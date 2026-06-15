@@ -1,0 +1,15 @@
+@import "tailwindcss";
+
+html, body, #root { height: 100%; }
+body { margin: 0; background: #0E1117; }
+
+/* tighten default scrollbars to match the dark desk theme */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #2A3344; border-radius: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* ticker tape marquee: two identical segments scrolled -50% for a seamless loop */
+.ticker-track { display: inline-flex; will-change: transform; animation: ticker-scroll 40s linear infinite; }
+.ticker-track:hover { animation-play-state: paused; }
+.ticker-seg { display: inline-flex; flex: none; }
+@keyframes ticker-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
