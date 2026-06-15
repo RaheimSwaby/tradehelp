@@ -1,6 +1,6 @@
 {
   "name": "tradehelp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Local-first trading journal with an offline AI coach (Electron + React + SQLite + Ollama)",
   "main": "./out/main/index.js",
   "license": "MIT",
@@ -36,7 +36,7 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "REPLACE_WITH_YOUR_GITHUB_USERNAME",
+        "owner": "RaheimSwaby",
         "repo": "tradehelp"
       }
     ],
