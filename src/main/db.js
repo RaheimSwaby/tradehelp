@@ -54,6 +54,7 @@ export function initDb() {
     provider: 'ollama',
     ollamaUrl: 'http://localhost:11434',
     ollamaModel: 'llama3.2',
+    ollamaVisionModel: 'llama3.2-vision',
     cloudUrl: 'https://api.openai.com/v1',
     cloudModel: 'gpt-4o-mini',
     cloudKey: '',

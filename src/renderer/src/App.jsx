@@ -79,6 +79,15 @@ async function downscale(dataUrl, maxDim = 1600, quality = 0.82) {
     return c.toDataURL('image/webp', quality)
   } catch { return dataUrl }
 }
+// Vision models (esp. local ones) are happiest with JPEG, so re-encode before sending.
+async function toJpeg(dataUrl) {
+  try {
+    const img = await loadImg(dataUrl)
+    const c = document.createElement('canvas'); c.width = img.width; c.height = img.height
+    c.getContext('2d').drawImage(img, 0, 0)
+    return c.toDataURL('image/jpeg', 0.85)
+  } catch { return dataUrl }
+}
 
 // ── time-in-trade helpers ──
 const pad2 = (n) => String(n).padStart(2, '0')
@@ -1051,6 +1060,8 @@ cutting winners early, rule-breaking. Be specific and reference their actual num
 Do NOT give buy/sell signals, price predictions, or personalized investment advice. Keep it tight (under ~180 words),
 direct, and supportive. If data is thin, say so honestly.`
 
+const VISION_SYSTEM = `You are a trading chart analyst inside a trader's journal. You are shown the screenshot(s) of ONE trade plus its details (symbol, direction, setup, outcome, R:R, emotion). Read the chart: describe the visible price structure (trend, key levels, candle behaviour), then judge whether the entry/exit and the stated setup look clean and consistent with what's on the chart — including any 'Before' vs 'After' images. Finish with ONE concrete, specific thing to repeat or fix next time. Do NOT predict future prices or give buy/sell signals. Keep it under ~160 words, concrete and direct.`
+
 function tradeContext(trades, stats) {
   const recent = [...trades].slice(-12).map((t) =>
     `${t.timestamp} ${t.symbol} ${t.direction} pnl=${fmtN(t.pnl)} rr=${t.rr ? fmtN(t.rr, 1) : '-'} setup=${t.setup} emotion=${t.emotion}`).join('\n')
@@ -1198,6 +1209,7 @@ function SettingsTab({ settings, onSave }) {
           <div className="space-y-3 mt-3">
             <Field label="Ollama URL"><input style={inputStyle} className={inp} value={s.ollamaUrl || ''} onChange={set('ollamaUrl')} /></Field>
             <Field label="Model"><input style={inputStyle} className={inp} value={s.ollamaModel || ''} onChange={set('ollamaModel')} placeholder="llama3.2" /></Field>
+            <Field label="Vision model (chart analysis)"><input style={inputStyle} className={inp} value={s.ollamaVisionModel || ''} onChange={set('ollamaVisionModel')} placeholder="llama3.2-vision" /></Field>
           </div>
         ) : (
           <div className="space-y-3 mt-3">
@@ -1216,8 +1228,9 @@ function SettingsTab({ settings, onSave }) {
         <ol className="text-sm space-y-2" style={{ color: T.dim }}>
           <li>1. Install Ollama from ollama.com</li>
           <li>2. In a terminal: <span style={{ color: T.accent, ...mono }}>ollama pull llama3.2</span></li>
-          <li>3. Ollama serves on localhost:11434 automatically</li>
-          <li>4. Hit “Test Ollama” to confirm, then use the AI Coach tab</li>
+          <li>3. For chart analysis: <span style={{ color: T.accent, ...mono }}>ollama pull llama3.2-vision</span></li>
+          <li>4. Ollama serves on localhost:11434 automatically</li>
+          <li>5. Hit “Test Ollama” to confirm, then use the AI Coach tab</li>
         </ol>
         <p className="mt-3 text-xs" style={{ color: T.faint }}>Everything stays on your machine. Your key and trades never leave this app.</p>
       </Panel>
@@ -1273,6 +1286,7 @@ function SettingsTab({ settings, onSave }) {
 function NotesModal({ trade, onClose }) {
   const [imgs, setImgs] = useState(null)
   const [zoom, setZoom] = useState(null)
+  const [analysis, setAnalysis] = useState(null) // { loading } | { text } | { error }
   useEffect(() => {
     let live = true
     if (window.api?.listImages) window.api.listImages(trade.id).then((r) => { if (live) setImgs(r) })
@@ -1280,6 +1294,28 @@ function NotesModal({ trade, onClose }) {
     return () => { live = false }
   }, [trade.id])
   async function del(id) { setImgs(await window.api.deleteImage(id)) }
+
+  async function analyze() {
+    const withPics = (imgs || []).filter((i) => i.dataUrl)
+    if (!withPics.length || analysis?.loading) return
+    setAnalysis({ loading: true })
+    try {
+      const jpegs = await Promise.all(withPics.map((i) => toJpeg(i.dataUrl)))
+      const ctx = [
+        `Trade: ${trade.symbol} ${trade.direction} · setup=${trade.setup || '-'} · outcome=${(Number(trade.pnl) || 0) >= 0 ? 'WIN' : 'LOSS'} (${fmt$(trade.pnl)})`,
+        `R:R=${trade.rr ? `1:${fmtN(trade.rr, 1)}` : '-'} · emotion=${trade.emotion || '-'}${trade.reason ? ` · reason=${trade.reason}` : ''}`,
+        `Image tags (in order): ${withPics.map((i) => i.tag || 'untagged').join(', ')}`,
+        `Notes: ${trade.notes || '(none)'}`
+      ].join('\n')
+      const res = await window.api.aiChat({
+        system: VISION_SYSTEM,
+        messages: [{ role: 'user', content: `Here is my trade and its chart screenshot(s).\n\n${ctx}`, images: jpegs }]
+      })
+      setAnalysis(res?.ok ? { text: res.text } : { error: res?.error || 'Analysis unavailable.' })
+    } catch (e) {
+      setAnalysis({ error: String(e?.message || e) })
+    }
+  }
 
   return (
     <div className="fixed inset-0 flex items-center justify-center p-4 z-50" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={onClose}>
@@ -1305,7 +1341,14 @@ function NotesModal({ trade, onClose }) {
           <div className="mt-4 text-xs" style={{ color: T.faint }}>Loading screenshots…</div>
         ) : imgs.length > 0 ? (
           <div className="mt-4">
-            <div className="text-xs uppercase tracking-wider mb-2" style={{ color: T.faint }}>Screenshots</div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-xs uppercase tracking-wider" style={{ color: T.faint }}>Screenshots</div>
+              <button type="button" onClick={analyze} disabled={analysis?.loading}
+                className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md font-semibold"
+                style={{ background: T.accent, color: '#1A1306', opacity: analysis?.loading ? 0.6 : 1 }}>
+                <Sparkles size={13} /> {analysis?.loading ? 'Analyzing…' : 'Analyze chart'}
+              </button>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {imgs.map((im) => (
                 <div key={im.id} className="rounded-lg overflow-hidden" style={{ border: `1px solid ${T.line}` }}>
@@ -1319,6 +1362,14 @@ function NotesModal({ trade, onClose }) {
                 </div>
               ))}
             </div>
+            {analysis && (
+              <div className="mt-3 rounded-lg p-3 text-sm" style={{ background: T.accentSoft, border: `1px solid ${T.line}`, color: '#F3D9A0' }}>
+                {analysis.loading ? <span style={{ color: T.accent }}>Reading the chart… local vision models can take a moment.</span>
+                  : analysis.error ? <span style={{ color: T.down }}>⚠︎ {analysis.error}</span>
+                  : <div className="whitespace-pre-wrap">{analysis.text}</div>}
+                {!analysis.loading && <div className="text-xs mt-2" style={{ color: T.faint }}>AI chart read · not financial advice</div>}
+              </div>
+            )}
           </div>
         ) : null}
       </div>

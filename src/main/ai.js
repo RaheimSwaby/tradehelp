@@ -2,11 +2,19 @@
 // the cloud path works with any OpenAI-compatible endpoint using your own key.
 
 const trim = (u) => String(u || '').replace(/\/+$/, '')
+const stripDataPrefix = (u) => String(u || '').replace(/^data:image\/[\w+.-]+;base64,/, '')
 
+// Messages may carry an `images` array of data URLs. Each provider wants a different
+// shape, so we adapt per provider. Text-only messages pass through unchanged.
 export async function chat(settings, { system, messages }) {
-  const msgs = [{ role: 'system', content: system }, ...messages]
+  const hasImages = messages.some((m) => Array.isArray(m.images) && m.images.length)
 
   if (settings.provider === 'cloud') {
+    const msgs = [{ role: 'system', content: system }, ...messages.map((m) => (
+      m.images?.length
+        ? { role: m.role, content: [{ type: 'text', text: m.content }, ...m.images.map((url) => ({ type: 'image_url', image_url: { url } }))] }
+        : { role: m.role, content: m.content }
+    ))]
     const res = await fetch(`${trim(settings.cloudUrl)}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -20,11 +28,17 @@ export async function chat(settings, { system, messages }) {
     return d.choices?.[0]?.message?.content ?? '(no response)'
   }
 
-  // default: Ollama
+  // default: Ollama. Use the vision model only when images are attached.
+  const model = hasImages ? (settings.ollamaVisionModel || settings.ollamaModel) : settings.ollamaModel
+  const msgs = [{ role: 'system', content: system }, ...messages.map((m) => (
+    m.images?.length
+      ? { role: m.role, content: m.content, images: m.images.map(stripDataPrefix) }
+      : { role: m.role, content: m.content }
+  ))]
   const res = await fetch(`${trim(settings.ollamaUrl)}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: settings.ollamaModel, stream: false, messages: msgs })
+    body: JSON.stringify({ model, stream: false, messages: msgs })
   }).catch(() => {
     throw new Error('Cannot reach Ollama. Is it running? Try: ollama serve')
   })
