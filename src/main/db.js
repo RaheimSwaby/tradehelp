@@ -22,7 +22,7 @@ export function initDb() {
       entry REAL, exit REAL, stop REAL, target REAL, size REAL,
       riskAmount REAL, pnl REAL, rr REAL,
       emotion TEXT, setup TEXT, notes TEXT, timestamp TEXT,
-      entryTime TEXT, exitTime TEXT, reason TEXT, source TEXT
+      entryTime TEXT, exitTime TEXT, reason TEXT, source TEXT, account TEXT
     );
     CREATE TABLE IF NOT EXISTS goals (
       id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -44,7 +44,7 @@ export function initDb() {
 
   // Migrate older DBs that predate columns added above.
   const tradeCols = new Set(db.prepare('PRAGMA table_info(trades)').all().map((c) => c.name))
-  for (const [name, type] of [['entryTime', 'TEXT'], ['exitTime', 'TEXT'], ['reason', 'TEXT'], ['source', 'TEXT']]) {
+  for (const [name, type] of [['entryTime', 'TEXT'], ['exitTime', 'TEXT'], ['reason', 'TEXT'], ['source', 'TEXT'], ['account', 'TEXT']]) {
     if (!tradeCols.has(name)) db.exec(`ALTER TABLE trades ADD COLUMN ${name} ${type}`)
   }
 
@@ -105,15 +105,15 @@ function buildRow(t) {
     notes: String(t.notes || ''),
     timestamp: String(t.timestamp || new Date().toISOString().slice(0, 16).replace('T', ' ')),
     entryTime: String(t.entryTime || ''), exitTime: String(t.exitTime || ''),
-    reason: String(t.reason || ''), source: String(t.source || 'manual')
+    reason: String(t.reason || ''), source: String(t.source || 'manual'), account: String(t.account || '')
   }
 }
 
 const INSERT_TRADE = `
   INSERT INTO trades
-    (id, symbol, direction, entry, exit, stop, target, size, riskAmount, pnl, rr, emotion, setup, notes, timestamp, entryTime, exitTime, reason, source)
+    (id, symbol, direction, entry, exit, stop, target, size, riskAmount, pnl, rr, emotion, setup, notes, timestamp, entryTime, exitTime, reason, source, account)
   VALUES
-    (@id, @symbol, @direction, @entry, @exit, @stop, @target, @size, @riskAmount, @pnl, @rr, @emotion, @setup, @notes, @timestamp, @entryTime, @exitTime, @reason, @source)
+    (@id, @symbol, @direction, @entry, @exit, @stop, @target, @size, @riskAmount, @pnl, @rr, @emotion, @setup, @notes, @timestamp, @entryTime, @exitTime, @reason, @source, @account)
 `
 
 export function addTrade(t) {
