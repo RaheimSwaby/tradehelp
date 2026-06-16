@@ -108,6 +108,7 @@ function fmtDuration(ms) {
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 function periodKey(dateStr, gran) {
   if (!dateStr) return ''
+  if (gran === 'year') return dateStr.slice(0, 4)
   if (gran === 'month') return dateStr.slice(0, 7)
   if (gran === 'quarter') { const m = +dateStr.slice(5, 7); return `${dateStr.slice(0, 4)}-Q${Math.ceil(m / 3)}` }
   const d = new Date(dateStr + 'T00:00:00')
@@ -117,6 +118,7 @@ function periodKey(dateStr, gran) {
 }
 function periodLabel(key, gran) {
   if (!key) return '—'
+  if (gran === 'year') return key === String(new Date().getFullYear()) ? `${key} (YTD)` : key
   if (gran === 'month') { const [y, m] = key.split('-'); return `${MONTHS[+m - 1]} ${y}` }
   if (gran === 'quarter') { const [y, q] = key.split('-Q'); return `Q${q} ${y}` }
   const mon = new Date(key + 'T00:00:00'); const sun = new Date(mon); sun.setDate(sun.getDate() + 6)
@@ -1235,7 +1237,7 @@ function Reviews({ trades, reviews, onSave }) {
   if (trades.length === 0) {
     return <Panel title="Reviews"><div className="py-12 text-center text-sm" style={{ color: T.dim }}>Log trades to build weekly, monthly and quarterly reviews.</div></Panel>
   }
-  const GRANS = [['week', 'Weekly'], ['month', 'Monthly'], ['quarter', 'Quarterly']]
+  const GRANS = [['week', 'Weekly'], ['month', 'Monthly'], ['quarter', 'Quarterly'], ['year', 'Yearly']]
 
   return (
     <div className="space-y-4">
