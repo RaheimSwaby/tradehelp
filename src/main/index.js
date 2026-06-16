@@ -56,6 +56,9 @@ function registerIpc() {
   ipcMain.handle('goals:get', () => db.getGoals())
   ipcMain.handle('goals:set', (_e, g) => db.setGoals(g))
 
+  ipcMain.handle('reviews:get', () => db.getReviews())
+  ipcMain.handle('reviews:set', (_e, period, text) => db.setReview(period, text))
+
   ipcMain.handle('settings:get', () => db.getSettings())
   ipcMain.handle('settings:set', (_e, s) => db.setSettings(s))
 

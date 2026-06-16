@@ -40,6 +40,9 @@ export function initDb() {
       createdAt TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_trade_images_tradeId ON trade_images(tradeId);
+    CREATE TABLE IF NOT EXISTS reviews (
+      period TEXT PRIMARY KEY, text TEXT, updatedAt TEXT
+    );
   `)
 
   // Migrate older DBs that predate columns added above.
@@ -200,4 +203,17 @@ export function deleteImage(id) {
   try { unlinkSync(join(imagesDir, row.file)) } catch {}
   db.prepare('DELETE FROM trade_images WHERE id = ?').run(String(id))
   return listImages(row.tradeId)
+}
+
+/* ───────── periodic reviews (keyed by a period string e.g. 2026-06, 2026-Q2, a week's Monday) ───────── */
+export function getReviews() {
+  const o = {}
+  for (const r of db.prepare('SELECT period, text FROM reviews').all()) o[r.period] = r.text
+  return o
+}
+
+export function setReview(period, text) {
+  db.prepare('INSERT INTO reviews (period, text, updatedAt) VALUES (?, ?, ?) ON CONFLICT(period) DO UPDATE SET text = excluded.text, updatedAt = excluded.updatedAt')
+    .run(String(period), String(text || ''), new Date().toISOString())
+  return getReviews()
 }

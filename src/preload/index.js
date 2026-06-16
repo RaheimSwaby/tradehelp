@@ -13,6 +13,9 @@ const api = {
   getGoals: () => ipcRenderer.invoke('goals:get'),
   setGoals: (g) => ipcRenderer.invoke('goals:set', g),
 
+  getReviews: () => ipcRenderer.invoke('reviews:get'),
+  setReview: (period, text) => ipcRenderer.invoke('reviews:set', period, text),
+
   getSettings: () => ipcRenderer.invoke('settings:get'),
   setSettings: (s) => ipcRenderer.invoke('settings:set', s),
 

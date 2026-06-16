@@ -7,7 +7,7 @@ import {
   BookOpen, LayoutDashboard, Brain, Target, Bot, Settings as SettingsIcon,
   Plus, Trash2, TrendingUp, Send, Sparkles, Search, X,
   Zap, Square, CheckSquare, AlertTriangle, Play, Paperclip, ImagePlus, Gauge, Lock,
-  Trophy, Shield, Snowflake, Camera, ScanSearch, Upload, BadgeCheck, Building2
+  Trophy, Shield, Snowflake, Camera, ScanSearch, Upload, BadgeCheck, Building2, ClipboardList
 } from 'lucide-react'
 
 /* ───────── theme (inline styles for color; Tailwind for layout) ───────── */
@@ -102,6 +102,26 @@ function fmtDuration(ms) {
   if (h < 24) return rm ? `${h}h ${rm}m` : `${h}h`
   const d = Math.floor(h / 24), rh = h % 24
   return rh ? `${d}d ${rh}h` : `${d}d`
+}
+
+// ── review period helpers ──
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+function periodKey(dateStr, gran) {
+  if (!dateStr) return ''
+  if (gran === 'month') return dateStr.slice(0, 7)
+  if (gran === 'quarter') { const m = +dateStr.slice(5, 7); return `${dateStr.slice(0, 4)}-Q${Math.ceil(m / 3)}` }
+  const d = new Date(dateStr + 'T00:00:00')
+  if (isNaN(d)) return ''
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7)) // back up to Monday
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
+}
+function periodLabel(key, gran) {
+  if (!key) return '—'
+  if (gran === 'month') { const [y, m] = key.split('-'); return `${MONTHS[+m - 1]} ${y}` }
+  if (gran === 'quarter') { const [y, q] = key.split('-Q'); return `Q${q} ${y}` }
+  const mon = new Date(key + 'T00:00:00'); const sun = new Date(mon); sun.setDate(sun.getDate() + 6)
+  const md = (d) => `${MONTHS[d.getMonth()]} ${d.getDate()}`
+  return `${md(mon)} – ${md(sun)}, ${sun.getFullYear()}`
 }
 
 // ── CSV import helpers ──
@@ -469,6 +489,7 @@ export default function App() {
   const [ready, setReady] = useState(false)
   const [trades, setTrades] = useState([])
   const [goals, setGoals] = useState({ weekly: 500, monthly: 2000 })
+  const [reviews, setReviews] = useState({})
   const [settings, setSettings] = useState(null)
   const [tab, setTab] = useState('journal')
   const [notesView, setNotesView] = useState(null)
@@ -489,6 +510,7 @@ export default function App() {
       if (!hasApi) { setReady(true); return }
       setTrades(await window.api.listTrades())
       setGoals(await window.api.getGoals())
+      setReviews(await window.api.getReviews())
       setSettings(await window.api.getSettings())
       setReady(true)
     })()
@@ -505,6 +527,7 @@ export default function App() {
   async function removeTrade(id) { if (hasApi) setTrades(await window.api.deleteTrade(id)) }
   async function importTrades(rows) { if (hasApi) setTrades(await window.api.importTrades(rows)) }
   async function saveGoals(g) { if (hasApi) setGoals(await window.api.setGoals(g)) }
+  async function saveReview(period, text) { if (hasApi) setReviews(await window.api.setReview(period, text)) }
   async function saveSettings(s) { if (hasApi) setSettings(await window.api.setSettings(s)) }
   const propFirmAccounts = useMemo(() => {
     try { const arr = JSON.parse(settings?.propFirmAccounts || 'null'); if (Array.isArray(arr)) return arr } catch {}
@@ -590,6 +613,7 @@ export default function App() {
     ['psych', 'Psychology', Brain],
     ['rating', 'Rating', Gauge],
     ['goals', 'Goals', Target],
+    ['reviews', 'Reviews', ClipboardList],
     ['coach', 'AI Coach', Bot],
     ['patterns', 'Patterns', ScanSearch],
     ['settings', 'Settings', SettingsIcon]
@@ -649,6 +673,7 @@ export default function App() {
             {tab === 'psych' && <Psychology stats={stats} />}
             {tab === 'rating' && <Rating trades={trades} stats={stats} achievements={achievements} unlockedAt={unlockedAt} />}
             {tab === 'goals' && <Goals goals={goals} onSave={saveGoals} trades={trades} />}
+            {tab === 'reviews' && <Reviews trades={trades} reviews={reviews} onSave={saveReview} />}
             {tab === 'coach' && <Coach trades={trades} stats={stats} settings={settings} events={events} now={now} />}
             {tab === 'patterns' && <Patterns trades={trades} />}
             {tab === 'settings' && <SettingsTab settings={settings} onSave={saveSettings} />}
@@ -1172,6 +1197,102 @@ function ProgressBar({ label, cur, target }) {
       <div className="h-2.5 rounded-full overflow-hidden" style={{ background: T.surface2 }}>
         <div className="h-full rounded-full" style={{ width: `${pct}%`, background: hit ? T.up : T.accent, transition: 'width .4s' }} />
       </div>
+    </div>
+  )
+}
+
+/* ───────── periodic reviews ───────── */
+const REVIEW_SYSTEM = `You are a trading coach writing a short periodic review. Given the trader's aggregated stats and trades for ONE period, summarize how the period went using their real numbers, name 1-2 strengths and 1-2 leaks (revenge, FOMO, overtrading, cutting winners early, oversizing), then give 2 concrete focus points for next period. No price predictions or buy/sell advice. Under ~170 words.`
+
+function Reviews({ trades, reviews, onSave }) {
+  const [gran, setGran] = useState('week')
+  const [sel, setSel] = useState('')
+  const periods = useMemo(() => {
+    const seen = new Set()
+    for (const t of trades) { const k = periodKey((t.entryTime || t.timestamp || '').slice(0, 10), gran); if (k) seen.add(k) }
+    return [...seen].sort().reverse()
+  }, [trades, gran])
+  const period = periods.includes(sel) ? sel : (periods[0] || '')
+  const periodTrades = useMemo(() => trades.filter((t) => periodKey((t.entryTime || t.timestamp || '').slice(0, 10), gran) === period), [trades, gran, period])
+  const stats = useMemo(() => computeStats(periodTrades), [periodTrades])
+  const avgGrade = periodTrades.length ? Math.round(periodTrades.reduce((a, t) => a + executionGrade(t).score, 0) / periodTrades.length) : 0
+
+  const [text, setText] = useState('')
+  const [saved, setSaved] = useState(false)
+  const [ai, setAi] = useState(null)
+  useEffect(() => { setText(reviews?.[period] || ''); setAi(null) }, [period, reviews])
+
+  function save() { onSave(period, text); setSaved(true); setTimeout(() => setSaved(false), 1500) }
+  async function summarize() {
+    if (!window.api?.aiChat || ai?.loading) return
+    setAi({ loading: true })
+    try {
+      const res = await window.api.aiChat({ system: REVIEW_SYSTEM, messages: [{ role: 'user', content: `Here is my ${periodLabel(period, gran)} performance:\n\n${tradeContext(periodTrades, stats)}` }] })
+      setAi(res?.ok ? { text: res.text } : { error: res?.error || 'Unavailable' })
+    } catch (e) { setAi({ error: String(e?.message || e) }) }
+  }
+
+  if (trades.length === 0) {
+    return <Panel title="Reviews"><div className="py-12 text-center text-sm" style={{ color: T.dim }}>Log trades to build weekly, monthly and quarterly reviews.</div></Panel>
+  }
+  const GRANS = [['week', 'Weekly'], ['month', 'Monthly'], ['quarter', 'Quarterly']]
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex gap-1">
+          {GRANS.map(([g, label]) => (
+            <button key={g} type="button" onClick={() => { setGran(g); setSel('') }} className="px-3 py-1.5 rounded-md text-sm" style={{ background: gran === g ? T.surface2 : 'transparent', color: gran === g ? T.accent : T.dim, border: `1px solid ${gran === g ? T.line : 'transparent'}` }}>{label}</button>
+          ))}
+        </div>
+        <select style={inputStyle} className="rounded px-2 py-1.5 text-sm" value={period} onChange={(e) => setSel(e.target.value)}>
+          {periods.map((p) => <option key={p} value={p}>{periodLabel(p, gran)}</option>)}
+        </select>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Stat label="Net P&L" value={fmt$(stats.totalPnl)} tone={stats.totalPnl >= 0 ? 'up' : 'down'} sub={`${stats.n} trades · ${stats.activeDays} days`} />
+        <Stat label="Win rate" value={`${fmtN(stats.winRate, 1)}%`} sub={`PF ${stats.profitFactor === Infinity ? '∞' : fmtN(stats.profitFactor, 2)}`} />
+        <Stat label="Avg grade" value={letterFor(avgGrade).letter} tone="accent" sub={`${avgGrade}/100 execution`} />
+        <Stat label="Expectancy" value={fmt$(stats.expectancy)} sub={`max DD ${fmt$(-stats.maxDD)}`} />
+      </div>
+
+      {stats.n > 0 && (
+        <Panel title={`Equity · ${periodLabel(period, gran)}`}>
+          <ResponsiveContainer width="100%" height={180}>
+            <LineChart data={stats.equity} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
+              <ReferenceLine y={0} stroke={T.line} />
+              <XAxis dataKey="i" tick={{ fill: T.faint, fontSize: 11 }} stroke={T.line} />
+              <YAxis tick={{ fill: T.faint, fontSize: 11 }} stroke={T.line} tickFormatter={(v) => '$' + v} />
+              <Tooltip contentStyle={{ background: T.surface2, border: `1px solid ${T.line}`, borderRadius: 8, color: T.text }} formatter={(v) => [fmt$(v), 'Equity']} />
+              <Line type="monotone" dataKey="equity" stroke={T.accent} strokeWidth={2.5} dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        </Panel>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <GroupTable title="P&L by setup" rows={stats.bySetup} />
+        <div className="space-y-4">
+          <ReasonList title="Why you won" rows={stats.reasonsWin} tone="up" />
+          <ReasonList title="Why you lost" rows={stats.reasonsLoss} tone="down" />
+        </div>
+      </div>
+
+      <Panel title="Your review" right={
+        <button type="button" onClick={summarize} disabled={ai?.loading} className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-md" style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}` }}><Sparkles size={13} /> {ai?.loading ? 'Thinking…' : 'AI summary'}</button>
+      }>
+        {ai && (
+          <div className="mb-3 rounded-lg p-3 text-sm" style={{ background: T.accentSoft, border: `1px solid ${T.line}`, color: '#F3D9A0' }}>
+            {ai.loading ? <span style={{ color: T.accent }}>Reviewing the period…</span> : ai.error ? <span style={{ color: T.down }}>⚠︎ {ai.error}</span> : <div className="whitespace-pre-wrap">{ai.text}</div>}
+          </div>
+        )}
+        <textarea style={inputStyle} className="w-full rounded px-3 py-2 text-sm" rows={6} value={text} onChange={(e) => setText(e.target.value)} placeholder={'What worked this period?\nWhat leaked?\nFocus for next period:'} />
+        <div className="flex items-center gap-3 mt-2">
+          <button type="button" onClick={save} className="rounded-md px-4 py-2 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306' }}>Save review</button>
+          {saved && <span className="text-xs" style={{ color: T.up }}>Saved ✓</span>}
+        </div>
+      </Panel>
     </div>
   )
 }
