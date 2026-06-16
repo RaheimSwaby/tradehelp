@@ -13,6 +13,7 @@ endpoint with your own key.
 | Dashboard  | Net P&L, win rate, profit factor, expectancy, max drawdown, streaks, equity curve, daily P&L. |
 | Psychology | P&L by emotion, by setup, and by hour of day.                                |
 | Goals      | Weekly/monthly targets with live progress bars.                              |
+| Prop Firm  | Track a prop firm challenge — profit target, max daily loss, trailing/static drawdown, min days — with live cushion-to-breach and pass/fail status. |
 | AI Coach   | Chat that reads your real stats; plus a live price lookup (crypto + stocks). |
 | Chart AI   | Attach before/after screenshots to a trade, then "Analyze chart" — a vision model reads the chart and critiques the setup (offline via Ollama vision, or your cloud key). |
 | Patterns   | Pick a setup; the AI reads your winning vs losing charts and tells you what visually separates them. |

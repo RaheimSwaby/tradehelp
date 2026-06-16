@@ -7,7 +7,7 @@ import {
   BookOpen, LayoutDashboard, Brain, Target, Bot, Settings as SettingsIcon,
   Plus, Trash2, TrendingUp, Send, Sparkles, Search, X,
   Zap, Square, CheckSquare, AlertTriangle, Play, Paperclip, ImagePlus, Gauge, Lock,
-  Trophy, Shield, Snowflake, Camera, ScanSearch, Upload, BadgeCheck
+  Trophy, Shield, Snowflake, Camera, ScanSearch, Upload, BadgeCheck, Building2
 } from 'lucide-react'
 
 /* ───────── theme (inline styles for color; Tailwind for layout) ───────── */
@@ -366,6 +366,53 @@ function computeAchievements(trades, stats) {
   }))
 }
 
+/* ───────── prop firm challenge tracker ───────── */
+const PROP_PRESETS = {
+  '25K': { accountSize: 25000, target: 1500, maxDailyLoss: 500, maxDrawdown: 1500 },
+  '50K': { accountSize: 50000, target: 3000, maxDailyLoss: 1100, maxDrawdown: 2000 },
+  '100K': { accountSize: 100000, target: 6000, maxDailyLoss: 2200, maxDrawdown: 3000 },
+  '150K': { accountSize: 150000, target: 9000, maxDailyLoss: 3300, maxDrawdown: 5000 }
+}
+
+// Tracks closed-trade (end-of-day style) balance vs. a prop firm's challenge rules.
+function computePropFirm(trades, cfg) {
+  const start = Number(cfg.accountSize) || 0
+  const target = Number(cfg.target) || 0
+  const maxDaily = Number(cfg.maxDailyLoss) || 0
+  const maxDD = Number(cfg.maxDrawdown) || 0
+  const minDays = Number(cfg.minDays) || 0
+  const trailing = cfg.ddType !== 'static'
+  const sorted = [...trades].sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''))
+  const floorAt = (peak) => (trailing ? Math.min(peak - maxDD, start) : start - maxDD)
+
+  let bal = start, peak = start, floorBreached = false
+  const curve = [{ i: 0, balance: start, floor: floorAt(start) }]
+  const dayPnl = {}
+  for (const t of sorted) {
+    bal += Number(t.pnl) || 0
+    peak = Math.max(peak, bal)
+    const floor = floorAt(peak)
+    if (maxDD > 0 && bal <= floor) floorBreached = true
+    curve.push({ i: curve.length, balance: bal, floor })
+    const d = (t.entryTime || t.timestamp || '').slice(0, 10)
+    if (d) dayPnl[d] = (dayPnl[d] || 0) + (Number(t.pnl) || 0)
+  }
+  let dailyBreached = false
+  for (const v of Object.values(dayPnl)) if (maxDaily > 0 && v <= -maxDaily) dailyBreached = true
+
+  const netProfit = bal - start
+  const curFloor = floorAt(peak)
+  const ddBuffer = bal - curFloor
+  const todayPnl = dayPnl[new Date().toISOString().slice(0, 10)] || 0
+  const dailyRemaining = Math.max(0, maxDaily - Math.max(0, -todayPnl))
+  const daysTraded = Object.keys(dayPnl).length
+  const targetHit = target > 0 && netProfit >= target
+  const daysHit = daysTraded >= minDays
+  const breached = floorBreached || dailyBreached
+  const status = breached ? 'failed' : (targetHit && daysHit ? 'passed' : 'active')
+  return { start, bal, netProfit, peak, curFloor, ddBuffer, maxDD, target, maxDaily, todayPnl, dailyRemaining, daysTraded, minDays, targetHit, daysHit, breached, floorBreached, dailyBreached, status, curve }
+}
+
 /* ───────── small UI bits ───────── */
 function Stat({ label, value, sub, tone }) {
   const color = tone === 'up' ? T.up : tone === 'down' ? T.down : tone === 'accent' ? T.accent : T.text
@@ -456,6 +503,8 @@ export default function App() {
   async function importTrades(rows) { if (hasApi) setTrades(await window.api.importTrades(rows)) }
   async function saveGoals(g) { if (hasApi) setGoals(await window.api.setGoals(g)) }
   async function saveSettings(s) { if (hasApi) setSettings(await window.api.setSettings(s)) }
+  const propFirmCfg = useMemo(() => { try { return JSON.parse(settings?.propFirm || 'null') } catch { return null } }, [settings])
+  async function savePropFirm(c) { await saveSettings({ propFirm: JSON.stringify(c) }) }
 
   // ── Trade Mode derived state ──
   const rules = useMemo(() => parseRules(settings), [settings])
@@ -529,6 +578,7 @@ export default function App() {
   const TABS = [
     ['journal', 'Journal', BookOpen],
     ['trade', 'Trade Mode', Zap],
+    ['propfirm', 'Prop Firm', Building2],
     ['dashboard', 'Dashboard', LayoutDashboard],
     ['psych', 'Psychology', Brain],
     ['rating', 'Rating', Gauge],
@@ -587,6 +637,7 @@ export default function App() {
           <>
             {tab === 'journal' && <Journal trades={trades} onAdd={addTrade} onRemove={removeTrade} onNotes={setNotesView} onImport={importTrades} />}
             {tab === 'trade' && <TradeModeTab settings={settings} onSave={saveSettings} rules={rules} live={tradeMode} todayNet={todayNet} todayCount={todayTrades.length} weekNet={weekNet} goal={dailyGoal} maxLoss={maxLoss} onStart={startDay} onEnd={endSession} />}
+            {tab === 'propfirm' && <PropFirm trades={trades} cfg={propFirmCfg} onSave={savePropFirm} />}
             {tab === 'dashboard' && <Dashboard stats={stats} />}
             {tab === 'psych' && <Psychology stats={stats} />}
             {tab === 'rating' && <Rating trades={trades} stats={stats} achievements={achievements} unlockedAt={unlockedAt} />}
@@ -1104,6 +1155,133 @@ function ProgressBar({ label, cur, target }) {
       <div className="h-2.5 rounded-full overflow-hidden" style={{ background: T.surface2 }}>
         <div className="h-full rounded-full" style={{ width: `${pct}%`, background: hit ? T.up : T.accent, transition: 'width .4s' }} />
       </div>
+    </div>
+  )
+}
+
+/* ───────── prop firm ───────── */
+function Meter({ pct, color, top, bottom }) {
+  return (
+    <div>
+      <div className="text-xs mb-1" style={{ ...mono, color: T.text }}>{top}</div>
+      <div className="h-2.5 rounded-full overflow-hidden" style={{ background: T.surface2 }}>
+        <div className="h-full rounded-full" style={{ width: `${clamp(pct, 0, 1) * 100}%`, background: color, transition: 'width .4s' }} />
+      </div>
+      <div className="text-xs mt-1" style={{ color: T.faint }}>{bottom}</div>
+    </div>
+  )
+}
+
+function PropFirm({ trades, cfg, onSave }) {
+  const configured = !!(cfg && cfg.enabled)
+  const [editing, setEditing] = useState(!configured)
+  const blank = { label: '', accountSize: '50000', target: '3000', maxDailyLoss: '1100', maxDrawdown: '2000', minDays: '5', ddType: 'trailing' }
+  const [f, setF] = useState(() => configured
+    ? { label: cfg.label || '', accountSize: String(cfg.accountSize ?? ''), target: String(cfg.target ?? ''), maxDailyLoss: String(cfg.maxDailyLoss ?? ''), maxDrawdown: String(cfg.maxDrawdown ?? ''), minDays: String(cfg.minDays ?? ''), ddType: cfg.ddType || 'trailing' }
+    : blank)
+  const set = (k) => (e) => setF((p) => ({ ...p, [k]: e.target.value }))
+  const preset = (n) => setF((p) => ({ ...p, label: p.label || `${n} account`, ...Object.fromEntries(Object.entries(PROP_PRESETS[n]).map(([k, v]) => [k, String(v)])) }))
+  function save() {
+    onSave({ enabled: true, label: f.label.trim(), accountSize: parseFloat(f.accountSize) || 0, target: parseFloat(f.target) || 0, maxDailyLoss: parseFloat(f.maxDailyLoss) || 0, maxDrawdown: parseFloat(f.maxDrawdown) || 0, minDays: parseInt(f.minDays, 10) || 0, ddType: f.ddType })
+    setEditing(false)
+  }
+  const inp = 'w-full rounded px-2 py-1.5 text-sm'
+
+  if (editing) {
+    return (
+      <div className="max-w-xl">
+        <Panel title="Prop firm challenge — setup">
+          <div className="flex flex-wrap gap-1.5 mb-3">
+            {Object.keys(PROP_PRESETS).map((n) => (
+              <button key={n} type="button" onClick={() => preset(n)} className="text-xs px-2 py-1 rounded-md" style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}` }}>{n} template</button>
+            ))}
+          </div>
+          <Field label="Label"><input style={inputStyle} className={inp} value={f.label} onChange={set('label')} placeholder="e.g. Topstep 50K" /></Field>
+          <div className="grid grid-cols-2 gap-3 mt-3">
+            <Field label="Account size $"><input style={inputStyle} className={inp} value={f.accountSize} onChange={set('accountSize')} inputMode="decimal" /></Field>
+            <Field label="Profit target $"><input style={inputStyle} className={inp} value={f.target} onChange={set('target')} inputMode="decimal" /></Field>
+            <Field label="Max daily loss $"><input style={inputStyle} className={inp} value={f.maxDailyLoss} onChange={set('maxDailyLoss')} inputMode="decimal" /></Field>
+            <Field label="Max drawdown $"><input style={inputStyle} className={inp} value={f.maxDrawdown} onChange={set('maxDrawdown')} inputMode="decimal" /></Field>
+            <Field label="Min trading days"><input style={inputStyle} className={inp} value={f.minDays} onChange={set('minDays')} inputMode="numeric" /></Field>
+            <Field label="Drawdown type">
+              <select style={inputStyle} className={inp} value={f.ddType} onChange={set('ddType')}>
+                <option value="trailing">Trailing (follows your high)</option>
+                <option value="static">Static (fixed from start)</option>
+              </select>
+            </Field>
+          </div>
+          <div className="flex items-center gap-3 mt-4">
+            <button type="button" onClick={save} className="rounded-md px-4 py-2 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306' }}>Start tracking</button>
+            {configured && <button type="button" onClick={() => setEditing(false)} className="rounded-md px-3 py-2 text-sm" style={{ background: T.surface2, color: T.text, border: `1px solid ${T.line}` }}>Cancel</button>}
+          </div>
+          <p className="text-xs mt-3" style={{ color: T.faint }}>Templates are rough starting points — set the exact numbers from your firm's rules. Tracks closed-trade balance (end-of-day style); intraday unrealized swings aren't counted.</p>
+        </Panel>
+      </div>
+    )
+  }
+
+  const r = computePropFirm(trades, cfg)
+  const ddPct = r.maxDD > 0 ? r.ddBuffer / r.maxDD : 1
+  const ddColor = r.floorBreached ? T.down : ddPct > 0.5 ? T.up : ddPct > 0.2 ? T.accent : T.down
+  const tgtPct = r.target > 0 ? r.netProfit / r.target : 0
+  const dailyPct = r.maxDaily > 0 ? r.dailyRemaining / r.maxDaily : 1
+  const status = r.status === 'passed' ? { label: 'PASSED', color: T.up } : r.status === 'failed' ? { label: 'FAILED', color: T.down } : { label: 'IN PROGRESS', color: T.accent }
+  const Req = ({ ok, label }) => (
+    <div className="flex items-center gap-2 text-sm">
+      {ok ? <CheckSquare size={16} style={{ color: T.up }} /> : <Square size={16} style={{ color: T.faint }} />}
+      <span style={{ color: ok ? T.text : T.dim }}>{label}</span>
+    </div>
+  )
+
+  return (
+    <div className="space-y-4">
+      <Panel title={cfg.label || 'Prop firm challenge'} right={
+        <div className="flex items-center gap-2">
+          <span className="text-xs px-2 py-0.5 rounded font-semibold" style={{ color: status.color, border: `1px solid ${status.color}` }}>{status.label}</span>
+          <button type="button" onClick={() => setEditing(true)} className="text-xs px-2 py-1 rounded-md" style={{ background: T.surface2, color: T.dim, border: `1px solid ${T.line}` }}>Edit</button>
+        </div>
+      }>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Stat label="Balance" value={fmt$(r.bal)} sub={`start ${fmt$(r.start)}`} />
+          <Stat label="Net P&L" value={fmt$(r.netProfit)} tone={r.netProfit >= 0 ? 'up' : 'down'} sub={`target ${fmt$(r.target)}`} />
+          <Stat label="DD cushion" value={fmt$(r.ddBuffer)} tone={r.floorBreached ? 'down' : 'none'} sub={`floor ${fmt$(r.curFloor)}`} />
+          <Stat label="Days traded" value={`${r.daysTraded} / ${r.minDays}`} tone={r.daysHit ? 'up' : 'none'} />
+        </div>
+        {r.breached && (
+          <div className="mt-3 rounded-lg px-3 py-2 text-sm" style={{ background: T.accentSoft, color: T.down, border: `1px solid ${T.down}` }}>
+            ⚠︎ Rules breached in this history — {[r.floorBreached && 'max drawdown', r.dailyBreached && 'daily-loss limit'].filter(Boolean).join(' & ')} hit.
+          </div>
+        )}
+      </Panel>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Panel title="Drawdown cushion"><Meter pct={ddPct} color={ddColor} top={fmt$(r.ddBuffer) + ' to breach'} bottom={`floor ${fmt$(r.curFloor)} · limit ${fmt$(-r.maxDD)}`} /></Panel>
+        <Panel title="Toward profit target"><Meter pct={tgtPct} color={r.targetHit ? T.up : T.accent} top={`${fmt$(r.netProfit)} / ${fmt$(r.target)}`} bottom={r.targetHit ? 'target reached ✓' : `${fmt$(Math.max(0, r.target - r.netProfit))} to go`} /></Panel>
+        <Panel title="Today's loss room"><Meter pct={dailyPct} color={dailyPct > 0.4 ? T.up : dailyPct > 0.15 ? T.accent : T.down} top={`${fmt$(r.dailyRemaining)} left today`} bottom={`today ${fmt$(r.todayPnl)} · limit ${fmt$(-r.maxDaily)}`} /></Panel>
+      </div>
+
+      <Panel title="Pass requirements">
+        <div className="space-y-2">
+          <Req ok={r.targetHit} label={`Hit profit target (${fmt$(r.target)})`} />
+          <Req ok={r.daysHit} label={`Trade at least ${r.minDays} day${r.minDays === 1 ? '' : 's'}`} />
+          <Req ok={!r.breached} label="No daily-loss or drawdown breach" />
+        </div>
+      </Panel>
+
+      {r.curve.length > 1 && (
+        <Panel title="Balance vs. drawdown floor">
+          <ResponsiveContainer width="100%" height={220}>
+            <LineChart data={r.curve} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
+              <ReferenceLine y={r.start} stroke={T.line} strokeDasharray="3 3" />
+              <XAxis dataKey="i" tick={{ fill: T.faint, fontSize: 11 }} stroke={T.line} />
+              <YAxis tick={{ fill: T.faint, fontSize: 11 }} stroke={T.line} tickFormatter={(v) => '$' + (v / 1000).toFixed(0) + 'k'} domain={['auto', 'auto']} />
+              <Tooltip contentStyle={{ background: T.surface2, border: `1px solid ${T.line}`, borderRadius: 8, color: T.text }} formatter={(v, n) => [fmt$(v), n === 'balance' ? 'Balance' : 'Floor']} />
+              <Line type="monotone" dataKey="floor" stroke={T.down} strokeWidth={1.5} strokeDasharray="4 3" dot={false} />
+              <Line type="monotone" dataKey="balance" stroke={T.accent} strokeWidth={2.5} dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        </Panel>
+      )}
     </div>
   )
 }
