@@ -15,6 +15,7 @@ endpoint with your own key.
 | Goals      | Weekly/monthly targets with live progress bars.                              |
 | AI Coach   | Chat that reads your real stats; plus a live price lookup (crypto + stocks). |
 | Chart AI   | Attach before/after screenshots to a trade, then "Analyze chart" — a vision model reads the chart and critiques the setup (offline via Ollama vision, or your cloud key). |
+| Patterns   | Pick a setup; the AI reads your winning vs losing charts and tells you what visually separates them. |
 | Settings   | Pick Ollama vs cloud, set model + endpoint, test the connection.             |
 
 Data is stored in a SQLite file in your OS user-data folder, so it survives

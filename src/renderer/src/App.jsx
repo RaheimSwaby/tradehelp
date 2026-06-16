@@ -7,7 +7,7 @@ import {
   BookOpen, LayoutDashboard, Brain, Target, Bot, Settings as SettingsIcon,
   Plus, Trash2, TrendingUp, Send, Sparkles, Search, X,
   Zap, Square, CheckSquare, AlertTriangle, Play, Paperclip, ImagePlus, Gauge, Lock,
-  Trophy, Shield, Snowflake, Camera
+  Trophy, Shield, Snowflake, Camera, ScanSearch
 } from 'lucide-react'
 
 /* ───────── theme (inline styles for color; Tailwind for layout) ───────── */
@@ -486,6 +486,7 @@ export default function App() {
     ['rating', 'Rating', Gauge],
     ['goals', 'Goals', Target],
     ['coach', 'AI Coach', Bot],
+    ['patterns', 'Patterns', ScanSearch],
     ['settings', 'Settings', SettingsIcon]
   ]
 
@@ -543,6 +544,7 @@ export default function App() {
             {tab === 'rating' && <Rating trades={trades} stats={stats} achievements={achievements} unlockedAt={unlockedAt} />}
             {tab === 'goals' && <Goals goals={goals} onSave={saveGoals} trades={trades} />}
             {tab === 'coach' && <Coach trades={trades} stats={stats} settings={settings} events={events} now={now} />}
+            {tab === 'patterns' && <Patterns trades={trades} />}
             {tab === 'settings' && <SettingsTab settings={settings} onSave={saveSettings} />}
           </>
         )}
@@ -1062,6 +1064,11 @@ direct, and supportive. If data is thin, say so honestly.`
 
 const VISION_SYSTEM = `You are a trading chart analyst inside a trader's journal. You are shown the screenshot(s) of ONE trade plus its details (symbol, direction, setup, outcome, R:R, emotion). Read the chart: describe the visible price structure (trend, key levels, candle behaviour), then judge whether the entry/exit and the stated setup look clean and consistent with what's on the chart — including any 'Before' vs 'After' images. Finish with ONE concrete, specific thing to repeat or fix next time. Do NOT predict future prices or give buy/sell signals. Keep it under ~160 words, concrete and direct.`
 
+// Cross-trade comparison runs in two passes so it works on weak local models too:
+// 1) describe each chart on its own, then 2) compare the descriptions as text.
+const CHART_DESCRIBE_SYSTEM = `You are a chart analyst. In 1-2 sentences, state ONLY what is visible in this trading chart: trend direction, notable levels, candle structure, and where price sits in its recent range. Be factual and concise. No advice, no predictions.`
+const COMPARE_SYSTEM = `You are a trading coach. You are given short factual descriptions of a trader's WINNING chart setups and, separately, their LOSING ones. Compare the two groups: what do the winners share, what recurring condition or mistake shows up in the losers, the single clearest visual difference, and ONE concrete rule to add to their pre-trade checklist. Give 2-4 specific points, then the rule. Under ~180 words. No price predictions or buy/sell calls.`
+
 function tradeContext(trades, stats) {
   const recent = [...trades].slice(-12).map((t) =>
     `${t.timestamp} ${t.symbol} ${t.direction} pnl=${fmtN(t.pnl)} rr=${t.rr ? fmtN(t.rr, 1) : '-'} setup=${t.setup} emotion=${t.emotion}`).join('\n')
@@ -1177,6 +1184,120 @@ function Coach({ trades, stats, settings, events, now }) {
           </p>
         </Panel>
       </div>
+    </div>
+  )
+}
+
+/* ───────── patterns: cross-trade chart comparison ───────── */
+function Patterns({ trades }) {
+  const withPics = useMemo(() => trades.filter((t) => (t.imageCount || 0) > 0), [trades])
+  const setups = useMemo(() => ['All setups', ...Array.from(new Set(withPics.map((t) => t.setup).filter(Boolean)))], [withPics])
+  const [setup, setSetup] = useState('All setups')
+  const [state, setState] = useState(null)
+  useEffect(() => { setState(null) }, [setup])
+
+  const pool = useMemo(() => withPics.filter((t) => setup === 'All setups' || t.setup === setup), [withPics, setup])
+  const winners = pool.filter((t) => (Number(t.pnl) || 0) >= 0)
+  const losers = pool.filter((t) => (Number(t.pnl) || 0) < 0)
+  const MAX = 3
+  const ready = winners.length > 0 && losers.length > 0
+  const reading = state?.phase === 'reading'
+
+  async function firstJpeg(id) {
+    const imgs = await window.api.listImages(id)
+    const first = (imgs || []).find((i) => i.dataUrl)
+    return first ? await toJpeg(first.dataUrl) : null
+  }
+
+  async function run() {
+    if (reading || !window.api?.aiChat) return
+    const byRecent = (a, b) => (b.timestamp || '').localeCompare(a.timestamp || '')
+    const picks = [
+      ...[...winners].sort(byRecent).slice(0, MAX).map((t) => ['win', t]),
+      ...[...losers].sort(byRecent).slice(0, MAX).map((t) => ['loss', t])
+    ]
+    setState({ phase: 'reading', done: 0, total: picks.length })
+    try {
+      const wins = [], losses = []
+      for (const [side, t] of picks) {
+        const url = await firstJpeg(t.id)
+        let desc = '(no image)'
+        if (url) {
+          const res = await window.api.aiChat({ system: CHART_DESCRIBE_SYSTEM, messages: [{ role: 'user', content: `Describe this ${t.symbol} ${t.setup || ''} chart.`, images: [url] }] })
+          desc = res?.ok ? res.text : `(couldn't read: ${res?.error || 'error'})`
+        }
+        ;(side === 'win' ? wins : losses).push({ symbol: t.symbol, dataUrl: url, desc })
+        setState((s) => (s?.phase === 'reading' ? { ...s, done: s.done + 1 } : s))
+      }
+      const block = (label, arr) => `${label}:\n` + arr.map((x, i) => `${i + 1}. ${x.symbol}: ${x.desc}`).join('\n')
+      const tag = setup === 'All setups' ? '' : ` ${setup}`
+      const summary = `${block(`WINNING${tag} trades`, wins)}\n\n${block(`LOSING${tag} trades`, losses)}`
+      const res = await window.api.aiChat({ system: COMPARE_SYSTEM, messages: [{ role: 'user', content: summary }] })
+      setState({ wins, losses, text: res?.ok ? res.text : null, error: res?.ok ? null : (res?.error || 'Comparison unavailable.') })
+    } catch (e) {
+      setState({ error: String(e?.message || e) })
+    }
+  }
+
+  if (withPics.length === 0) {
+    return <Panel title="Pattern finder"><div className="py-12 text-center text-sm" style={{ color: T.dim }}>Attach chart screenshots to a few winning and losing trades, then come back — this finds what separates them.</div></Panel>
+  }
+
+  const Thumbs = ({ title, arr, color }) => (
+    <div>
+      <div className="text-xs uppercase tracking-wider mb-1.5" style={{ color }}>{title}</div>
+      <div className="flex flex-wrap gap-2">
+        {arr.map((x, i) => (
+          <div key={i} className="rounded overflow-hidden" style={{ border: `1px solid ${color}`, width: 130 }} title={x.desc}>
+            {x.dataUrl ? <img src={x.dataUrl} alt="" className="w-full" style={{ height: 70, objectFit: 'cover' }} /> : <div style={{ height: 70, background: T.surface2 }} />}
+            <div className="px-1.5 py-0.5 text-xs truncate" style={{ color: T.dim, background: T.surface2 }}>{x.symbol}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+
+  return (
+    <div className="space-y-4">
+      <Panel title="Compare winners vs losers">
+        <p className="text-sm mb-3" style={{ color: T.dim }}>
+          The AI reads up to {MAX} winning and {MAX} losing charts for a setup, then tells you what visually separates them. Runs on your machine — the read is as good as your vision model (best with llama3.2-vision or a cloud key).
+        </p>
+        <div className="flex flex-wrap items-end gap-3">
+          <Field label="Setup">
+            <select style={inputStyle} className="rounded px-2 py-1.5 text-sm" value={setup} onChange={(e) => setSetup(e.target.value)}>
+              {setups.map((s) => <option key={s}>{s}</option>)}
+            </select>
+          </Field>
+          <div className="text-xs pb-2" style={{ color: T.faint }}>
+            <span style={{ color: T.up }}>{winners.length} win{winners.length === 1 ? '' : 's'}</span> · <span style={{ color: T.down }}>{losers.length} loss{losers.length === 1 ? '' : 'es'}</span> with screenshots
+          </div>
+          <button type="button" onClick={run} disabled={!ready || reading}
+            className="ml-auto flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-semibold"
+            style={{ background: T.accent, color: '#1A1306', opacity: (!ready || reading) ? 0.5 : 1 }}>
+            <ScanSearch size={15} /> {reading ? `Reading ${state.done}/${state.total}…` : 'Find patterns'}
+          </button>
+        </div>
+        {!ready && <div className="text-xs mt-2" style={{ color: T.faint }}>Need at least one winning and one losing trade with a screenshot{setup === 'All setups' ? '' : ' for this setup'}.</div>}
+      </Panel>
+
+      {state?.wins && (
+        <Panel title="Charts compared">
+          <div className="space-y-3">
+            <Thumbs title="Winners" arr={state.wins} color={T.up} />
+            <Thumbs title="Losers" arr={state.losses} color={T.down} />
+          </div>
+        </Panel>
+      )}
+
+      {state && (state.text || state.error) && (
+        <Panel title="What separates them">
+          {state.error
+            ? <div className="text-sm" style={{ color: T.down }}>⚠︎ {state.error}</div>
+            : <div className="text-sm whitespace-pre-wrap" style={{ color: '#F3D9A0' }}>{state.text}</div>}
+          {state.text && <div className="text-xs mt-2" style={{ color: T.faint }}>AI pattern read · not financial advice</div>}
+        </Panel>
+      )}
     </div>
   )
 }
