@@ -3,6 +3,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 const api = {
   listTrades: () => ipcRenderer.invoke('trades:list'),
   addTrade: (t) => ipcRenderer.invoke('trades:add', t),
+  importTrades: (rows) => ipcRenderer.invoke('trades:import', rows),
   deleteTrade: (id) => ipcRenderer.invoke('trades:delete', id),
 
   listImages: (tradeId) => ipcRenderer.invoke('images:list', tradeId),

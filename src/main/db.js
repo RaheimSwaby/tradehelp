@@ -22,7 +22,7 @@ export function initDb() {
       entry REAL, exit REAL, stop REAL, target REAL, size REAL,
       riskAmount REAL, pnl REAL, rr REAL,
       emotion TEXT, setup TEXT, notes TEXT, timestamp TEXT,
-      entryTime TEXT, exitTime TEXT, reason TEXT
+      entryTime TEXT, exitTime TEXT, reason TEXT, source TEXT
     );
     CREATE TABLE IF NOT EXISTS goals (
       id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -44,7 +44,7 @@ export function initDb() {
 
   // Migrate older DBs that predate columns added above.
   const tradeCols = new Set(db.prepare('PRAGMA table_info(trades)').all().map((c) => c.name))
-  for (const [name, type] of [['entryTime', 'TEXT'], ['exitTime', 'TEXT'], ['reason', 'TEXT']]) {
+  for (const [name, type] of [['entryTime', 'TEXT'], ['exitTime', 'TEXT'], ['reason', 'TEXT'], ['source', 'TEXT']]) {
     if (!tradeCols.has(name)) db.exec(`ALTER TABLE trades ADD COLUMN ${name} ${type}`)
   }
 
@@ -93,8 +93,8 @@ export const listTrades = () =>
     FROM trades t ORDER BY t.timestamp ASC, t.rowid ASC
   `).all()
 
-export function addTrade(t) {
-  const row = {
+function buildRow(t) {
+  return {
     id: String(t.id),
     symbol: String(t.symbol || ''),
     direction: String(t.direction || 'Long'),
@@ -104,14 +104,28 @@ export function addTrade(t) {
     emotion: String(t.emotion || ''), setup: String(t.setup || ''),
     notes: String(t.notes || ''),
     timestamp: String(t.timestamp || new Date().toISOString().slice(0, 16).replace('T', ' ')),
-    entryTime: String(t.entryTime || ''), exitTime: String(t.exitTime || ''), reason: String(t.reason || '')
+    entryTime: String(t.entryTime || ''), exitTime: String(t.exitTime || ''),
+    reason: String(t.reason || ''), source: String(t.source || 'manual')
   }
-  db.prepare(`
-    INSERT INTO trades
-      (id, symbol, direction, entry, exit, stop, target, size, riskAmount, pnl, rr, emotion, setup, notes, timestamp, entryTime, exitTime, reason)
-    VALUES
-      (@id, @symbol, @direction, @entry, @exit, @stop, @target, @size, @riskAmount, @pnl, @rr, @emotion, @setup, @notes, @timestamp, @entryTime, @exitTime, @reason)
-  `).run(row)
+}
+
+const INSERT_TRADE = `
+  INSERT INTO trades
+    (id, symbol, direction, entry, exit, stop, target, size, riskAmount, pnl, rr, emotion, setup, notes, timestamp, entryTime, exitTime, reason, source)
+  VALUES
+    (@id, @symbol, @direction, @entry, @exit, @stop, @target, @size, @riskAmount, @pnl, @rr, @emotion, @setup, @notes, @timestamp, @entryTime, @exitTime, @reason, @source)
+`
+
+export function addTrade(t) {
+  db.prepare(INSERT_TRADE).run(buildRow(t))
+  return listTrades()
+}
+
+// Bulk insert from a broker CSV — flagged source='import' so the rating can show "Verified".
+export function importTrades(list) {
+  const stmt = db.prepare(INSERT_TRADE)
+  const tx = db.transaction((rows) => { for (const r of rows) stmt.run(buildRow({ ...r, source: 'import' })) })
+  tx(Array.isArray(list) ? list : [])
   return listTrades()
 }
 

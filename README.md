@@ -9,7 +9,7 @@ endpoint with your own key.
 
 | Tab        | What it does                                                                 |
 |------------|------------------------------------------------------------------------------|
-| Journal    | Log trades (long/short, entry/exit/stop/target, size, risk). Auto-calcs P&L + R:R. |
+| Journal    | Log trades (long/short, entry/exit/stop/target, size, risk). Auto-calcs P&L + R:R. Import a broker CSV (any layout — you map the columns); imported trades count as **Verified** on your rating. |
 | Dashboard  | Net P&L, win rate, profit factor, expectancy, max drawdown, streaks, equity curve, daily P&L. |
 | Psychology | P&L by emotion, by setup, and by hour of day.                                |
 | Goals      | Weekly/monthly targets with live progress bars.                              |

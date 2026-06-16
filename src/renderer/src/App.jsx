@@ -7,7 +7,7 @@ import {
   BookOpen, LayoutDashboard, Brain, Target, Bot, Settings as SettingsIcon,
   Plus, Trash2, TrendingUp, Send, Sparkles, Search, X,
   Zap, Square, CheckSquare, AlertTriangle, Play, Paperclip, ImagePlus, Gauge, Lock,
-  Trophy, Shield, Snowflake, Camera, ScanSearch
+  Trophy, Shield, Snowflake, Camera, ScanSearch, Upload, BadgeCheck
 } from 'lucide-react'
 
 /* ───────── theme (inline styles for color; Tailwind for layout) ───────── */
@@ -103,6 +103,52 @@ function fmtDuration(ms) {
   const d = Math.floor(h / 24), rh = h % 24
   return rh ? `${d}d ${rh}h` : `${d}d`
 }
+
+// ── CSV import helpers ──
+function parseCSV(text) {
+  const rows = []
+  let row = [], cur = '', inQ = false
+  text = String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]
+    if (inQ) {
+      if (c === '"') { if (text[i + 1] === '"') { cur += '"'; i++ } else inQ = false }
+      else cur += c
+    } else if (c === '"') inQ = true
+    else if (c === ',') { row.push(cur); cur = '' }
+    else if (c === '\n') { row.push(cur); rows.push(row); row = []; cur = '' }
+    else cur += c
+  }
+  if (cur !== '' || row.length) { row.push(cur); rows.push(row) }
+  return rows.filter((r) => r.some((c) => String(c).trim() !== ''))
+}
+function csvNum(v) {
+  let s = String(v ?? '').trim().replace(/[$,\s]/g, '')
+  if (!s) return 0
+  let neg = false
+  if (/^\(.*\)$/.test(s)) { neg = true; s = s.slice(1, -1) }
+  const n = parseFloat(s)
+  return Number.isFinite(n) ? (neg ? -Math.abs(n) : n) : 0
+}
+function csvDate(v) {
+  const s = String(v || '').trim()
+  if (!s) return ''
+  const d = new Date(s)
+  if (isNaN(d)) return ''
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`
+}
+const normDir = (v) => (/^\s*(s|sell|short|sld|sold)/i.test(String(v || '')) ? 'Short' : 'Long')
+// [field, label, header-guess regex, required]
+const IMPORT_FIELDS = [
+  ['symbol', 'Symbol', /symbol|ticker|instrument|contract|product/i, true],
+  ['direction', 'Direction', /side|action|direction|b\/s|buy|sell|long|short|type/i, false],
+  ['size', 'Size / qty', /qty|quantity|size|shares|contracts|volume|lots|filled/i, false],
+  ['entry', 'Entry price', /entry.*price|open.*price|avg.*entry|buy.*price|price.*open|^entry$|fill.*price/i, false],
+  ['exit', 'Exit price', /exit.*price|close.*price|sell.*price|price.*close|^exit$/i, false],
+  ['pnl', 'Net P&L', /pnl|p&l|p\/l|profit|realized|net|gain/i, false],
+  ['entryTime', 'Entry time', /entry.*time|open.*time|time.*open|date.*open|entry.*date|opened|^date$|^time$|timestamp/i, false],
+  ['exitTime', 'Exit time', /exit.*time|close.*time|time.*close|date.*close|exit.*date|closed/i, false]
+]
 
 // ── economic-calendar helpers ──
 const IMPACT_RANK = { High: 3, Medium: 2, Low: 1, Holiday: 0, None: 0 }
@@ -279,7 +325,8 @@ function computeRating(trades, stats) {
     : medHold < 2 * 864e5 ? 'Swing Trader'
     : 'Position Trader'
 
-  return { ovr, attrs, archetype, provisional: n < 20, sampleN: n, verified: false }
+  const imported = trades.filter((t) => t.source === 'import').length
+  return { ovr, attrs, archetype, provisional: n < 20, sampleN: n, imported }
 }
 
 // Achievements reward BEHAVIOUR, not P&L — and use "best ever" tallies so they stay earned.
@@ -406,6 +453,7 @@ export default function App() {
     setTrades(await window.api.listTrades())
   }
   async function removeTrade(id) { if (hasApi) setTrades(await window.api.deleteTrade(id)) }
+  async function importTrades(rows) { if (hasApi) setTrades(await window.api.importTrades(rows)) }
   async function saveGoals(g) { if (hasApi) setGoals(await window.api.setGoals(g)) }
   async function saveSettings(s) { if (hasApi) setSettings(await window.api.setSettings(s)) }
 
@@ -537,7 +585,7 @@ export default function App() {
           </div>
         ) : (
           <>
-            {tab === 'journal' && <Journal trades={trades} onAdd={addTrade} onRemove={removeTrade} onNotes={setNotesView} />}
+            {tab === 'journal' && <Journal trades={trades} onAdd={addTrade} onRemove={removeTrade} onNotes={setNotesView} onImport={importTrades} />}
             {tab === 'trade' && <TradeModeTab settings={settings} onSave={saveSettings} rules={rules} live={tradeMode} todayNet={todayNet} todayCount={todayTrades.length} weekNet={weekNet} goal={dailyGoal} maxLoss={maxLoss} onStart={startDay} onEnd={endSession} />}
             {tab === 'dashboard' && <Dashboard stats={stats} />}
             {tab === 'psych' && <Psychology stats={stats} />}
@@ -577,10 +625,11 @@ function UpdateBanner({ onInstall }) {
 }
 
 /* ───────── journal ───────── */
-function Journal({ trades, onAdd, onRemove, onNotes }) {
+function Journal({ trades, onAdd, onRemove, onNotes, onImport }) {
   const blank = { symbol: '', direction: 'Long', entry: '', exit: '', stop: '', target: '', size: '', riskAmount: '', pnl: '', emotion: 'Neutral', setup: 'Pullback', notes: '', entryTime: nowLocalInput(), exitTime: nowLocalInput(), reason: '' }
   const [f, setF] = useState(blank)
   const [images, setImages] = useState([])
+  const [importOpen, setImportOpen] = useState(false)
   const fileRef = useRef(null)
   const set = (k) => (e) => setF((p) => ({ ...p, [k]: e.target.value }))
 
@@ -737,8 +786,9 @@ function Journal({ trades, onAdd, onRemove, onNotes }) {
       </div>
 
       <div className="rounded-xl overflow-hidden" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
-        <div className="px-4 py-3 text-sm font-semibold" style={{ borderBottom: `1px solid ${T.line}` }}>
-          Trade history <span style={{ color: T.faint }}>· {trades.length}</span>
+        <div className="px-4 py-3 flex items-center justify-between" style={{ borderBottom: `1px solid ${T.line}` }}>
+          <span className="text-sm font-semibold">Trade history <span style={{ color: T.faint }}>· {trades.length}</span></span>
+          <button type="button" onClick={() => setImportOpen(true)} className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-md" style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}` }}><Upload size={13} /> Import CSV</button>
         </div>
         {trades.length === 0 ? (
           <div className="px-4 py-16 text-center text-sm" style={{ color: T.dim }}>No trades yet. Log your first one — your edge shows up after a handful.</div>
@@ -775,6 +825,7 @@ function Journal({ trades, onAdd, onRemove, onNotes }) {
         )}
         <div className="px-4 py-2 text-xs" style={{ color: T.faint, borderTop: `1px solid ${T.line}` }}>Double-click a row to view its notes &amp; screenshots.</div>
       </div>
+      {importOpen && <ImportModal onClose={() => setImportOpen(false)} onImport={async (rows) => { await onImport(rows); setImportOpen(false) }} />}
     </div>
   )
 }
@@ -903,6 +954,9 @@ function Rating({ trades, stats, achievements, unlockedAt }) {
   }
   const tier = r.ovr >= 90 ? 'Superstar' : r.ovr >= 84 ? 'Elite' : r.ovr >= 76 ? 'All-Star' : r.ovr >= 68 ? 'Starter' : 'Prospect'
   const ovrColor = r.provisional ? T.dim : r.ovr >= 84 ? T.up : r.ovr >= 68 ? T.accent : T.down
+  const verified = r.imported > 0
+  const vLabel = r.imported >= r.sampleN ? 'Verified' : verified ? `Verified ${r.imported}/${r.sampleN}` : 'Self-reported'
+  const VIcon = verified ? BadgeCheck : Lock
   const ATTRS = [
     ['Edge', r.attrs.edge], ['Discipline', r.attrs.discipline], ['Risk Mgmt', r.attrs.risk],
     ['Consistency', r.attrs.consistency], ['Patience', r.attrs.patience]
@@ -913,7 +967,7 @@ function Rating({ trades, stats, achievements, unlockedAt }) {
       <div className="rounded-xl p-5" style={{ background: `linear-gradient(160deg, ${T.surface2}, ${T.surface})`, border: `1px solid ${T.line}` }}>
         <div className="flex items-center justify-between">
           <span className="text-xs uppercase tracking-wider" style={{ color: T.faint }}>Overall</span>
-          <span className="text-xs px-1.5 py-0.5 rounded inline-flex items-center gap-1" style={{ color: T.faint, border: `1px solid ${T.line}` }}><Lock size={11} /> {r.verified ? 'Verified' : 'Self-reported'}</span>
+          <span className="text-xs px-1.5 py-0.5 rounded inline-flex items-center gap-1" style={{ color: verified ? T.up : T.faint, border: `1px solid ${verified ? T.up : T.line}` }}><VIcon size={11} /> {vLabel}</span>
         </div>
         <div className="flex items-end gap-3 mt-1">
           <div style={{ fontSize: 64, lineHeight: 1, fontWeight: 800, ...mono, color: ovrColor }}>{r.ovr}</div>
@@ -1399,6 +1453,120 @@ function SettingsTab({ settings, onSave }) {
           Keyless by default (ForexFactory weekly feed). You'll get a subtle banner and a desktop notification before a high-impact event, plus a warning in the Trade Mode pre-flight.
         </p>
       </Panel>
+    </div>
+  )
+}
+
+/* ───────── CSV import modal ───────── */
+function ImportModal({ onClose, onImport }) {
+  const [data, setData] = useState(null) // { headers, rows }
+  const [map, setMap] = useState({})
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState(null)
+  const fileRef = useRef(null)
+  const inp = 'w-full rounded px-2 py-1.5 text-sm'
+
+  async function onFile(file) {
+    if (!file) return
+    setErr(null)
+    try {
+      const all = parseCSV(await file.text())
+      if (all.length < 2) { setErr('That file has a header but no data rows.'); return }
+      const headers = all[0].map((h) => h.trim())
+      const guessed = {}
+      for (const [field, , re] of IMPORT_FIELDS) guessed[field] = headers.find((h) => re.test(h)) || ''
+      setData({ headers, rows: all.slice(1) }); setMap(guessed)
+    } catch (e) { setErr('Could not read the CSV: ' + (e?.message || e)) }
+  }
+
+  const built = useMemo(() => {
+    if (!data) return []
+    const idx = (field) => (map[field] ? data.headers.indexOf(map[field]) : -1)
+    const cell = (row, field) => { const i = idx(field); return i >= 0 ? row[i] : '' }
+    return data.rows.map((row) => {
+      const sym = String(cell(row, 'symbol') || '').trim()
+      if (!sym) return null
+      const dir = normDir(cell(row, 'direction'))
+      const entry = csvNum(cell(row, 'entry')), exit = csvNum(cell(row, 'exit')), size = csvNum(cell(row, 'size'))
+      const pnl = map.pnl ? csvNum(cell(row, 'pnl')) : (entry && exit && size ? (exit - entry) * size * (dir === 'Long' ? 1 : -1) : 0)
+      const et = csvDate(cell(row, 'entryTime')), xt = csvDate(cell(row, 'exitTime'))
+      return {
+        id: Date.now().toString(36) + Math.random().toString(16).slice(2),
+        symbol: sym.toUpperCase(), direction: dir, entry, exit, stop: 0, target: 0, size, riskAmount: 0,
+        pnl, rr: 0, emotion: '', setup: '', notes: '', reason: '',
+        entryTime: et, exitTime: xt,
+        timestamp: et || xt || new Date().toISOString().slice(0, 16).replace('T', ' '), source: 'import'
+      }
+    }).filter(Boolean)
+  }, [data, map])
+
+  async function doImport() {
+    if (!built.length) { setErr('No rows had a symbol — check the Symbol mapping.'); return }
+    setBusy(true)
+    try { await onImport(built) } catch (e) { setErr(String(e?.message || e)); setBusy(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 flex items-center justify-center p-4 z-50" style={{ background: 'rgba(0,0,0,0.65)' }} onClick={onClose}>
+      <div className="rounded-xl w-full max-w-2xl max-h-[88vh] overflow-y-auto" style={{ background: T.surface, border: `1px solid ${T.line}` }} onClick={(e) => e.stopPropagation()}>
+        <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${T.line}` }}>
+          <div className="flex items-center gap-2"><Upload size={18} style={{ color: T.accent }} /><span className="text-sm font-semibold">Import trades from CSV</span></div>
+          <button type="button" onClick={onClose} style={{ color: T.faint }}><X size={18} /></button>
+        </div>
+        <div className="px-5 py-4 space-y-4">
+          {!data ? (
+            <div onClick={() => fileRef.current?.click()} onDrop={(e) => { e.preventDefault(); onFile(e.dataTransfer?.files?.[0]) }} onDragOver={(e) => e.preventDefault()}
+              className="rounded-lg py-10 text-center cursor-pointer" style={{ background: T.surface2, border: `1px dashed ${T.line}` }}>
+              <Upload size={22} style={{ color: T.accent, display: 'inline' }} />
+              <div className="text-sm mt-2" style={{ color: T.dim }}>Drop your broker's CSV export here, or click to choose</div>
+              <div className="text-xs mt-1" style={{ color: T.faint }}>NinjaTrader, Tradovate, ThinkorSwim, IBKR, Webull… any CSV with headers</div>
+              <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => onFile(e.target.files?.[0])} />
+            </div>
+          ) : (
+            <>
+              <div className="text-xs" style={{ color: T.dim }}>{data.rows.length} rows · map your columns (we guessed — fix any that are off):</div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {IMPORT_FIELDS.map(([field, label, , req]) => (
+                  <Field key={field} label={label + (req ? ' *' : '')}>
+                    <select style={inputStyle} className={inp} value={map[field] || ''} onChange={(e) => setMap((m) => ({ ...m, [field]: e.target.value }))}>
+                      <option value="">—</option>
+                      {data.headers.map((h) => <option key={h} value={h}>{h}</option>)}
+                    </select>
+                  </Field>
+                ))}
+              </div>
+              <div>
+                <div className="text-xs uppercase tracking-wider mb-1" style={{ color: T.faint }}>Preview</div>
+                <div className="overflow-x-auto rounded-lg" style={{ border: `1px solid ${T.line}` }}>
+                  <table className="w-full text-xs" style={mono}>
+                    <thead><tr style={{ color: T.faint }}>{['Symbol', 'Dir', 'Entry', 'Exit', 'P&L', 'Entry time'].map((h) => <th key={h} className="text-left px-2 py-1 font-normal">{h}</th>)}</tr></thead>
+                    <tbody>
+                      {built.slice(0, 3).map((t) => (
+                        <tr key={t.id} style={{ borderTop: `1px solid ${T.line}` }}>
+                          <td className="px-2 py-1">{t.symbol}</td>
+                          <td className="px-2 py-1" style={{ color: t.direction === 'Long' ? T.up : T.down }}>{t.direction}</td>
+                          <td className="px-2 py-1">{t.entry || '—'}</td>
+                          <td className="px-2 py-1">{t.exit || '—'}</td>
+                          <td className="px-2 py-1" style={{ color: t.pnl >= 0 ? T.up : T.down }}>{fmt$(t.pnl)}</td>
+                          <td className="px-2 py-1" style={{ color: T.dim }}>{t.entryTime || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
+          {err && <div className="text-xs" style={{ color: T.down }}>{err}</div>}
+        </div>
+        <div className="px-5 py-4 flex items-center justify-between gap-2" style={{ borderTop: `1px solid ${T.line}` }}>
+          <span className="text-xs" style={{ color: T.faint }}>Imported trades count as <span style={{ color: T.up }}>Verified</span> on your rating.</span>
+          <div className="flex gap-2">
+            {data && <button type="button" onClick={() => { setData(null); setMap({}); setErr(null) }} className="rounded-md px-3 py-2 text-sm" style={{ background: T.surface2, color: T.text, border: `1px solid ${T.line}` }}>Choose another</button>}
+            <button type="button" disabled={!data || busy} onClick={doImport} className="rounded-md px-4 py-2 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306', opacity: (!data || busy) ? 0.5 : 1 }}>{busy ? 'Importing…' : `Import ${built.length} trades`}</button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

@@ -46,6 +46,7 @@ app.on('window-all-closed', () => {
 function registerIpc() {
   ipcMain.handle('trades:list', () => db.listTrades())
   ipcMain.handle('trades:add', (_e, t) => db.addTrade(t))
+  ipcMain.handle('trades:import', (_e, rows) => db.importTrades(rows))
   ipcMain.handle('trades:delete', (_e, id) => db.deleteTrade(id))
 
   ipcMain.handle('images:list', (_e, tradeId) => db.listImages(tradeId))
