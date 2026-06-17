@@ -72,6 +72,23 @@ const parseRules = (s) => {
   catch { return [] }
 }
 
+// Streams an AI reply: calls onChunk(delta) as tokens arrive, resolves with the full text.
+// Falls back to the non-streaming call (firing onChunk once) if streaming isn't available.
+function streamChat(payload, onChunk) {
+  return new Promise((resolve, reject) => {
+    const api = typeof window !== 'undefined' && window.api
+    if (api?.aiChatStream) {
+      api.aiChatStream(payload, {
+        onChunk: (d) => { try { onChunk?.(d) } catch {} },
+        onDone: (text) => resolve(text || ''),
+        onError: (err) => reject(new Error(err || 'AI unavailable'))
+      })
+    } else if (api?.aiChat) {
+      api.aiChat(payload).then((r) => { if (r?.ok) { onChunk?.(r.text); resolve(r.text) } else reject(new Error(r?.error || 'AI unavailable')) }).catch(reject)
+    } else reject(new Error('AI unavailable'))
+  })
+}
+
 // ── image helpers: downscale on the client so the DB + IPC stay light ──
 const fileToDataUrl = (file) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file) })
 const loadImg = (src) => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src })
@@ -1333,8 +1350,9 @@ function Reviews({ trades, reviews, onSave }) {
     if (!window.api?.aiChat || ai?.loading) return
     setAi({ loading: true })
     try {
-      const res = await window.api.aiChat({ system: REVIEW_SYSTEM, messages: [{ role: 'user', content: `Here is my ${periodLabel(period, gran)} performance:\n\n${tradeContext(periodTrades, stats)}` }] })
-      setAi(res?.ok ? { text: res.text } : { error: res?.error || 'Unavailable' })
+      let acc = ''
+      await streamChat({ system: REVIEW_SYSTEM, messages: [{ role: 'user', content: `Here is my ${periodLabel(period, gran)} performance:\n\n${tradeContext(periodTrades, stats)}` }] },
+        (d) => { acc += d; setAi({ text: acc }) })
     } catch (e) { setAi({ error: String(e?.message || e) }) }
   }
 
@@ -1614,27 +1632,28 @@ function Coach({ trades, stats, settings, events, now }) {
   const [msgs, setMsgs] = useState([])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
+  const [streamText, setStreamText] = useState(null)
   const [price, setPrice] = useState({ sym: '', out: null, loading: false })
   const scrollRef = useRef(null)
-  useEffect(() => { scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight) }, [msgs, busy])
+  useEffect(() => { scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight) }, [msgs, busy, streamText])
 
   const modelLabel = settings?.provider === 'cloud' ? settings?.cloudModel : settings?.ollamaModel
 
   async function ask(userText) {
     if (busy) return
     const next = [...msgs, { role: 'user', content: userText }]
-    setMsgs(next); setInput(''); setBusy(true)
+    setMsgs(next); setInput(''); setBusy(true); setStreamText('')
+    const apiMsgs = [
+      { role: 'user', content: `Here is my current journal data:\n\n${tradeContext(trades, stats)}` },
+      { role: 'assistant', content: 'Got it — I have your stats and recent trades in front of me.' },
+      ...next
+    ]
     try {
-      const apiMsgs = [
-        { role: 'user', content: `Here is my current journal data:\n\n${tradeContext(trades, stats)}` },
-        { role: 'assistant', content: 'Got it — I have your stats and recent trades in front of me.' },
-        ...next
-      ]
-      const res = await window.api.aiChat({ system: COACH_SYSTEM, messages: apiMsgs })
-      setMsgs((m) => [...m, { role: 'assistant', content: res?.ok ? res.text : `⚠︎ ${res?.error || 'Coach unavailable.'}` }])
+      const full = await streamChat({ system: COACH_SYSTEM, messages: apiMsgs }, (d) => setStreamText((s) => (s || '') + d))
+      setMsgs((m) => [...m, { role: 'assistant', content: full }])
     } catch (e) {
-      setMsgs((m) => [...m, { role: 'assistant', content: '⚠︎ Could not reach the model. Check Settings → make sure Ollama is running.' }])
-    } finally { setBusy(false) }
+      setMsgs((m) => [...m, { role: 'assistant', content: `⚠︎ ${e?.message || 'Could not reach the model. Check Settings.'}` }])
+    } finally { setStreamText(null); setBusy(false) }
   }
 
   async function checkPrice() {
@@ -1670,7 +1689,13 @@ function Coach({ trades, stats, settings, events, now }) {
               <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap" style={{ background: m.role === 'user' ? T.surface2 : T.accentSoft, color: m.role === 'user' ? T.text : '#F3D9A0', border: `1px solid ${T.line}` }}>{m.content}</div>
             </div>
           ))}
-          {busy && <div className="text-sm" style={{ color: T.accent }}>Coach is thinking…</div>}
+          {streamText !== null && (
+            <div className="flex" style={{ justifyContent: 'flex-start' }}>
+              <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap" style={{ background: T.accentSoft, color: '#F3D9A0', border: `1px solid ${T.line}` }}>
+                {streamText || 'Coach is thinking…'}
+              </div>
+            </div>
+          )}
         </div>
         <div className="px-4 pt-2" style={{ borderTop: `1px solid ${T.line}` }}>
           <div className="flex flex-wrap gap-1.5 py-2">
@@ -1760,10 +1785,11 @@ function Patterns({ trades }) {
       const block = (label, arr) => `${label}:\n` + arr.map((x, i) => `${i + 1}. ${x.symbol}: ${x.desc}`).join('\n')
       const tag = setup === 'All setups' ? '' : ` ${setup}`
       const summary = `${block(`WINNING${tag} trades`, wins)}\n\n${block(`LOSING${tag} trades`, losses)}`
-      const res = await window.api.aiChat({ system: COMPARE_SYSTEM, messages: [{ role: 'user', content: summary }] })
-      setState({ wins, losses, text: res?.ok ? res.text : null, error: res?.ok ? null : (res?.error || 'Comparison unavailable.') })
+      setState({ wins, losses, text: '' })
+      let acc = ''
+      await streamChat({ system: COMPARE_SYSTEM, messages: [{ role: 'user', content: summary }] }, (d) => { acc += d; setState((s) => ({ ...s, text: acc })) })
     } catch (e) {
-      setState({ error: String(e?.message || e) })
+      setState((s) => ({ ...(s && s.wins ? s : {}), error: String(e?.message || e) }))
     }
   }
 
@@ -2172,11 +2198,9 @@ function NotesModal({ trade, onClose }) {
         `Image tags (in order): ${withPics.map((i) => i.tag || 'untagged').join(', ')}`,
         `Notes: ${trade.notes || '(none)'}`
       ].join('\n')
-      const res = await window.api.aiChat({
-        system: VISION_SYSTEM,
-        messages: [{ role: 'user', content: `Here is my trade and its chart screenshot(s).\n\n${ctx}`, images: jpegs }]
-      })
-      setAnalysis(res?.ok ? { text: res.text } : { error: res?.error || 'Analysis unavailable.' })
+      let acc = ''
+      await streamChat({ system: VISION_SYSTEM, messages: [{ role: 'user', content: `Here is my trade and its chart screenshot(s).\n\n${ctx}`, images: jpegs }] },
+        (d) => { acc += d; setAnalysis({ text: acc }) })
     } catch (e) {
       setAnalysis({ error: String(e?.message || e) })
     }

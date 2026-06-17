@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron'
 import { join } from 'path'
 import { writeFileSync, readFileSync } from 'fs'
 import * as db from './db.js'
-import { chat, models } from './ai.js'
+import { chat, chatStream, models } from './ai.js'
 import { fetchPrice, fetchQuotes } from './price.js'
 import { fetchEvents } from './events.js'
 import { initUpdater } from './updater.js'
@@ -94,6 +94,17 @@ function registerIpc() {
       return { ok: true, text }
     } catch (err) {
       return { ok: false, error: String(err?.message || err) }
+    }
+  })
+
+  ipcMain.on('ai:stream:start', async (e, { id, payload }) => {
+    try {
+      const text = await chatStream(db.getSettings(), payload, (delta) => {
+        try { e.sender.send('ai:stream:chunk', { id, delta }) } catch {}
+      })
+      try { e.sender.send('ai:stream:end', { id, text }) } catch {}
+    } catch (err) {
+      try { e.sender.send('ai:stream:error', { id, error: String(err?.message || err) }) } catch {}
     }
   })
 
