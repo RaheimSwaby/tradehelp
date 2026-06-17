@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TradeHelp — local-first trading journal & offline AI coach</title>
+<meta name="description" content="A desktop trading journal with an offline AI coach. Your trades live on your machine and never leave it. Free to download for Windows." />
+<link rel="icon" href="logo.svg" />
+<style>
+  :root{
+    --bg:#0E1117; --surface:#151B26; --surface2:#1C2433; --line:#2A3344;
+    --text:#E6EAF2; --dim:#8A94A6; --faint:#5A6478; --accent:#F5B642; --up:#34D399; --down:#FB7185;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.6;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1040px;margin:0 auto;padding:0 24px}
+  a{color:inherit;text-decoration:none}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+
+  nav{display:flex;align-items:center;justify-content:space-between;padding:20px 0}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px;letter-spacing:-.01em}
+  .brand .h{color:var(--accent)}
+  .btn{display:inline-flex;align-items:center;gap:8px;background:var(--accent);color:#1A1306;font-weight:600;padding:11px 18px;border-radius:10px;border:none;cursor:pointer;font-size:15px}
+  .btn.ghost{background:var(--surface2);color:var(--text);border:1px solid var(--line)}
+  .btn:hover{filter:brightness(1.05)}
+
+  header.hero{text-align:center;padding:56px 0 40px}
+  .pill{display:inline-block;font-size:12px;color:var(--faint);border:1px solid var(--line);border-radius:999px;padding:4px 12px;margin-bottom:22px}
+  h1{font-size:clamp(34px,5vw,52px);line-height:1.1;letter-spacing:-.02em;font-weight:700}
+  h1 .accent{color:var(--accent)}
+  .sub{color:var(--dim);font-size:clamp(16px,2.2vw,20px);max-width:620px;margin:18px auto 30px}
+  .cta{display:flex;gap:12px;justify-content:center;align-items:center;flex-wrap:wrap}
+  .note{color:var(--faint);font-size:13px;margin-top:14px}
+
+  .strip{border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:var(--surface);margin-top:48px}
+  .strip .wrap{display:flex;flex-wrap:wrap;gap:8px 28px;justify-content:center;padding:16px 24px;font-size:14px;color:var(--dim)}
+  .strip b{color:var(--text);font-weight:600}
+
+  section{padding:56px 0}
+  h2{font-size:28px;letter-spacing:-.01em;font-weight:700;text-align:center;margin-bottom:8px}
+  .lede{color:var(--dim);text-align:center;max-width:560px;margin:0 auto 36px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px}
+  .card h3{font-size:16px;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+  .dot{width:9px;height:9px;border-radius:3px;display:inline-block}
+  .card p{color:var(--dim);font-size:14.5px}
+
+  .privacy{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:34px;text-align:center}
+  .privacy h2{margin-bottom:10px}
+  .privacy p{color:var(--dim);max-width:620px;margin:0 auto}
+
+  footer{border-top:1px solid var(--line);padding:28px 0;color:var(--faint);font-size:13px;text-align:center}
+  footer a{color:var(--dim)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav>
+    <a class="brand" href="#"><img src="logo.svg" width="30" height="30" alt="" />Trade<span class="h">Help</span></a>
+    <a class="btn" href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.exe">Download</a>
+  </nav>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="pill">Offline · private · free</span>
+    <h1>Your trading edge,<br /><span class="accent">on your machine.</span></h1>
+    <p class="sub">A local-first trading journal with an offline AI coach. Log trades, grade your process, track prop-firm rules, and let AI read your charts — all without your data ever leaving your device.</p>
+    <div class="cta">
+      <a class="btn" href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.exe">
+        <img src="logo.svg" width="18" height="18" alt="" /> Download for Windows
+      </a>
+      <a class="btn ghost" href="https://github.com/RaheimSwaby/tradehelp/releases/latest">macOS / Linux</a>
+    </div>
+    <p class="note">Free · Windows 10/11 · first launch may show a SmartScreen prompt — click “More info → Run anyway”.</p>
+  </div>
+</header>
+
+<div class="strip">
+  <div class="wrap">
+    <span><b>Local-first</b> — SQLite on your machine</span>
+    <span><b>Offline AI</b> — runs on your own Ollama</span>
+    <span><b>No account</b> — nothing to sign up for</span>
+    <span><b>Auto-updates</b> — always current</span>
+  </div>
+</div>
+
+<section>
+  <div class="wrap">
+    <h2>Everything in one place</h2>
+    <p class="lede">A serious journal for serious traders — without the subscription or the cloud.</p>
+    <div class="grid">
+      <div class="card"><h3><span class="dot" style="background:var(--accent)"></span>Trade Mode</h3><p>Your own pre-trade checklist, daily goal &amp; max-loss lockout, and a focused “go time” view that flips the whole app when you're live.</p></div>
+      <div class="card"><h3><span class="dot" style="background:var(--accent)"></span>AI chart analysis</h3><p>Attach a screenshot and an offline vision model reads the chart — then compares your winning vs losing setups to find what separates them.</p></div>
+      <div class="card"><h3><span class="dot" style="background:var(--accent)"></span>Prop-firm tracking</h3><p>Track one or many challenges — profit target, daily loss, trailing drawdown — with live cushion-to-breach and a tightest-account flag.</p></div>
+      <div class="card"><h3><span class="dot" style="background:var(--up)"></span>Rating &amp; achievements</h3><p>A 59–99 trader rating that grades your <em>process</em>, not luck, plus psychology-based achievements and a non-tilt streak.</p></div>
+      <div class="card"><h3><span class="dot" style="background:var(--up)"></span>Reviews</h3><p>Weekly, monthly, quarterly and year-to-date reviews with stats, an equity curve, and a saved written reflection — with an optional AI summary.</p></div>
+      <div class="card"><h3><span class="dot" style="background:var(--down)"></span>Verified import</h3><p>Import any broker CSV — map the columns once — and your rating upgrades from “Self-reported” to “Verified”.</p></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="privacy">
+      <h2>Offline by design</h2>
+      <p>Your trades, notes and screenshots live in a single file on your computer. There's no server, no account, and no cloud — so your edge stays yours. The AI coach runs on your own machine through Ollama, or your own API key if you prefer.</p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    TradeHelp — not financial advice. An educational journaling tool. ·
+    <a href="https://github.com/RaheimSwaby/tradehelp">Source on GitHub</a>
+  </div>
+</footer>
+</body>
+</html>

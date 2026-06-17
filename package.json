@@ -1,6 +1,6 @@
 {
   "name": "tradehelp",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "description": "Local-first trading journal with an offline AI coach (Electron + React + SQLite + Ollama)",
   "main": "./out/main/index.js",
   "license": "MIT",
@@ -32,6 +32,7 @@
   "build": {
     "appId": "com.tradehelp.app",
     "productName": "TradeHelp",
+    "artifactName": "${productName}-Setup.${ext}",
     "asar": true,
     "publish": [
       {
