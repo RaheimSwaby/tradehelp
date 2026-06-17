@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3'
 import { app } from 'electron'
 import { join } from 'path'
-import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync, readdirSync } from 'fs'
 import { randomUUID } from 'crypto'
 
 let db
@@ -132,6 +132,15 @@ export function importTrades(list) {
   return listTrades()
 }
 
+export function updateTrade(t) {
+  db.prepare(`UPDATE trades SET
+    symbol=@symbol, direction=@direction, entry=@entry, exit=@exit, stop=@stop, target=@target,
+    size=@size, riskAmount=@riskAmount, pnl=@pnl, rr=@rr, emotion=@emotion, setup=@setup,
+    notes=@notes, timestamp=@timestamp, entryTime=@entryTime, exitTime=@exitTime,
+    reason=@reason, source=@source, account=@account WHERE id=@id`).run(buildRow(t))
+  return listTrades()
+}
+
 export function deleteTrade(id) {
   for (const img of db.prepare('SELECT file FROM trade_images WHERE tradeId = ?').all(String(id))) {
     try { unlinkSync(join(imagesDir, img.file)) } catch {}
@@ -216,4 +225,49 @@ export function setReview(period, text) {
   db.prepare('INSERT INTO reviews (period, text, updatedAt) VALUES (?, ?, ?) ON CONFLICT(period) DO UPDATE SET text = excluded.text, updatedAt = excluded.updatedAt')
     .run(String(period), String(text || ''), new Date().toISOString())
   return getReviews()
+}
+
+/* ───────── backup / export / import ───────── */
+const SECRET_KEYS = ['cloudKey', 'finnhubKey', 'fmpKey', 'licenseKey', 'licenseInstanceId']
+
+// Portable JSON snapshot of the journal (API keys stripped). Screenshots are files, not included.
+export function getAllData() {
+  const settings = getSettings()
+  for (const k of SECRET_KEYS) delete settings[k]
+  return {
+    app: 'tradehelp', version: 1, exportedAt: new Date().toISOString(),
+    trades: db.prepare('SELECT * FROM trades').all(),
+    goals: getGoals(),
+    reviews: getReviews(),
+    settings
+  }
+}
+
+export function restoreData(data) {
+  const tx = db.transaction((d) => {
+    if (Array.isArray(d.trades)) {
+      const ins = db.prepare(`INSERT OR REPLACE INTO trades
+        (id, symbol, direction, entry, exit, stop, target, size, riskAmount, pnl, rr, emotion, setup, notes, timestamp, entryTime, exitTime, reason, source, account)
+        VALUES (@id,@symbol,@direction,@entry,@exit,@stop,@target,@size,@riskAmount,@pnl,@rr,@emotion,@setup,@notes,@timestamp,@entryTime,@exitTime,@reason,@source,@account)`)
+      for (const t of d.trades) ins.run(buildRow(t))
+    }
+    if (d.goals) setGoals(d.goals)
+    if (d.reviews) for (const [p, text] of Object.entries(d.reviews)) setReview(p, text)
+    if (d.settings) setSettings(d.settings)
+  })
+  tx(data || {})
+  return { trades: listTrades(), goals: getGoals(), reviews: getReviews(), settings: getSettings() }
+}
+
+// Daily snapshot of the SQLite file into userData/backups, keeping the last 7.
+export function backupDb() {
+  try {
+    const dir = join(app.getPath('userData'), 'backups')
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+    const dest = join(dir, `tradehelp-${new Date().toISOString().slice(0, 10)}.db`)
+    db.backup(dest).then(() => {
+      const files = readdirSync(dir).filter((f) => f.endsWith('.db')).sort()
+      for (const f of files.slice(0, Math.max(0, files.length - 7))) { try { unlinkSync(join(dir, f)) } catch {} }
+    }).catch(() => {})
+  } catch {}
 }

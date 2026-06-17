@@ -7,7 +7,8 @@ import {
   BookOpen, LayoutDashboard, Brain, Target, Bot, Settings as SettingsIcon,
   Plus, Trash2, TrendingUp, Send, Sparkles, Search, X,
   Zap, Square, CheckSquare, AlertTriangle, Play, Paperclip, ImagePlus, Gauge, Lock,
-  Trophy, Shield, Snowflake, Camera, ScanSearch, Upload, BadgeCheck, Building2, ClipboardList
+  Trophy, Shield, Snowflake, Camera, ScanSearch, Upload, BadgeCheck, Building2, ClipboardList,
+  Pencil, CalendarDays, ChevronLeft, ChevronRight
 } from 'lucide-react'
 
 /* ───────── theme (inline styles for color; Tailwind for layout) ───────── */
@@ -35,6 +36,8 @@ function applyTheme(live) {
 
 // ⚠ Replace with your real Lemon Squeezy checkout link once the $20 product exists.
 const CHECKOUT_URL = 'https://YOUR-STORE.lemonsqueezy.com/buy/YOUR-PRODUCT-ID'
+// Until a real checkout link is set, the trial/paywall stays dormant so nobody hits a dead paywall.
+const GATE_CONFIGURED = !CHECKOUT_URL.includes('YOUR-STORE')
 
 const EMOTIONS = ['Disciplined', 'Confident', 'Neutral', 'Hesitant', 'Anxious', 'FOMO', 'Greedy', 'Revenge', 'Bored']
 const SETUPS = ['Opening Range Breakout', 'VWAP Reclaim', 'Pullback', 'Trend Continuation', 'Reversal', 'Liquidity Sweep']
@@ -537,8 +540,14 @@ export default function App() {
     for (const im of images) { try { await window.api.addImage(t.id, im) } catch { /* skip a bad image, keep the trade */ } }
     setTrades(await window.api.listTrades())
   }
+  async function updateTrade(t) { if (hasApi) setTrades(await window.api.updateTrade(t)) }
   async function removeTrade(id) { if (hasApi) setTrades(await window.api.deleteTrade(id)) }
   async function importTrades(rows) { if (hasApi) setTrades(await window.api.importTrades(rows)) }
+  async function reloadAll() {
+    if (!hasApi) return
+    setTrades(await window.api.listTrades()); setGoals(await window.api.getGoals())
+    setReviews(await window.api.getReviews()); setSettings(await window.api.getSettings())
+  }
   async function saveGoals(g) { if (hasApi) setGoals(await window.api.setGoals(g)) }
   async function saveReview(period, text) { if (hasApi) setReviews(await window.api.setReview(period, text)) }
   async function refreshLicense() { if (hasApi && window.api.getLicense) setLicense(await window.api.getLicense()) }
@@ -636,7 +645,7 @@ export default function App() {
   return (
     <div style={{ background: T.bg, color: T.text, minHeight: '100vh', borderTop: `3px solid ${tradeMode ? T.accent : 'transparent'}`, transition: 'background .3s' }}>
       <Ticker settings={settings} />
-      {license?.state === 'trial' && <TrialBanner days={license.daysLeft} />}
+      {GATE_CONFIGURED && license?.state === 'trial' && <TrialBanner days={license.daysLeft} />}
       {imminentEvent && <EventBanner event={imminentEvent} now={now} />}
       {tradeMode && <LiveBanner net={todayNet} goal={dailyGoal} maxLoss={maxLoss} lossHit={lossHit} onEnd={endSession} />}
       <div className="max-w-6xl mx-auto px-4 py-5">
@@ -679,21 +688,21 @@ export default function App() {
           <div className="py-20 text-center text-sm" style={{ color: T.down }}>
             This UI must run inside the Electron shell (npm run dev) to reach your local database.
           </div>
-        ) : license?.state === 'expired' ? (
+        ) : GATE_CONFIGURED && license?.state === 'expired' ? (
           <Paywall onActivated={refreshLicense} />
         ) : (
           <>
-            {tab === 'journal' && <Journal trades={trades} onAdd={addTrade} onRemove={removeTrade} onNotes={setNotesView} onImport={importTrades} accounts={propFirmAccounts} />}
+            {tab === 'journal' && <Journal trades={trades} onAdd={addTrade} onUpdate={updateTrade} onRemove={removeTrade} onNotes={setNotesView} onImport={importTrades} accounts={propFirmAccounts} />}
             {tab === 'trade' && <TradeModeTab settings={settings} onSave={saveSettings} rules={rules} live={tradeMode} todayNet={todayNet} todayCount={todayTrades.length} weekNet={weekNet} goal={dailyGoal} maxLoss={maxLoss} onStart={startDay} onEnd={endSession} />}
             {tab === 'propfirm' && <PropFirm trades={trades} accounts={propFirmAccounts} onSave={savePropFirmAccounts} />}
-            {tab === 'dashboard' && <Dashboard stats={stats} />}
+            {tab === 'dashboard' && <Dashboard stats={stats} trades={trades} />}
             {tab === 'psych' && <Psychology stats={stats} />}
             {tab === 'rating' && <Rating trades={trades} stats={stats} achievements={achievements} unlockedAt={unlockedAt} />}
             {tab === 'goals' && <Goals goals={goals} onSave={saveGoals} trades={trades} />}
             {tab === 'reviews' && <Reviews trades={trades} reviews={reviews} onSave={saveReview} />}
             {tab === 'coach' && <Coach trades={trades} stats={stats} settings={settings} events={events} now={now} />}
             {tab === 'patterns' && <Patterns trades={trades} />}
-            {tab === 'settings' && <SettingsTab settings={settings} onSave={saveSettings} license={license} onLicenseChange={refreshLicense} />}
+            {tab === 'settings' && <SettingsTab settings={settings} onSave={saveSettings} license={license} onLicenseChange={refreshLicense} onReload={reloadAll} />}
           </>
         )}
       </div>
@@ -725,12 +734,28 @@ function UpdateBanner({ onInstall }) {
 }
 
 /* ───────── journal ───────── */
-function Journal({ trades, onAdd, onRemove, onNotes, onImport, accounts = [] }) {
+function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, accounts = [] }) {
   const blank = { symbol: '', direction: 'Long', entry: '', exit: '', stop: '', target: '', size: '', riskAmount: '', pnl: '', emotion: 'Neutral', setup: 'Pullback', notes: '', entryTime: nowLocalInput(), exitTime: nowLocalInput(), reason: '', account: '' }
   const [f, setF] = useState(blank)
   const [images, setImages] = useState([])
   const [importOpen, setImportOpen] = useState(false)
+  const [editing, setEditing] = useState(null)
   const fileRef = useRef(null)
+
+  function startEdit(t) {
+    setEditing(t)
+    setImages([])
+    setF({
+      symbol: t.symbol || '', direction: t.direction || 'Long',
+      entry: String(t.entry ?? ''), exit: String(t.exit ?? ''), stop: String(t.stop ?? ''), target: String(t.target ?? ''),
+      size: String(t.size ?? ''), riskAmount: String(t.riskAmount ?? ''), pnl: String(t.pnl ?? ''),
+      emotion: t.emotion || 'Neutral', setup: t.setup || '', notes: t.notes || '',
+      entryTime: t.entryTime ? t.entryTime.replace(' ', 'T') : '', exitTime: t.exitTime ? t.exitTime.replace(' ', 'T') : '',
+      reason: t.reason || '', account: t.account || ''
+    })
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+  function cancelEdit() { setEditing(null); setF(blank) }
   const set = (k) => (e) => setF((p) => ({ ...p, [k]: e.target.value }))
 
   // Setup suggestions = presets + any custom setups already used. Free-text, so you can type your own.
@@ -786,21 +811,25 @@ function Journal({ trades, onAdd, onRemove, onNotes, onImport, accounts = [] }) 
     if (!f.symbol.trim()) return
     const pnl = f.pnl !== '' ? parseFloat(f.pnl) : (derivedPnl ?? 0)
     const rr = derivedRR ?? (f.riskAmount && f.pnl ? Math.abs(parseFloat(f.pnl)) / Math.abs(parseFloat(f.riskAmount)) : 0)
-    onAdd({
-      id: Date.now() + Math.random().toString(16).slice(2),
-      symbol: f.symbol.trim().toUpperCase(),
-      direction: f.direction,
+    const base = {
+      symbol: f.symbol.trim().toUpperCase(), direction: f.direction,
       entry: parseFloat(f.entry) || 0, exit: parseFloat(f.exit) || 0,
       stop: parseFloat(f.stop) || 0, target: parseFloat(f.target) || 0,
       size: parseFloat(f.size) || 0, riskAmount: parseFloat(f.riskAmount) || 0,
       pnl: isNaN(pnl) ? 0 : pnl, rr: rr || 0,
       emotion: f.emotion, setup: f.setup.trim(), notes: f.notes.trim(),
-      timestamp: new Date().toISOString().slice(0, 16).replace('T', ' '),
       entryTime: f.entryTime ? f.entryTime.replace('T', ' ') : '',
       exitTime: f.exitTime ? f.exitTime.replace('T', ' ') : '',
       reason: f.reason, account: f.account
-    }, images.map((im) => ({ dataUrl: im.dataUrl, tag: im.tag.trim(), caption: '' })))
-    setF(blank); setImages([])
+    }
+    if (editing) {
+      onUpdate({ ...base, id: editing.id, timestamp: editing.timestamp, source: editing.source || 'manual' })
+      setEditing(null); setF(blank)
+    } else {
+      onAdd({ ...base, id: Date.now() + Math.random().toString(16).slice(2), timestamp: new Date().toISOString().slice(0, 16).replace('T', ' ') },
+        images.map((im) => ({ dataUrl: im.dataUrl, tag: im.tag.trim(), caption: '' })))
+      setF(blank); setImages([])
+    }
   }
 
   const inp = 'w-full rounded px-2 py-1.5 text-sm'
@@ -808,8 +837,9 @@ function Journal({ trades, onAdd, onRemove, onNotes, onImport, accounts = [] }) 
     <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-5">
       <div className="rounded-xl p-4" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
         <div className="flex items-center gap-2 mb-3">
-          <Plus size={16} style={{ color: T.accent }} />
-          <h2 className="text-sm font-semibold">Log a trade</h2>
+          {editing ? <Pencil size={16} style={{ color: T.accent }} /> : <Plus size={16} style={{ color: T.accent }} />}
+          <h2 className="text-sm font-semibold">{editing ? `Edit trade · ${editing.symbol}` : 'Log a trade'}</h2>
+          {editing && <button type="button" onClick={cancelEdit} className="ml-auto text-xs" style={{ color: T.dim }}>Cancel</button>}
         </div>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Symbol"><input style={inputStyle} className={inp} value={f.symbol} onChange={set('symbol')} placeholder="ES, BTC, AAPL" /></Field>
@@ -860,6 +890,7 @@ function Journal({ trades, onAdd, onRemove, onNotes, onImport, accounts = [] }) 
         <div className="mt-3">
           <Field label="Notes"><textarea style={inputStyle} className={inp} rows={3} value={f.notes} onChange={set('notes')} placeholder="What did you see? What did you feel?" /></Field>
         </div>
+        {!editing && (
         <div className="mt-3">
           <Field label="Screenshots — before / after">
             <div
@@ -887,12 +918,16 @@ function Journal({ trades, onAdd, onRemove, onNotes, onImport, accounts = [] }) 
             </div>
           )}
         </div>
+        )}
         <div className="flex items-center justify-between mt-3 text-xs" style={{ color: T.dim }}>
           <span>R:R {derivedRR != null ? `1:${fmtN(derivedRR, 1)}` : '—'}</span>
           <span>Held {derivedHold != null ? fmtDuration(derivedHold) || '0m' : '—'}</span>
           <span>P&L {derivedPnl != null ? fmt$(derivedPnl) : '—'}</span>
         </div>
-        <button type="button" onClick={submit} className="w-full mt-3 rounded-md py-2 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306' }}>Save trade</button>
+        <div className="flex gap-2 mt-3">
+          <button type="button" onClick={submit} className="flex-1 rounded-md py-2 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306' }}>{editing ? 'Update trade' : 'Save trade'}</button>
+          {editing && <button type="button" onClick={cancelEdit} className="rounded-md px-3 py-2 text-sm" style={{ background: T.surface2, color: T.text, border: `1px solid ${T.line}` }}>Cancel</button>}
+        </div>
       </div>
 
       <div className="rounded-xl overflow-hidden" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
@@ -924,8 +959,9 @@ function Journal({ trades, onAdd, onRemove, onNotes, onImport, accounts = [] }) 
                     <td className="px-3 py-2" style={{ color: T.dim }}>{fmtDuration(holdMs(t)) || '—'}</td>
                     <td className="px-3 py-2" style={{ color: T.dim }}>{t.setup}</td>
                     <td className="px-3 py-2" style={{ color: T.dim }}>{t.emotion}</td>
-                    <td className="px-3 py-2 text-right">
-                      <button type="button" onClick={() => onRemove(t.id)} title="Delete" style={{ color: T.faint }}><Trash2 size={15} /></button>
+                    <td className="px-3 py-2 text-right whitespace-nowrap">
+                      <button type="button" onClick={() => startEdit(t)} title="Edit" style={{ color: T.faint }} className="mr-3"><Pencil size={14} /></button>
+                      <button type="button" onClick={() => { if (window.confirm('Delete this trade? This cannot be undone.')) onRemove(t.id) }} title="Delete" style={{ color: T.faint }}><Trash2 size={15} /></button>
                     </td>
                   </tr>
                 ))}
@@ -941,7 +977,58 @@ function Journal({ trades, onAdd, onRemove, onNotes, onImport, accounts = [] }) 
 }
 
 /* ───────── dashboard ───────── */
-function Dashboard({ stats }) {
+function PnlCalendar({ trades }) {
+  const [ym, setYm] = useState(() => new Date().toISOString().slice(0, 7))
+  const dayMap = useMemo(() => {
+    const m = {}
+    for (const t of trades || []) {
+      const d = (t.entryTime || t.timestamp || '').slice(0, 10)
+      if (d.slice(0, 7) !== ym) continue
+      if (!m[d]) m[d] = { pnl: 0, n: 0 }
+      m[d].pnl += Number(t.pnl) || 0; m[d].n += 1
+    }
+    return m
+  }, [trades, ym])
+  const [y, mo] = ym.split('-').map(Number)
+  const startDow = new Date(y, mo - 1, 1).getDay()
+  const days = new Date(y, mo, 0).getDate()
+  const vals = Object.values(dayMap)
+  const maxAbs = Math.max(1, ...vals.map((v) => Math.abs(v.pnl)))
+  const monthPnl = vals.reduce((a, v) => a + v.pnl, 0)
+  const greenDays = vals.filter((v) => v.pnl > 0).length
+  const redDays = vals.filter((v) => v.pnl < 0).length
+  const shift = (delta) => { const d = new Date(y, mo - 1 + delta, 1); setYm(`${d.getFullYear()}-${pad2(d.getMonth() + 1)}`) }
+  const cellBg = (pnl) => {
+    if (pnl == null) return T.surface2
+    const a = Math.min(0.85, 0.2 + (Math.abs(pnl) / maxAbs) * 0.6)
+    return pnl >= 0 ? `rgba(52,211,153,${a})` : `rgba(251,113,133,${a})`
+  }
+  const cells = []
+  for (let i = 0; i < startDow; i++) cells.push(null)
+  for (let d = 1; d <= days; d++) cells.push({ d, v: dayMap[`${ym}-${pad2(d)}`] })
+  return (
+    <Panel title="Calendar" right={
+      <div className="flex items-center gap-3 text-sm">
+        <span style={{ color: T.faint }}>Net <span style={{ ...mono, color: monthPnl >= 0 ? T.up : T.down }}>{fmt$(monthPnl)}</span> · <span style={{ color: T.up }}>{greenDays}G</span> · <span style={{ color: T.down }}>{redDays}R</span></span>
+        <button type="button" onClick={() => shift(-1)} style={{ color: T.dim }}><ChevronLeft size={16} /></button>
+        <span className="w-24 text-center">{MONTHS[mo - 1]} {y}</span>
+        <button type="button" onClick={() => shift(1)} style={{ color: T.dim }}><ChevronRight size={16} /></button>
+      </div>
+    }>
+      <div className="grid grid-cols-7 gap-1">
+        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => <div key={d} className="text-center text-xs py-1" style={{ color: T.faint }}>{d}</div>)}
+        {cells.map((c, i) => c == null ? <div key={i} /> : (
+          <div key={i} className="rounded p-1.5 min-h-[54px]" style={{ background: c.v ? cellBg(c.v.pnl) : T.surface2, border: `1px solid ${T.line}` }}>
+            <div className="text-xs" style={{ color: c.v ? '#0E1117' : T.faint }}>{c.d}</div>
+            {c.v && <div className="text-xs font-semibold leading-tight" style={{ ...mono, color: '#0E1117' }}>{fmt$(c.v.pnl)}</div>}
+          </div>
+        ))}
+      </div>
+    </Panel>
+  )
+}
+
+function Dashboard({ stats, trades }) {
   const empty = stats.n === 0
   return (
     <div className="space-y-4">
@@ -955,6 +1042,8 @@ function Dashboard({ stats }) {
         <Stat label="Avg loser" value={fmt$(-stats.avgLoss)} tone="down" />
         <Stat label="Streaks" value={String(stats.currentStreak)} sub={`best ${stats.bestWin}W · worst ${stats.worstLoss}L`} />
       </div>
+
+      <PnlCalendar trades={trades} />
 
       <Panel title="Equity curve">
         {empty ? <EmptyChart /> : (
@@ -1819,8 +1908,30 @@ function LicensePanel({ license, onChange }) {
   )
 }
 
+function DataPanel({ onReload }) {
+  const [msg, setMsg] = useState(null)
+  async function exp() { const r = await window.api.exportData(); if (r?.ok) setMsg('Backup saved.'); else if (r?.error) setMsg('Export failed: ' + r.error) }
+  async function imp() {
+    if (!window.confirm('Import a backup file? Trades with matching IDs will be overwritten.')) return
+    const r = await window.api.importData()
+    if (r?.ok) { setMsg('Backup restored.'); onReload?.() } else if (r?.error) setMsg('Import failed: ' + r.error)
+  }
+  return (
+    <Panel title="Data &amp; backup">
+      <p className="text-sm mb-3" style={{ color: T.dim }}>Your journal lives in a file on this machine — back it up regularly.</p>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={exp} className="rounded-md px-3 py-2 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306' }}>Export backup</button>
+        <button type="button" onClick={imp} className="rounded-md px-3 py-2 text-sm" style={{ background: T.surface2, color: T.text, border: `1px solid ${T.line}` }}>Import / restore</button>
+        <button type="button" onClick={() => window.api.openDataFolder()} className="rounded-md px-3 py-2 text-sm" style={{ background: T.surface2, color: T.text, border: `1px solid ${T.line}` }}>Open data folder</button>
+      </div>
+      {msg && <div className="mt-3 text-xs" style={{ color: T.dim }}>{msg}</div>}
+      <p className="text-xs mt-2" style={{ color: T.faint }}>A daily auto-backup is kept in the data folder. Exports exclude your API keys.</p>
+    </Panel>
+  )
+}
+
 /* ───────── settings ───────── */
-function SettingsTab({ settings, onSave, license, onLicenseChange }) {
+function SettingsTab({ settings, onSave, license, onLicenseChange, onReload }) {
   const [s, setS] = useState(settings || {})
   const [test, setTest] = useState(null)
   useEffect(() => { setS(settings || {}) }, [settings])
@@ -1837,6 +1948,7 @@ function SettingsTab({ settings, onSave, license, onLicenseChange }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <LicensePanel license={license} onChange={onLicenseChange} />
+      <DataPanel onReload={onReload} />
       <Panel title="Model provider">
         <Field label="Provider">
           <select style={inputStyle} className={inp} value={s.provider || 'ollama'} onChange={set('provider')}>

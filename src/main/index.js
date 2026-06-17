@@ -1,5 +1,6 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron'
 import { join } from 'path'
+import { writeFileSync, readFileSync } from 'fs'
 import * as db from './db.js'
 import { chat, models } from './ai.js'
 import { fetchPrice, fetchQuotes } from './price.js'
@@ -32,6 +33,7 @@ function createWindow() {
 
 app.whenReady().then(() => {
   db.initDb()
+  db.backupDb()
   registerIpc()
   createWindow()
   initUpdater(() => win)
@@ -47,8 +49,26 @@ app.on('window-all-closed', () => {
 function registerIpc() {
   ipcMain.handle('trades:list', () => db.listTrades())
   ipcMain.handle('trades:add', (_e, t) => db.addTrade(t))
+  ipcMain.handle('trades:update', (_e, t) => db.updateTrade(t))
   ipcMain.handle('trades:import', (_e, rows) => db.importTrades(rows))
   ipcMain.handle('trades:delete', (_e, id) => db.deleteTrade(id))
+
+  ipcMain.handle('data:export', async () => {
+    const { canceled, filePath } = await dialog.showSaveDialog(win, {
+      defaultPath: `tradehelp-backup-${new Date().toISOString().slice(0, 10)}.json`,
+      filters: [{ name: 'JSON', extensions: ['json'] }]
+    })
+    if (canceled || !filePath) return { ok: false }
+    try { writeFileSync(filePath, JSON.stringify(db.getAllData(), null, 2)); return { ok: true, path: filePath } }
+    catch (e) { return { ok: false, error: String(e?.message || e) } }
+  })
+  ipcMain.handle('data:import', async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog(win, { properties: ['openFile'], filters: [{ name: 'JSON', extensions: ['json'] }] })
+    if (canceled || !filePaths?.[0]) return { ok: false }
+    try { return { ok: true, data: db.restoreData(JSON.parse(readFileSync(filePaths[0], 'utf8'))) } }
+    catch (e) { return { ok: false, error: String(e?.message || e) } }
+  })
+  ipcMain.handle('data:openFolder', () => shell.openPath(app.getPath('userData')))
 
   ipcMain.handle('images:list', (_e, tradeId) => db.listImages(tradeId))
   ipcMain.handle('images:add', (_e, tradeId, img) => db.addImage(tradeId, img))

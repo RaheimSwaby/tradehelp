@@ -1,6 +1,6 @@
 {
   "name": "tradehelp",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Local-first trading journal with an offline AI coach (Electron + React + SQLite + Ollama)",
   "main": "./out/main/index.js",
   "license": "MIT",
@@ -50,14 +50,17 @@
     ],
     "mac": {
       "category": "public.app-category.finance",
-      "target": "dmg"
+      "target": "dmg",
+      "icon": "build/icon.png"
     },
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "build/icon.ico"
     },
     "linux": {
       "target": "AppImage",
-      "category": "Office"
+      "category": "Office",
+      "icon": "build/icon.png"
     }
   }
 }

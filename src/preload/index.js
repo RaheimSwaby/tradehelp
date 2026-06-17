@@ -3,8 +3,13 @@ import { contextBridge, ipcRenderer } from 'electron'
 const api = {
   listTrades: () => ipcRenderer.invoke('trades:list'),
   addTrade: (t) => ipcRenderer.invoke('trades:add', t),
+  updateTrade: (t) => ipcRenderer.invoke('trades:update', t),
   importTrades: (rows) => ipcRenderer.invoke('trades:import', rows),
   deleteTrade: (id) => ipcRenderer.invoke('trades:delete', id),
+
+  exportData: () => ipcRenderer.invoke('data:export'),
+  importData: () => ipcRenderer.invoke('data:import'),
+  openDataFolder: () => ipcRenderer.invoke('data:openFolder'),
 
   listImages: (tradeId) => ipcRenderer.invoke('images:list', tradeId),
   addImage: (tradeId, img) => ipcRenderer.invoke('images:add', tradeId, img),
