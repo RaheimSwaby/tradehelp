@@ -286,6 +286,11 @@ function letterFor(score) {
 
 // Per-trade execution grade — deliberately blind to whether the trade won or lost.
 function executionGrade(t) {
+  // Imported trades carry no process data (no emotion/stop/risk), so execution can't be judged.
+  // Use a fair outcome-based placeholder until the trader journals them: win = A, loss = C.
+  if (t.source === 'import') {
+    return (Number(t.pnl) || 0) >= 0 ? { score: 90, letter: 'A', tone: 'up' } : { score: 60, letter: 'C', tone: 'accent' }
+  }
   const entry = Number(t.entry) || 0, stop = Number(t.stop) || 0
   const pnl = Number(t.pnl) || 0, risk = Number(t.riskAmount) || 0, rr = Number(t.rr) || 0
 
@@ -483,7 +488,8 @@ function Readout({ label, value, tone }) {
 function GradeChip({ t }) {
   const g = executionGrade(t)
   const c = g.tone === 'up' ? T.up : g.tone === 'accent' ? T.accent : T.down
-  return <span className="inline-block text-xs font-bold px-1.5 py-0.5 rounded" style={{ color: c, border: `1px solid ${c}` }} title={`Execution ${g.score}/100 — process, not outcome`}>{g.letter}</span>
+  const title = t.source === 'import' ? 'Imported — graded on outcome until you journal it' : `Execution ${g.score}/100 — process, not outcome`
+  return <span className="inline-block text-xs font-bold px-1.5 py-0.5 rounded" style={{ color: c, border: `1px solid ${c}` }} title={title}>{g.letter}</span>
 }
 
 /* ───────── main app ───────── */
@@ -1988,7 +1994,7 @@ function NotesModal({ trade, onClose }) {
                 {trade.entryTime || '—'} → {trade.exitTime || '—'}{holdMs(trade) ? ` · held ${fmtDuration(holdMs(trade))}` : ''}
               </div>
             )}
-            <div className="text-xs mt-1 flex items-center gap-1.5" style={{ color: T.faint }}>Execution <GradeChip t={trade} /> <span>· process, not outcome</span></div>
+            <div className="text-xs mt-1 flex items-center gap-1.5" style={{ color: T.faint }}>Execution <GradeChip t={trade} /> <span>· {trade.source === 'import' ? 'imported (outcome-based)' : 'process, not outcome'}</span></div>
             {trade.reason && <div className="text-xs mt-1" style={{ color: T.dim }}>Reason: <span style={{ color: T.text }}>{trade.reason}</span></div>}
           </div>
           <button type="button" onClick={onClose} style={{ color: T.faint }}><X size={18} /></button>
