@@ -197,6 +197,7 @@ const IMPORT_FIELDS = [
 
 // ── economic-calendar helpers ──
 const IMPACT_RANK = { High: 3, Medium: 2, Low: 1, Holiday: 0, None: 0 }
+const ALERT_LEADS = [30, 15, 5] // minutes before a high-impact event to fire a notification
 const untilLabel = (ts, now) => {
   const m = Math.round((ts - now) / 60000)
   if (m <= 0) return 'now'
@@ -593,15 +594,14 @@ export default function App() {
 
   // ── economic-calendar alerts ──
   const eventsEnabled = (settings?.eventsEnabled ?? 'true') !== 'false'
-  const leadMin = parseFloat(settings?.eventsLeadMin) || 15
   const minImpact = settings?.eventsMinImpact || 'High'
   const watchedEvents = useMemo(
     () => events.filter((e) => (IMPACT_RANK[e.impact] || 0) >= (IMPACT_RANK[minImpact] || 3)),
     [events, minImpact]
   )
   const imminentEvent = useMemo(
-    () => (eventsEnabled ? watchedEvents.find((e) => e.ts > now && e.ts - now <= leadMin * 60000) || null : null),
-    [watchedEvents, now, leadMin, eventsEnabled]
+    () => (eventsEnabled ? watchedEvents.find((e) => e.ts > now && e.ts - now <= ALERT_LEADS[0] * 60000) || null : null),
+    [watchedEvents, now, eventsEnabled]
   )
 
   useEffect(() => { const id = setInterval(() => setNow(Date.now()), 30000); return () => clearInterval(id) }, [])
@@ -614,18 +614,18 @@ export default function App() {
     const id = setInterval(load, 10 * 60000)
     return () => { live = false; clearInterval(id) }
   }, [hasApi, eventsEnabled, settings?.fmpKey])
+  // Fire a desktop notification at each of 30 / 15 / 5 minutes before a watched event.
   useEffect(() => {
-    if (!imminentEvent) return
-    const key = imminentEvent.title + imminentEvent.ts
-    if (firedRef.current.has(key)) return
-    firedRef.current.add(key)
-    const mins = Math.max(1, Math.round((imminentEvent.ts - Date.now()) / 60000))
-    try {
-      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-        new Notification('High-impact news', { body: `${imminentEvent.country} ${imminentEvent.title} · in ${mins} min` })
-      }
-    } catch {}
-  }, [imminentEvent])
+    if (!eventsEnabled || typeof Notification === 'undefined' || Notification.permission !== 'granted') return
+    for (const e of watchedEvents) {
+      const mins = Math.round((e.ts - Date.now()) / 60000)
+      if (mins <= 0 || mins > ALERT_LEADS[0]) continue
+      const due = ALERT_LEADS.filter((L) => mins <= L && !firedRef.current.has(`${e.title}|${e.ts}|${L}`))
+      if (!due.length) continue
+      for (const L of due) firedRef.current.add(`${e.title}|${e.ts}|${L}`)
+      try { new Notification('High-impact news', { body: `${e.country} ${e.title} · in ${Math.max(1, mins)} min` }) } catch {}
+    }
+  }, [now, watchedEvents, eventsEnabled])
 
   // ── achievements ──
   const achievements = useMemo(() => computeAchievements(trades, stats), [trades, stats])
@@ -2036,8 +2036,7 @@ function SettingsTab({ settings, onSave, license, onLicenseChange, onReload }) {
           <input type="checkbox" checked={(s.eventsEnabled ?? 'true') !== 'false'} onChange={(e) => setS((p) => ({ ...p, eventsEnabled: String(e.target.checked) }))} />
           Warn me before high-impact news
         </label>
-        <div className="grid grid-cols-2 gap-3 mt-3">
-          <Field label="Alert me (min before)"><input style={inputStyle} className={inp} value={s.eventsLeadMin ?? '15'} onChange={set('eventsLeadMin')} inputMode="numeric" /></Field>
+        <div className="mt-3">
           <Field label="Minimum impact">
             <select style={inputStyle} className={inp} value={s.eventsMinImpact || 'High'} onChange={set('eventsMinImpact')}>
               <option value="High">High only</option>
@@ -2052,7 +2051,7 @@ function SettingsTab({ settings, onSave, license, onLicenseChange, onReload }) {
         </div>
         <button type="button" onClick={() => onSave(s)} className="mt-4 rounded-md px-3 py-2 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306' }}>Save</button>
         <p className="mt-3 text-xs" style={{ color: T.faint }}>
-          Keyless by default (ForexFactory weekly feed). You'll get a subtle banner and a desktop notification before a high-impact event, plus a warning in the Trade Mode pre-flight.
+          Keyless by default (ForexFactory weekly feed). You'll get desktop notifications 30, 15 and 5 minutes before a high-impact event, a subtle banner, and a warning in the Trade Mode pre-flight.
         </p>
       </Panel>
     </div>
