@@ -32,6 +32,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  app.setAppUserModelId('com.tradehelp.app') // so Windows notifications show "TradeHelp", not "electron.app"
   db.initDb()
   db.backupDb()
   registerIpc()
