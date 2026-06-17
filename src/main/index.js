@@ -1,10 +1,11 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import { join } from 'path'
 import * as db from './db.js'
 import { chat, models } from './ai.js'
 import { fetchPrice, fetchQuotes } from './price.js'
 import { fetchEvents } from './events.js'
 import { initUpdater } from './updater.js'
+import * as license from './license.js'
 
 let win
 
@@ -58,6 +59,11 @@ function registerIpc() {
 
   ipcMain.handle('reviews:get', () => db.getReviews())
   ipcMain.handle('reviews:set', (_e, period, text) => db.setReview(period, text))
+
+  ipcMain.handle('license:status', () => license.status(db))
+  ipcMain.handle('license:activate', (_e, key) => license.activate(db, key))
+  ipcMain.handle('license:deactivate', () => license.deactivate(db))
+  ipcMain.handle('app:openExternal', (_e, url) => shell.openExternal(String(url)))
 
   ipcMain.handle('settings:get', () => db.getSettings())
   ipcMain.handle('settings:set', (_e, s) => db.setSettings(s))

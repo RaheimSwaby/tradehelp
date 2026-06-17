@@ -33,6 +33,9 @@ function applyTheme(live) {
   inputStyle = { background: T.surface2, border: `1px solid ${T.line}`, color: T.text, ...mono }
 }
 
+// ⚠ Replace with your real Lemon Squeezy checkout link once the $20 product exists.
+const CHECKOUT_URL = 'https://YOUR-STORE.lemonsqueezy.com/buy/YOUR-PRODUCT-ID'
+
 const EMOTIONS = ['Disciplined', 'Confident', 'Neutral', 'Hesitant', 'Anxious', 'FOMO', 'Greedy', 'Revenge', 'Bored']
 const SETUPS = ['Opening Range Breakout', 'VWAP Reclaim', 'Pullback', 'Trend Continuation', 'Reversal', 'Liquidity Sweep']
 const TILT = ['FOMO', 'Greedy', 'Revenge']
@@ -499,6 +502,7 @@ export default function App() {
   const [goals, setGoals] = useState({ weekly: 500, monthly: 2000 })
   const [reviews, setReviews] = useState({})
   const [settings, setSettings] = useState(null)
+  const [license, setLicense] = useState(null)
   const [tab, setTab] = useState('journal')
   const [notesView, setNotesView] = useState(null)
   const [tradeMode, setTradeMode] = useState(false)
@@ -520,6 +524,7 @@ export default function App() {
       setGoals(await window.api.getGoals())
       setReviews(await window.api.getReviews())
       setSettings(await window.api.getSettings())
+      if (window.api.getLicense) setLicense(await window.api.getLicense())
       setReady(true)
     })()
   }, [hasApi])
@@ -536,6 +541,7 @@ export default function App() {
   async function importTrades(rows) { if (hasApi) setTrades(await window.api.importTrades(rows)) }
   async function saveGoals(g) { if (hasApi) setGoals(await window.api.setGoals(g)) }
   async function saveReview(period, text) { if (hasApi) setReviews(await window.api.setReview(period, text)) }
+  async function refreshLicense() { if (hasApi && window.api.getLicense) setLicense(await window.api.getLicense()) }
   async function saveSettings(s) { if (hasApi) setSettings(await window.api.setSettings(s)) }
   const propFirmAccounts = useMemo(() => {
     try { const arr = JSON.parse(settings?.propFirmAccounts || 'null'); if (Array.isArray(arr)) return arr } catch {}
@@ -630,6 +636,7 @@ export default function App() {
   return (
     <div style={{ background: T.bg, color: T.text, minHeight: '100vh', borderTop: `3px solid ${tradeMode ? T.accent : 'transparent'}`, transition: 'background .3s' }}>
       <Ticker settings={settings} />
+      {license?.state === 'trial' && <TrialBanner days={license.daysLeft} />}
       {imminentEvent && <EventBanner event={imminentEvent} now={now} />}
       {tradeMode && <LiveBanner net={todayNet} goal={dailyGoal} maxLoss={maxLoss} lossHit={lossHit} onEnd={endSession} />}
       <div className="max-w-6xl mx-auto px-4 py-5">
@@ -672,6 +679,8 @@ export default function App() {
           <div className="py-20 text-center text-sm" style={{ color: T.down }}>
             This UI must run inside the Electron shell (npm run dev) to reach your local database.
           </div>
+        ) : license?.state === 'expired' ? (
+          <Paywall onActivated={refreshLicense} />
         ) : (
           <>
             {tab === 'journal' && <Journal trades={trades} onAdd={addTrade} onRemove={removeTrade} onNotes={setNotesView} onImport={importTrades} accounts={propFirmAccounts} />}
@@ -684,7 +693,7 @@ export default function App() {
             {tab === 'reviews' && <Reviews trades={trades} reviews={reviews} onSave={saveReview} />}
             {tab === 'coach' && <Coach trades={trades} stats={stats} settings={settings} events={events} now={now} />}
             {tab === 'patterns' && <Patterns trades={trades} />}
-            {tab === 'settings' && <SettingsTab settings={settings} onSave={saveSettings} />}
+            {tab === 'settings' && <SettingsTab settings={settings} onSave={saveSettings} license={license} onLicenseChange={refreshLicense} />}
           </>
         )}
       </div>
@@ -1732,8 +1741,86 @@ function Patterns({ trades }) {
   )
 }
 
+/* ───────── license & trial ───────── */
+function TrialBanner({ days }) {
+  return (
+    <div className="w-full" style={{ background: T.accentSoft, borderBottom: `1px solid ${T.line}` }}>
+      <div className="max-w-6xl mx-auto px-4 py-1.5 text-xs flex items-center gap-2" style={{ color: T.accent }}>
+        <span>Free trial — <strong>{days} day{days === 1 ? '' : 's'}</strong> left</span>
+        <button type="button" onClick={() => window.api.openExternal(CHECKOUT_URL)} className="ml-auto px-2.5 py-0.5 rounded-md font-semibold" style={{ background: T.accent, color: '#1A1306' }}>Get it — $20</button>
+      </div>
+    </div>
+  )
+}
+
+function Paywall({ onActivated }) {
+  const [key, setKey] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState(null)
+  async function activate() {
+    if (!key.trim() || busy) return
+    setBusy(true); setErr(null)
+    const res = await window.api.activateLicense(key.trim())
+    setBusy(false)
+    if (res?.ok) onActivated?.()
+    else setErr(res?.error || 'Activation failed.')
+  }
+  return (
+    <div className="py-12 flex justify-center">
+      <div className="rounded-2xl p-8 max-w-md w-full text-center" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
+        <div className="text-lg font-semibold">Your free trial has ended</div>
+        <p className="text-sm mt-2" style={{ color: T.dim }}>Unlock TradeHelp for a one-time <span style={{ color: T.text }}>$20</span> — no subscription, works offline, yours forever.</p>
+        <button type="button" onClick={() => window.api.openExternal(CHECKOUT_URL)} className="w-full mt-5 rounded-md py-2.5 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306' }}>Get TradeHelp — $20</button>
+        <div className="text-xs my-4" style={{ color: T.faint }}>Already bought it? Paste your key:</div>
+        <input style={inputStyle} className="w-full rounded px-3 py-2 text-sm" value={key} onChange={(e) => setKey(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && activate()} placeholder="license key" />
+        <button type="button" onClick={activate} disabled={busy} className="w-full mt-2 rounded-md py-2 text-sm font-semibold" style={{ background: T.surface2, color: T.text, border: `1px solid ${T.line}` }}>{busy ? 'Activating…' : 'Activate'}</button>
+        {err && <div className="mt-3 text-xs" style={{ color: T.down }}>{err}</div>}
+        <div className="mt-4 text-xs" style={{ color: T.faint }}>Your trades stay safe on your machine — nothing is deleted.</div>
+      </div>
+    </div>
+  )
+}
+
+function LicensePanel({ license, onChange }) {
+  const [key, setKey] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState(null)
+  const st = license?.state
+  async function activate() {
+    if (!key.trim() || busy) return
+    setBusy(true); setMsg(null)
+    const res = await window.api.activateLicense(key.trim())
+    setBusy(false)
+    if (res?.ok) { setMsg({ ok: 'Activated — thank you!' }); setKey(''); onChange?.() }
+    else setMsg({ err: res?.error || 'Activation failed.' })
+  }
+  async function deactivate() { await window.api.deactivateLicense(); onChange?.() }
+  const inp = 'w-full rounded px-2 py-1.5 text-sm'
+  return (
+    <Panel title="License">
+      <div className="text-sm mb-3">
+        {st === 'active' ? <span style={{ color: T.up }}>● Licensed — full version unlocked.</span>
+          : st === 'trial' ? <span style={{ color: T.accent }}>● Free trial — {license.daysLeft} day{license.daysLeft === 1 ? '' : 's'} left.</span>
+          : <span style={{ color: T.down }}>● Trial ended — enter a key to unlock.</span>}
+      </div>
+      {st === 'active' ? (
+        <button type="button" onClick={deactivate} className="rounded-md px-3 py-2 text-sm" style={{ background: T.surface2, color: T.text, border: `1px solid ${T.line}` }}>Deactivate on this machine</button>
+      ) : (
+        <>
+          <Field label="License key"><input style={inputStyle} className={inp} value={key} onChange={(e) => setKey(e.target.value)} placeholder="paste your key" /></Field>
+          <div className="flex gap-2 mt-3">
+            <button type="button" onClick={activate} disabled={busy} className="rounded-md px-4 py-2 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306' }}>{busy ? 'Activating…' : 'Activate'}</button>
+            <button type="button" onClick={() => window.api.openExternal(CHECKOUT_URL)} className="rounded-md px-4 py-2 text-sm" style={{ background: T.surface2, color: T.text, border: `1px solid ${T.line}` }}>Buy — $20</button>
+          </div>
+        </>
+      )}
+      {msg && <div className="mt-3 text-xs" style={{ color: msg.ok ? T.up : T.down }}>{msg.ok || msg.err}</div>}
+    </Panel>
+  )
+}
+
 /* ───────── settings ───────── */
-function SettingsTab({ settings, onSave }) {
+function SettingsTab({ settings, onSave, license, onLicenseChange }) {
   const [s, setS] = useState(settings || {})
   const [test, setTest] = useState(null)
   useEffect(() => { setS(settings || {}) }, [settings])
@@ -1749,6 +1836,7 @@ function SettingsTab({ settings, onSave }) {
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <LicensePanel license={license} onChange={onLicenseChange} />
       <Panel title="Model provider">
         <Field label="Provider">
           <select style={inputStyle} className={inp} value={s.provider || 'ollama'} onChange={set('provider')}>

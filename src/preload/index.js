@@ -28,7 +28,12 @@ const api = {
 
   onUpdateReady: (cb) => ipcRenderer.on('update:ready', () => cb()),
   installUpdate: () => ipcRenderer.invoke('update:install'),
-  checkUpdate: () => ipcRenderer.invoke('update:check')
+  checkUpdate: () => ipcRenderer.invoke('update:check'),
+
+  getLicense: () => ipcRenderer.invoke('license:status'),
+  activateLicense: (key) => ipcRenderer.invoke('license:activate', key),
+  deactivateLicense: () => ipcRenderer.invoke('license:deactivate'),
+  openExternal: (url) => ipcRenderer.invoke('app:openExternal', url)
 }
 
 contextBridge.exposeInMainWorld('api', api)

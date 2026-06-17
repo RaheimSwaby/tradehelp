@@ -10,15 +10,17 @@ endpoint with your own key.
 | Tab        | What it does                                                                 |
 |------------|------------------------------------------------------------------------------|
 | Journal    | Log trades (long/short, entry/exit/stop/target, size, risk). Auto-calcs P&L + R:R. Import a broker CSV (any layout — you map the columns); imported trades count as **Verified** on your rating. |
+| Trade Mode | Your own pre-trade checklist, daily goal + max-loss lockout, and a focused "go time" mode that recolors the app when you're live. |
 | Dashboard  | Net P&L, win rate, profit factor, expectancy, max drawdown, streaks, equity curve, daily P&L. |
-| Psychology | P&L by emotion, by setup, and by hour of day.                                |
+| Psychology | P&L by emotion, by setup, by hour, and your win/loss reasons.                 |
+| Rating     | A 59–99 trader rating that grades your process (not luck), per-trade A–F execution grades, psychology achievements, and a non-tilt streak. |
 | Goals      | Weekly/monthly targets with live progress bars.                              |
 | Prop Firm  | Track a prop firm challenge — profit target, max daily loss, trailing/static drawdown, min days — with live cushion-to-breach and pass/fail status. |
 | Reviews    | Weekly / monthly / quarterly reviews — period stats, equity, top setups & reasons, a saved written reflection, and an optional AI summary. |
 | AI Coach   | Chat that reads your real stats; plus a live price lookup (crypto + stocks). |
 | Chart AI   | Attach before/after screenshots to a trade, then "Analyze chart" — a vision model reads the chart and critiques the setup (offline via Ollama vision, or your cloud key). |
 | Patterns   | Pick a setup; the AI reads your winning vs losing charts and tells you what visually separates them. |
-| Settings   | Pick Ollama vs cloud, set model + endpoint, test the connection.             |
+| Settings   | Pick Ollama vs cloud (incl. a vision model), and set up the ticker tape + economic-calendar news alerts. |
 
 Data is stored in a SQLite file in your OS user-data folder, so it survives
 app updates and never leaves your machine.
@@ -98,11 +100,17 @@ endpoint). To add "skills," give the main process more tools (a screenshot
 embedder, a CSV importer, a rule checker) and let the coach call them — the
 plumbing is already isolated in `ai.js`.
 
-## Not built yet (roadmap)
+## Pricing
 
-NinjaTrader CSV import, screenshot storage + vision embeddings (OpenCLIP),
-trade-similarity search, and the rule-enforcement engine. The schema and IPC
-layer are structured so these slot in without reshaping the app.
+A free 14-day trial, then a one-time **$20** unlock — no subscription. Licensing
+is handled by a merchant-of-record (Lemon Squeezy): the app activates a key once
+online, then works fully offline.
+
+## Roadmap
+
+Code-signing / Microsoft Store listing (to drop the SmartScreen warning),
+cross-trade chart-similarity search, an opt-in community with translation, and a
+custom domain for the landing page.
 
 > The coach focuses on process, discipline, and psychology from your own log.
 > It is not financial advice and does not generate buy/sell signals.
