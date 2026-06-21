@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { T, mono, inputStyle } from '../theme.js'
 import { CHECKOUT_URL } from '../utils.js'
 import { Panel, Field } from '../components/Shared.jsx'
@@ -103,6 +103,53 @@ export function DataPanel({ onReload }) {
   )
 }
 
+/* ───────── model picker: text field + browse button + clickable chips ───────── */
+function ModelSelect({ value, onChange, placeholder }) {
+  const [models, setModels] = useState(null) // null = not yet fetched
+  const [loading, setLoading] = useState(false)
+  const [err, setErr] = useState(null)
+
+  const browse = useCallback(async () => {
+    setLoading(true); setErr(null)
+    const res = await window.api.aiModels().catch(() => ({ ok: false, error: 'Cannot reach Ollama' }))
+    setLoading(false)
+    if (res.ok) setModels(res.models || [])
+    else { setModels([]); setErr(res.error) }
+  }, [])
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex gap-2">
+        <input style={inputStyle} className="flex-1 rounded px-2 py-1.5 text-sm"
+          value={value} onChange={onChange} placeholder={placeholder} />
+        <button type="button" onClick={browse} disabled={loading}
+          className="rounded px-2.5 py-1.5 text-xs font-medium whitespace-nowrap"
+          style={{ background: T.surface2, border: `1px solid ${T.line}`, color: loading ? T.faint : T.accent }}>
+          {loading ? 'Loading…' : 'Browse'}
+        </button>
+      </div>
+      {err && <div className="text-xs" style={{ color: T.down }}>{err} — is Ollama running?</div>}
+      {models !== null && !err && (
+        models.length === 0
+          ? <div className="text-xs" style={{ color: T.faint }}>No models found. Run: <span style={{ ...mono, color: T.accent }}>ollama pull llama3.2</span></div>
+          : <div className="flex flex-wrap gap-1.5">
+              {models.map((m) => (
+                <button key={m} type="button" onClick={() => onChange({ target: { value: m } })}
+                  className="text-xs px-2 py-0.5 rounded-full"
+                  style={{
+                    background: value === m ? T.accentSoft : T.surface2,
+                    color: value === m ? T.accent : T.dim,
+                    border: `1px solid ${value === m ? T.accent : T.line}`
+                  }}>
+                  {m}
+                </button>
+              ))}
+            </div>
+      )}
+    </div>
+  )
+}
+
 /* ───────── settings ───────── */
 export function SettingsTab({ settings, onSave, license, onLicenseChange, onReload }) {
   const [s, setS] = useState(settings || {})
@@ -132,8 +179,8 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
         {(s.provider || 'ollama') === 'ollama' ? (
           <div className="space-y-3 mt-3">
             <Field label="Ollama URL"><input style={inputStyle} className={inp} value={s.ollamaUrl || ''} onChange={set('ollamaUrl')} /></Field>
-            <Field label="Model"><input style={inputStyle} className={inp} value={s.ollamaModel || ''} onChange={set('ollamaModel')} placeholder="llama3.2" /></Field>
-            <Field label="Vision model (chart analysis)"><input style={inputStyle} className={inp} value={s.ollamaVisionModel || ''} onChange={set('ollamaVisionModel')} placeholder="llama3.2-vision" /></Field>
+            <Field label="Model"><ModelSelect value={s.ollamaModel || ''} onChange={set('ollamaModel')} placeholder="llama3.2" /></Field>
+            <Field label="Vision model (chart analysis)"><ModelSelect value={s.ollamaVisionModel || ''} onChange={set('ollamaVisionModel')} placeholder="llama3.2-vision" /></Field>
           </div>
         ) : (
           <div className="space-y-3 mt-3">
