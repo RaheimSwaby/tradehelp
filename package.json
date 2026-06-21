@@ -11,7 +11,9 @@
     "dist": "electron-vite build && electron-builder",
     "rebuild": "electron-builder install-app-deps",
     "postinstall": "electron-builder install-app-deps",
+    "pretest": "npm rebuild better-sqlite3",
     "test": "vitest run",
+    "posttest": "npm run rebuild",
     "test:watch": "vitest"
   },
   "dependencies": {
@@ -61,4 +63,9 @@
       "icon": "build/icon.ico"
     },
     "linux": {
-      "target": "AppImag
+      "target": "AppImage",
+      "category": "Office",
+      "icon": "build/icon.png"
+    }
+  }
+}

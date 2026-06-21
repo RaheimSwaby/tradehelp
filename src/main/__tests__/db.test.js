@@ -8,15 +8,15 @@
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { rmSync } from 'fs'
-import { mkdtempSync } from 'fs'
-import { join } from 'path'
-import { tmpdir } from 'os'
 
-// vi.hoisted() executes before anything else — including vi.mock() factories —
-// so tmpDir is available when the mock factory runs.
-const tmpDir = vi.hoisted(() =>
-  mkdtempSync(join(tmpdir(), 'tradehelp-test-'))
-)
+// vi.hoisted() runs before ESM imports are evaluated, so use require() inside it
+// rather than referencing the top-level import bindings (which aren't ready yet).
+const tmpDir = vi.hoisted(() => {
+  const { mkdtempSync } = require('fs')
+  const { join } = require('path')
+  const { tmpdir } = require('os')
+  return mkdtempSync(join(tmpdir(), 'tradehelp-test-'))
+})
 
 vi.mock('electron', () => ({
   app: { getPath: () => tmpDir },
