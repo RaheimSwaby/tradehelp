@@ -271,4 +271,11 @@ export function restoreData(data) {
 export function backupDb() {
   try {
     const dir = join(app.getPath('userData'), 'backups')
-    if (!existsSync(dir)) mkdirSync(dir, { recurs
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+    const dest = join(dir, `tradehelp-${new Date().toISOString().slice(0, 10)}.db`)
+    db.backup(dest).then(() => {
+      const files = readdirSync(dir).filter((f) => f.endsWith('.db')).sort()
+      for (const f of files.slice(0, Math.max(0, files.length - 7))) { try { unlinkSync(join(dir, f)) } catch {} }
+    }).catch(() => {})
+  } catch {}
+}

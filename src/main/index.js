@@ -136,4 +136,9 @@ function registerIpc() {
 
   ipcMain.handle('events:list', async () => {
     try {
-      return await fetchEvents(db.get
+      return await fetchEvents(db.getSettings())
+    } catch {
+      return []
+    }
+  })
+}
