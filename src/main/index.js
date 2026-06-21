@@ -72,6 +72,7 @@ function registerIpc() {
   ipcMain.handle('data:openFolder', () => shell.openPath(app.getPath('userData')))
 
   ipcMain.handle('images:list', (_e, tradeId) => db.listImages(tradeId))
+  ipcMain.handle('images:get', (_e, id) => db.getImage(id))
   ipcMain.handle('images:add', (_e, tradeId, img) => db.addImage(tradeId, img))
   ipcMain.handle('images:delete', (_e, id) => db.deleteImage(id))
 
@@ -135,9 +136,4 @@ function registerIpc() {
 
   ipcMain.handle('events:list', async () => {
     try {
-      return await fetchEvents(db.getSettings())
-    } catch {
-      return []
-    }
-  })
-}
+      return await fetchEvents(db.get

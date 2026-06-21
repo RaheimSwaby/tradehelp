@@ -1757,9 +1757,10 @@ function Patterns({ trades }) {
   const reading = state?.phase === 'reading'
 
   async function firstJpeg(id) {
-    const imgs = await window.api.listImages(id)
-    const first = (imgs || []).find((i) => i.dataUrl)
-    return first ? await toJpeg(first.dataUrl) : null
+    const metas = await window.api.listImages(id)
+    if (!metas?.length) return null
+    const img = await window.api.getImage(metas[0].id)
+    return img?.dataUrl ? await toJpeg(img.dataUrl) : null
   }
 
   async function run() {
@@ -2172,6 +2173,23 @@ function ImportModal({ onClose, onImport }) {
   )
 }
 
+/* ───────── lazy image: fetches its own data URL on mount so listImages stays fast ───────── */
+function LazyImage({ id, tag, onZoom }) {
+  const [src, setSrc] = useState(null) // null = loading, '' = missing
+  useEffect(() => {
+    let live = true
+    window.api?.getImage(id).then((r) => { if (live) setSrc(r?.dataUrl || '') }).catch(() => { if (live) setSrc('') })
+    return () => { live = false }
+  }, [id])
+  if (src === null) return <div className="py-8 text-center text-xs" style={{ color: T.faint }}>Loading…</div>
+  if (!src) return <div className="py-8 text-center text-xs" style={{ color: T.faint }}>Image missing</div>
+  return (
+    <img src={src} alt={tag} className="w-full cursor-zoom-in"
+      style={{ maxHeight: 320, objectFit: 'contain', background: '#000' }}
+      onClick={() => onZoom(src)} />
+  )
+}
+
 /* ───────── trade detail modal (notes + screenshots) ───────── */
 function NotesModal({ trade, onClose }) {
   const [imgs, setImgs] = useState(null)
@@ -2186,10 +2204,13 @@ function NotesModal({ trade, onClose }) {
   async function del(id) { setImgs(await window.api.deleteImage(id)) }
 
   async function analyze() {
-    const withPics = (imgs || []).filter((i) => i.dataUrl)
-    if (!withPics.length || analysis?.loading) return
+    if (!imgs?.length || analysis?.loading) return
     setAnalysis({ loading: true })
     try {
+      // Fetch image data on demand — listImages only returns metadata now
+      const fetched = await Promise.all(imgs.map((im) => window.api.getImage(im.id)))
+      const withPics = fetched.filter((r) => r?.dataUrl)
+      if (!withPics.length) { setAnalysis({ error: 'No image data found on disk.' }); return }
       const jpegs = await Promise.all(withPics.map((i) => toJpeg(i.dataUrl)))
       const ctx = [
         `Trade: ${trade.symbol} ${trade.direction} · setup=${trade.setup || '-'} · outcome=${(Number(trade.pnl) || 0) >= 0 ? 'WIN' : 'LOSS'} (${fmt$(trade.pnl)})`,
@@ -2244,9 +2265,7 @@ function NotesModal({ trade, onClose }) {
                     <span className="text-xs" style={{ color: T.dim }}>{im.tag || 'untagged'}</span>
                     <button type="button" onClick={() => del(im.id)} title="Delete image" style={{ color: T.faint }}><Trash2 size={13} /></button>
                   </div>
-                  {im.dataUrl
-                    ? <img src={im.dataUrl} alt={im.tag} className="w-full cursor-zoom-in" style={{ maxHeight: 320, objectFit: 'contain', background: '#000' }} onClick={() => setZoom(im.dataUrl)} />
-                    : <div className="py-8 text-center text-xs" style={{ color: T.faint }}>image missing</div>}
+                  <LazyImage id={im.id} tag={im.tag} onZoom={setZoom} />
                 </div>
               ))}
             </div>
@@ -2520,17 +2539,4 @@ function Lockout({ net, maxLoss, onEnd, onDismiss }) {
   return (
     <div className="fixed inset-0 flex items-center justify-center p-4 z-[60]" style={{ background: 'rgba(0,0,0,0.75)' }}>
       <div className="rounded-xl w-full max-w-md p-6 text-center" style={{ background: T.surface, border: `1px solid ${T.down}` }}>
-        <div className="flex justify-center mb-3"><AlertTriangle size={40} style={{ color: T.down }} /></div>
-        <div className="text-lg font-semibold">Daily loss limit reached</div>
-        <div className="text-sm mt-2" style={{ color: T.dim }}>
-          You're down <span style={{ color: T.down, ...mono }}>{fmt$(net)}</span> today — past your{' '}
-          <span style={mono}>{fmt$(-maxLoss)}</span> stop. The edge for today is gone. Step away.
-        </div>
-        <div className="flex gap-2 justify-center mt-5">
-          <button type="button" onClick={onEnd} className="rounded-md px-4 py-2 text-sm font-semibold" style={{ background: T.down, color: '#2A0A10' }}>End session</button>
-          <button type="button" onClick={onDismiss} className="rounded-md px-4 py-2 text-sm" style={{ background: T.surface2, color: T.dim, border: `1px solid ${T.line}` }}>Keep trading anyway</button>
-        </div>
-      </div>
-    </div>
-  )
-}
+        <div className="flex justify-center mb-3"><A

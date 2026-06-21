@@ -194,16 +194,24 @@ export function addImage(tradeId, { dataUrl, tag, caption } = {}) {
   return { id: row.id, tradeId: row.tradeId, tag: row.tag, caption: row.caption }
 }
 
+// Returns metadata only — no file I/O. Call getImage(id) to fetch a single image's data URL.
 export function listImages(tradeId) {
-  const rows = db.prepare('SELECT id, file, tag, caption FROM trade_images WHERE tradeId = ? ORDER BY rowid ASC').all(String(tradeId))
-  return rows.map((r) => {
-    let dataUrl = ''
-    try {
-      const mime = EXT_MIME[(r.file.split('.').pop() || 'png').toLowerCase()] || 'image/png'
-      dataUrl = `data:${mime};base64,${readFileSync(join(imagesDir, r.file)).toString('base64')}`
-    } catch {}
-    return { id: r.id, tag: r.tag, caption: r.caption, dataUrl }
-  })
+  return db
+    .prepare('SELECT id, tag, caption FROM trade_images WHERE tradeId = ? ORDER BY rowid ASC')
+    .all(String(tradeId))
+    .map((r) => ({ id: r.id, tag: r.tag, caption: r.caption }))
+}
+
+// Reads one image from disk on demand. Returns null if the record or file is missing.
+export function getImage(id) {
+  const r = db.prepare('SELECT id, file, tag, caption FROM trade_images WHERE id = ?').get(String(id))
+  if (!r) return null
+  let dataUrl = ''
+  try {
+    const mime = EXT_MIME[(r.file.split('.').pop() || 'png').toLowerCase()] || 'image/png'
+    dataUrl = `data:${mime};base64,${readFileSync(join(imagesDir, r.file)).toString('base64')}`
+  } catch {}
+  return { id: r.id, tag: r.tag, caption: r.caption, dataUrl }
 }
 
 export function deleteImage(id) {
@@ -263,11 +271,4 @@ export function restoreData(data) {
 export function backupDb() {
   try {
     const dir = join(app.getPath('userData'), 'backups')
-    if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
-    const dest = join(dir, `tradehelp-${new Date().toISOString().slice(0, 10)}.db`)
-    db.backup(dest).then(() => {
-      const files = readdirSync(dir).filter((f) => f.endsWith('.db')).sort()
-      for (const f of files.slice(0, Math.max(0, files.length - 7))) { try { unlinkSync(join(dir, f)) } catch {} }
-    }).catch(() => {})
-  } catch {}
-}
+    if (!existsSync(dir)) mkdirSync(dir, { recurs

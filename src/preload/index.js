@@ -12,6 +12,7 @@ const api = {
   openDataFolder: () => ipcRenderer.invoke('data:openFolder'),
 
   listImages: (tradeId) => ipcRenderer.invoke('images:list', tradeId),
+  getImage: (id) => ipcRenderer.invoke('images:get', id),
   addImage: (tradeId, img) => ipcRenderer.invoke('images:add', tradeId, img),
   deleteImage: (id) => ipcRenderer.invoke('images:delete', id),
 
@@ -54,7 +55,4 @@ const api = {
   getLicense: () => ipcRenderer.invoke('license:status'),
   activateLicense: (key) => ipcRenderer.invoke('license:activate', key),
   deactivateLicense: () => ipcRenderer.invoke('license:deactivate'),
-  openExternal: (url) => ipcRenderer.invoke('app:openExternal', url)
-}
-
-contextBridge.exposeInMainWorld('api', api)
+  openExternal: (url) => ipcRenderer.invoke('app:openExternal

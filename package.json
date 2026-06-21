@@ -10,7 +10,9 @@
     "preview": "electron-vite preview",
     "dist": "electron-vite build && electron-builder",
     "rebuild": "electron-builder install-app-deps",
-    "postinstall": "electron-builder install-app-deps"
+    "postinstall": "electron-builder install-app-deps",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "better-sqlite3": "^11.3.0",
@@ -27,7 +29,8 @@
     "electron-builder": "^25.1.8",
     "electron-vite": "^2.3.0",
     "tailwindcss": "^4.0.0",
-    "vite": "^5.4.11"
+    "vite": "^5.4.11",
+    "vitest": "^2.0.0"
   },
   "build": {
     "appId": "com.tradehelp.app",
@@ -58,9 +61,4 @@
       "icon": "build/icon.ico"
     },
     "linux": {
-      "target": "AppImage",
-      "category": "Office",
-      "icon": "build/icon.png"
-    }
-  }
-}
+      "target": "AppImag
