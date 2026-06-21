@@ -1,0 +1,269 @@
+import { Trophy, Brain, Snowflake, Shield, Target, BookOpen, Camera, TrendingUp } from 'lucide-react'
+import { TILT, REASONS, clamp, fmtN, holdMs } from './utils.js'
+
+/* ───────── stats ───────── */
+export function computeStats(trades) {
+  const sorted = [...trades].sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''))
+  const n = sorted.length
+  const pnls = sorted.map((t) => Number(t.pnl) || 0)
+  const wins = pnls.filter((p) => p > 0)
+  const losses = pnls.filter((p) => p < 0)
+  const totalPnl = pnls.reduce((a, b) => a + b, 0)
+  const grossProfit = wins.reduce((a, b) => a + b, 0)
+  const grossLoss = Math.abs(losses.reduce((a, b) => a + b, 0))
+  const winRate = n ? (wins.length / n) * 100 : 0
+  const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : (grossProfit > 0 ? Infinity : 0)
+  const avgWin = wins.length ? grossProfit / wins.length : 0
+  const avgLoss = losses.length ? grossLoss / losses.length : 0
+  const expectancy = n ? totalPnl / n : 0
+  const rrs = sorted.map((t) => Number(t.rr)).filter((r) => r > 0)
+  const avgRR = rrs.length ? rrs.reduce((a, b) => a + b, 0) / rrs.length : 0
+
+  let eq = 0, peak = 0, maxDD = 0
+  const equity = sorted.map((t, i) => {
+    eq += Number(t.pnl) || 0
+    peak = Math.max(peak, eq)
+    maxDD = Math.max(maxDD, peak - eq)
+    return { i: i + 1, equity: eq }
+  })
+
+  let cur = 0, curSign = 0, bestWin = 0, worstLoss = 0
+  for (const p of pnls) {
+    const s = p > 0 ? 1 : p < 0 ? -1 : 0
+    if (s === 0) continue
+    if (s === curSign) cur += 1
+    else { curSign = s; cur = 1 }
+    if (curSign === 1) bestWin = Math.max(bestWin, cur)
+    else worstLoss = Math.max(worstLoss, cur)
+  }
+  const currentStreak = curSign === 0 ? '—' : `${cur}${curSign === 1 ? 'W' : 'L'}`
+
+  const dayMap = {}
+  for (const t of sorted) {
+    const d = (t.timestamp || '').slice(0, 10)
+    if (!d) continue
+    dayMap[d] = (dayMap[d] || 0) + (Number(t.pnl) || 0)
+  }
+  const daily = Object.entries(dayMap).map(([d, v]) => ({ day: d.slice(5), pnl: v })).slice(-14)
+  const activeDays = Object.keys(dayMap).length
+
+  const groupPnl = (key) => {
+    const m = {}
+    for (const t of sorted) {
+      const k = t[key] || '—'
+      if (!m[k]) m[k] = { name: k, pnl: 0, n: 0, w: 0 }
+      m[k].pnl += Number(t.pnl) || 0
+      m[k].n += 1
+      if ((Number(t.pnl) || 0) > 0) m[k].w += 1
+    }
+    return Object.values(m).map((g) => ({ ...g, wr: g.n ? (g.w / g.n) * 100 : 0 })).sort((a, b) => b.pnl - a.pnl)
+  }
+
+  const hourMap = {}
+  for (const t of sorted) {
+    // Prefer the actual entry time (when the trade was taken) over the log time.
+    const hh = (t.entryTime || t.timestamp || '').slice(11, 13)
+    if (!hh) continue
+    hourMap[hh] = (hourMap[hh] || 0) + (Number(t.pnl) || 0)
+  }
+  const byHour = Object.entries(hourMap).map(([h, v]) => ({ hour: h + ':00', pnl: v })).sort((a, b) => a.hour.localeCompare(b.hour))
+
+  // non-tilt streak: consecutive trades with no FOMO/greed/revenge tag (current + best)
+  let ntCur = 0, ntBest = 0
+  for (const t of sorted) {
+    if (TILT.includes(t.emotion)) ntCur = 0
+    else { ntCur += 1; ntBest = Math.max(ntBest, ntCur) }
+  }
+
+  // self-diagnosed reasons, split by outcome
+  const reasonsWin = {}, reasonsLoss = {}
+  for (const t of sorted) {
+    if (!t.reason) continue
+    const b = (Number(t.pnl) || 0) >= 0 ? reasonsWin : reasonsLoss
+    b[t.reason] = (b[t.reason] || 0) + 1
+  }
+  const toReasonArr = (o) => Object.entries(o).map(([name, m]) => ({ name, n: m })).sort((a, b) => b.n - a.n)
+
+  return {
+    n, totalPnl, winRate, profitFactor, avgWin, avgLoss, expectancy, avgRR,
+    maxDD, currentStreak, bestWin, worstLoss, equity, daily, activeDays,
+    grossProfit, grossLoss, nonTiltStreak: ntCur, bestNonTilt: ntBest,
+    reasonsWin: toReasonArr(reasonsWin), reasonsLoss: toReasonArr(reasonsLoss),
+    byEmotion: groupPnl('emotion'), bySetup: groupPnl('setup'), byHour
+  }
+}
+
+/* ───────── rating: grade the process, not the outcome ───────── */
+export function letterFor(score) {
+  if (score >= 95) return { letter: 'A+', tone: 'up' }
+  if (score >= 85) return { letter: 'A', tone: 'up' }
+  if (score >= 70) return { letter: 'B', tone: 'up' }
+  if (score >= 55) return { letter: 'C', tone: 'accent' }
+  if (score >= 40) return { letter: 'D', tone: 'down' }
+  return { letter: 'F', tone: 'down' }
+}
+
+// Per-trade execution grade — deliberately blind to whether the trade won or lost.
+export function executionGrade(t) {
+  // Imported trades carry no process data (no emotion/stop/risk), so execution can't be judged.
+  // Use a fair outcome-based placeholder until the trader journals them: win = A, loss = C.
+  if (t.source === 'import') {
+    return (Number(t.pnl) || 0) >= 0 ? { score: 90, letter: 'A', tone: 'up' } : { score: 60, letter: 'C', tone: 'accent' }
+  }
+  const entry = Number(t.entry) || 0, stop = Number(t.stop) || 0
+  const pnl = Number(t.pnl) || 0, risk = Number(t.riskAmount) || 0, rr = Number(t.rr) || 0
+
+  let stopPts = 0
+  if (stop > 0 && entry > 0) stopPts = (t.direction === 'Long' ? stop < entry : stop > entry) ? 25 : 10
+
+  const rrPts = rr >= 2 ? 25 : rr >= 1.5 ? 20 : rr >= 1 ? 15 : rr > 0 ? 8 : 14
+
+  const e = t.emotion || ''
+  const emoPts = ['Disciplined', 'Confident', 'Neutral'].includes(e) ? 25 : ['FOMO', 'Greedy', 'Revenge'].includes(e) ? 0 : 12
+
+  let riskPts = 20 // win / breakeven / no risk logged = can't fault it
+  if (pnl < 0 && risk > 0) {
+    const mult = Math.abs(pnl) / risk
+    riskPts = mult <= 1.1 ? 25 : mult <= 1.5 ? 12 : 0 // loss bigger than planned = stop wasn't honored
+  }
+
+  const score = stopPts + rrPts + emoPts + riskPts
+  return { score, ...letterFor(score) }
+}
+
+export function computeRating(trades, stats) {
+  const n = stats.n
+  const grades = trades.map(executionGrade)
+  const avgGrade = grades.length ? grades.reduce((a, g) => a + g.score, 0) / grades.length : 60
+
+  const PF = stats.profitFactor === Infinity ? 2.5 : (stats.profitFactor || 0)
+  const edge = clamp(Math.round(55 + (PF - 1) * 40), 20, 99)
+  const discipline = clamp(Math.round(avgGrade), 20, 99)
+  const ddRatio = stats.maxDD / Math.max(stats.grossProfit, Math.abs(stats.avgWin) * 3, 1)
+  const risk = clamp(Math.round(95 - ddRatio * 55), 25, 99)
+  const consistency = clamp(Math.round(38 + stats.winRate * 0.55 + (PF >= 1 ? 8 : -8)), 25, 95)
+  const tpd = stats.activeDays ? n / stats.activeDays : 0
+  const patience = clamp(Math.round(95 - Math.max(0, tpd - 4) * 9), 30, 95)
+
+  // self-diagnosed reasons nudge the attribute they map to (bounded ±10)
+  const tally = { patience: { g: 0, b: 0 }, discipline: { g: 0, b: 0 }, risk: { g: 0, b: 0 }, edge: { g: 0, b: 0 } }
+  for (const t of trades) {
+    const r = REASONS[t.reason]
+    if (r && r.attr) tally[r.attr][r.good ? 'g' : 'b']++
+  }
+  const nudge = (k) => { const a = tally[k], tot = a.g + a.b; return tot ? clamp(Math.round(((a.g - a.b) / tot) * 10), -10, 10) : 0 }
+
+  const attrs = {
+    edge: clamp(edge + nudge('edge'), 20, 99),
+    discipline: clamp(discipline + nudge('discipline'), 20, 99),
+    risk: clamp(risk + nudge('risk'), 25, 99),
+    consistency,
+    patience: clamp(patience + nudge('patience'), 30, 95)
+  }
+  const raw = attrs.edge * 0.3 + attrs.discipline * 0.3 + attrs.risk * 0.2 + attrs.consistency * 0.1 + attrs.patience * 0.1
+  const ovr = clamp(Math.round(raw), 59, 99)
+
+  const holds = trades.map(holdMs).filter((m) => m && m > 0).sort((a, b) => a - b)
+  const medHold = holds.length ? holds[Math.floor(holds.length / 2)] : null
+  const archetype = medHold == null ? 'Trader'
+    : medHold < 10 * 60000 ? 'Scalper'
+    : medHold < 2 * 3600000 ? 'Day Trader'
+    : medHold < 2 * 864e5 ? 'Swing Trader'
+    : 'Position Trader'
+
+  const imported = trades.filter((t) => t.source === 'import').length
+  return { ovr, attrs, archetype, provisional: n < 20, sampleN: n, imported }
+}
+
+// Achievements reward BEHAVIOUR, not P&L — and use "best ever" tallies so they stay earned.
+export function computeAchievements(trades, stats) {
+  const sorted = [...trades].sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''))
+  let aGradeLosses = 0, stopSet = 0, withShots = 0, honoredCur = 0, honoredBest = 0
+  const dayTilt = {}
+  for (const t of sorted) {
+    const pnl = Number(t.pnl) || 0, risk = Number(t.riskAmount) || 0
+    const entry = Number(t.entry) || 0, stop = Number(t.stop) || 0
+    if (executionGrade(t).score >= 85 && pnl < 0) aGradeLosses++
+    if (stop > 0 && entry > 0 && (t.direction === 'Long' ? stop < entry : stop > entry)) stopSet++
+    if ((t.imageCount || 0) > 0) withShots++
+    const honored = pnl >= 0 || risk <= 0 || Math.abs(pnl) <= 1.1 * risk
+    if (honored) { honoredCur++; honoredBest = Math.max(honoredBest, honoredCur) } else honoredCur = 0
+    const d = (t.entryTime || t.timestamp || '').slice(0, 10)
+    if (d) { if (!(d in dayTilt)) dayTilt[d] = false; if (TILT.includes(t.emotion)) dayTilt[d] = true }
+  }
+  let cleanRun = 0, cleanBest = 0
+  for (const d of Object.keys(dayTilt).sort()) { if (!dayTilt[d]) { cleanRun++; cleanBest = Math.max(cleanBest, cleanRun) } else cleanRun = 0 }
+  const PF = stats.profitFactor === Infinity ? 99 : (stats.profitFactor || 0)
+
+  const defs = [
+    { id: 'process', name: 'Process over Profit', Icon: Trophy, desc: '10 A-grade trades that still lost — right trade, accepted variance.', current: aGradeLosses, goal: 10 },
+    { id: 'zen', name: 'Zen Mode', Icon: Brain, desc: 'A 25-trade streak with no FOMO, greed or revenge.', current: stats.bestNonTilt, goal: 25 },
+    { id: 'coolweek', name: 'Cool Week', Icon: Snowflake, desc: '5 straight trading days with zero tilt.', current: cleanBest, goal: 5 },
+    { id: 'stophonored', name: 'Stop Honored', Icon: Shield, desc: '15 trades in a row with no loss past your planned risk.', current: honoredBest, goal: 15 },
+    { id: 'riskmgr', name: 'Risk Manager', Icon: Target, desc: '50 trades logged with a stop set.', current: stopSet, goal: 50 },
+    { id: 'journaler', name: 'Journaler', Icon: BookOpen, desc: '100 trades journaled.', current: stats.n, goal: 100 },
+    { id: 'reviewer', name: 'Reviewer', Icon: Camera, desc: 'Screenshots attached to 20 trades.', current: withShots, goal: 20 },
+    { id: 'edge', name: 'Edge Confirmed', Icon: TrendingUp, desc: 'Profit factor over 1.5 across 50+ trades.', current: Math.min(stats.n, 50), goal: 50, gate: PF > 1.5 }
+  ]
+  return defs.map((d) => ({
+    ...d,
+    progress: clamp((d.current || 0) / d.goal, 0, 1),
+    unlocked: (d.current || 0) >= d.goal && (d.gate === undefined || d.gate)
+  }))
+}
+
+/* ───────── prop firm challenge tracker ───────── */
+// Tracks closed-trade (end-of-day style) balance vs. a prop firm's challenge rules.
+export function computePropFirm(trades, cfg) {
+  const start = Number(cfg.accountSize) || 0
+  const target = Number(cfg.target) || 0
+  const maxDaily = Number(cfg.maxDailyLoss) || 0
+  const maxDD = Number(cfg.maxDrawdown) || 0
+  const minDays = Number(cfg.minDays) || 0
+  const trailing = cfg.ddType !== 'static'
+  const scale = Number(cfg.sizeScale) || 1
+  const rel = cfg.scope === 'own' ? trades.filter((t) => t.account === cfg.id) : trades
+  const sorted = [...rel].sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''))
+  const floorAt = (peak) => (trailing ? Math.min(peak - maxDD, start) : start - maxDD)
+
+  let bal = start, peak = start, floorBreached = false
+  const curve = [{ i: 0, balance: start, floor: floorAt(start) }]
+  const dayPnl = {}
+  for (const t of sorted) {
+    const pnl = (Number(t.pnl) || 0) * scale
+    bal += pnl
+    peak = Math.max(peak, bal)
+    const floor = floorAt(peak)
+    if (maxDD > 0 && bal <= floor) floorBreached = true
+    curve.push({ i: curve.length, balance: bal, floor })
+    const d = (t.entryTime || t.timestamp || '').slice(0, 10)
+    if (d) dayPnl[d] = (dayPnl[d] || 0) + pnl
+  }
+  let dailyBreached = false
+  for (const v of Object.values(dayPnl)) if (maxDaily > 0 && v <= -maxDaily) dailyBreached = true
+
+  const netProfit = bal - start
+  const curFloor = floorAt(peak)
+  const ddBuffer = bal - curFloor
+  const todayPnl = dayPnl[new Date().toISOString().slice(0, 10)] || 0
+  const dailyRemaining = Math.max(0, maxDaily - Math.max(0, -todayPnl))
+  const daysTraded = Object.keys(dayPnl).length
+  const targetHit = target > 0 && netProfit >= target
+  const daysHit = daysTraded >= minDays
+  const breached = floorBreached || dailyBreached
+  const status = breached ? 'failed' : (targetHit && daysHit ? 'passed' : 'active')
+  return { start, bal, netProfit, peak, curFloor, ddBuffer, maxDD, target, maxDaily, todayPnl, dailyRemaining, daysTraded, minDays, targetHit, daysHit, breached, floorBreached, dailyBreached, status, curve }
+}
+
+export function tradeContext(trades, stats) {
+  const recent = [...trades].slice(-12).map((t) =>
+    `${t.timestamp} ${t.symbol} ${t.direction} pnl=${fmtN(t.pnl)} rr=${t.rr ? fmtN(t.rr, 1) : '-'} setup=${t.setup} emotion=${t.emotion}`).join('\n')
+  const top = (arr) => arr.slice(0, 3).map((g) => `${g.name}(${fmtN(g.pnl)})`).join(', ')
+  return `STATS:
+trades=${stats.n} netPnL=${fmtN(stats.totalPnl)} winRate=${fmtN(stats.winRate, 1)}% profitFactor=${stats.profitFactor === Infinity ? 'inf' : fmtN(stats.profitFactor, 2)}
+avgWin=${fmtN(stats.avgWin)} avgLoss=${fmtN(stats.avgLoss)} maxDD=${fmtN(stats.maxDD)} avgRR=${fmtN(stats.avgRR, 1)} currentStreak=${stats.currentStreak}
+P&L by emotion: ${top(stats.byEmotion)}
+P&L by setup: ${top(stats.bySetup)}
+RECENT TRADES:
+${recent || '(none)'}`
+}
