@@ -55,7 +55,8 @@ const api = {
   getLicense: () => ipcRenderer.invoke('license:status'),
   activateLicense: (key) => ipcRenderer.invoke('license:activate', key),
   deactivateLicense: () => ipcRenderer.invoke('license:deactivate'),
-  openExternal: (url) => ipcRenderer.invoke('app:openExternal', url)
+  openExternal: (url) => ipcRenderer.invoke('app:openExternal', url),
+  testKey: (payload) => ipcRenderer.invoke('key:test', payload)
 }
 
 contextBridge.exposeInMainWorld('api', api)

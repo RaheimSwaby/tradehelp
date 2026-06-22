@@ -7,6 +7,7 @@ import { fetchPrice, fetchQuotes } from './price.js'
 import { fetchEvents } from './events.js'
 import { initUpdater } from './updater.js'
 import * as license from './license.js'
+import { testKey } from './keytest.js'
 
 let win
 
@@ -86,6 +87,7 @@ function registerIpc() {
   ipcMain.handle('license:activate', (_e, key) => license.activate(db, key))
   ipcMain.handle('license:deactivate', () => license.deactivate(db))
   ipcMain.handle('app:openExternal', (_e, url) => shell.openExternal(String(url)))
+  ipcMain.handle('key:test', (_e, payload) => testKey(payload))
 
   ipcMain.handle('settings:get', () => db.getSettings())
   ipcMain.handle('settings:set', (_e, s) => db.setSettings(s))

@@ -150,6 +150,24 @@ function ModelSelect({ value, onChange, placeholder }) {
   )
 }
 
+/* ───────── api-key validity check ───────── */
+function TestKey({ type, value, url }) {
+  const [r, setR] = useState(null) // null | { loading } | { ok, msg }
+  useEffect(() => { setR(null) }, [value])
+  async function run() {
+    if (r?.loading) return
+    setR({ loading: true })
+    const res = await window.api.testKey({ type, key: value, url }).catch(() => null)
+    setR(res || { ok: false, msg: '✗ Test failed.' })
+  }
+  return (
+    <div className="mt-1.5 flex items-center gap-2">
+      <button type="button" onClick={run} disabled={r?.loading} className="text-xs px-2 py-1 rounded-md" style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}` }}>{r?.loading ? 'Testing…' : 'Test key'}</button>
+      {r && !r.loading && <span className="text-xs" style={{ color: r.ok ? T.up : T.down }}>{r.msg}</span>}
+    </div>
+  )
+}
+
 /* ───────── settings ───────── */
 export function SettingsTab({ settings, onSave, license, onLicenseChange, onReload }) {
   const [s, setS] = useState(settings || {})
@@ -187,6 +205,7 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
             <Field label="Base URL"><input style={inputStyle} className={inp} value={s.cloudUrl || ''} onChange={set('cloudUrl')} /></Field>
             <Field label="Model"><input style={inputStyle} className={inp} value={s.cloudModel || ''} onChange={set('cloudModel')} /></Field>
             <Field label="API key (stored locally)"><input type="password" style={inputStyle} className={inp} value={s.cloudKey || ''} onChange={set('cloudKey')} /></Field>
+            <TestKey type="cloud" value={s.cloudKey} url={s.cloudUrl} />
           </div>
         )}
         <div className="flex gap-2 mt-4">
@@ -217,6 +236,7 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
           </Field>
           <Field label="Finnhub API key (optional — real-time stocks)">
             <input type="password" style={inputStyle} className={inp} value={s.finnhubKey ?? ''} onChange={set('finnhubKey')} placeholder="leave blank for keyless / delayed" />
+            <TestKey type="finnhub" value={s.finnhubKey} />
           </Field>
         </div>
         <button type="button" onClick={() => onSave(s)} className="mt-4 rounded-md px-3 py-2 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306' }}>Save</button>
@@ -241,6 +261,7 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
         <div className="mt-3">
           <Field label="FMP API key (optional — fuller calendar)">
             <input type="password" style={inputStyle} className={inp} value={s.fmpKey ?? ''} onChange={set('fmpKey')} placeholder="leave blank for keyless (ForexFactory)" />
+            <TestKey type="fmp" value={s.fmpKey} />
           </Field>
         </div>
         <button type="button" onClick={() => onSave(s)} className="mt-4 rounded-md px-3 py-2 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306' }}>Save</button>

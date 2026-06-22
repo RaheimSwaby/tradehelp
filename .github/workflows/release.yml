@@ -1,7 +1,7 @@
 name: Release
 
-# Push a version tag (e.g. v0.2.0) and this builds the installers and publishes
-# them to a GitHub Release, which is also the feed electron-updater reads.
+# Push a version tag (e.g. v0.2.0) and this runs the tests, builds the installers,
+# and publishes them to a GitHub Release (the feed electron-updater reads).
 on:
   push:
     tags: ['v*']
@@ -10,7 +10,18 @@ permissions:
   contents: write
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npm test
+
   build:
+    needs: test
     strategy:
       matrix:
         os: [windows-latest, ubuntu-latest]
