@@ -150,7 +150,7 @@ export default function App() {
   useEffect(() => { window.api?.onUpdateReady?.(() => setUpdateReady(true)) }, [])
 
   // Re-theme the entire app when live. Runs every render; App is the only writer of T.
-  applyTheme(tradeMode)
+  applyTheme(tradeMode, settings?.accentColor)
 
   const TABS = [
     ['journal', 'Journal', BookOpen],

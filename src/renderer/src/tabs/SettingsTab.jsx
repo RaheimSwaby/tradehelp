@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { T, mono, inputStyle } from '../theme.js'
+import { T, mono, inputStyle, ACCENT_OPTIONS } from '../theme.js'
 import { CHECKOUT_URL } from '../utils.js'
 import { Panel, Field } from '../components/Shared.jsx'
 
@@ -187,6 +187,22 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <LicensePanel license={license} onChange={onLicenseChange} />
       <DataPanel onReload={onReload} />
+      <Panel title="Appearance">
+        <Field label="Accent color">
+          <div className="flex flex-wrap gap-2 mt-1">
+            {ACCENT_OPTIONS.map((o) => {
+              const active = (s.accentColor || 'amber') === o.key
+              return (
+                <button key={o.key} type="button" title={o.key}
+                  onClick={() => { const next = { ...s, accentColor: o.key }; setS(next); onSave(next) }}
+                  className="w-8 h-8 rounded-full"
+                  style={{ background: o.accent, border: `2px solid ${active ? T.text : 'transparent'}`, outline: active ? `1px solid ${o.accent}` : 'none' }} />
+              )
+            })}
+          </div>
+        </Field>
+        <p className="text-xs mt-3" style={{ color: T.faint }}>Recolors buttons, highlights and the active tab across the app. Trade Mode keeps its own "go time" color.</p>
+      </Panel>
       <Panel title="Model provider">
         <Field label="Provider">
           <select style={inputStyle} className={inp} value={s.provider || 'ollama'} onChange={set('provider')}>

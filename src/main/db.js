@@ -79,7 +79,8 @@ export function initDb() {
     eventsEnabled: 'true',
     fmpKey: '',
     eventsMinImpact: 'High',
-    eventsLeadMin: '15'
+    eventsLeadMin: '15',
+    accentColor: 'amber'
   }
   const ins = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)')
   for (const [k, v] of Object.entries(defaults)) ins.run(k, String(v))
