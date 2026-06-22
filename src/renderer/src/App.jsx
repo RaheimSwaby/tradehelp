@@ -8,6 +8,7 @@ import { fmt$, fmtN, parseRules, IMPACT_RANK, ALERT_LEADS, GATE_CONFIGURED } fro
 import { computeStats, computeAchievements } from './stats.js'
 import { Readout } from './components/Shared.jsx'
 import { NotesModal } from './components/NotesModal.jsx'
+import { WhatsNew } from './components/WhatsNew.jsx'
 import { Journal } from './tabs/JournalTab.jsx'
 import { Dashboard } from './tabs/DashboardTab.jsx'
 import { Psychology } from './tabs/PsychologyTab.jsx'
@@ -42,6 +43,8 @@ export default function App() {
   const firedRef = useRef(new Set())
   const [toast, setToast] = useState(null)
   const [updateReady, setUpdateReady] = useState(false)
+  const [whatsNew, setWhatsNew] = useState(null)
+  const wnRef = useRef(false)
 
   const hasApi = typeof window !== 'undefined' && window.api
 
@@ -56,6 +59,21 @@ export default function App() {
       setReady(true)
     })()
   }, [hasApi])
+
+  // Show "What's new" once after an auto-update bumps the version (not on a fresh install).
+  useEffect(() => {
+    if (wnRef.current || !hasApi || !settings || !window.api.appVersion) return
+    wnRef.current = true
+    ;(async () => {
+      const v = await window.api.appVersion()
+      const last = settings.lastSeenVersion
+      if (last && last !== v) {
+        const r = await window.api.releaseNotes().catch(() => null)
+        setWhatsNew({ version: v, notes: r?.notes || '' })
+      }
+      if (last !== v) window.api.setSettings({ lastSeenVersion: v })
+    })()
+  }, [settings, hasApi])
 
   const stats = useMemo(() => computeStats(trades), [trades])
 
@@ -243,6 +261,7 @@ export default function App() {
       )}
       {toast && <AchievementToast a={toast} onClose={() => setToast(null)} />}
       {updateReady && <UpdateBanner onInstall={() => window.api.installUpdate()} />}
+      {whatsNew && <WhatsNew info={whatsNew} onClose={() => setWhatsNew(null)} />}
     </div>
   )
 }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react'
-import { Plus, Trash2, Upload, Paperclip, X, Pencil, ImagePlus, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, Trash2, Upload, Paperclip, X, Pencil, ImagePlus, ChevronLeft, ChevronRight, Search } from 'lucide-react'
 import { T, mono, inputStyle } from '../theme.js'
 import { fmt$, fmtN, nowLocalInput, parseLocal, holdMs, fmtDuration, EMOTIONS, SETUPS, WIN_REASONS, LOSS_REASONS, pad2, MONTHS, downscale, fileToDataUrl } from '../utils.js'
 import { Field, Panel, GradeChip } from '../components/Shared.jsx'
@@ -12,7 +12,20 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
   const [images, setImages] = useState([])
   const [importOpen, setImportOpen] = useState(false)
   const [editing, setEditing] = useState(null)
+  const [query, setQuery] = useState('')
+  const [outcome, setOutcome] = useState('all') // all | win | loss
   const fileRef = useRef(null)
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return trades.filter((t) => {
+      const pnl = Number(t.pnl) || 0
+      if (outcome === 'win' && pnl < 0) return false
+      if (outcome === 'loss' && pnl >= 0) return false
+      if (!q) return true
+      return [t.symbol, t.setup, t.emotion, t.reason, t.notes, t.direction].some((v) => String(v || '').toLowerCase().includes(q))
+    })
+  }, [trades, query, outcome])
 
   function startEdit(t) {
     setEditing(t)
@@ -203,12 +216,27 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
       </div>
 
       <div className="rounded-xl overflow-hidden" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
-        <div className="px-4 py-3 flex items-center justify-between" style={{ borderBottom: `1px solid ${T.line}` }}>
-          <span className="text-sm font-semibold">Trade history <span style={{ color: T.faint }}>· {trades.length}</span></span>
-          <button type="button" onClick={() => setImportOpen(true)} className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-md" style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}` }}><Upload size={13} /> Import CSV</button>
+        <div className="px-4 py-3" style={{ borderBottom: `1px solid ${T.line}` }}>
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-semibold">Trade history <span style={{ color: T.faint }}>· {filtered.length === trades.length ? trades.length : `${filtered.length} of ${trades.length}`}</span></span>
+            <button type="button" onClick={() => setImportOpen(true)} className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-md" style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}` }}><Upload size={13} /> Import CSV</button>
+          </div>
+          {trades.length > 0 && (
+            <div className="flex items-center gap-2 mt-2">
+              <div className="relative flex-1">
+                <Search size={13} style={{ color: T.faint, position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)' }} />
+                <input style={inputStyle} className="w-full rounded pl-7 pr-2 py-1.5 text-xs" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search symbol, setup, emotion, notes…" />
+              </div>
+              {[['all', 'All'], ['win', 'Wins'], ['loss', 'Losses']].map(([k, label]) => (
+                <button key={k} type="button" onClick={() => setOutcome(k)} className="text-xs px-2 py-1 rounded-md" style={{ background: outcome === k ? T.surface2 : 'transparent', color: outcome === k ? T.accent : T.dim, border: `1px solid ${outcome === k ? T.line : 'transparent'}` }}>{label}</button>
+              ))}
+            </div>
+          )}
         </div>
         {trades.length === 0 ? (
           <div className="px-4 py-16 text-center text-sm" style={{ color: T.dim }}>No trades yet. Log your first one — your edge shows up after a handful.</div>
+        ) : filtered.length === 0 ? (
+          <div className="px-4 py-16 text-center text-sm" style={{ color: T.dim }}>No trades match your search.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm" style={mono}>
@@ -218,7 +246,7 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
                 </tr>
               </thead>
               <tbody>
-                {[...trades].reverse().map((t) => (
+                {[...filtered].reverse().map((t) => (
                   <tr key={t.id} className="cursor-pointer" style={{ borderTop: `1px solid ${T.line}` }} onDoubleClick={() => onNotes(t)}>
                     <td className="px-3 py-2 whitespace-nowrap" style={{ color: T.dim }}>{t.timestamp}</td>
                     <td className="px-3 py-2 font-semibold">

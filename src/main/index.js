@@ -88,6 +88,16 @@ function registerIpc() {
   ipcMain.handle('license:deactivate', () => license.deactivate(db))
   ipcMain.handle('app:openExternal', (_e, url) => shell.openExternal(String(url)))
   ipcMain.handle('key:test', (_e, payload) => testKey(payload))
+  ipcMain.handle('app:version', () => app.getVersion())
+  ipcMain.handle('release:notes', async () => {
+    const v = app.getVersion()
+    try {
+      const r = await fetch(`https://api.github.com/repos/RaheimSwaby/tradehelp/releases/tags/v${v}`, { headers: { Accept: 'application/vnd.github+json' } })
+      if (!r.ok) return { version: v, notes: '' }
+      const d = await r.json()
+      return { version: v, notes: String(d.body || '') }
+    } catch { return { version: v, notes: '' } }
+  })
 
   ipcMain.handle('settings:get', () => db.getSettings())
   ipcMain.handle('settings:set', (_e, s) => db.setSettings(s))
