@@ -1,7 +1,8 @@
-// ⚠ Replace with your real Lemon Squeezy checkout link once the $20 product exists.
-export const CHECKOUT_URL = 'https://YOUR-STORE.lemonsqueezy.com/buy/YOUR-PRODUCT-ID'
+// ⚠ Replace with your real Gumroad product URL once the $20 product exists,
+// e.g. 'https://you.gumroad.com/l/tradehelp'.
+export const CHECKOUT_URL = 'https://YOUR-NAME.gumroad.com/l/YOUR-PRODUCT'
 // Until a real checkout link is set, the trial/paywall stays dormant so nobody hits a dead paywall.
-export const GATE_CONFIGURED = !CHECKOUT_URL.includes('YOUR-STORE')
+export const GATE_CONFIGURED = !CHECKOUT_URL.includes('YOUR-NAME')
 
 export const EMOTIONS = ['Disciplined', 'Confident', 'Neutral', 'Hesitant', 'Anxious', 'FOMO', 'Greedy', 'Revenge', 'Bored']
 export const SETUPS = ['Opening Range Breakout', 'VWAP Reclaim', 'Pullback', 'Trend Continuation', 'Reversal', 'Liquidity Sweep']
