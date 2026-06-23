@@ -4,12 +4,12 @@
 export const TRIAL_DAYS = 14
 
 // ── Gumroad product ──────────────────────────────────────────────────────────
-// Paste your product's permalink — the bit after /l/ in your product URL,
-// e.g. https://you.gumroad.com/l/tradehelp  ->  'tradehelp'.
-// (The numeric product_id from Gumroad's product settings also works here.)
-const GUMROAD_PRODUCT = 'YOUR-GUMROAD-PRODUCT'
+// Gumroad's verify API keys off the product_id (NOT the /l/ permalink). If you
+// ever need to find it, POST to the verify endpoint once with any value — the
+// error message names the exact product_id to use.
+const GUMROAD_PRODUCT_ID = 'qu9Yv3jKqcNEbp1fU-aftg=='
 // How many devices one key may activate before we ask the buyer to reach out.
-const MAX_ACTIVATIONS = 5
+const MAX_ACTIVATIONS = 2
 const VERIFY_URL = 'https://api.gumroad.com/v2/licenses/verify'
 
 const daysSince = (iso) => Math.floor((Date.now() - Date.parse(iso)) / 86400000)
@@ -25,23 +25,16 @@ export function status(db) {
   return { state, daysLeft, key: s.licenseKey || '' }
 }
 
-// Hits Gumroad's verify endpoint. Tries the configured value as a product_id
-// first, then as a product_permalink, so either form the seller pastes works.
-// Only the matching attempt increments the use count, so a key burns one
-// activation per call regardless.
+// Hits Gumroad's verify endpoint with our product_id. Passing increment=true on
+// activation bumps the key's use count, which is how we cap activations per key.
 async function verifyKey(key, increment) {
-  for (const field of ['product_id', 'product_permalink']) {
-    const body = new URLSearchParams({ [field]: GUMROAD_PRODUCT, license_key: key, increment_uses_count: String(increment) })
-    let res, d
-    try {
-      res = await fetch(VERIFY_URL, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' }, body })
-      d = await res.json().catch(() => ({}))
-    } catch { return { network: true } }
+  const body = new URLSearchParams({ product_id: GUMROAD_PRODUCT_ID, license_key: key, increment_uses_count: String(increment) })
+  try {
+    const res = await fetch(VERIFY_URL, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' }, body })
+    const d = await res.json().catch(() => ({}))
     if (res.ok && d.success) return { ok: true, data: d }
-    // Only fall through to the other field when the product itself wasn't found.
-    if (!/product/i.test(d.message || '')) return { ok: false, data: d }
-  }
-  return { ok: false, data: { message: 'That key could not be verified for this product.' } }
+    return { ok: false, data: d }
+  } catch { return { network: true } }
 }
 
 export async function activate(db, key) {
