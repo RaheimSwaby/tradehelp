@@ -139,12 +139,36 @@ export function csvNum(v) {
   const n = parseFloat(s)
   return Number.isFinite(n) ? (neg ? -Math.abs(n) : n) : 0
 }
+// Parse a broker CSV date/datetime into "YYYY-MM-DD HH:MM". Handles ISO, US (M/D/Y),
+// European day-first (D/M/Y — detected when the first number is > 12), dotted/dashed/
+// slashed separators, AM/PM, and epoch timestamps. Returns '' if it can't parse.
 export function csvDate(v) {
   const s = String(v || '').trim()
   if (!s) return ''
-  const d = new Date(s)
-  if (isNaN(d)) return ''
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`
+  const out = (d) => (isNaN(d) ? '' : `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`)
+  // Epoch milliseconds / seconds
+  if (/^\d{13}$/.test(s)) return out(new Date(+s))
+  if (/^\d{10}$/.test(s)) return out(new Date(+s * 1000))
+  // Numeric date a·b·c (any of / . -), optional time + AM/PM
+  const m = s.match(/^(\d{1,4})[/.\-](\d{1,2})[/.\-](\d{1,4})(?:[ T]+(\d{1,2}):(\d{2})(?::\d{2})?\s*([ap]m)?)?/i)
+  if (m) {
+    const a = +m[1], b = +m[2], c = +m[3]
+    let year, mon, day
+    if (m[1].length === 4) { year = a; mon = b; day = c }          // YYYY-MM-DD
+    else {
+      year = c < 100 ? 2000 + c : c
+      if (a > 12) { day = a; mon = b }                              // D/M/Y (unambiguous)
+      else if (b > 12) { mon = a; day = b }                        // M/D/Y (unambiguous)
+      else { mon = a; day = b }                                    // ambiguous → assume US M/D/Y
+    }
+    let hh = m[4] ? +m[4] : 0
+    const mm = m[5] ? +m[5] : 0, ap = (m[6] || '').toLowerCase()
+    if (ap === 'pm' && hh < 12) hh += 12
+    if (ap === 'am' && hh === 12) hh = 0
+    if (mon >= 1 && mon <= 12 && day >= 1 && day <= 31) return out(new Date(year, mon - 1, day, hh, mm))
+  }
+  // Fallback to the engine (handles "Jan 15 2024 9:30 AM", RFC, full ISO with timezone)
+  return out(new Date(s))
 }
 export const normDir = (v) => (/^\s*(s|sell|short|sld|sold)/i.test(String(v || '')) ? 'Short' : 'Long')
 // [field, label, header-guess regex, required]
@@ -155,8 +179,8 @@ export const IMPORT_FIELDS = [
   ['entry', 'Entry price', /entry.*price|open.*price|avg.*entry|buy.*price|price.*open|^entry$|fill.*price/i, false],
   ['exit', 'Exit price', /exit.*price|close.*price|sell.*price|price.*close|^exit$/i, false],
   ['pnl', 'Net P&L', /pnl|p&l|p\/l|profit|realized|net|gain/i, false],
-  ['entryTime', 'Entry time', /entry.*time|open.*time|time.*open|date.*open|entry.*date|opened|^date$|^time$|timestamp/i, false],
-  ['exitTime', 'Exit time', /exit.*time|close.*time|time.*close|date.*close|exit.*date|closed/i, false]
+  ['entryTime', 'Entry time', /entry.*time|open.*time|time.*open|date.*open|entry.*date|opened|trade.*date|trade.*time|fill.*time|exec.*time|order.*time|transaction.*date|date.?time|datetime|^date$|^time$|timestamp/i, false],
+  ['exitTime', 'Exit time', /exit.*time|close.*time|time.*close|date.*close|exit.*date|closed|sell.*time|liquidat/i, false]
 ]
 
 // ── economic-calendar helpers ──
