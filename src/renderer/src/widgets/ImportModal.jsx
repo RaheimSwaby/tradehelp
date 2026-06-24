@@ -22,6 +22,22 @@ export function ImportModal({ onClose, onImport }) {
       const headers = all[0].map((h) => h.trim())
       const guessed = {}
       for (const [field, , re] of IMPORT_FIELDS) guessed[field] = headers.find((h) => re.test(h)) || ''
+      // If no date column matched by header name, sniff the data for one — picks the
+      // first unmapped column whose values mostly look like dates. Handles brokers
+      // (e.g. TopstepX) whose date-column header we don't recognize, so trades keep
+      // their real dates instead of all falling back to the import time.
+      if (!guessed.entryTime) {
+        const used = new Set(Object.values(guessed).filter(Boolean))
+        const sample = all.slice(1, 8)
+        const dateish = (v) => /\d[/.\-:]\d/.test(v) // digit-sep-digit, e.g. 1/2, 9:30, 2024-01
+        for (let i = 0; i < headers.length; i++) {
+          if (used.has(headers[i])) continue
+          const vals = sample.map((r) => String(r[i] || '').trim()).filter(Boolean)
+          if (vals.length >= 2 && vals.filter((v) => dateish(v) && csvDate(v)).length >= Math.ceil(vals.length * 0.6)) {
+            guessed.entryTime = headers[i]; break
+          }
+        }
+      }
       setData({ headers, rows: all.slice(1) }); setMap(guessed)
     } catch (e) { setErr('Could not read the CSV: ' + (e?.message || e)) }
   }
