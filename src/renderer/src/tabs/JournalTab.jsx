@@ -246,7 +246,8 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
             <table className="w-full text-sm" style={mono}>
               <thead>
                 <tr style={{ color: T.faint }} className="text-xs uppercase tracking-wider">
-                  {['Time', 'Symbol', 'Dir', 'P&L', 'Grade', 'R:R', 'Held', 'Setup', 'Emotion', ''].map((h) => <th key={h} className="text-left font-normal px-3 py-2">{h}</th>)}
+                  {['Time', 'Symbol', 'Dir', 'P&L', 'Grade', 'R:R', 'Held', 'Setup', 'Emotion'].map((h) => <th key={h} className="text-left font-normal px-3 py-2">{h}</th>)}
+                  <th className="text-right font-normal px-3 py-2 sticky right-0" style={{ background: T.surface }}>Edit · Del</th>
                 </tr>
               </thead>
               <tbody>
@@ -263,9 +264,9 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
                     <td className="px-3 py-2" style={{ color: T.dim }}>{fmtDuration(holdMs(t)) || '—'}</td>
                     <td className="px-3 py-2" style={{ color: T.dim }}>{t.setup}</td>
                     <td className="px-3 py-2" style={{ color: T.dim }}>{t.emotion}</td>
-                    <td className="px-3 py-2 text-right whitespace-nowrap">
-                      <button type="button" onClick={() => startEdit(t)} title="Edit" style={{ color: T.faint }} className="mr-3"><Pencil size={14} /></button>
-                      <button type="button" onClick={() => { if (window.confirm('Delete this trade? This cannot be undone.')) onRemove(t.id) }} title="Delete" style={{ color: T.faint }}><Trash2 size={15} /></button>
+                    <td className="px-3 py-2 text-right whitespace-nowrap sticky right-0" style={{ background: T.surface }}>
+                      <button type="button" onClick={() => startEdit(t)} title="Edit trade" style={{ color: T.dim }} className="mr-3 hover:opacity-70"><Pencil size={16} /></button>
+                      <button type="button" onClick={() => { if (window.confirm('Delete this trade? This cannot be undone.')) onRemove(t.id) }} title="Delete trade" style={{ color: T.down }} className="hover:opacity-70"><Trash2 size={16} /></button>
                     </td>
                   </tr>
                 ))}
