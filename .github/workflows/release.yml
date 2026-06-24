@@ -24,8 +24,10 @@ jobs:
     needs: test
     strategy:
       matrix:
-        os: [windows-latest, ubuntu-latest]
-        # macOS is omitted until Apple signing/notarization secrets are added.
+        os: [windows-latest, ubuntu-latest, macos-latest]
+        # macOS builds are UNSIGNED (mac.identity=null) — users run `xattr -cr
+        # /Applications/TradeHelp.app` once to open. Add Apple signing/notarization
+        # secrets later for a clean double-click install.
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
