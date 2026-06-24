@@ -23,6 +23,11 @@ jobs:
   build:
     needs: test
     strategy:
+      # Serialized so the platform jobs don't race to create the GitHub release
+      # (concurrent --publish would split assets across duplicate draft releases).
+      # The first job creates the draft; the rest append to it.
+      max-parallel: 1
+      fail-fast: false
       matrix:
         os: [windows-latest, ubuntu-latest, macos-latest]
         # macOS builds are UNSIGNED (mac.identity=null) — users run `xattr -cr
