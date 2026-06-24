@@ -6,7 +6,7 @@ import { streamChat } from '../utils.js'
 import { GradeChip } from './Shared.jsx'
 import { LazyImage } from './LazyImage.jsx'
 
-const VISION_SYSTEM = `You are a trading chart analyst inside a trader's journal. You are shown the screenshot(s) of ONE trade plus its details (symbol, direction, setup, outcome, R:R, emotion). Read the chart: describe the visible price structure (trend, key levels, candle behaviour), then judge whether the entry/exit and the stated setup look clean and consistent with what's on the chart — including any 'Before' vs 'After' images. Finish with ONE concrete, specific thing to repeat or fix next time. Do NOT predict future prices or give buy/sell signals. Keep it under ~160 words, concrete and direct.`
+const VISION_SYSTEM = `You are a trading chart analyst inside a trader's journal. You are shown the screenshot(s) of ONE trade plus its details (symbol, direction, setup, outcome, R:R, emotion). Read the chart: describe the visible price structure (trend, key levels, candle behaviour), then judge whether the entry/exit and the stated setup look clean and consistent with what's on the chart — including any 'Before' vs 'After' images. Some charts may have the trader's OWN markers drawn on them (e.g. Entry, Stop, Target) — treat those as ground truth for where those levels are, rather than guessing from the candles. Finish with ONE concrete, specific thing to repeat or fix next time. Do NOT predict future prices or give buy/sell signals. Keep it under ~160 words, concrete and direct.`
 
 /* ───────── trade detail modal (notes + screenshots) ───────── */
 export function NotesModal({ trade, onClose }) {
@@ -34,6 +34,7 @@ export function NotesModal({ trade, onClose }) {
         `Trade: ${trade.symbol} ${trade.direction} · setup=${trade.setup || '-'} · outcome=${(Number(trade.pnl) || 0) >= 0 ? 'WIN' : 'LOSS'} (${fmt$(trade.pnl)})`,
         `R:R=${trade.rr ? `1:${fmtN(trade.rr, 1)}` : '-'} · emotion=${trade.emotion || '-'}${trade.reason ? ` · reason=${trade.reason}` : ''}`,
         `Image tags (in order): ${withPics.map((i) => i.tag || 'untagged').join(', ')}`,
+        `Trader-marked levels on the chart(s): ${withPics.map((i) => i.caption).filter(Boolean).join('; ') || 'none'}`,
         `Notes: ${trade.notes || '(none)'}`
       ].join('\n')
       let acc = ''

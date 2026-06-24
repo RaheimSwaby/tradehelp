@@ -4,12 +4,14 @@ import { T, mono, inputStyle } from '../theme.js'
 import { fmt$, fmtN, nowLocalInput, parseLocal, holdMs, fmtDuration, EMOTIONS, SETUPS, WIN_REASONS, LOSS_REASONS, pad2, MONTHS, downscale, fileToDataUrl } from '../utils.js'
 import { Field, Panel, GradeChip } from '../components/Shared.jsx'
 import { ImportModal } from '../widgets/ImportModal.jsx'
+import { AnnotateModal } from '../components/AnnotateModal.jsx'
 
 /* ───────── journal ───────── */
 export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, accounts = [] }) {
   const blank = { symbol: '', direction: 'Long', entry: '', exit: '', stop: '', target: '', size: '', riskAmount: '', pnl: '', emotion: 'Neutral', setup: 'Pullback', notes: '', entryTime: nowLocalInput(), exitTime: nowLocalInput(), reason: '', account: '' }
   const [f, setF] = useState(blank)
   const [images, setImages] = useState([])
+  const [annotating, setAnnotating] = useState(null)
   const [importOpen, setImportOpen] = useState(false)
   const [editing, setEditing] = useState(null)
   const [query, setQuery] = useState('')
@@ -112,7 +114,7 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
       setEditing(null); setF(blank)
     } else {
       onAdd({ ...base, id: Date.now() + Math.random().toString(16).slice(2), timestamp: new Date().toISOString().slice(0, 16).replace('T', ' ') },
-        images.map((im) => ({ dataUrl: im.dataUrl, tag: im.tag.trim(), caption: '' })))
+        images.map((im) => ({ dataUrl: im.dataUrl, tag: im.tag.trim(), caption: (im.labels || []).join(', ') })))
       setF(blank); setImages([])
     }
   }
@@ -196,6 +198,8 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
                   <div className="relative">
                     <img src={im.dataUrl} alt="" className="w-full h-20 object-cover" />
                     <button type="button" onClick={() => removeImage(im.tmpId)} className="absolute top-1 right-1 rounded p-0.5" style={{ background: 'rgba(0,0,0,0.6)', color: '#fff' }}><X size={13} /></button>
+                    <button type="button" onClick={() => setAnnotating(im)} className="absolute bottom-1 left-1 rounded px-1.5 py-0.5 text-[10px] font-semibold flex items-center gap-1" style={{ background: 'rgba(0,0,0,0.6)', color: T.accent }}><Pencil size={10} /> Mark up</button>
+                    {im.labels?.length > 0 && <span className="absolute bottom-1 right-1 rounded px-1.5 py-0.5 text-[10px]" style={{ background: 'rgba(0,0,0,0.6)', color: T.up }}>{im.labels.join(' · ')}</span>}
                   </div>
                   <input style={inputStyle} className="w-full px-2 py-1 text-xs" value={im.tag} onChange={(e) => setTag(im.tmpId, e.target.value)} placeholder="tag (e.g. Before)" />
                 </div>
@@ -272,6 +276,7 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
         <div className="px-4 py-2 text-xs" style={{ color: T.faint, borderTop: `1px solid ${T.line}` }}>Double-click a row to view its notes &amp; screenshots.</div>
       </div>
       {importOpen && <ImportModal onClose={() => setImportOpen(false)} onImport={async (rows) => { await onImport(rows); setImportOpen(false) }} />}
+      {annotating && <AnnotateModal src={annotating.dataUrl} onClose={() => setAnnotating(null)} onSave={(dataUrl, labels) => { setImages((p) => p.map((im) => (im.tmpId === annotating.tmpId ? { ...im, dataUrl, labels } : im))); setAnnotating(null) }} />}
     </div>
   )
 }
