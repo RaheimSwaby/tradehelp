@@ -29,6 +29,14 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
     })
   }, [trades, query, outcome])
 
+  const [page, setPage] = useState(0)
+  const [pageSize, setPageSize] = useState(20)
+  const ordered = useMemo(() => [...filtered].reverse(), [filtered]) // newest first
+  const pageCount = Math.max(1, Math.ceil(ordered.length / pageSize))
+  const safePage = Math.min(page, pageCount - 1)
+  const pageRows = ordered.slice(safePage * pageSize, safePage * pageSize + pageSize)
+  useEffect(() => { setPage(0) }, [query, outcome, pageSize])
+
   function startEdit(t) {
     setEditing(t)
     setImages([])
@@ -273,7 +281,7 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
                 </tr>
               </thead>
               <tbody>
-                {[...filtered].reverse().map((t) => (
+                {pageRows.map((t) => (
                   <tr key={t.id} className="cursor-pointer" style={{ borderTop: `1px solid ${T.line}` }} onDoubleClick={() => onNotes(t)}>
                     <td className="px-3 py-2 whitespace-nowrap" style={{ color: T.dim }}>{t.timestamp}</td>
                     <td className="px-3 py-2 font-semibold">
@@ -294,6 +302,21 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+        {ordered.length > 0 && (
+          <div className="px-4 py-2 flex flex-wrap items-center justify-between gap-2 text-xs" style={{ color: T.dim, borderTop: `1px solid ${T.line}` }}>
+            <span>Showing <span style={{ ...mono, color: T.text }}>{safePage * pageSize + 1}–{Math.min((safePage + 1) * pageSize, ordered.length)}</span> of {ordered.length}</span>
+            <div className="flex items-center gap-1.5">
+              <span style={{ color: T.faint }}>Per page</span>
+              {[20, 40, 50].map((n) => (
+                <button key={n} type="button" onClick={() => setPageSize(n)} className="px-1.5 py-0.5 rounded" style={{ background: pageSize === n ? T.surface2 : 'transparent', color: pageSize === n ? T.accent : T.dim, border: `1px solid ${pageSize === n ? T.line : 'transparent'}` }}>{n}</button>
+              ))}
+              <span style={{ width: 1, height: 14, background: T.line, margin: '0 4px' }} />
+              <button type="button" onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={safePage === 0} style={{ color: T.dim, opacity: safePage === 0 ? 0.4 : 1 }}><ChevronLeft size={15} /></button>
+              <span style={{ ...mono, color: T.text }}>{safePage + 1}/{pageCount}</span>
+              <button type="button" onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))} disabled={safePage >= pageCount - 1} style={{ color: T.dim, opacity: safePage >= pageCount - 1 ? 0.4 : 1 }}><ChevronRight size={15} /></button>
+            </div>
           </div>
         )}
         <div className="px-4 py-2 text-xs" style={{ color: T.faint, borderTop: `1px solid ${T.line}` }}>Double-click a row to open it — edit notes, view screenshots. Use ✏️ to edit the full trade.</div>
