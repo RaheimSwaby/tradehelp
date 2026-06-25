@@ -82,7 +82,10 @@ export function initDb() {
     eventsMinImpact: 'High',
     eventsLeadMin: '15',
     accentColor: 'amber',
-    lastSeenVersion: ''
+    lastSeenVersion: '',
+    breakWeeks: '[]',
+    onBreak: 'false',
+    breakSince: ''
   }
   const ins = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)')
   for (const [k, v] of Object.entries(defaults)) ins.run(k, String(v))

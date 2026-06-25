@@ -1,5 +1,5 @@
-import { Trophy, Brain, Snowflake, Shield, Target, BookOpen, Camera, TrendingUp } from 'lucide-react'
-import { TILT, REASONS, clamp, fmtN, holdMs } from './utils.js'
+import { Trophy, Brain, Snowflake, Shield, Target, BookOpen, Camera, TrendingUp, Calendar, Flame } from 'lucide-react'
+import { TILT, REASONS, clamp, fmtN, holdMs, periodKey, pad2 } from './utils.js'
 
 /* ───────── stats ───────── */
 export function computeStats(trades) {
@@ -285,4 +285,60 @@ P&L by emotion: ${top(stats.byEmotion)}
 P&L by setup: ${top(stats.bySetup)}
 RECENT TRADES:
 ${recent || '(none)'}`
+}
+
+/* ───────── medals + weekly journaling streak ───────── */
+const TIER_NAMES = ['—', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond']
+const tierOf = (v, th) => { let t = 0; for (let i = 0; i < th.length; i++) if (v >= th[i]) t = i + 1; return t }
+const weekOf = (d) => periodKey(String(d || '').slice(0, 10), 'week')
+const prevWeek = (wk) => { const d = new Date(wk + 'T00:00:00'); d.setDate(d.getDate() - 7); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}` }
+
+// Consecutive weeks (Mon-start) with at least one logged trade, bridging weeks the
+// trader marked as a break. Forgives the current in-progress week.
+export function journalingStreak(trades, settings = {}) {
+  const active = new Set()
+  for (const t of trades || []) { const w = weekOf(t.entryTime || t.timestamp); if (w) active.add(w) }
+  let breakSet
+  try { breakSet = new Set(JSON.parse(settings.breakWeeks || '[]')) } catch { breakSet = new Set() }
+  const onBreak = settings.onBreak === 'true' || settings.onBreak === true
+  const since = settings.breakSince || ''
+  const isBreak = (w) => breakSet.has(w) || (onBreak && since && w >= since)
+  const cw = weekOf(new Date().toISOString())
+  let w = cw, streak = 0, guard = 0
+  if (!active.has(cw) && !isBreak(cw)) w = prevWeek(cw) // grace for the in-progress week
+  while (guard++ < 600) {
+    if (isBreak(w)) { w = prevWeek(w); continue }
+    if (active.has(w)) { streak++; w = prevWeek(w); continue }
+    break
+  }
+  return { streak, onBreak }
+}
+
+function bestWinStreak(trades) {
+  const sorted = [...(trades || [])].sort((a, b) => String(a.entryTime || a.timestamp || '').localeCompare(String(b.entryTime || b.timestamp || '')))
+  let best = 0, cur = 0
+  for (const t of sorted) { if ((Number(t.pnl) || 0) > 0) { cur++; if (cur > best) best = cur } else cur = 0 }
+  return best
+}
+
+function cleanWeeks(trades) {
+  const byWeek = {}
+  for (const t of trades || []) { const w = weekOf(t.entryTime || t.timestamp); if (!w) continue; if (!(w in byWeek)) byWeek[w] = true; if (TILT.includes(t.emotion)) byWeek[w] = false }
+  return Object.values(byWeek).filter(Boolean).length
+}
+
+export function computeMedals(trades, stats, settings = {}) {
+  const js = journalingStreak(trades, settings)
+  const defs = [
+    { id: 'consistency', name: 'Consistency', desc: 'Weeks journaled in a row', Icon: Calendar, value: js.streak, unit: 'wk', th: [2, 4, 12, 26, 52] },
+    { id: 'discipline', name: 'Discipline', desc: 'Best non-tilt streak', Icon: Shield, value: stats.bestNonTilt || 0, unit: '', th: [10, 25, 50, 100, 200] },
+    { id: 'composure', name: 'Composure', desc: 'Clean (no-tilt) weeks', Icon: Snowflake, value: cleanWeeks(trades), unit: 'wk', th: [2, 5, 12, 26, 52] },
+    { id: 'dedication', name: 'Dedication', desc: 'Trades journaled', Icon: BookOpen, value: stats.n || 0, unit: '', th: [25, 100, 250, 500, 1000] },
+    { id: 'hothand', name: 'Hot hand', desc: 'Best win streak — luck counts here', Icon: Flame, value: bestWinStreak(trades), unit: '', th: [3, 5, 8, 12, 20] }
+  ]
+  const medals = defs.map((m) => {
+    const tier = tierOf(m.value, m.th)
+    return { ...m, tier, tierName: TIER_NAMES[tier], next: tier < m.th.length ? m.th[tier] : null, progress: tier < m.th.length ? Math.min(1, m.value / m.th[tier]) : 1 }
+  })
+  return { streak: js.streak, onBreak: js.onBreak, medals }
 }

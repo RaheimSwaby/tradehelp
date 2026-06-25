@@ -104,6 +104,9 @@ export function periodKey(dateStr, gran) {
   d.setDate(d.getDate() - ((d.getDay() + 6) % 7)) // back up to Monday
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
 }
+// Monday-of-this-week key, and the Monday one week after a given week-key (for streaks/breaks).
+export const thisWeekKey = () => periodKey(new Date().toISOString().slice(0, 10), 'week')
+export const nextWeekKey = (wk) => { const d = new Date(wk + 'T00:00:00'); d.setDate(d.getDate() + 7); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}` }
 export function periodLabel(key, gran) {
   if (!key) return '—'
   if (gran === 'year') return key === String(new Date().getFullYear()) ? `${key} (YTD)` : key

@@ -239,7 +239,7 @@ export default function App() {
             {tab === 'propfirm' && <PropFirm trades={trades} accounts={propFirmAccounts} onSave={savePropFirmAccounts} />}
             {tab === 'dashboard' && <Dashboard stats={stats} trades={trades} />}
             {tab === 'psych' && <Psychology stats={stats} />}
-            {tab === 'rating' && <Rating trades={trades} stats={stats} achievements={achievements} unlockedAt={unlockedAt} />}
+            {tab === 'rating' && <Rating trades={trades} stats={stats} achievements={achievements} unlockedAt={unlockedAt} settings={settings} onSave={saveSettings} />}
             {tab === 'goals' && <Goals goals={goals} onSave={saveGoals} trades={trades} />}
             {tab === 'reviews' && <Reviews trades={trades} reviews={reviews} onSave={saveReview} />}
             {tab === 'coach' && <Coach trades={trades} stats={stats} settings={settings} events={events} now={now} />}

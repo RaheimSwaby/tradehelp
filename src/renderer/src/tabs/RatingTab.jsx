@@ -1,15 +1,44 @@
 import React, { useMemo } from 'react'
 import { Brain, Lock, BadgeCheck, X } from 'lucide-react'
 import { T, mono } from '../theme.js'
-import { computeRating, computeAchievements, computeSelfGrade } from '../stats.js'
+import { computeRating, computeAchievements, computeSelfGrade, computeMedals } from '../stats.js'
+import { thisWeekKey, nextWeekKey } from '../utils.js'
 import { Panel } from '../components/Shared.jsx'
 
 const gradeColor = (l) => (l === 'A+' || l === 'A' ? T.up : l === 'B' || l === 'C' ? T.accent : l === '—' ? T.dim : T.down)
 
+const TIER_COLOR = ['#5A6478', '#CD7F32', '#C0C0C0', '#FFD54A', '#7FD8E8', '#B9F2FF'] // none, bronze, silver, gold, platinum, diamond
+function MedalCoin({ m }) {
+  const c = TIER_COLOR[m.tier]
+  const Icon = m.Icon
+  return (
+    <div className="rounded-lg p-3 text-center" style={{ background: T.surface2, border: `1px solid ${m.tier ? c : T.line}`, opacity: m.tier ? 1 : 0.8 }} title={m.desc}>
+      <div className="mx-auto rounded-full flex items-center justify-center" style={{ width: 46, height: 46, background: m.tier ? `radial-gradient(circle at 35% 28%, ${c}, ${c}66)` : T.surface, border: `2px solid ${m.tier ? c : T.line}`, boxShadow: m.tier >= 4 ? `0 0 12px ${c}99` : 'none' }}>
+        <Icon size={20} style={{ color: m.tier ? '#1A1306' : T.faint }} />
+      </div>
+      <div className="text-sm font-semibold mt-1.5" style={{ color: m.tier ? T.text : T.dim }}>{m.name}</div>
+      <div className="text-xs" style={{ color: m.tier ? c : T.faint }}>{m.tierName}</div>
+      <div className="text-[11px] mt-0.5" style={{ color: T.faint, ...mono }}>{m.value}{m.unit}{m.next ? ` / ${m.next}${m.unit}` : ' · max'}</div>
+    </div>
+  )
+}
+
 /* ───────── rating ───────── */
-export function Rating({ trades, stats, achievements, unlockedAt }) {
+export function Rating({ trades, stats, achievements, unlockedAt, settings, onSave }) {
   const r = useMemo(() => computeRating(trades, stats), [trades, stats])
   const self = useMemo(() => computeSelfGrade(trades), [trades])
+  const m = useMemo(() => computeMedals(trades, stats, settings || {}), [trades, stats, settings])
+  function toggleBreak() {
+    const cw = thisWeekKey()
+    if (m.onBreak) {
+      let bw; try { bw = new Set(JSON.parse(settings?.breakWeeks || '[]')) } catch { bw = new Set() }
+      let w = settings?.breakSince || cw, guard = 0
+      while (w <= cw && guard++ < 600) { bw.add(w); w = nextWeekKey(w) }
+      onSave?.({ onBreak: 'false', breakSince: '', breakWeeks: JSON.stringify([...bw]) })
+    } else {
+      onSave?.({ onBreak: 'true', breakSince: cw })
+    }
+  }
   if (stats.n === 0) {
     return <Panel title="Trader rating"><div className="py-12 text-center text-sm" style={{ color: T.dim }}>Log trades to build your rating. It grades your <span style={{ color: T.text }}>process</span> — not whether you won.</div></Panel>
   }
@@ -72,6 +101,18 @@ export function Rating({ trades, stats, achievements, unlockedAt }) {
         </Panel>
       </div>
     </div>
+      <Panel title="Medals" right={
+        <button type="button" onClick={toggleBreak} className="text-xs px-2.5 py-1 rounded-md" style={{ background: m.onBreak ? T.accentSoft : T.surface2, color: m.onBreak ? T.accent : T.dim, border: `1px solid ${T.line}` }}>
+          {m.onBreak ? '▶ Back from break' : '⏸ Take a break'}
+        </button>
+      }>
+        {m.onBreak
+          ? <div className="text-xs mb-3" style={{ color: T.accent }}>On a break — your weekly streak is frozen. Hit "Back from break" (or just log a trade) to pick up where you left off.</div>
+          : <div className="text-xs mb-3" style={{ color: T.dim }}>Journaling streak: <span style={{ color: T.text, ...mono }}>{m.streak}</span> week{m.streak === 1 ? '' : 's'}. Taking time off? Hit "Take a break" so it freezes instead of resetting.</div>}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+          {m.medals.map((md) => <MedalCoin key={md.id} m={md} />)}
+        </div>
+      </Panel>
       <Panel title="Self-graded" right={<span className="text-xs inline-flex items-center gap-1 px-2 py-0.5 rounded" style={{ color: T.faint, border: `1px solid ${T.line}` }}>your call · not verified</span>}>
         {self.count === 0 ? (
           <div className="text-sm" style={{ color: T.dim }}>Grade your own <span style={{ color: T.text }}>setup</span> and <span style={{ color: T.text }}>execution</span> when you log a trade — your honest read, kept separate from the app's grade above. A losing trade can still be an A+ setup.</div>
