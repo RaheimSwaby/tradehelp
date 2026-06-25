@@ -4,7 +4,7 @@ import {
   TrendingUp, Zap, Building2, ClipboardList, Gauge, ScanSearch, Play
 } from 'lucide-react'
 import { applyTheme, T, mono } from './theme.js'
-import { fmt$, fmtN, parseRules, IMPACT_RANK, ALERT_LEADS, GATE_CONFIGURED } from './utils.js'
+import { fmt$, fmtN, parseRules, IMPACT_RANK, ALERT_LEADS, GATE_CONFIGURED, isNewerVersion } from './utils.js'
 import { computeStats, computeAchievements } from './stats.js'
 import { Readout } from './components/Shared.jsx'
 import { NotesModal } from './components/NotesModal.jsx'
@@ -23,6 +23,7 @@ import { TrialBanner, Paywall, SettingsTab } from './tabs/SettingsTab.jsx'
 import { Ticker } from './widgets/Ticker.jsx'
 import { EventBanner } from './widgets/EventBanner.jsx'
 import { UpdateBanner } from './widgets/UpdateBanner.jsx'
+import { UpdateAvailableBanner } from './widgets/UpdateAvailableBanner.jsx'
 
 /* ───────── main app ───────── */
 export default function App() {
@@ -45,6 +46,7 @@ export default function App() {
   const [updateReady, setUpdateReady] = useState(false)
   const [whatsNew, setWhatsNew] = useState(null)
   const wnRef = useRef(false)
+  const [updateAvail, setUpdateAvail] = useState(null)
 
   const hasApi = typeof window !== 'undefined' && window.api
 
@@ -74,6 +76,19 @@ export default function App() {
       if (last !== v) window.api.setSettings({ lastSeenVersion: v })
     })()
   }, [settings, hasApi])
+
+  // Nudge to update when a newer release exists and auto-update can't deliver it (macOS).
+  useEffect(() => {
+    if (!hasApi || !window.api.latestVersion) return
+    let live = true
+    ;(async () => {
+      const [cur, latest] = await Promise.all([window.api.appVersion(), window.api.latestVersion()])
+      if (live && latest?.platform === 'darwin' && latest.version && isNewerVersion(latest.version, cur)) {
+        setUpdateAvail({ ...latest, current: cur })
+      }
+    })()
+    return () => { live = false }
+  }, [hasApi])
 
   const stats = useMemo(() => computeStats(trades), [trades])
 
@@ -187,6 +202,7 @@ export default function App() {
   return (
     <div style={{ background: T.bg, color: T.text, minHeight: '100vh', borderTop: `3px solid ${tradeMode ? T.accent : 'transparent'}`, transition: 'background .3s' }}>
       <Ticker settings={settings} />
+      {updateAvail && <UpdateAvailableBanner info={updateAvail} onClose={() => setUpdateAvail(null)} />}
       {GATE_CONFIGURED && license?.state === 'trial' && <TrialBanner days={license.daysLeft} />}
       {imminentEvent && <EventBanner event={imminentEvent} now={now} />}
       {tradeMode && <LiveBanner net={todayNet} goal={dailyGoal} maxLoss={maxLoss} lossHit={lossHit} onEnd={endSession} />}

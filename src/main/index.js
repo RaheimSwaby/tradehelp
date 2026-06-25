@@ -98,6 +98,17 @@ function registerIpc() {
       return { version: v, notes: String(d.body || '') }
     } catch { return { version: v, notes: '' } }
   })
+  // Latest published version + platform, for the in-app "update available" nudge
+  // (mainly for macOS, where the unsigned build can't auto-update).
+  ipcMain.handle('update:latest', async () => {
+    const platform = process.platform
+    try {
+      const r = await fetch('https://api.github.com/repos/RaheimSwaby/tradehelp/releases/latest', { headers: { Accept: 'application/vnd.github+json' } })
+      if (!r.ok) return { platform }
+      const d = await r.json()
+      return { platform, version: String(d.tag_name || '').replace(/^v/, ''), url: d.html_url || '' }
+    } catch { return { platform } }
+  })
 
   ipcMain.handle('settings:get', () => db.getSettings())
   ipcMain.handle('settings:set', (_e, s) => db.setSettings(s))

@@ -3,6 +3,14 @@ export const CHECKOUT_URL = 'https://tradehelp.gumroad.com/l/oyftvr'
 // Until a real checkout link is set, the trial/paywall stays dormant so nobody hits a dead paywall.
 export const GATE_CONFIGURED = !CHECKOUT_URL.includes('YOUR-NAME')
 
+// true if version a is newer than b (semver-ish "x.y.z")
+export function isNewerVersion(a, b) {
+  const pa = String(a || '').split('.').map((n) => parseInt(n, 10) || 0)
+  const pb = String(b || '').split('.').map((n) => parseInt(n, 10) || 0)
+  for (let i = 0; i < 3; i++) { if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0) }
+  return false
+}
+
 export const EMOTIONS = ['Disciplined', 'Confident', 'Neutral', 'Hesitant', 'Anxious', 'FOMO', 'Greedy', 'Revenge', 'Bored']
 export const SELF_GRADES = ['A+', 'A', 'B', 'C', 'D', 'F']
 export const SETUPS = ['Opening Range Breakout', 'VWAP Reclaim', 'Pullback', 'Trend Continuation', 'Reversal', 'Liquidity Sweep']

@@ -58,7 +58,8 @@ const api = {
   openExternal: (url) => ipcRenderer.invoke('app:openExternal', url),
   testKey: (payload) => ipcRenderer.invoke('key:test', payload),
   appVersion: () => ipcRenderer.invoke('app:version'),
-  releaseNotes: () => ipcRenderer.invoke('release:notes')
+  releaseNotes: () => ipcRenderer.invoke('release:notes'),
+  latestVersion: () => ipcRenderer.invoke('update:latest')
 }
 
 contextBridge.exposeInMainWorld('api', api)
