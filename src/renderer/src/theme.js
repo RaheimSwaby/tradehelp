@@ -22,7 +22,8 @@ const ACCENTS = {
   sky: { accent: '#38BDF8', accentSoft: '#0F2A3C' },
   violet: { accent: '#A78BFA', accentSoft: '#241A3C' },
   pink: { accent: '#F472B6', accentSoft: '#3A1828' },
-  cyan: { accent: '#22D3EE', accentSoft: '#0E2F36' }
+  cyan: { accent: '#22D3EE', accentSoft: '#0E2F36' },
+  red: { accent: '#F8544F', accentSoft: '#3A1614' }
 }
 export const ACCENT_OPTIONS = Object.keys(ACCENTS).map((key) => ({ key, accent: ACCENTS[key].accent }))
 
