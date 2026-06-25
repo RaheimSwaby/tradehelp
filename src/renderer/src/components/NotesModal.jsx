@@ -68,6 +68,7 @@ export function NotesModal({ trade, onClose, onUpdate }) {
             <div className="text-xs mt-1 flex items-center gap-1.5" style={{ color: T.faint }}>Execution <GradeChip t={trade} /> <span>· {trade.source === 'import' ? 'imported (outcome-based)' : 'process, not outcome'}</span></div>
             {trade.reason && <div className="text-xs mt-1" style={{ color: T.dim }}>Reason: <span style={{ color: T.text }}>{trade.reason}</span></div>}
             {trade.fees > 0 && <div className="text-xs mt-1" style={{ color: T.faint, ...mono }}>Net {fmt$(trade.pnl)} · after {fmt$(trade.fees)} fees · gross {fmt$((Number(trade.pnl) || 0) + (Number(trade.fees) || 0))}</div>}
+            {(trade.selfSetup || trade.selfExec) && <div className="text-xs mt-1" style={{ color: T.faint }}>Self-grade · setup <span style={{ color: T.text }}>{trade.selfSetup || '—'}</span> · execution <span style={{ color: T.text }}>{trade.selfExec || '—'}</span></div>}
           </div>
           <button type="button" onClick={onClose} style={{ color: T.faint }}><X size={18} /></button>
         </div>

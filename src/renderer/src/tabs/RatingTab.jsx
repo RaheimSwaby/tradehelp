@@ -1,12 +1,15 @@
 import React, { useMemo } from 'react'
 import { Brain, Lock, BadgeCheck, X } from 'lucide-react'
 import { T, mono } from '../theme.js'
-import { computeRating, computeAchievements } from '../stats.js'
+import { computeRating, computeAchievements, computeSelfGrade } from '../stats.js'
 import { Panel } from '../components/Shared.jsx'
+
+const gradeColor = (l) => (l === 'A+' || l === 'A' ? T.up : l === 'B' || l === 'C' ? T.accent : l === '—' ? T.dim : T.down)
 
 /* ───────── rating ───────── */
 export function Rating({ trades, stats, achievements, unlockedAt }) {
   const r = useMemo(() => computeRating(trades, stats), [trades, stats])
+  const self = useMemo(() => computeSelfGrade(trades), [trades])
   if (stats.n === 0) {
     return <Panel title="Trader rating"><div className="py-12 text-center text-sm" style={{ color: T.dim }}>Log trades to build your rating. It grades your <span style={{ color: T.text }}>process</span> — not whether you won.</div></Panel>
   }
@@ -69,6 +72,27 @@ export function Rating({ trades, stats, achievements, unlockedAt }) {
         </Panel>
       </div>
     </div>
+      <Panel title="Self-graded" right={<span className="text-xs inline-flex items-center gap-1 px-2 py-0.5 rounded" style={{ color: T.faint, border: `1px solid ${T.line}` }}>your call · not verified</span>}>
+        {self.count === 0 ? (
+          <div className="text-sm" style={{ color: T.dim }}>Grade your own <span style={{ color: T.text }}>setup</span> and <span style={{ color: T.text }}>execution</span> when you log a trade — your honest read, kept separate from the app's grade above. A losing trade can still be an A+ setup.</div>
+        ) : (
+          <div>
+            <div className="grid grid-cols-2 gap-3">
+              {[['Setup', self.setupLetter], ['Execution', self.execLetter]].map(([label, letter]) => (
+                <div key={label} className="rounded-lg p-3 text-center" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
+                  <div className="text-xs uppercase tracking-wider" style={{ color: T.faint }}>{label}</div>
+                  <div style={{ fontSize: 36, fontWeight: 800, lineHeight: 1.1, ...mono, color: gradeColor(letter) }}>{letter}</div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 flex items-baseline gap-2">
+              <span className="text-xs uppercase tracking-wider" style={{ color: T.faint }}>GPA</span>
+              <span style={{ ...mono, fontSize: 22, fontWeight: 700, color: T.text }}>{self.gpa.toFixed(2)}</span>
+              <span className="text-xs" style={{ color: T.faint }}>· {self.count} trade{self.count === 1 ? '' : 's'} you graded</span>
+            </div>
+          </div>
+        )}
+      </Panel>
       <AchievementShelf achievements={achievements} unlockedAt={unlockedAt} />
     </div>
   )

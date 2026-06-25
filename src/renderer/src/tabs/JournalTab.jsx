@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { Plus, Trash2, Upload, Paperclip, X, Pencil, ImagePlus, ChevronLeft, ChevronRight, Search } from 'lucide-react'
 import { T, mono, inputStyle } from '../theme.js'
-import { fmt$, fmtN, nowLocalInput, parseLocal, holdMs, fmtDuration, EMOTIONS, SETUPS, WIN_REASONS, LOSS_REASONS, pad2, MONTHS, downscale, fileToDataUrl } from '../utils.js'
+import { fmt$, fmtN, nowLocalInput, parseLocal, holdMs, fmtDuration, EMOTIONS, SETUPS, WIN_REASONS, LOSS_REASONS, SELF_GRADES, pad2, MONTHS, downscale, fileToDataUrl } from '../utils.js'
 import { Field, Panel, GradeChip } from '../components/Shared.jsx'
 import { ImportModal } from '../widgets/ImportModal.jsx'
 import { AnnotateModal } from '../components/AnnotateModal.jsx'
 
 /* ───────── journal ───────── */
 export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, accounts = [] }) {
-  const blank = { symbol: '', direction: 'Long', entry: '', exit: '', stop: '', target: '', size: '', riskAmount: '', pnl: '', fees: '', emotion: 'Neutral', setup: 'Pullback', notes: '', entryTime: nowLocalInput(), exitTime: nowLocalInput(), reason: '', account: '' }
+  const blank = { symbol: '', direction: 'Long', entry: '', exit: '', stop: '', target: '', size: '', riskAmount: '', pnl: '', fees: '', emotion: 'Neutral', setup: 'Pullback', notes: '', entryTime: nowLocalInput(), exitTime: nowLocalInput(), reason: '', account: '', selfSetup: '', selfExec: '' }
   const [f, setF] = useState(blank)
   const [images, setImages] = useState([])
   const [annotating, setAnnotating] = useState(null)
@@ -39,7 +39,7 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
       pnl: String((Number(t.pnl) || 0) + (Number(t.fees) || 0)), fees: t.fees ? String(t.fees) : '',
       emotion: t.emotion || 'Neutral', setup: t.setup || '', notes: t.notes || '',
       entryTime: t.entryTime ? t.entryTime.replace(' ', 'T') : '', exitTime: t.exitTime ? t.exitTime.replace(' ', 'T') : '',
-      reason: t.reason || '', account: t.account || ''
+      reason: t.reason || '', account: t.account || '', selfSetup: t.selfSetup || '', selfExec: t.selfExec || ''
     })
     if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -112,7 +112,7 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
       emotion: f.emotion, setup: f.setup.trim(), notes: f.notes.trim(),
       entryTime: f.entryTime ? f.entryTime.replace('T', ' ') : '',
       exitTime: f.exitTime ? f.exitTime.replace('T', ' ') : '',
-      reason: f.reason, account: f.account
+      reason: f.reason, account: f.account, selfSetup: f.selfSetup, selfExec: f.selfExec
     }
     if (editing) {
       onUpdate({ ...base, id: editing.id, timestamp: editing.timestamp, source: editing.source || 'manual' })
@@ -161,6 +161,20 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
             <select style={inputStyle} className={inp} value={f.reason} onChange={set('reason')}>
               <option value="">— optional, nudges your rating —</option>
               {reasonOptions.map((rr) => <option key={rr} value={rr}>{rr}</option>)}
+            </select>
+          </Field>
+        </div>
+        <div className="grid grid-cols-2 gap-3 mt-3">
+          <Field label="Setup grade (self)">
+            <select style={inputStyle} className={inp} value={f.selfSetup} onChange={set('selfSetup')}>
+              <option value="">— ungraded —</option>
+              {SELF_GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
+            </select>
+          </Field>
+          <Field label="Execution grade (self)">
+            <select style={inputStyle} className={inp} value={f.selfExec} onChange={set('selfExec')}>
+              <option value="">— ungraded —</option>
+              {SELF_GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
             </select>
           </Field>
         </div>

@@ -4,6 +4,7 @@ export const CHECKOUT_URL = 'https://tradehelp.gumroad.com/l/oyftvr'
 export const GATE_CONFIGURED = !CHECKOUT_URL.includes('YOUR-NAME')
 
 export const EMOTIONS = ['Disciplined', 'Confident', 'Neutral', 'Hesitant', 'Anxious', 'FOMO', 'Greedy', 'Revenge', 'Bored']
+export const SELF_GRADES = ['A+', 'A', 'B', 'C', 'D', 'F']
 export const SETUPS = ['Opening Range Breakout', 'VWAP Reclaim', 'Pullback', 'Trend Continuation', 'Reversal', 'Liquidity Sweep']
 export const TILT = ['FOMO', 'Greedy', 'Revenge']
 

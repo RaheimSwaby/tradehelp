@@ -103,6 +103,25 @@ export function letterFor(score) {
   return { letter: 'F', tone: 'down' }
 }
 
+// ── self-graded GPA: the trader's own Setup + Execution letter grades (A+→F).
+// Separate from the app's algorithmic grade — it's self-reported, not verified.
+const SELF_GPA = { 'A+': 4.3, A: 4.0, B: 3.0, C: 2.0, D: 1.0, F: 0.0 }
+const gpaToLetter = (g) =>
+  g == null ? '—' : g >= 4.15 ? 'A+' : g >= 3.5 ? 'A' : g >= 2.5 ? 'B' : g >= 1.5 ? 'C' : g >= 0.5 ? 'D' : 'F'
+export function computeSelfGrade(trades) {
+  const setupPts = [], execPts = []
+  let count = 0
+  for (const t of trades || []) {
+    const s = SELF_GPA[t.selfSetup], e = SELF_GPA[t.selfExec]
+    if (s != null) setupPts.push(s)
+    if (e != null) execPts.push(e)
+    if (s != null || e != null) count++
+  }
+  const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null)
+  const setupGpa = avg(setupPts), execGpa = avg(execPts), gpa = avg([...setupPts, ...execPts])
+  return { count, gpa, setupGpa, execGpa, letter: gpaToLetter(gpa), setupLetter: gpaToLetter(setupGpa), execLetter: gpaToLetter(execGpa) }
+}
+
 // Per-trade execution grade — deliberately blind to whether the trade won or lost.
 export function executionGrade(t) {
   // Imported trades carry no process data (no emotion/stop/risk), so execution can't be judged.

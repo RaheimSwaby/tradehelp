@@ -22,7 +22,8 @@ export function initDb() {
       entry REAL, exit REAL, stop REAL, target REAL, size REAL,
       riskAmount REAL, pnl REAL, fees REAL, rr REAL,
       emotion TEXT, setup TEXT, notes TEXT, timestamp TEXT,
-      entryTime TEXT, exitTime TEXT, reason TEXT, source TEXT, account TEXT
+      entryTime TEXT, exitTime TEXT, reason TEXT, source TEXT, account TEXT,
+      selfSetup TEXT, selfExec TEXT
     );
     CREATE TABLE IF NOT EXISTS goals (
       id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -47,7 +48,7 @@ export function initDb() {
 
   // Migrate older DBs that predate columns added above.
   const tradeCols = new Set(db.prepare('PRAGMA table_info(trades)').all().map((c) => c.name))
-  for (const [name, type] of [['entryTime', 'TEXT'], ['exitTime', 'TEXT'], ['reason', 'TEXT'], ['source', 'TEXT'], ['account', 'TEXT'], ['fees', 'REAL']]) {
+  for (const [name, type] of [['entryTime', 'TEXT'], ['exitTime', 'TEXT'], ['reason', 'TEXT'], ['source', 'TEXT'], ['account', 'TEXT'], ['fees', 'REAL'], ['selfSetup', 'TEXT'], ['selfExec', 'TEXT']]) {
     if (!tradeCols.has(name)) db.exec(`ALTER TABLE trades ADD COLUMN ${name} ${type}`)
   }
 
@@ -110,15 +111,16 @@ function buildRow(t) {
     notes: String(t.notes || ''),
     timestamp: String(t.timestamp || new Date().toISOString().slice(0, 16).replace('T', ' ')),
     entryTime: String(t.entryTime || ''), exitTime: String(t.exitTime || ''),
-    reason: String(t.reason || ''), source: String(t.source || 'manual'), account: String(t.account || '')
+    reason: String(t.reason || ''), source: String(t.source || 'manual'), account: String(t.account || ''),
+    selfSetup: String(t.selfSetup || ''), selfExec: String(t.selfExec || '')
   }
 }
 
 const INSERT_TRADE = `
   INSERT INTO trades
-    (id, symbol, direction, entry, exit, stop, target, size, riskAmount, pnl, fees, rr, emotion, setup, notes, timestamp, entryTime, exitTime, reason, source, account)
+    (id, symbol, direction, entry, exit, stop, target, size, riskAmount, pnl, fees, rr, emotion, setup, notes, timestamp, entryTime, exitTime, reason, source, account, selfSetup, selfExec)
   VALUES
-    (@id, @symbol, @direction, @entry, @exit, @stop, @target, @size, @riskAmount, @pnl, @fees, @rr, @emotion, @setup, @notes, @timestamp, @entryTime, @exitTime, @reason, @source, @account)
+    (@id, @symbol, @direction, @entry, @exit, @stop, @target, @size, @riskAmount, @pnl, @fees, @rr, @emotion, @setup, @notes, @timestamp, @entryTime, @exitTime, @reason, @source, @account, @selfSetup, @selfExec)
 `
 
 export function addTrade(t) {
@@ -139,7 +141,7 @@ export function updateTrade(t) {
     symbol=@symbol, direction=@direction, entry=@entry, exit=@exit, stop=@stop, target=@target,
     size=@size, riskAmount=@riskAmount, pnl=@pnl, fees=@fees, rr=@rr, emotion=@emotion, setup=@setup,
     notes=@notes, timestamp=@timestamp, entryTime=@entryTime, exitTime=@exitTime,
-    reason=@reason, source=@source, account=@account WHERE id=@id`).run(buildRow(t))
+    reason=@reason, source=@source, account=@account, selfSetup=@selfSetup, selfExec=@selfExec WHERE id=@id`).run(buildRow(t))
   return listTrades()
 }
 
@@ -257,8 +259,8 @@ export function restoreData(data) {
   const tx = db.transaction((d) => {
     if (Array.isArray(d.trades)) {
       const ins = db.prepare(`INSERT OR REPLACE INTO trades
-        (id, symbol, direction, entry, exit, stop, target, size, riskAmount, pnl, fees, rr, emotion, setup, notes, timestamp, entryTime, exitTime, reason, source, account)
-        VALUES (@id,@symbol,@direction,@entry,@exit,@stop,@target,@size,@riskAmount,@pnl,@fees,@rr,@emotion,@setup,@notes,@timestamp,@entryTime,@exitTime,@reason,@source,@account)`)
+        (id, symbol, direction, entry, exit, stop, target, size, riskAmount, pnl, fees, rr, emotion, setup, notes, timestamp, entryTime, exitTime, reason, source, account, selfSetup, selfExec)
+        VALUES (@id,@symbol,@direction,@entry,@exit,@stop,@target,@size,@riskAmount,@pnl,@fees,@rr,@emotion,@setup,@notes,@timestamp,@entryTime,@exitTime,@reason,@source,@account,@selfSetup,@selfExec)`)
       for (const t of d.trades) ins.run(buildRow(t))
     }
     if (d.goals) setGoals(d.goals)
