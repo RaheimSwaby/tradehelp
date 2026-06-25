@@ -51,12 +51,14 @@ export function ImportModal({ onClose, onImport }) {
       if (!sym) return null
       const dir = normDir(cell(row, 'direction'))
       const entry = csvNum(cell(row, 'entry')), exit = csvNum(cell(row, 'exit')), size = csvNum(cell(row, 'size'))
-      const pnl = map.pnl ? csvNum(cell(row, 'pnl')) : (entry && exit && size ? (exit - entry) * size * (dir === 'Long' ? 1 : -1) : 0)
+      const fees = map.fees ? Math.abs(csvNum(cell(row, 'fees'))) : 0
+      const grossPnl = map.pnl ? csvNum(cell(row, 'pnl')) : (entry && exit && size ? (exit - entry) * size * (dir === 'Long' ? 1 : -1) : 0)
+      const pnl = grossPnl - fees // store net of fees
       const et = csvDate(cell(row, 'entryTime')), xt = csvDate(cell(row, 'exitTime'))
       return {
         id: Date.now().toString(36) + Math.random().toString(16).slice(2),
         symbol: sym.toUpperCase(), direction: dir, entry, exit, stop: 0, target: 0, size, riskAmount: 0,
-        pnl, rr: 0, emotion: '', setup: '', notes: '', reason: '',
+        pnl, fees, rr: 0, emotion: '', setup: '', notes: '', reason: '',
         entryTime: et, exitTime: xt,
         timestamp: et || xt || new Date().toISOString().slice(0, 16).replace('T', ' '), source: 'import'
       }

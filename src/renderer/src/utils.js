@@ -178,7 +178,8 @@ export const IMPORT_FIELDS = [
   ['size', 'Size / qty', /qty|quantity|size|shares|contracts|volume|lots|filled/i, false],
   ['entry', 'Entry price', /entry.*price|open.*price|avg.*entry|buy.*price|price.*open|^entry$|fill.*price/i, false],
   ['exit', 'Exit price', /exit.*price|close.*price|sell.*price|price.*close|^exit$/i, false],
-  ['pnl', 'Net P&L', /pnl|p&l|p\/l|profit|realized|net|gain/i, false],
+  ['pnl', 'P&L (gross)', /pnl|p&l|p\/l|profit|realized|net|gain/i, false],
+  ['fees', 'Fees / commission', /commission|fee|comms?$/i, false],
   ['entryTime', 'Entry time', /entry.*time|open.*time|time.*open|date.*open|entry.*date|opened|trade.*date|trade.*time|fill.*time|exec.*time|order.*time|transaction.*date|date.?time|datetime|^date$|^time$|timestamp/i, false],
   ['exitTime', 'Exit time', /exit.*time|close.*time|time.*close|date.*close|exit.*date|closed|sell.*time|liquidat/i, false]
 ]

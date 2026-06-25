@@ -20,7 +20,7 @@ export function initDb() {
       id TEXT PRIMARY KEY,
       symbol TEXT, direction TEXT,
       entry REAL, exit REAL, stop REAL, target REAL, size REAL,
-      riskAmount REAL, pnl REAL, rr REAL,
+      riskAmount REAL, pnl REAL, fees REAL, rr REAL,
       emotion TEXT, setup TEXT, notes TEXT, timestamp TEXT,
       entryTime TEXT, exitTime TEXT, reason TEXT, source TEXT, account TEXT
     );
@@ -47,7 +47,7 @@ export function initDb() {
 
   // Migrate older DBs that predate columns added above.
   const tradeCols = new Set(db.prepare('PRAGMA table_info(trades)').all().map((c) => c.name))
-  for (const [name, type] of [['entryTime', 'TEXT'], ['exitTime', 'TEXT'], ['reason', 'TEXT'], ['source', 'TEXT'], ['account', 'TEXT']]) {
+  for (const [name, type] of [['entryTime', 'TEXT'], ['exitTime', 'TEXT'], ['reason', 'TEXT'], ['source', 'TEXT'], ['account', 'TEXT'], ['fees', 'REAL']]) {
     if (!tradeCols.has(name)) db.exec(`ALTER TABLE trades ADD COLUMN ${name} ${type}`)
   }
 
@@ -105,7 +105,7 @@ function buildRow(t) {
     direction: String(t.direction || 'Long'),
     entry: num(t.entry), exit: num(t.exit), stop: num(t.stop),
     target: num(t.target), size: num(t.size),
-    riskAmount: num(t.riskAmount), pnl: num(t.pnl), rr: num(t.rr),
+    riskAmount: num(t.riskAmount), pnl: num(t.pnl), fees: num(t.fees), rr: num(t.rr),
     emotion: String(t.emotion || ''), setup: String(t.setup || ''),
     notes: String(t.notes || ''),
     timestamp: String(t.timestamp || new Date().toISOString().slice(0, 16).replace('T', ' ')),
@@ -116,9 +116,9 @@ function buildRow(t) {
 
 const INSERT_TRADE = `
   INSERT INTO trades
-    (id, symbol, direction, entry, exit, stop, target, size, riskAmount, pnl, rr, emotion, setup, notes, timestamp, entryTime, exitTime, reason, source, account)
+    (id, symbol, direction, entry, exit, stop, target, size, riskAmount, pnl, fees, rr, emotion, setup, notes, timestamp, entryTime, exitTime, reason, source, account)
   VALUES
-    (@id, @symbol, @direction, @entry, @exit, @stop, @target, @size, @riskAmount, @pnl, @rr, @emotion, @setup, @notes, @timestamp, @entryTime, @exitTime, @reason, @source, @account)
+    (@id, @symbol, @direction, @entry, @exit, @stop, @target, @size, @riskAmount, @pnl, @fees, @rr, @emotion, @setup, @notes, @timestamp, @entryTime, @exitTime, @reason, @source, @account)
 `
 
 export function addTrade(t) {
@@ -137,7 +137,7 @@ export function importTrades(list) {
 export function updateTrade(t) {
   db.prepare(`UPDATE trades SET
     symbol=@symbol, direction=@direction, entry=@entry, exit=@exit, stop=@stop, target=@target,
-    size=@size, riskAmount=@riskAmount, pnl=@pnl, rr=@rr, emotion=@emotion, setup=@setup,
+    size=@size, riskAmount=@riskAmount, pnl=@pnl, fees=@fees, rr=@rr, emotion=@emotion, setup=@setup,
     notes=@notes, timestamp=@timestamp, entryTime=@entryTime, exitTime=@exitTime,
     reason=@reason, source=@source, account=@account WHERE id=@id`).run(buildRow(t))
   return listTrades()
@@ -257,8 +257,8 @@ export function restoreData(data) {
   const tx = db.transaction((d) => {
     if (Array.isArray(d.trades)) {
       const ins = db.prepare(`INSERT OR REPLACE INTO trades
-        (id, symbol, direction, entry, exit, stop, target, size, riskAmount, pnl, rr, emotion, setup, notes, timestamp, entryTime, exitTime, reason, source, account)
-        VALUES (@id,@symbol,@direction,@entry,@exit,@stop,@target,@size,@riskAmount,@pnl,@rr,@emotion,@setup,@notes,@timestamp,@entryTime,@exitTime,@reason,@source,@account)`)
+        (id, symbol, direction, entry, exit, stop, target, size, riskAmount, pnl, fees, rr, emotion, setup, notes, timestamp, entryTime, exitTime, reason, source, account)
+        VALUES (@id,@symbol,@direction,@entry,@exit,@stop,@target,@size,@riskAmount,@pnl,@fees,@rr,@emotion,@setup,@notes,@timestamp,@entryTime,@exitTime,@reason,@source,@account)`)
       for (const t of d.trades) ins.run(buildRow(t))
     }
     if (d.goals) setGoals(d.goals)

@@ -8,7 +8,7 @@ import { AnnotateModal } from '../components/AnnotateModal.jsx'
 
 /* ───────── journal ───────── */
 export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, accounts = [] }) {
-  const blank = { symbol: '', direction: 'Long', entry: '', exit: '', stop: '', target: '', size: '', riskAmount: '', pnl: '', emotion: 'Neutral', setup: 'Pullback', notes: '', entryTime: nowLocalInput(), exitTime: nowLocalInput(), reason: '', account: '' }
+  const blank = { symbol: '', direction: 'Long', entry: '', exit: '', stop: '', target: '', size: '', riskAmount: '', pnl: '', fees: '', emotion: 'Neutral', setup: 'Pullback', notes: '', entryTime: nowLocalInput(), exitTime: nowLocalInput(), reason: '', account: '' }
   const [f, setF] = useState(blank)
   const [images, setImages] = useState([])
   const [annotating, setAnnotating] = useState(null)
@@ -35,7 +35,8 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
     setF({
       symbol: t.symbol || '', direction: t.direction || 'Long',
       entry: String(t.entry ?? ''), exit: String(t.exit ?? ''), stop: String(t.stop ?? ''), target: String(t.target ?? ''),
-      size: String(t.size ?? ''), riskAmount: String(t.riskAmount ?? ''), pnl: String(t.pnl ?? ''),
+      size: String(t.size ?? ''), riskAmount: String(t.riskAmount ?? ''),
+      pnl: String((Number(t.pnl) || 0) + (Number(t.fees) || 0)), fees: t.fees ? String(t.fees) : '',
       emotion: t.emotion || 'Neutral', setup: t.setup || '', notes: t.notes || '',
       entryTime: t.entryTime ? t.entryTime.replace(' ', 'T') : '', exitTime: t.exitTime ? t.exitTime.replace(' ', 'T') : '',
       reason: t.reason || '', account: t.account || ''
@@ -70,8 +71,10 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
   }, [f.entryTime, f.exitTime])
 
   // reason options follow the outcome (win vs loss); clear a stale pick if the outcome flips
-  const effPnl = f.pnl !== '' ? parseFloat(f.pnl) : (derivedPnl ?? null)
-  const isWin = effPnl == null || isNaN(effPnl) ? null : effPnl >= 0
+  const feeNum = parseFloat(f.fees) || 0
+  const effGross = f.pnl !== '' ? parseFloat(f.pnl) : (derivedPnl ?? null)
+  const effNet = effGross == null || isNaN(effGross) ? null : effGross - feeNum
+  const isWin = effNet == null ? null : effNet >= 0
   const reasonOptions = isWin === false ? LOSS_REASONS : WIN_REASONS
   useEffect(() => { setF((p) => (p.reason && !reasonOptions.includes(p.reason) ? { ...p, reason: '' } : p)) }, [isWin]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -96,14 +99,16 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
 
   function submit() {
     if (!f.symbol.trim()) return
-    const pnl = f.pnl !== '' ? parseFloat(f.pnl) : (derivedPnl ?? 0)
+    const grossPnl = f.pnl !== '' ? parseFloat(f.pnl) : (derivedPnl ?? 0)
+    const fees = parseFloat(f.fees) || 0
+    const pnl = (isNaN(grossPnl) ? 0 : grossPnl) - fees // store P&L net of fees
     const rr = derivedRR ?? (f.riskAmount && f.pnl ? Math.abs(parseFloat(f.pnl)) / Math.abs(parseFloat(f.riskAmount)) : 0)
     const base = {
       symbol: f.symbol.trim().toUpperCase(), direction: f.direction,
       entry: parseFloat(f.entry) || 0, exit: parseFloat(f.exit) || 0,
       stop: parseFloat(f.stop) || 0, target: parseFloat(f.target) || 0,
       size: parseFloat(f.size) || 0, riskAmount: parseFloat(f.riskAmount) || 0,
-      pnl: isNaN(pnl) ? 0 : pnl, rr: rr || 0,
+      pnl: isNaN(pnl) ? 0 : pnl, fees, rr: rr || 0,
       emotion: f.emotion, setup: f.setup.trim(), notes: f.notes.trim(),
       entryTime: f.entryTime ? f.entryTime.replace('T', ' ') : '',
       exitTime: f.exitTime ? f.exitTime.replace('T', ' ') : '',
@@ -169,9 +174,12 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
             </Field>
           </div>
         )}
-        <div className="mt-3">
-          <Field label="Net P&L $ (blank = auto-calc)">
+        <div className="grid grid-cols-2 gap-3 mt-3">
+          <Field label="P&L $ (before fees)">
             <input style={inputStyle} className={inp} value={f.pnl} onChange={set('pnl')} inputMode="decimal" placeholder={derivedPnl != null ? `auto: ${fmtN(derivedPnl)}` : '—'} />
+          </Field>
+          <Field label="Fees / commissions $">
+            <input style={inputStyle} className={inp} value={f.fees} onChange={set('fees')} inputMode="decimal" placeholder="0" />
           </Field>
         </div>
         <div className="mt-3">
@@ -211,7 +219,7 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
         <div className="flex items-center justify-between mt-3 text-xs" style={{ color: T.dim }}>
           <span>R:R {derivedRR != null ? `1:${fmtN(derivedRR, 1)}` : '—'}</span>
           <span>Held {derivedHold != null ? fmtDuration(derivedHold) || '0m' : '—'}</span>
-          <span>P&L {derivedPnl != null ? fmt$(derivedPnl) : '—'}</span>
+          <span>Net {effNet != null ? fmt$(effNet) : '—'}</span>
         </div>
         <div className="flex gap-2 mt-3">
           <button type="button" onClick={submit} className="flex-1 rounded-md py-2 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306' }}>{editing ? 'Update trade' : 'Save trade'}</button>
