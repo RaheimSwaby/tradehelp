@@ -9,10 +9,18 @@ import { LazyImage } from './LazyImage.jsx'
 const VISION_SYSTEM = `You are a trading chart analyst inside a trader's journal. You are shown the screenshot(s) of ONE trade plus its details (symbol, direction, setup, outcome, R:R, emotion). Read the chart: describe the visible price structure (trend, key levels, candle behaviour), then judge whether the entry/exit and the stated setup look clean and consistent with what's on the chart — including any 'Before' vs 'After' images. Some charts may have the trader's OWN markers drawn on them (e.g. Entry, Stop, Target) — treat those as ground truth for where those levels are, rather than guessing from the candles. Finish with ONE concrete, specific thing to repeat or fix next time. Do NOT predict future prices or give buy/sell signals. Keep it under ~160 words, concrete and direct.`
 
 /* ───────── trade detail modal (notes + screenshots) ───────── */
-export function NotesModal({ trade, onClose }) {
+export function NotesModal({ trade, onClose, onUpdate }) {
   const [imgs, setImgs] = useState(null)
   const [zoom, setZoom] = useState(null)
   const [analysis, setAnalysis] = useState(null) // { loading } | { text } | { error }
+  const [notes, setNotes] = useState(trade.notes || '')
+  const [baseNotes, setBaseNotes] = useState(trade.notes || '')
+  const [savedFlash, setSavedFlash] = useState(false)
+  const dirty = notes.trim() !== baseNotes.trim()
+  async function saveNotes() {
+    await onUpdate?.({ ...trade, notes: notes.trim() })
+    setBaseNotes(notes.trim()); setSavedFlash(true); setTimeout(() => setSavedFlash(false), 1800)
+  }
   useEffect(() => {
     let live = true
     if (window.api?.listImages) window.api.listImages(trade.id).then((r) => { if (live) setImgs(r) })
@@ -62,8 +70,20 @@ export function NotesModal({ trade, onClose }) {
           </div>
           <button type="button" onClick={onClose} style={{ color: T.faint }}><X size={18} /></button>
         </div>
-        <div className="mt-3 text-sm whitespace-pre-wrap" style={{ color: T.text }}>
-          {trade.notes || <span style={{ color: T.faint }}>No notes written for this trade.</span>}
+        <div className="mt-3">
+          <div className="text-xs uppercase tracking-wider mb-1" style={{ color: T.faint }}>Notes</div>
+          <textarea
+            value={notes} onChange={(e) => setNotes(e.target.value)} rows={4}
+            placeholder="What did you see? What did you feel? Edit anytime…"
+            className="w-full rounded px-3 py-2 text-sm"
+            style={{ background: T.surface2, border: `1px solid ${T.line}`, color: T.text }} />
+          {(dirty || savedFlash) && (
+            <div className="flex items-center gap-2 mt-2">
+              {dirty && <button type="button" onClick={saveNotes} className="rounded-md px-3 py-1.5 text-xs font-semibold" style={{ background: T.accent, color: '#1A1306' }}>Save notes</button>}
+              {dirty && <button type="button" onClick={() => setNotes(baseNotes)} className="rounded-md px-3 py-1.5 text-xs" style={{ background: T.surface2, color: T.text, border: `1px solid ${T.line}` }}>Revert</button>}
+              {savedFlash && <span className="text-xs" style={{ color: T.up }}>Saved ✓</span>}
+            </div>
+          )}
         </div>
         {imgs === null ? (
           <div className="mt-4 text-xs" style={{ color: T.faint }}>Loading screenshots…</div>

@@ -249,7 +249,7 @@ export default function App() {
         )}
       </div>
 
-      {notesView && <NotesModal trade={notesView} onClose={() => setNotesView(null)} />}
+      {notesView && <NotesModal trade={notesView} onClose={() => setNotesView(null)} onUpdate={updateTrade} />}
       {preflight && (
         <Preflight rules={rules} checks={checks} setChecks={setChecks}
           snapshot={{ todayNet, todayCount: todayTrades.length, weekNet }}
