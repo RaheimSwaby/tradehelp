@@ -1,7 +1,7 @@
 // Bundled patch notes — shown in the "What's new" modal after an update.
 // Add an entry here with every release so users always see real notes.
 export const RELEASE_NOTES = {
-  '0.21.9': `• Fixed critical bug — auto-updater was stuck reporting v0.21.2, updates now deliver correctly`,
+  '0.22.0': `• Update banner now appears on Windows when a new version is available — click to download the latest installer directly`,
   '0.21.8': `• Fixed CI workflow (removed release-notes job that was failing)`,
   '0.21.7': `• Restored original update flow: app silently downloads update and shows a bottom-left 'Restart now' banner`,
   '0.21.6': `• Fixed CI release-notes generation`,

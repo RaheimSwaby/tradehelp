@@ -92,7 +92,7 @@ export default function App() {
     const check = async () => {
       try {
         const [cur, latest] = await Promise.all([window.api.appVersion(), window.api.latestVersion()])
-        if (live && latest?.platform === 'darwin' && latest.version && isNewerVersion(latest.version, cur)) {
+        if (live && latest?.version && isNewerVersion(latest.version, cur)) {
           setUpdateAvail({ ...latest, current: cur })
         }
       } catch {}
