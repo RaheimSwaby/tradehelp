@@ -38,11 +38,11 @@ function HeatMap({ stats }) {
       {bestHour && (
         <div className="flex flex-wrap gap-3 mb-4 text-xs">
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg" style={{ background: 'rgba(255,69,0,0.12)', border: '1px solid rgba(255,69,0,0.3)', color: '#ff6a33' }}>
-            🔥 Best: {fmt12(bestHour.h)}–{fmt12(String(parseInt(bestHour.h, 10) + 1).padStart(2, '0'))} · {fmtN(bestHour.wr, 0)}% WR across {bestHour.total} trades
+            🔥 Best: {bestHour.day} {fmt12(bestHour.h)}–{fmt12(String(parseInt(bestHour.h, 10) + 1).padStart(2, '0'))} · {fmtN(bestHour.wr, 0)}% WR across {bestHour.total} trades
           </div>
           {worstHour && (
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg" style={{ background: 'rgba(30,58,95,0.3)', border: '1px solid rgba(96,165,250,0.2)', color: '#93c5fd' }}>
-              ❄️ Avoid: {fmt12(worstHour.h)} · {fmtN(worstHour.wr, 0)}% WR
+              ❄️ Worst: {worstHour.day} {fmt12(worstHour.h)} · {fmtN(worstHour.wr, 0)}% WR
             </div>
           )}
         </div>

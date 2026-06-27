@@ -93,12 +93,13 @@ export function computeStats(trades) {
     _hourTotals[h].total += v.total
     _hourTotals[h].pnl += v.pnl
   }
-  const _hourRanked = Object.entries(_hourTotals)
+  // Best/worst individual cell (day-hour combo) for the advisory
+  const _cellRanked = Object.entries(byHourDay)
     .filter(([, v]) => v.total >= 3)
-    .map(([h, v]) => ({ h, wr: (v.wins / v.total) * 100, total: v.total, pnl: v.pnl }))
+    .map(([k, v]) => { const [day, h] = k.split('-'); return { day, h, wr: (v.wins / v.total) * 100, total: v.total, pnl: v.pnl } })
     .sort((a, b) => b.wr - a.wr)
-  const bestHour = _hourRanked[0] || null
-  const worstHour = _hourRanked.length > 1 ? _hourRanked[_hourRanked.length - 1] : null
+  const bestHour = _cellRanked[0] || null
+  const worstHour = _cellRanked.length > 1 ? _cellRanked[_cellRanked.length - 1] : null
 
   // non-tilt streak: consecutive trades with no FOMO/greed/revenge tag (current + best)
   let ntCur = 0, ntBest = 0
