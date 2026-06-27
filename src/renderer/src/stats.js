@@ -1,4 +1,4 @@
-import { Trophy, Brain, Snowflake, Shield, Target, BookOpen, Camera, TrendingUp, Calendar, Flame } from 'lucide-react'
+import { Trophy, Brain, Snowflake, Shield, Target, BookOpen, Camera, TrendingUp, Calendar, Flame, Wallet, Banknote } from 'lucide-react'
 import { TILT, REASONS, clamp, fmtN, holdMs, periodKey, pad2 } from './utils.js'
 
 /* ───────── stats ───────── */
@@ -233,7 +233,7 @@ export function computeRating(trades, stats) {
 }
 
 // Achievements reward BEHAVIOUR, not P&L — and use "best ever" tallies so they stay earned.
-export function computeAchievements(trades, stats) {
+export function computeAchievements(trades, stats, payouts = []) {
   const sorted = [...trades].sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''))
   let aGradeLosses = 0, stopSet = 0, withShots = 0, honoredCur = 0, honoredBest = 0
   const dayTilt = {}
@@ -260,7 +260,8 @@ export function computeAchievements(trades, stats) {
     { id: 'riskmgr', name: 'Risk Manager', Icon: Target, desc: '50 trades logged with a stop set.', current: stopSet, goal: 50 },
     { id: 'journaler', name: 'Journaler', Icon: BookOpen, desc: '100 trades journaled.', current: stats.n, goal: 100 },
     { id: 'reviewer', name: 'Reviewer', Icon: Camera, desc: 'Screenshots attached to 20 trades.', current: withShots, goal: 20 },
-    { id: 'edge', name: 'Edge Confirmed', Icon: TrendingUp, desc: 'Profit factor over 1.5 across 50+ trades.', current: Math.min(stats.n, 50), goal: 50, gate: PF > 1.5 }
+    { id: 'edge', name: 'Edge Confirmed', Icon: TrendingUp, desc: 'Profit factor over 1.5 across 50+ trades.', current: Math.min(stats.n, 50), goal: 50, gate: PF > 1.5 },
+    { id: 'firstpayout', name: 'First Payout', Icon: Wallet, desc: 'Cashed your first prop firm payout.', current: (payouts?.length || 0) >= 1 ? 1 : 0, goal: 1 }
   ]
   return defs.map((d) => ({
     ...d,
@@ -365,18 +366,25 @@ function cleanWeeks(trades) {
   return Object.values(byWeek).filter(Boolean).length
 }
 
-export function computeMedals(trades, stats, settings = {}) {
+// The payout medal runs an extended 8-tier ladder (wood → legendary) with its own
+// names/colors, distinct from the 5-tier Bronze→Diamond scale the other medals use.
+const PAYOUT_TIER_NAMES = ['—', 'Wood', 'Steel', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Legendary']
+const PAYOUT_TIER_COLORS = ['#5A6478', '#8B5A2B', '#9CA3AF', '#CD7F32', '#C0C0C0', '#FFD54A', '#7FD8E8', '#B9F2FF', '#C084FC']
+
+export function computeMedals(trades, stats, settings = {}, payouts = []) {
   const js = journalingStreak(trades, settings)
   const defs = [
     { id: 'consistency', name: 'Consistency', desc: 'Weeks journaled in a row', Icon: Calendar, value: js.streak, unit: 'wk', th: [2, 4, 12, 26, 52] },
     { id: 'discipline', name: 'Discipline', desc: 'Best non-tilt streak', Icon: Shield, value: stats.bestNonTilt || 0, unit: '', th: [10, 25, 50, 100, 200] },
     { id: 'composure', name: 'Composure', desc: 'Clean (no-tilt) weeks', Icon: Snowflake, value: cleanWeeks(trades), unit: 'wk', th: [2, 5, 12, 26, 52] },
     { id: 'dedication', name: 'Dedication', desc: 'Trades journaled', Icon: BookOpen, value: stats.n || 0, unit: '', th: [25, 100, 250, 500, 1000] },
-    { id: 'hothand', name: 'Hot hand', desc: 'Best win streak — luck counts here', Icon: Flame, value: bestWinStreak(trades), unit: '', th: [3, 5, 8, 12, 20] }
+    { id: 'hothand', name: 'Hot hand', desc: 'Best win streak — luck counts here', Icon: Flame, value: bestWinStreak(trades), unit: '', th: [3, 5, 8, 12, 20] },
+    { id: 'payday', name: 'Payday', desc: 'Prop firm payouts collected', Icon: Banknote, value: payouts?.length || 0, unit: '', th: [1, 6, 12, 22, 35, 50, 65, 100], tierNames: PAYOUT_TIER_NAMES, tierColors: PAYOUT_TIER_COLORS }
   ]
   const medals = defs.map((m) => {
+    const names = m.tierNames || TIER_NAMES
     const tier = tierOf(m.value, m.th)
-    return { ...m, tier, tierName: TIER_NAMES[tier], next: tier < m.th.length ? m.th[tier] : null, progress: tier < m.th.length ? Math.min(1, m.value / m.th[tier]) : 1 }
+    return { ...m, tier, tierName: names[tier], next: tier < m.th.length ? m.th[tier] : null, progress: tier < m.th.length ? Math.min(1, m.value / m.th[tier]) : 1 }
   })
   return { streak: js.streak, onBreak: js.onBreak, medals }
 }

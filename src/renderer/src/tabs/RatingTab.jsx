@@ -9,7 +9,7 @@ const gradeColor = (l) => (l === 'A+' || l === 'A' ? T.up : l === 'B' || l === '
 
 const TIER_COLOR = ['#5A6478', '#CD7F32', '#C0C0C0', '#FFD54A', '#7FD8E8', '#B9F2FF'] // none, bronze, silver, gold, platinum, diamond
 function MedalCoin({ m }) {
-  const c = TIER_COLOR[m.tier]
+  const c = (m.tierColors || TIER_COLOR)[m.tier]
   const Icon = m.Icon
   return (
     <div className="rounded-lg p-3 text-center" style={{ background: T.surface2, border: `1px solid ${m.tier ? c : T.line}`, opacity: m.tier ? 1 : 0.8 }} title={m.desc}>
@@ -24,10 +24,10 @@ function MedalCoin({ m }) {
 }
 
 /* ───────── rating ───────── */
-export function Rating({ trades, stats, achievements, unlockedAt, settings, onSave }) {
+export function Rating({ trades, stats, achievements, unlockedAt, settings, onSave, payouts = [] }) {
   const r = useMemo(() => computeRating(trades, stats), [trades, stats])
   const self = useMemo(() => computeSelfGrade(trades), [trades])
-  const m = useMemo(() => computeMedals(trades, stats, settings || {}), [trades, stats, settings])
+  const m = useMemo(() => computeMedals(trades, stats, settings || {}, payouts), [trades, stats, settings, payouts])
   function toggleBreak() {
     const cw = thisWeekKey()
     if (m.onBreak) {

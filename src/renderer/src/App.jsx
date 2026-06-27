@@ -196,7 +196,7 @@ export default function App() {
   }, [now, watchedEvents, eventsEnabled])
 
   // ── achievements ──
-  const achievements = useMemo(() => computeAchievements(trades, stats), [trades, stats])
+  const achievements = useMemo(() => computeAchievements(trades, stats, payouts), [trades, stats, payouts])
   const unlockedAt = useMemo(() => { try { return JSON.parse(settings?.achievements || '{}') } catch { return {} } }, [settings])
   useEffect(() => {
     if (!hasApi || !settings) return
@@ -283,7 +283,7 @@ export default function App() {
             {tab === 'propfirm' && <PropFirm trades={trades} accounts={propFirmAccounts} onSave={savePropFirmAccounts} payouts={payouts} onAddPayout={addPayout} onDeletePayout={deletePayout} />}
             {tab === 'dashboard' && <Dashboard stats={stats} trades={trades} accounts={propFirmAccounts} />}
             {tab === 'psych' && <Psychology stats={stats} />}
-            {tab === 'rating' && <Rating trades={trades} stats={stats} achievements={achievements} unlockedAt={unlockedAt} settings={settings} onSave={saveSettings} />}
+            {tab === 'rating' && <Rating trades={trades} stats={stats} achievements={achievements} unlockedAt={unlockedAt} settings={settings} onSave={saveSettings} payouts={payouts} />}
             {tab === 'goals' && <Goals goals={goals} onSave={saveGoals} trades={trades} />}
             {tab === 'reviews' && <Reviews trades={trades} reviews={reviews} onSave={saveReview} />}
             {tab === 'coach' && <Coach trades={trades} stats={stats} settings={settings} events={events} now={now} />}
