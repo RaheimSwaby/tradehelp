@@ -47,6 +47,7 @@ export default function App() {
   const [toast, setToast] = useState(null)
   const [whatsNew, setWhatsNew] = useState(null)
   const wnRef = useRef(false)
+  const [updateReady, setUpdateReady] = useState(null)
   const [updateAvail, setUpdateAvail] = useState(null)
   const [playbook, setPlaybook] = useState([])
 
@@ -81,14 +82,17 @@ export default function App() {
     })()
   }, [settings, hasApi])
 
-  // Check GitHub releases for a newer version on all platforms.
+  // electron-updater signals when a download is ready (Windows/Linux).
+  useEffect(() => { window.api?.onUpdateReady?.((info) => setUpdateReady(info || {})) }, [])
+
+  // GitHub API fallback for macOS (unsigned builds can't use electron-updater).
   useEffect(() => {
     if (!hasApi || !window.api.latestVersion) return
     let live = true
     const check = async () => {
       try {
         const [cur, latest] = await Promise.all([window.api.appVersion(), window.api.latestVersion()])
-        if (live && latest?.version && isNewerVersion(latest.version, cur)) {
+        if (live && latest?.platform === 'darwin' && latest.version && isNewerVersion(latest.version, cur)) {
           setUpdateAvail({ ...latest, current: cur })
         }
       } catch {}
@@ -289,6 +293,7 @@ export default function App() {
         <Lockout net={todayNet} maxLoss={maxLoss} onEnd={endSession} onDismiss={() => setLockoutDismissed(true)} />
       )}
       {toast && <AchievementToast a={toast} onClose={() => setToast(null)} />}
+      {updateReady && <UpdateBanner info={updateReady} onInstall={() => window.api.installUpdate()} />}
       {whatsNew && <WhatsNew info={whatsNew} onClose={() => setWhatsNew(null)} />}
     </div>
   )

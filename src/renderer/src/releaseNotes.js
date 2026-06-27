@@ -1,6 +1,7 @@
 // Bundled patch notes — shown in the "What's new" modal after an update.
 // Add an entry here with every release so users always see real notes.
 export const RELEASE_NOTES = {
+  '0.21.7': `• Restored original update flow: app silently downloads update and shows a bottom-left 'Restart now' banner`,
   '0.21.6': `• Fixed CI release-notes generation`,
   '0.21.4': `• Update notifications now work on all platforms — a banner appears when a new version is out with a direct download link\n• Fixed update delivery that was silently broken for Windows users`,
   '0.21.3': `• Update flow is now user-triggered: banner shows when an update is available, click "Update now" to download, then "Restart now" to apply`,
