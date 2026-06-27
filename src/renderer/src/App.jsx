@@ -85,22 +85,23 @@ export default function App() {
   // electron-updater signals when a download is ready (Windows/Linux).
   useEffect(() => { window.api?.onUpdateReady?.((info) => setUpdateReady(info || {})) }, [])
 
-  // GitHub API fallback for macOS (unsigned builds can't use electron-updater).
+  // GitHub API check for macOS only — unsigned mac builds can't auto-update, so they
+  // get a top banner with a direct .dmg link. Windows/Linux use electron-updater
+  // (auto-download + the bottom-left "Restart now" banner) instead.
   useEffect(() => {
     if (!hasApi || !window.api.latestVersion) return
     let live = true
     const check = async () => {
       try {
         const [cur, latest] = await Promise.all([window.api.appVersion(), window.api.latestVersion()])
-        if (live && latest?.version && isNewerVersion(latest.version, cur)) {
+        if (live && latest?.platform === 'darwin' && latest.version && isNewerVersion(latest.version, cur)) {
           setUpdateAvail({ ...latest, current: cur })
         }
       } catch {}
     }
     check()
-    const pollId = setInterval(check, 10 * 1000)
     window.addEventListener('focus', check)
-    return () => { live = false; clearInterval(pollId); window.removeEventListener('focus', check) }
+    return () => { live = false; window.removeEventListener('focus', check) }
   }, [hasApi])
 
   const stats = useMemo(() => computeStats(trades), [trades])

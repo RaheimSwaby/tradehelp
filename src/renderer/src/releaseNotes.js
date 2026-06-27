@@ -1,6 +1,7 @@
 // Bundled patch notes — shown in the "What's new" modal after an update.
 // Add an entry here with every release so users always see real notes.
 export const RELEASE_NOTES = {
+  '0.22.3': `• Windows updates are fully automatic again — the app downloads in the background and shows a "Restart now" button to update instantly\n• Added Performance heat map and Playbook to the website`,
   '0.22.2': `• Fixed releases being published as drafts — landing page download and in-app update now work correctly`,
   '0.22.1': `• Update check interval reduced to 10s for testing`,
   '0.22.0': `• Update banner now appears on Windows when a new version is available — click to download the latest installer directly`,
