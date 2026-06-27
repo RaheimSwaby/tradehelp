@@ -53,7 +53,10 @@ const api = {
   priceBatch: (symbols) => ipcRenderer.invoke('price:batch', symbols),
   events: () => ipcRenderer.invoke('events:list'),
 
+  onUpdateAvailable: (cb) => ipcRenderer.on('update:available', (_e, info) => cb(info)),
+  onUpdateProgress: (cb) => ipcRenderer.on('update:progress', (_e, info) => cb(info)),
   onUpdateReady: (cb) => ipcRenderer.on('update:ready', (_e, info) => cb(info)),
+  downloadUpdate: () => ipcRenderer.invoke('update:download'),
   installUpdate: () => ipcRenderer.invoke('update:install'),
   checkUpdate: () => ipcRenderer.invoke('update:check'),
 
