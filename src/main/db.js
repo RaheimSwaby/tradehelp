@@ -64,6 +64,15 @@ export function initDb() {
       createdAt TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_day_logs_date ON day_logs(date);
+    CREATE TABLE IF NOT EXISTS payouts (
+      id TEXT PRIMARY KEY,
+      accountId TEXT NOT NULL,
+      date TEXT NOT NULL,
+      amount REAL DEFAULT 0,
+      note TEXT DEFAULT '',
+      createdAt TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_payouts_account ON payouts(accountId);
   `)
 
   // Migrate older DBs that predate columns added above.
@@ -389,6 +398,31 @@ export function addDayLog(e) {
 export function deleteDayLog(id) {
   db.prepare('DELETE FROM day_logs WHERE id = ?').run(String(id))
   return listDayLogs()
+}
+
+// ───── Prop firm payouts ─────
+
+export function listPayouts() {
+  return db.prepare('SELECT * FROM payouts ORDER BY date DESC, createdAt DESC').all()
+}
+
+export function addPayout(e) {
+  const row = {
+    id: randomUUID(),
+    accountId: String(e.accountId || ''),
+    date: String(e.date || '').slice(0, 10),
+    amount: Number(e.amount) || 0,
+    note: String(e.note || ''),
+    createdAt: new Date().toISOString(),
+  }
+  db.prepare(`INSERT INTO payouts (id, accountId, date, amount, note, createdAt)
+    VALUES (@id,@accountId,@date,@amount,@note,@createdAt)`).run(row)
+  return listPayouts()
+}
+
+export function deletePayout(id) {
+  db.prepare('DELETE FROM payouts WHERE id = ?').run(String(id))
+  return listPayouts()
 }
 
 // Daily snapshot of the SQLite file into userData/backups, keeping the last 7.

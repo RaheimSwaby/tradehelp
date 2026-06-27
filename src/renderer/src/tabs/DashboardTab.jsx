@@ -1,7 +1,8 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, ReferenceLine, Tooltip, Cell } from 'recharts'
 import { T, mono } from '../theme.js'
 import { fmt$, fmtN } from '../utils.js'
+import { computeStats } from '../stats.js'
 import { Stat, Panel, EmptyChart } from '../components/Shared.jsx'
 import { PnlCalendar } from './JournalTab.jsx'
 
@@ -135,27 +136,51 @@ function HeatMap({ stats }) {
 }
 
 /* ───────── dashboard ───────── */
-export function Dashboard({ stats, trades }) {
-  const empty = stats.n === 0
+export function Dashboard({ stats, trades, accounts = [] }) {
+  const [view, setView] = useState('all') // all | live | prop
+  const hasProp = accounts.length > 0
+  const propIds = useMemo(() => new Set(accounts.map((a) => a.id)), [accounts])
+  const viewTrades = useMemo(() => {
+    if (view === 'all' || !hasProp) return trades
+    if (view === 'prop') return trades.filter((t) => propIds.has(t.account))
+    return trades.filter((t) => !propIds.has(t.account)) // live
+  }, [trades, view, propIds, hasProp])
+  // Reuse the precomputed combined stats for "all"; only recompute for a filtered view.
+  const vStats = useMemo(() => (view === 'all' || !hasProp ? stats : computeStats(viewTrades)), [view, hasProp, stats, viewTrades])
+  const empty = vStats.n === 0
+
   return (
     <div className="space-y-4">
+      {hasProp && (
+        <div className="flex items-center gap-1.5">
+          {[['all', 'All'], ['live', 'Live'], ['prop', 'Prop']].map(([k, label]) => (
+            <button key={k} type="button" onClick={() => setView(k)} className="text-xs px-3 py-1.5 rounded-md font-semibold"
+              style={{ background: view === k ? T.surface2 : 'transparent', color: view === k ? T.accent : T.dim, border: `1px solid ${view === k ? T.line : 'transparent'}` }}>
+              {label}
+            </button>
+          ))}
+          <span className="text-xs ml-1" style={{ color: T.faint }}>
+            {view === 'prop' ? 'prop-tagged trades only' : view === 'live' ? 'live / personal trades only' : 'live + prop combined'}
+          </span>
+        </div>
+      )}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Stat label="Net P&L" value={fmt$(stats.totalPnl)} tone={stats.totalPnl >= 0 ? 'up' : 'down'} sub={`${stats.n} trades`} />
-        <Stat label="Win rate" value={`${fmtN(stats.winRate, 1)}%`} sub={`expectancy ${fmt$(stats.expectancy)}/trade`} />
-        <Stat label="Profit factor" value={stats.profitFactor === Infinity ? '∞' : fmtN(stats.profitFactor, 2)} tone="accent" sub="gross win ÷ gross loss" />
-        <Stat label="Avg R:R" value={stats.avgRR ? `1:${fmtN(stats.avgRR, 1)}` : '—'} />
-        <Stat label="Max drawdown" value={fmt$(-stats.maxDD)} tone="down" />
-        <Stat label="Avg winner" value={fmt$(stats.avgWin)} tone="up" />
-        <Stat label="Avg loser" value={fmt$(-stats.avgLoss)} tone="down" />
-        <Stat label="Streaks" value={String(stats.currentStreak)} sub={`best ${stats.bestWin}W · worst ${stats.worstLoss}L`} />
+        <Stat label="Net P&L" value={fmt$(vStats.totalPnl)} tone={vStats.totalPnl >= 0 ? 'up' : 'down'} sub={`${vStats.n} trades`} />
+        <Stat label="Win rate" value={`${fmtN(vStats.winRate, 1)}%`} sub={`expectancy ${fmt$(vStats.expectancy)}/trade`} />
+        <Stat label="Profit factor" value={vStats.profitFactor === Infinity ? '∞' : fmtN(vStats.profitFactor, 2)} tone="accent" sub="gross win ÷ gross loss" />
+        <Stat label="Avg R:R" value={vStats.avgRR ? `1:${fmtN(vStats.avgRR, 1)}` : '—'} />
+        <Stat label="Max drawdown" value={fmt$(-vStats.maxDD)} tone="down" />
+        <Stat label="Avg winner" value={fmt$(vStats.avgWin)} tone="up" />
+        <Stat label="Avg loser" value={fmt$(-vStats.avgLoss)} tone="down" />
+        <Stat label="Streaks" value={String(vStats.currentStreak)} sub={`best ${vStats.bestWin}W · worst ${vStats.worstLoss}L`} />
       </div>
 
-      <PnlCalendar trades={trades} />
+      <PnlCalendar trades={viewTrades} />
 
       <Panel title="Equity curve">
         {empty ? <EmptyChart /> : (
           <ResponsiveContainer width="100%" height={240}>
-            <LineChart data={stats.equity} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
+            <LineChart data={vStats.equity} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
               <ReferenceLine y={0} stroke={T.line} />
               <XAxis dataKey="i" tick={{ fill: T.faint, fontSize: 11 }} stroke={T.line} />
               <YAxis tick={{ fill: T.faint, fontSize: 11 }} stroke={T.line} tickFormatter={(v) => '$' + v} />
@@ -169,18 +194,18 @@ export function Dashboard({ stats, trades }) {
       <Panel title="Daily P&L (last 14 active days)">
         {empty ? <EmptyChart /> : (
           <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={stats.daily} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
+            <BarChart data={vStats.daily} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
               <ReferenceLine y={0} stroke={T.line} />
               <XAxis dataKey="day" tick={{ fill: T.faint, fontSize: 11 }} stroke={T.line} />
               <YAxis tick={{ fill: T.faint, fontSize: 11 }} stroke={T.line} tickFormatter={(v) => '$' + v} />
               <Tooltip contentStyle={{ background: T.surface2, border: `1px solid ${T.line}`, borderRadius: 8, color: T.text }} formatter={(v) => [fmt$(v), 'P&L']} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
-              <Bar dataKey="pnl" radius={[3, 3, 0, 0]}>{stats.daily.map((d, i) => <Cell key={i} fill={d.pnl >= 0 ? T.up : T.down} />)}</Bar>
+              <Bar dataKey="pnl" radius={[3, 3, 0, 0]}>{vStats.daily.map((d, i) => <Cell key={i} fill={d.pnl >= 0 ? T.up : T.down} />)}</Bar>
             </BarChart>
           </ResponsiveContainer>
         )}
       </Panel>
 
-      <HeatMap stats={stats} />
+      <HeatMap stats={vStats} />
     </div>
   )
 }

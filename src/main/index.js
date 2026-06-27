@@ -97,6 +97,10 @@ function registerIpc() {
   ipcMain.handle('daylog:add', (_e, entry) => db.addDayLog(entry))
   ipcMain.handle('daylog:delete', (_e, id) => db.deleteDayLog(id))
 
+  ipcMain.handle('payout:list', () => db.listPayouts())
+  ipcMain.handle('payout:add', (_e, entry) => db.addPayout(entry))
+  ipcMain.handle('payout:delete', (_e, id) => db.deletePayout(id))
+
   ipcMain.handle('license:status', () => license.status(db))
   ipcMain.handle('license:activate', (_e, key) => license.activate(db, key))
   ipcMain.handle('license:deactivate', () => license.deactivate(db))

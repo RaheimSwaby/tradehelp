@@ -267,11 +267,11 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
             </Field>
           </div>
         )}
-        {!compact && accounts.length > 0 && (
+        {accounts.length > 0 && (
           <div className="mt-3">
-            <Field label="Account (for per-account books)">
+            <Field label="Account — Live or which prop account">
               <select style={inputStyle} className={inp} value={f.account} onChange={set('account')}>
-                <option value="">— unassigned / shared —</option>
+                <option value="">Live / personal</option>
                 {accounts.map((a) => <option key={a.id} value={a.id}>{a.label || 'Account'}</option>)}
               </select>
             </Field>

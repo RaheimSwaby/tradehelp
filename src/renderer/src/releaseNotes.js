@@ -1,6 +1,7 @@
 // Bundled patch notes — shown in the "What's new" modal after an update.
 // Add an entry here with every release so users always see real notes.
 export const RELEASE_NOTES = {
+  '0.24.0': `• Tag each trade as Live or a specific prop account right in the journal\n• Dashboard now has a Live / Prop / All toggle so your prop and live P&L stay separate (letter grade still combines both)\n• Prop accounts now count only the trades you tag to them by default — your live trades no longer leak in\n• Each account card shows two bars: progress toward target AND drawdown cushion\n• Track prop firm payouts — per account and an all-time log`,
   '0.23.2': `• The floating Trade Mode news widget now always shows while you're live — even when there's no upcoming news (so you know you're clear)`,
   '0.23.1': `• Economic calendar now floats in the corner while Trade Mode is live, so upcoming news stays in view — imminent high-impact events glow red, and it collapses to a pill when you want it out of the way`,
   '0.23.0': `• Simple journal mode — toggle it on to hide the price/risk fields and log a trade in under a minute (keeps screenshots)\n• No-trade day tracker — log days you sat out or missed, with a reason and mood, without touching your P&L\n• Add your own custom emotions and setups with a + button\n• Setup is now a clean dropdown instead of free-text`,

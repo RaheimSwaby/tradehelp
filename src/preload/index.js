@@ -31,6 +31,10 @@ const api = {
   addDayLog: (e) => ipcRenderer.invoke('daylog:add', e),
   deleteDayLog: (id) => ipcRenderer.invoke('daylog:delete', id),
 
+  listPayouts: () => ipcRenderer.invoke('payout:list'),
+  addPayout: (e) => ipcRenderer.invoke('payout:add', e),
+  deletePayout: (id) => ipcRenderer.invoke('payout:delete', id),
+
   getSettings: () => ipcRenderer.invoke('settings:get'),
   setSettings: (s) => ipcRenderer.invoke('settings:set', s),
 

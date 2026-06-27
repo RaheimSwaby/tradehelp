@@ -51,6 +51,7 @@ export default function App() {
   const [updateAvail, setUpdateAvail] = useState(null)
   const [playbook, setPlaybook] = useState([])
   const [dayLogs, setDayLogs] = useState([])
+  const [payouts, setPayouts] = useState([])
 
   const hasApi = typeof window !== 'undefined' && window.api
 
@@ -64,6 +65,7 @@ export default function App() {
       if (window.api.getLicense) setLicense(await window.api.getLicense())
       if (window.api.listPlaybook) setPlaybook(await window.api.listPlaybook())
       if (window.api.listDayLogs) setDayLogs(await window.api.listDayLogs())
+      if (window.api.listPayouts) setPayouts(await window.api.listPayouts())
       setReady(true)
     })()
   }, [hasApi])
@@ -139,6 +141,9 @@ export default function App() {
 
   async function addDayLog(e) { if (hasApi && window.api.addDayLog) setDayLogs(await window.api.addDayLog(e)) }
   async function deleteDayLog(id) { if (hasApi && window.api.deleteDayLog) setDayLogs(await window.api.deleteDayLog(id)) }
+
+  async function addPayout(e) { if (hasApi && window.api.addPayout) setPayouts(await window.api.addPayout(e)) }
+  async function deletePayout(id) { if (hasApi && window.api.deletePayout) setPayouts(await window.api.deletePayout(id)) }
 
   // ── Trade Mode derived state ──
   const rules = useMemo(() => parseRules(settings), [settings])
@@ -275,8 +280,8 @@ export default function App() {
           <>
             {tab === 'journal' && <Journal trades={trades} onAdd={addTrade} onUpdate={updateTrade} onRemove={removeTrade} onNotes={setNotesView} onImport={importTrades} accounts={propFirmAccounts} settings={settings} onSaveSettings={saveSettings} dayLogs={dayLogs} onAddDayLog={addDayLog} onDeleteDayLog={deleteDayLog} />}
             {tab === 'trade' && <TradeModeTab settings={settings} onSave={saveSettings} rules={rules} live={tradeMode} todayNet={todayNet} todayCount={todayTrades.length} weekNet={weekNet} goal={dailyGoal} maxLoss={maxLoss} onStart={startDay} onEnd={endSession} />}
-            {tab === 'propfirm' && <PropFirm trades={trades} accounts={propFirmAccounts} onSave={savePropFirmAccounts} />}
-            {tab === 'dashboard' && <Dashboard stats={stats} trades={trades} />}
+            {tab === 'propfirm' && <PropFirm trades={trades} accounts={propFirmAccounts} onSave={savePropFirmAccounts} payouts={payouts} onAddPayout={addPayout} onDeletePayout={deletePayout} />}
+            {tab === 'dashboard' && <Dashboard stats={stats} trades={trades} accounts={propFirmAccounts} />}
             {tab === 'psych' && <Psychology stats={stats} />}
             {tab === 'rating' && <Rating trades={trades} stats={stats} achievements={achievements} unlockedAt={unlockedAt} settings={settings} onSave={saveSettings} />}
             {tab === 'goals' && <Goals goals={goals} onSave={saveGoals} trades={trades} />}
