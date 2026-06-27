@@ -17,5 +17,5 @@ export function initUpdater(getWindow) {
   autoUpdater.on('error', () => { /* stay quiet; a failed update check shouldn't bother the user */ })
 
   autoUpdater.checkForUpdates().catch(() => {})
-  setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 6 * 60 * 60 * 1000)
+  setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 30 * 60 * 1000)
 }
