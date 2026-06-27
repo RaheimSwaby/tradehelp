@@ -44,7 +44,6 @@ export default function App() {
   const [now, setNow] = useState(Date.now())
   const firedRef = useRef(new Set())
   const [toast, setToast] = useState(null)
-  const [updateBanner, setUpdateBanner] = useState(null) // { state, info }
   const [whatsNew, setWhatsNew] = useState(null)
   const wnRef = useRef(false)
   const [updateAvail, setUpdateAvail] = useState(null)
@@ -80,15 +79,17 @@ export default function App() {
     })()
   }, [settings, hasApi])
 
-  // Nudge to update when a newer release exists and auto-update can't deliver it (macOS).
+  // Check GitHub releases for a newer version on all platforms.
   useEffect(() => {
     if (!hasApi || !window.api.latestVersion) return
     let live = true
     const check = async () => {
-      const [cur, latest] = await Promise.all([window.api.appVersion(), window.api.latestVersion()])
-      if (live && latest?.platform === 'darwin' && latest.version && isNewerVersion(latest.version, cur)) {
-        setUpdateAvail({ ...latest, current: cur })
-      }
+      try {
+        const [cur, latest] = await Promise.all([window.api.appVersion(), window.api.latestVersion()])
+        if (live && latest?.version && isNewerVersion(latest.version, cur)) {
+          setUpdateAvail({ ...latest, current: cur })
+        }
+      } catch {}
     }
     check()
     window.addEventListener('focus', check)
@@ -189,11 +190,6 @@ export default function App() {
     setToast(newly[newly.length - 1])
   }, [achievements, unlockedAt, hasApi])
   useEffect(() => { if (!toast) return; const id = setTimeout(() => setToast(null), 5000); return () => clearTimeout(id) }, [toast])
-  useEffect(() => {
-    window.api?.onUpdateAvailable?.((info) => setUpdateBanner({ state: 'available', info: info || {} }))
-    window.api?.onUpdateProgress?.((info) => setUpdateBanner((b) => ({ state: 'downloading', info: { ...b?.info, ...info } })))
-    window.api?.onUpdateReady?.((info) => setUpdateBanner({ state: 'ready', info: info || {} }))
-  }, [])
 
   // Re-theme the entire app when live. Runs every render; App is the only writer of T.
   applyTheme(tradeMode, settings?.accentColor)
@@ -291,14 +287,6 @@ export default function App() {
         <Lockout net={todayNet} maxLoss={maxLoss} onEnd={endSession} onDismiss={() => setLockoutDismissed(true)} />
       )}
       {toast && <AchievementToast a={toast} onClose={() => setToast(null)} />}
-      {updateBanner && (
-        <UpdateBanner
-          state={updateBanner.state}
-          info={updateBanner.info}
-          onDownload={() => { setUpdateBanner((b) => ({ ...b, state: 'downloading' })); window.api.downloadUpdate() }}
-          onInstall={() => window.api.installUpdate()}
-        />
-      )}
       {whatsNew && <WhatsNew info={whatsNew} onClose={() => setWhatsNew(null)} />}
     </div>
   )

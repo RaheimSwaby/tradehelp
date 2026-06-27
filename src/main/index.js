@@ -119,8 +119,16 @@ function registerIpc() {
       const r = await fetch('https://api.github.com/repos/RaheimSwaby/tradehelp/releases/latest', { headers: { Accept: 'application/vnd.github+json' } })
       if (!r.ok) return { platform }
       const d = await r.json()
-      const dmg = (d.assets || []).find((a) => a.name?.endsWith('.dmg'))
-      return { platform, version: String(d.tag_name || '').replace(/^v/, ''), url: d.html_url || '', dmgUrl: dmg?.browser_download_url || '' }
+      const assets = d.assets || []
+      const dmg = assets.find((a) => a.name?.endsWith('.dmg'))
+      const exe = assets.find((a) => a.name?.endsWith('.exe') && !a.name?.includes('blockmap'))
+      return {
+        platform,
+        version: String(d.tag_name || '').replace(/^v/, ''),
+        url: d.html_url || '',
+        dmgUrl: dmg?.browser_download_url || '',
+        exeUrl: exe?.browser_download_url || ''
+      }
     } catch { return { platform } }
   })
 
