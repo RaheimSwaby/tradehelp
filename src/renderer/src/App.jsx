@@ -81,13 +81,15 @@ export default function App() {
   useEffect(() => {
     if (!hasApi || !window.api.latestVersion) return
     let live = true
-    ;(async () => {
+    const check = async () => {
       const [cur, latest] = await Promise.all([window.api.appVersion(), window.api.latestVersion()])
       if (live && latest?.platform === 'darwin' && latest.version && isNewerVersion(latest.version, cur)) {
         setUpdateAvail({ ...latest, current: cur })
       }
-    })()
-    return () => { live = false }
+    }
+    check()
+    window.addEventListener('focus', check)
+    return () => { live = false; window.removeEventListener('focus', check) }
   }, [hasApi])
 
   const stats = useMemo(() => computeStats(trades), [trades])
