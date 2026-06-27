@@ -10,6 +10,11 @@ import * as license from './license.js'
 import { testKey } from './keytest.js'
 
 let win
+let settingsCache = null
+function cachedSettings() {
+  if (!settingsCache) settingsCache = db.getSettings()
+  return settingsCache
+}
 
 function createWindow() {
   win = new BrowserWindow({
@@ -86,7 +91,10 @@ function registerIpc() {
   ipcMain.handle('license:status', () => license.status(db))
   ipcMain.handle('license:activate', (_e, key) => license.activate(db, key))
   ipcMain.handle('license:deactivate', () => license.deactivate(db))
-  ipcMain.handle('app:openExternal', (_e, url) => shell.openExternal(String(url)))
+  ipcMain.handle('app:openExternal', (_e, url) => {
+    const s = String(url)
+    if (/^https?:\/\//i.test(s)) shell.openExternal(s)
+  })
   ipcMain.handle('key:test', (_e, payload) => testKey(payload))
   ipcMain.handle('app:version', () => app.getVersion())
   ipcMain.handle('release:notes', async () => {
@@ -111,11 +119,11 @@ function registerIpc() {
   })
 
   ipcMain.handle('settings:get', () => db.getSettings())
-  ipcMain.handle('settings:set', (_e, s) => db.setSettings(s))
+  ipcMain.handle('settings:set', (_e, s) => { const r = db.setSettings(s); settingsCache = r; return r })
 
   ipcMain.handle('ai:chat', async (_e, payload) => {
     try {
-      const text = await chat(db.getSettings(), payload)
+      const text = await chat(cachedSettings(), payload)
       return { ok: true, text }
     } catch (err) {
       return { ok: false, error: String(err?.message || err) }
@@ -124,7 +132,7 @@ function registerIpc() {
 
   ipcMain.on('ai:stream:start', async (e, { id, payload }) => {
     try {
-      const text = await chatStream(db.getSettings(), payload, (delta) => {
+      const text = await chatStream(cachedSettings(), payload, (delta) => {
         try { e.sender.send('ai:stream:chunk', { id, delta }) } catch {}
       })
       try { e.sender.send('ai:stream:end', { id, text }) } catch {}
@@ -135,7 +143,7 @@ function registerIpc() {
 
   ipcMain.handle('ai:models', async () => {
     try {
-      return { ok: true, models: await models(db.getSettings()) }
+      return { ok: true, models: await models(cachedSettings()) }
     } catch (err) {
       return { ok: false, error: String(err?.message || err) }
     }
@@ -143,7 +151,7 @@ function registerIpc() {
 
   ipcMain.handle('price:get', async (_e, sym) => {
     try {
-      return { ok: true, ...(await fetchPrice(sym, db.getSettings().finnhubKey)) }
+      return { ok: true, ...(await fetchPrice(sym, cachedSettings().finnhubKey)) }
     } catch (err) {
       return { ok: false, error: String(err?.message || err) }
     }
@@ -151,7 +159,7 @@ function registerIpc() {
 
   ipcMain.handle('price:batch', async (_e, symbols) => {
     try {
-      return await fetchQuotes(symbols, db.getSettings().finnhubKey)
+      return await fetchQuotes(symbols, cachedSettings().finnhubKey)
     } catch {
       return []
     }
@@ -159,7 +167,7 @@ function registerIpc() {
 
   ipcMain.handle('events:list', async () => {
     try {
-      return await fetchEvents(db.getSettings())
+      return await fetchEvents(cachedSettings())
     } catch {
       return []
     }

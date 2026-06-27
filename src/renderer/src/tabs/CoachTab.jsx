@@ -21,7 +21,9 @@ export function Coach({ trades, stats, settings, events, now }) {
   const [streamText, setStreamText] = useState(null)
   const [price, setPrice] = useState({ sym: '', out: null, loading: false })
   const scrollRef = useRef(null)
+  const cancelStreamRef = useRef(null)
   useEffect(() => { scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight) }, [msgs, busy, streamText])
+  useEffect(() => () => cancelStreamRef.current?.(), [])
 
   const modelLabel = settings?.provider === 'cloud' ? settings?.cloudModel : settings?.ollamaModel
 
@@ -35,7 +37,7 @@ export function Coach({ trades, stats, settings, events, now }) {
       ...next
     ]
     try {
-      const full = await streamChat({ system: COACH_SYSTEM, messages: apiMsgs }, (d) => setStreamText((s) => (s || '') + d))
+      const full = await streamChat({ system: COACH_SYSTEM, messages: apiMsgs }, (d) => setStreamText((s) => (s || '') + d), cancelStreamRef)
       setMsgs((m) => [...m, { role: 'assistant', content: full }])
     } catch (e) {
       setMsgs((m) => [...m, { role: 'assistant', content: `⚠︎ ${e?.message || 'Could not reach the model. Check Settings.'}` }])

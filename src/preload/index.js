@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import { randomUUID } from 'crypto'
 
 const api = {
   listTrades: () => ipcRenderer.invoke('trades:list'),
@@ -27,7 +28,7 @@ const api = {
 
   aiChat: (payload) => ipcRenderer.invoke('ai:chat', payload),
   aiChatStream: (payload, { onChunk, onDone, onError }) => {
-    const id = Math.random().toString(36).slice(2)
+    const id = randomUUID()
     const onC = (_e, m) => { if (m.id === id) onChunk?.(m.delta) }
     const onE = (_e, m) => { if (m.id === id) { cleanup(); onDone?.(m.text) } }
     const onErr = (_e, m) => { if (m.id === id) { cleanup(); onError?.(m.error) } }

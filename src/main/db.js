@@ -98,8 +98,11 @@ const num = (v) => {
 
 export const listTrades = () =>
   db.prepare(`
-    SELECT t.*, (SELECT COUNT(*) FROM trade_images i WHERE i.tradeId = t.id) AS imageCount
-    FROM trades t ORDER BY t.timestamp ASC, t.rowid ASC
+    SELECT t.*, COUNT(i.id) AS imageCount
+    FROM trades t
+    LEFT JOIN trade_images i ON i.tradeId = t.id
+    GROUP BY t.id
+    ORDER BY t.timestamp ASC, t.rowid ASC
   `).all()
 
 function buildRow(t) {
@@ -173,12 +176,26 @@ export function getSettings() {
   return o
 }
 
+const SETTINGS_KEYS = new Set([
+  'provider', 'ollamaUrl', 'ollamaModel', 'ollamaVisionModel',
+  'cloudUrl', 'cloudModel', 'cloudKey',
+  'dailyGoal', 'maxDailyLoss', 'tradeRules',
+  'tickerEnabled', 'tickerSymbols', 'finnhubKey',
+  'eventsEnabled', 'fmpKey', 'eventsMinImpact', 'eventsLeadMin',
+  'accentColor', 'lastSeenVersion',
+  'breakWeeks', 'onBreak', 'breakSince',
+  'trialStart', 'licenseKey', 'licenseInstanceId', 'licenseStatus',
+  'achievements', 'propFirmAccounts', 'propFirm',
+])
+
 export function setSettings(s) {
   const up = db.prepare(
     'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
   )
   const tx = db.transaction((obj) => {
-    for (const [k, v] of Object.entries(obj)) up.run(k, String(v))
+    for (const [k, v] of Object.entries(obj)) {
+      if (SETTINGS_KEYS.has(k)) up.run(k, String(v))
+    }
   })
   tx(s)
   return getSettings()
@@ -186,11 +203,13 @@ export function setSettings(s) {
 
 /* ───────── trade screenshots (files on disk; DB only holds the filename) ───────── */
 const EXT_MIME = { webp: 'image/webp', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif' }
+const WRITE_MIME = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' }
 
 export function addImage(tradeId, { dataUrl, tag, caption } = {}) {
   const m = String(dataUrl || '').match(/^data:(image\/[\w+.-]+);base64,(.+)$/s)
   if (!m) throw new Error('Bad image data')
-  const ext = m[1] === 'image/jpeg' ? 'jpg' : (m[1].split('/')[1] || 'png').replace('+xml', '')
+  const ext = WRITE_MIME[m[1]]
+  if (!ext) throw new Error('Unsupported image type')
   const file = `${randomUUID()}.${ext}`
   writeFileSync(join(imagesDir, file), Buffer.from(m[2], 'base64'))
   const row = {
@@ -213,12 +232,13 @@ export function listImages(tradeId) {
 export function getImage(id) {
   const r = db.prepare('SELECT id, file, tag, caption FROM trade_images WHERE id = ?').get(String(id))
   if (!r) return null
-  let dataUrl = ''
   try {
     const mime = EXT_MIME[(r.file.split('.').pop() || 'png').toLowerCase()] || 'image/png'
-    dataUrl = `data:${mime};base64,${readFileSync(join(imagesDir, r.file)).toString('base64')}`
-  } catch {}
-  return { id: r.id, tag: r.tag, caption: r.caption, dataUrl }
+    const dataUrl = `data:${mime};base64,${readFileSync(join(imagesDir, r.file)).toString('base64')}`
+    return { id: r.id, tag: r.tag, caption: r.caption, dataUrl }
+  } catch {
+    return null
+  }
 }
 
 export function deleteImage(id) {
@@ -283,6 +303,8 @@ export function backupDb() {
     db.backup(dest).then(() => {
       const files = readdirSync(dir).filter((f) => f.endsWith('.db')).sort()
       for (const f of files.slice(0, Math.max(0, files.length - 7))) { try { unlinkSync(join(dir, f)) } catch {} }
-    }).catch(() => {})
-  } catch {}
+    }).catch((err) => console.error('[backup] SQLite backup failed:', err))
+  } catch (err) {
+    console.error('[backup] Backup setup failed:', err)
+  }
 }
