@@ -5,7 +5,7 @@ import { T } from '../theme.js'
 export function WhatsNew({ info, onClose }) {
   const notes = (info.notes || '').trim()
   return (
-    <div className="fixed inset-0 flex items-center justify-center p-4 z-[70]" style={{ background: 'rgba(0,0,0,0.65)' }} onClick={onClose}>
+    <div className="fixed inset-0 flex items-center justify-center p-4 z-[70]" style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }} onClick={onClose}>
       <div className="rounded-xl w-full max-w-md max-h-[80vh] overflow-y-auto" style={{ background: T.surface, border: `1px solid ${T.line}` }} onClick={(e) => e.stopPropagation()}>
         <div className="px-5 py-4 flex items-center gap-2" style={{ borderBottom: `1px solid ${T.line}` }}>
           <Sparkles size={18} style={{ color: T.accent }} />

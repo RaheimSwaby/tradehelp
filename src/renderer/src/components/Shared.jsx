@@ -5,7 +5,7 @@ import { executionGrade } from '../stats.js'
 export function Stat({ label, value, sub, tone }) {
   const color = tone === 'up' ? T.up : tone === 'down' ? T.down : tone === 'accent' ? T.accent : T.text
   return (
-    <div className="rounded-lg p-3" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
+    <div className="rounded-lg p-3 th-card" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
       <div className="text-xs uppercase tracking-wider" style={{ color: T.faint }}>{label}</div>
       <div className="mt-1 text-xl font-semibold" style={{ ...mono, color }}>{value}</div>
       {sub && <div className="text-xs mt-0.5" style={{ color: T.dim }}>{sub}</div>}

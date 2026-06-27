@@ -397,7 +397,7 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
               <tbody>
                 {pageRows.map((t) => (
                   <tr key={t.id} className="cursor-pointer" style={{ borderTop: `1px solid ${T.line}` }} onDoubleClick={() => onNotes(t)}>
-                    <td className="px-3 py-2 whitespace-nowrap" style={{ color: T.dim }}>{t.timestamp}</td>
+                    <td className="px-3 py-2 whitespace-nowrap" style={{ color: T.dim, boxShadow: `inset 3px 0 0 ${(Number(t.pnl) || 0) >= 0 ? T.up : T.down}` }}>{t.timestamp}</td>
                     <td className="px-3 py-2 font-semibold">
                       <span className="inline-flex items-center gap-1">{t.symbol}{t.imageCount > 0 && <Paperclip size={12} style={{ color: T.faint }} title={`${t.imageCount} screenshot${t.imageCount === 1 ? '' : 's'}`} />}</span>
                     </td>
@@ -451,7 +451,7 @@ function NoTradeModal({ emotions = [], onClose, onSave }) {
   const [note, setNote] = useState('')
   const inp = 'w-full rounded px-2 py-1.5 text-sm'
   return (
-    <div className="fixed inset-0 flex items-center justify-center p-4 z-[70]" style={{ background: 'rgba(0,0,0,0.65)' }} onClick={onClose}>
+    <div className="fixed inset-0 flex items-center justify-center p-4 z-[70]" style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }} onClick={onClose}>
       <div className="rounded-2xl w-full max-w-md p-5 space-y-3" style={{ background: T.surface, border: `1px solid ${T.line}` }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-2">
           <CalendarOff size={16} style={{ color: T.accent }} />

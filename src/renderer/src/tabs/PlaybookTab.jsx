@@ -92,7 +92,7 @@ export function PlaybookTab({ entries, trades, onAdd, onUpdate, onDelete }) {
           return (
             <div
               key={e.id}
-              className="rounded-xl overflow-hidden"
+              className={`rounded-xl overflow-hidden ${open ? '' : 'th-card'}`}
               style={{ background: T.surface, border: `1px solid ${open ? T.accent + '66' : T.line}`, transition: 'border-color .15s' }}
             >
               {/* Card header */}
@@ -193,7 +193,7 @@ export function PlaybookTab({ entries, trades, onAdd, onUpdate, onDelete }) {
       {editing && (
         <div
           className="fixed inset-0 flex items-end sm:items-center justify-center p-4 z-50"
-          style={{ background: 'rgba(0,0,0,0.65)' }}
+          style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}
           onClick={() => setEditing(null)}
         >
           <div

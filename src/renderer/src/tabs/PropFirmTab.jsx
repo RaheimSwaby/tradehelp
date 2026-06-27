@@ -134,7 +134,7 @@ export function AccountCard({ acc, r, tight, payout = 0, onClick }) {
   const tgtPct = r.target > 0 ? clamp(r.netProfit / r.target, 0, 1) : 0
   const tgtColor = r.targetHit ? T.up : T.accent
   return (
-    <button type="button" onClick={onClick} className="text-left rounded-xl p-4 w-full" style={{ background: T.surface, border: `1px solid ${tight ? T.down : T.line}` }}>
+    <button type="button" onClick={onClick} className="text-left rounded-xl p-4 w-full th-card" style={{ background: T.surface, border: `1px solid ${tight ? T.down : T.line}` }}>
       <div className="flex items-center justify-between">
         <span className="text-sm font-semibold">{acc.label || 'Account'}</span>
         <span className="text-xs px-1.5 py-0.5 rounded" style={{ color: status.color, border: `1px solid ${status.color}` }}>{status.label}</span>

@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { AlertTriangle, CalendarClock, ChevronDown, ChevronUp } from 'lucide-react'
-import { T, mono } from '../theme.js'
+import { T, mono, withAlpha } from '../theme.js'
 import { untilLabel } from '../utils.js'
 import { Panel } from '../components/Shared.jsx'
 
@@ -59,7 +59,7 @@ export function FloatingEvents({ events, now, leadMin = 15 }) {
         type="button"
         onClick={() => setCollapsed(false)}
         className="fixed bottom-4 right-4 z-[60] flex items-center gap-2 rounded-full px-3 py-2 text-xs font-semibold"
-        style={{ background: T.surface, border: `1px solid ${nextSoon ? T.down : T.accent}`, color: nextSoon ? T.down : T.accent, boxShadow: '0 10px 30px rgba(0,0,0,0.45)', ...mono }}
+        style={{ background: withAlpha(T.surface, 0.72), backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', border: `1px solid ${nextSoon ? T.down : T.accent}`, color: nextSoon ? T.down : T.accent, boxShadow: '0 10px 30px rgba(0,0,0,0.45)', ...mono }}
       >
         <CalendarClock size={14} />
         {next ? (
@@ -78,9 +78,9 @@ export function FloatingEvents({ events, now, leadMin = 15 }) {
   return (
     <div
       className="fixed bottom-4 right-4 z-[60] w-72 rounded-xl overflow-hidden"
-      style={{ background: T.surface, border: `1px solid ${nextSoon ? T.down : T.accent}`, boxShadow: '0 12px 34px rgba(0,0,0,0.5)' }}
+      style={{ background: withAlpha(T.surface, 0.78), backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: `1px solid ${nextSoon ? T.down : T.accent}`, boxShadow: '0 12px 34px rgba(0,0,0,0.5)' }}
     >
-      <div className="flex items-center gap-2 px-3 py-2" style={{ borderBottom: `1px solid ${T.line}`, background: T.surface2 }}>
+      <div className="flex items-center gap-2 px-3 py-2" style={{ borderBottom: `1px solid ${T.line}`, background: withAlpha(T.surface2, 0.6) }}>
         <CalendarClock size={14} style={{ color: T.accent }} />
         <span className="text-xs font-semibold">Upcoming news</span>
         <button type="button" onClick={() => setCollapsed(true)} className="ml-auto" title="Collapse" style={{ color: T.dim }}>

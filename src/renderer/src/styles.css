@@ -8,6 +8,14 @@ body { margin: 0; background: #0E1117; }
 ::-webkit-scrollbar-thumb { background: #2A3344; border-radius: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 
+/* lift + accent-glow on interactive cards (stat tiles, account & playbook cards) */
+.th-card { transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease; }
+.th-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.38);
+  border-color: var(--th-accent, #F5B642) !important;
+}
+
 /* ticker tape marquee: two identical segments scrolled -50% for a seamless loop */
 .ticker-track { display: inline-flex; will-change: transform; animation: ticker-scroll 40s linear infinite; }
 .ticker-track:hover { animation-play-state: paused; }

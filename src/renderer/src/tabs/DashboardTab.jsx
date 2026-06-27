@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react'
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, ReferenceLine, Tooltip, Cell } from 'recharts'
+import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, ReferenceLine, Tooltip, Cell } from 'recharts'
 import { T, mono } from '../theme.js'
 import { fmt$, fmtN } from '../utils.js'
 import { computeStats } from '../stats.js'
@@ -180,13 +180,19 @@ export function Dashboard({ stats, trades, accounts = [] }) {
       <Panel title="Equity curve">
         {empty ? <EmptyChart /> : (
           <ResponsiveContainer width="100%" height={240}>
-            <LineChart data={vStats.equity} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
+            <AreaChart data={vStats.equity} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
+              <defs>
+                <linearGradient id="equityFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={T.accent} stopOpacity={0.35} />
+                  <stop offset="100%" stopColor={T.accent} stopOpacity={0} />
+                </linearGradient>
+              </defs>
               <ReferenceLine y={0} stroke={T.line} />
               <XAxis dataKey="i" tick={{ fill: T.faint, fontSize: 11 }} stroke={T.line} />
               <YAxis tick={{ fill: T.faint, fontSize: 11 }} stroke={T.line} tickFormatter={(v) => '$' + v} />
               <Tooltip contentStyle={{ background: T.surface2, border: `1px solid ${T.line}`, borderRadius: 8, color: T.text }} formatter={(v) => [fmt$(v), 'Equity']} />
-              <Line type="monotone" dataKey="equity" stroke={T.accent} strokeWidth={2.5} dot={false} />
-            </LineChart>
+              <Area type="monotone" dataKey="equity" stroke={T.accent} strokeWidth={2.5} fill="url(#equityFill)" dot={false} />
+            </AreaChart>
           </ResponsiveContainer>
         )}
       </Panel>

@@ -211,6 +211,10 @@ export default function App() {
 
   // Re-theme the entire app when live. Runs every render; App is the only writer of T.
   applyTheme(tradeMode, settings?.accentColor)
+  // Expose the live accent to CSS (used by .th-card hover borders).
+  useEffect(() => {
+    document.documentElement.style.setProperty('--th-accent', T.accent)
+  }, [tradeMode, settings?.accentColor])
 
   const TABS = [
     ['journal', 'Journal', BookOpen],

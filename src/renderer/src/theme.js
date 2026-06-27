@@ -13,7 +13,14 @@ export const LIVE = {
 // Mutable: every component reads these at render time, so reassigning them re-themes
 // the whole app. App (the root) is the only writer, via applyTheme() during render.
 export let T = { ...BASE }
-export const mono = { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace' }
+export const mono = { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', fontVariantNumeric: 'tabular-nums' }
+
+// hex (#RRGGBB) → rgba string, for translucent glass surfaces that still track the theme.
+export function withAlpha(hex, a) {
+  const n = parseInt(String(hex).slice(1), 16)
+  if (Number.isNaN(n)) return hex
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`
+}
 export let inputStyle = { background: T.surface2, border: `1px solid ${T.line}`, color: T.text, ...mono }
 // User-selectable accent colors (all bright enough that the dark button text reads on them).
 const ACCENTS = {
