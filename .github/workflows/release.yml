@@ -1,7 +1,5 @@
 name: Release
 
-# Push a version tag (e.g. v0.2.0) and this runs the tests, builds the installers,
-# and publishes them to a GitHub Release (the feed electron-updater reads).
 on:
   push:
     tags: ['v*']
@@ -23,16 +21,10 @@ jobs:
   build:
     needs: test
     strategy:
-      # Serialized so the platform jobs don't race to create the GitHub release
-      # (concurrent --publish would split assets across duplicate draft releases).
-      # The first job creates the draft; the rest append to it.
       max-parallel: 1
       fail-fast: false
       matrix:
         os: [windows-latest, ubuntu-latest, macos-latest]
-        # macOS builds are UNSIGNED (mac.identity=null) — users run `xattr -cr
-        # /Applications/TradeHelp.app` once to open. Add Apple signing/notarization
-        # secrets later for a clean double-click install.
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -43,21 +35,5 @@ jobs:
       - run: npm run build
       - name: Build & publish installer
         run: npx electron-builder --publish always
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  release-notes:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Add auto-generated release notes
-        run: |
-          NOTES=$(gh api repos/RaheimSwaby/tradehelp/releases/generate-notes \
-            -f tag_name="${{ github.ref_name }}" \
-            --jq '.body')
-          gh release edit "${{ github.ref_name }}" --notes "$NOTES"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
