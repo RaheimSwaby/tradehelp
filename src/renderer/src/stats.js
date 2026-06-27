@@ -68,6 +68,38 @@ export function computeStats(trades) {
   }
   const byHour = Object.entries(hourMap).map(([h, v]) => ({ hour: h + ':00', pnl: v })).sort((a, b) => a.hour.localeCompare(b.hour))
 
+  // Hour × weekday win-rate matrix for the heat map
+  const WDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  const byHourDay = {}
+  for (const t of sorted) {
+    const ts = t.entryTime || t.timestamp
+    if (!ts) continue
+    const d = new Date(String(ts).replace(' ', 'T'))
+    if (isNaN(d)) continue
+    const day = WDAYS[d.getDay()]
+    const h = String(d.getHours()).padStart(2, '0')
+    const k = `${day}-${h}`
+    if (!byHourDay[k]) byHourDay[k] = { wins: 0, total: 0, pnl: 0 }
+    byHourDay[k].total++
+    byHourDay[k].pnl += Number(t.pnl) || 0
+    if ((Number(t.pnl) || 0) > 0) byHourDay[k].wins++
+  }
+  // Roll up to per-hour totals for the advisory line
+  const _hourTotals = {}
+  for (const [k, v] of Object.entries(byHourDay)) {
+    const h = k.split('-')[1]
+    if (!_hourTotals[h]) _hourTotals[h] = { wins: 0, total: 0, pnl: 0 }
+    _hourTotals[h].wins += v.wins
+    _hourTotals[h].total += v.total
+    _hourTotals[h].pnl += v.pnl
+  }
+  const _hourRanked = Object.entries(_hourTotals)
+    .filter(([, v]) => v.total >= 3)
+    .map(([h, v]) => ({ h, wr: (v.wins / v.total) * 100, total: v.total, pnl: v.pnl }))
+    .sort((a, b) => b.wr - a.wr)
+  const bestHour = _hourRanked[0] || null
+  const worstHour = _hourRanked.length > 1 ? _hourRanked[_hourRanked.length - 1] : null
+
   // non-tilt streak: consecutive trades with no FOMO/greed/revenge tag (current + best)
   let ntCur = 0, ntBest = 0
   for (const t of sorted) {
@@ -89,7 +121,8 @@ export function computeStats(trades) {
     maxDD, currentStreak, bestWin, worstLoss, equity, daily, activeDays,
     grossProfit, grossLoss, nonTiltStreak: ntCur, bestNonTilt: ntBest,
     reasonsWin: toReasonArr(reasonsWin), reasonsLoss: toReasonArr(reasonsLoss),
-    byEmotion: groupPnl('emotion'), bySetup: groupPnl('setup'), byHour
+    byEmotion: groupPnl('emotion'), bySetup: groupPnl('setup'), byHour,
+    byHourDay, bestHour, worstHour
   }
 }
 

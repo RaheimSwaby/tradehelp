@@ -22,6 +22,11 @@ const api = {
   getReviews: () => ipcRenderer.invoke('reviews:get'),
   setReview: (period, text) => ipcRenderer.invoke('reviews:set', period, text),
 
+  listPlaybook: () => ipcRenderer.invoke('playbook:list'),
+  addPlaybookEntry: (e) => ipcRenderer.invoke('playbook:add', e),
+  updatePlaybookEntry: (e) => ipcRenderer.invoke('playbook:update', e),
+  deletePlaybookEntry: (id) => ipcRenderer.invoke('playbook:delete', id),
+
   getSettings: () => ipcRenderer.invoke('settings:get'),
   setSettings: (s) => ipcRenderer.invoke('settings:set', s),
 

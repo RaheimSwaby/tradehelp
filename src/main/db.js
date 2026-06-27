@@ -44,6 +44,17 @@ export function initDb() {
     CREATE TABLE IF NOT EXISTS reviews (
       period TEXT PRIMARY KEY, text TEXT, updatedAt TEXT
     );
+    CREATE TABLE IF NOT EXISTS playbook (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT DEFAULT '',
+      criteria TEXT DEFAULT '',
+      invalidation TEXT DEFAULT '',
+      targets TEXT DEFAULT '',
+      notes TEXT DEFAULT '',
+      createdAt TEXT,
+      updatedAt TEXT
+    );
   `)
 
   // Migrate older DBs that predate columns added above.
@@ -292,6 +303,53 @@ export function restoreData(data) {
   })
   tx(data || {})
   return { trades: listTrades(), goals: getGoals(), reviews: getReviews(), settings: getSettings() }
+}
+
+// ───── Playbook ─────
+
+export function listPlaybook() {
+  return db.prepare('SELECT * FROM playbook ORDER BY name ASC').all()
+}
+
+export function addPlaybookEntry(e) {
+  const row = {
+    id: randomUUID(),
+    name: String(e.name || '').trim(),
+    description: String(e.description || ''),
+    criteria: String(e.criteria || ''),
+    invalidation: String(e.invalidation || ''),
+    targets: String(e.targets || ''),
+    notes: String(e.notes || ''),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  }
+  db.prepare(`INSERT INTO playbook
+    (id, name, description, criteria, invalidation, targets, notes, createdAt, updatedAt)
+    VALUES (@id,@name,@description,@criteria,@invalidation,@targets,@notes,@createdAt,@updatedAt)
+  `).run(row)
+  return listPlaybook()
+}
+
+export function updatePlaybookEntry(e) {
+  db.prepare(`UPDATE playbook SET
+    name=@name, description=@description, criteria=@criteria,
+    invalidation=@invalidation, targets=@targets, notes=@notes, updatedAt=@updatedAt
+    WHERE id=@id`).run({
+    id: String(e.id),
+    name: String(e.name || '').trim(),
+    description: String(e.description || ''),
+    criteria: String(e.criteria || ''),
+    invalidation: String(e.invalidation || ''),
+    targets: String(e.targets || ''),
+    notes: String(e.notes || ''),
+    updatedAt: new Date().toISOString(),
+  })
+  return listPlaybook()
+}
+
+export function deletePlaybookEntry(id) {
+  db.prepare('DELETE FROM playbook WHERE id = ?').run(String(id))
+  return listPlaybook()
 }
 
 // Daily snapshot of the SQLite file into userData/backups, keeping the last 7.

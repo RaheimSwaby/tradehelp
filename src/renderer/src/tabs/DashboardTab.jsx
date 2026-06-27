@@ -1,9 +1,131 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, ReferenceLine, Tooltip, Cell } from 'recharts'
 import { T, mono } from '../theme.js'
 import { fmt$, fmtN } from '../utils.js'
 import { Stat, Panel, EmptyChart } from '../components/Shared.jsx'
 import { PnlCalendar } from './JournalTab.jsx'
+
+const HMAP_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
+function heatColor(wr, total) {
+  if (!total || total < 2) return { bg: 'transparent', border: T.line, glow: 'none', text: T.faint }
+  if (wr >= 80) return { bg: '#ff4500', border: '#ff6a33', glow: '0 0 12px 3px rgba(255,80,0,0.65)', text: '#fff' }
+  if (wr >= 70) return { bg: '#dc2626', border: '#ef4444', glow: '0 0 8px 2px rgba(220,38,38,0.5)', text: '#fff' }
+  if (wr >= 60) return { bg: '#c2410c', border: '#ea580c', glow: '0 0 6px 1px rgba(194,65,12,0.4)', text: '#fff' }
+  if (wr >= 50) return { bg: '#b45309', border: '#d97706', glow: 'none', text: '#fde68a' }
+  if (wr >= 38) return { bg: '#1e3a5f', border: '#2563eb', glow: 'none', text: '#93c5fd' }
+  return { bg: '#0f1f38', border: '#1e3a5f', glow: 'none', text: '#60a5fa' }
+}
+
+function HeatMap({ stats }) {
+  const [hovered, setHovered] = useState(null)
+  const { byHourDay = {}, bestHour, worstHour } = stats
+
+  const allHours = Object.keys(byHourDay).map((k) => parseInt(k.split('-')[1], 10))
+  const minH = allHours.length ? Math.min(...allHours) : 9
+  const maxH = allHours.length ? Math.max(...allHours) : 16
+  const hours = Array.from({ length: maxH - minH + 1 }, (_, i) => String(minH + i).padStart(2, '0'))
+  const activeDays = HMAP_DAYS.filter((d) => hours.some((h) => byHourDay[`${d}-${h}`]))
+  const days = activeDays.length ? activeDays : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
+
+  const fmt12 = (h) => { const n = parseInt(h, 10); return n === 0 ? '12am' : n < 12 ? `${n}am` : n === 12 ? '12pm' : `${n - 12}pm` }
+
+  const hasData = Object.keys(byHourDay).length > 0
+
+  return (
+    <Panel title="Performance heat map">
+      {/* Advisory */}
+      {bestHour && (
+        <div className="flex flex-wrap gap-3 mb-4 text-xs">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg" style={{ background: 'rgba(255,69,0,0.12)', border: '1px solid rgba(255,69,0,0.3)', color: '#ff6a33' }}>
+            🔥 Best: {fmt12(bestHour.h)}–{fmt12(String(parseInt(bestHour.h, 10) + 1).padStart(2, '0'))} · {fmtN(bestHour.wr, 0)}% WR across {bestHour.total} trades
+          </div>
+          {worstHour && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg" style={{ background: 'rgba(30,58,95,0.3)', border: '1px solid rgba(96,165,250,0.2)', color: '#93c5fd' }}>
+              ❄️ Avoid: {fmt12(worstHour.h)} · {fmtN(worstHour.wr, 0)}% WR
+            </div>
+          )}
+        </div>
+      )}
+
+      {!hasData ? (
+        <div className="py-8 text-center text-xs" style={{ color: T.faint }}>Log trades with entry times to see your heat map.</div>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ borderCollapse: 'separate', borderSpacing: 4, minWidth: 'max-content' }}>
+            <thead>
+              <tr>
+                <th style={{ width: 36 }} />
+                {hours.map((h) => (
+                  <th key={h} style={{ fontSize: 10, color: T.faint, fontWeight: 400, textAlign: 'center', paddingBottom: 4, minWidth: 40 }}>{fmt12(h)}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {days.map((day) => (
+                <tr key={day}>
+                  <td style={{ fontSize: 11, color: T.dim, paddingRight: 6, textAlign: 'right', whiteSpace: 'nowrap' }}>{day}</td>
+                  {hours.map((h) => {
+                    const cell = byHourDay[`${day}-${h}`]
+                    const total = cell?.total || 0
+                    const wr = total ? (cell.wins / total) * 100 : 0
+                    const c = heatColor(wr, total)
+                    const key = `${day}-${h}`
+                    const isHov = hovered === key
+                    return (
+                      <td key={h} style={{ padding: 0 }}>
+                        <div
+                          onMouseEnter={() => setHovered(key)}
+                          onMouseLeave={() => setHovered(null)}
+                          style={{
+                            width: 40, height: 32, borderRadius: 5,
+                            background: c.bg,
+                            border: `1px solid ${isHov ? T.accent : c.border}`,
+                            boxShadow: isHov ? `0 0 0 1px ${T.accent}` : c.glow,
+                            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                            cursor: total >= 2 ? 'default' : 'default',
+                            transition: 'box-shadow .15s',
+                            position: 'relative'
+                          }}
+                        >
+                          {total >= 2 && (
+                            <span style={{ fontSize: 10, fontWeight: 600, color: c.text, lineHeight: 1 }}>{Math.round(wr)}%</span>
+                          )}
+                          {isHov && total > 0 && (
+                            <div style={{
+                              position: 'absolute', bottom: 'calc(100% + 6px)', left: '50%', transform: 'translateX(-50%)',
+                              background: T.surface2, border: `1px solid ${T.line}`, borderRadius: 6,
+                              padding: '5px 8px', zIndex: 10, whiteSpace: 'nowrap', fontSize: 11, color: T.text,
+                              pointerEvents: 'none'
+                            }}>
+                              <div style={{ color: c.bg === 'transparent' ? T.dim : c.bg, fontWeight: 600 }}>{Math.round(wr)}% win rate</div>
+                              <div style={{ color: T.dim }}>{total} trade{total !== 1 ? 's' : ''} · {fmt$(cell.pnl)}</div>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    )
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {/* Legend */}
+          <div className="flex items-center gap-3 mt-3 text-xs" style={{ color: T.faint }}>
+            <span>Cold</span>
+            {[['#0f1f38', '<40%'], ['#1e3a5f', '40%'], ['#b45309', '50%'], ['#c2410c', '60%'], ['#dc2626', '70%'], ['#ff4500', '80%+']].map(([bg, label]) => (
+              <span key={label} className="flex items-center gap-1">
+                <span style={{ display: 'inline-block', width: 12, height: 12, borderRadius: 3, background: bg }} />
+                {label}
+              </span>
+            ))}
+            <span>Hot 🔥</span>
+          </div>
+        </div>
+      )}
+    </Panel>
+  )
+}
 
 /* ───────── dashboard ───────── */
 export function Dashboard({ stats, trades }) {
@@ -50,6 +172,8 @@ export function Dashboard({ stats, trades }) {
           </ResponsiveContainer>
         )}
       </Panel>
+
+      <HeatMap stats={stats} />
     </div>
   )
 }

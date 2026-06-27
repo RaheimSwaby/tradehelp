@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react'
 import {
   BookOpen, LayoutDashboard, Brain, Target, Bot, Settings as SettingsIcon,
-  TrendingUp, Zap, Building2, ClipboardList, Gauge, ScanSearch, Play
+  TrendingUp, Zap, Building2, ClipboardList, Gauge, ScanSearch, Play, BookMarked
 } from 'lucide-react'
 import { applyTheme, T, mono } from './theme.js'
 import { fmt$, fmtN, parseRules, IMPACT_RANK, ALERT_LEADS, GATE_CONFIGURED, isNewerVersion } from './utils.js'
@@ -17,6 +17,7 @@ import { Goals } from './tabs/GoalsTab.jsx'
 import { Reviews } from './tabs/ReviewsTab.jsx'
 import { Coach } from './tabs/CoachTab.jsx'
 import { Patterns } from './tabs/PatternsTab.jsx'
+import { PlaybookTab } from './tabs/PlaybookTab.jsx'
 import { PropFirm } from './tabs/PropFirmTab.jsx'
 import { TradeModeTab, Preflight, LiveBanner, Lockout } from './tabs/TradeModeTab.jsx'
 import { TrialBanner, Paywall, SettingsTab } from './tabs/SettingsTab.jsx'
@@ -47,6 +48,7 @@ export default function App() {
   const [whatsNew, setWhatsNew] = useState(null)
   const wnRef = useRef(false)
   const [updateAvail, setUpdateAvail] = useState(null)
+  const [playbook, setPlaybook] = useState([])
 
   const hasApi = typeof window !== 'undefined' && window.api
 
@@ -58,6 +60,7 @@ export default function App() {
       setReviews(await window.api.getReviews())
       setSettings(await window.api.getSettings())
       if (window.api.getLicense) setLicense(await window.api.getLicense())
+      if (window.api.listPlaybook) setPlaybook(await window.api.listPlaybook())
       setReady(true)
     })()
   }, [hasApi])
@@ -118,6 +121,10 @@ export default function App() {
     return []
   }, [settings])
   async function savePropFirmAccounts(arr) { await saveSettings({ propFirmAccounts: JSON.stringify(arr) }) }
+
+  async function addPlaybookEntry(e) { if (hasApi && window.api.addPlaybookEntry) setPlaybook(await window.api.addPlaybookEntry(e)) }
+  async function updatePlaybookEntry(e) { if (hasApi && window.api.updatePlaybookEntry) setPlaybook(await window.api.updatePlaybookEntry(e)) }
+  async function deletePlaybookEntry(id) { if (hasApi && window.api.deletePlaybookEntry) setPlaybook(await window.api.deletePlaybookEntry(id)) }
 
   // ── Trade Mode derived state ──
   const rules = useMemo(() => parseRules(settings), [settings])
@@ -198,6 +205,7 @@ export default function App() {
     ['reviews', 'Reviews', ClipboardList],
     ['coach', 'AI Coach', Bot],
     ['patterns', 'Patterns', ScanSearch],
+    ['playbook', 'Playbook', BookMarked],
     ['settings', 'Settings', SettingsIcon]
   ]
 
@@ -262,6 +270,7 @@ export default function App() {
             {tab === 'reviews' && <Reviews trades={trades} reviews={reviews} onSave={saveReview} />}
             {tab === 'coach' && <Coach trades={trades} stats={stats} settings={settings} events={events} now={now} />}
             {tab === 'patterns' && <Patterns trades={trades} />}
+            {tab === 'playbook' && <PlaybookTab entries={playbook} trades={trades} onAdd={addPlaybookEntry} onUpdate={updatePlaybookEntry} onDelete={deletePlaybookEntry} />}
             {tab === 'settings' && <SettingsTab settings={settings} onSave={saveSettings} license={license} onLicenseChange={refreshLicense} onReload={reloadAll} />}
           </>
         )}

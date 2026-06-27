@@ -88,6 +88,11 @@ function registerIpc() {
   ipcMain.handle('reviews:get', () => db.getReviews())
   ipcMain.handle('reviews:set', (_e, period, text) => db.setReview(period, text))
 
+  ipcMain.handle('playbook:list', () => db.listPlaybook())
+  ipcMain.handle('playbook:add', (_e, entry) => db.addPlaybookEntry(entry))
+  ipcMain.handle('playbook:update', (_e, entry) => db.updatePlaybookEntry(entry))
+  ipcMain.handle('playbook:delete', (_e, id) => db.deletePlaybookEntry(id))
+
   ipcMain.handle('license:status', () => license.status(db))
   ipcMain.handle('license:activate', (_e, key) => license.activate(db, key))
   ipcMain.handle('license:deactivate', () => license.deactivate(db))
