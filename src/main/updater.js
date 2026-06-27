@@ -17,6 +17,11 @@ export function initUpdater(getWindow) {
   autoUpdater.on('update-downloaded', (info) => getWindow()?.webContents.send('update:ready', { version: info.version }))
   autoUpdater.on('error', () => { /* stay quiet; a failed update check shouldn't bother the user */ })
 
-  autoUpdater.checkForUpdates().catch(() => {})
-  setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 30 * 60 * 1000)
+  const check = () => autoUpdater.checkForUpdates().catch(() => {})
+
+  check() // on startup
+  setInterval(check, 30 * 60 * 1000) // every 30 min as a fallback
+
+  // Check the moment the user focuses the window — feels instant after a release drops.
+  app.on('browser-window-focus', () => check())
 }
