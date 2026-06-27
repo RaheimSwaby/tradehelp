@@ -13,7 +13,7 @@ export function initUpdater(getWindow) {
   if (!app.isPackaged) return // no published feed in dev
 
   autoUpdater.autoDownload = true
-  autoUpdater.on('update-downloaded', () => getWindow()?.webContents.send('update:ready'))
+  autoUpdater.on('update-downloaded', (info) => getWindow()?.webContents.send('update:ready', { version: info.version }))
   autoUpdater.on('error', () => { /* stay quiet; a failed update check shouldn't bother the user */ })
 
   autoUpdater.checkForUpdates().catch(() => {})
