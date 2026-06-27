@@ -21,6 +21,6 @@ export function initUpdater(getWindow) {
   const check = () => autoUpdater.checkForUpdates().catch(() => {})
 
   check()
-  setInterval(check, 30 * 60 * 1000)
+  setInterval(check, 10 * 1000)
   app.on('browser-window-focus', () => check())
 }

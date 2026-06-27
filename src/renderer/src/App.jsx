@@ -98,8 +98,9 @@ export default function App() {
       } catch {}
     }
     check()
+    const pollId = setInterval(check, 10 * 1000)
     window.addEventListener('focus', check)
-    return () => { live = false; window.removeEventListener('focus', check) }
+    return () => { live = false; clearInterval(pollId); window.removeEventListener('focus', check) }
   }, [hasApi])
 
   const stats = useMemo(() => computeStats(trades), [trades])
