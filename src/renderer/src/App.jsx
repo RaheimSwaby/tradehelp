@@ -23,7 +23,7 @@ import { PropFirm } from './tabs/PropFirmTab.jsx'
 import { TradeModeTab, Preflight, LiveBanner, Lockout } from './tabs/TradeModeTab.jsx'
 import { TrialBanner, Paywall, SettingsTab } from './tabs/SettingsTab.jsx'
 import { Ticker } from './widgets/Ticker.jsx'
-import { EventBanner } from './widgets/EventBanner.jsx'
+import { EventBanner, FloatingEvents } from './widgets/EventBanner.jsx'
 import { UpdateBanner } from './widgets/UpdateBanner.jsx'
 import { UpdateAvailableBanner } from './widgets/UpdateAvailableBanner.jsx'
 
@@ -299,6 +299,7 @@ export default function App() {
       {tradeMode && lossHit && !lockoutDismissed && (
         <Lockout net={todayNet} maxLoss={maxLoss} onEnd={endSession} onDismiss={() => setLockoutDismissed(true)} />
       )}
+      {tradeMode && eventsEnabled && <FloatingEvents events={events} now={now} leadMin={parseInt(settings?.eventsLeadMin) || 15} />}
       {toast && <AchievementToast a={toast} onClose={() => setToast(null)} />}
       {updateReady && <UpdateBanner info={updateReady} onInstall={() => window.api.installUpdate()} />}
       {whatsNew && <WhatsNew info={whatsNew} onClose={() => setWhatsNew(null)} />}
