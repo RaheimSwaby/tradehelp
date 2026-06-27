@@ -6,6 +6,7 @@ import {
 import { applyTheme, T, mono } from './theme.js'
 import { fmt$, fmtN, parseRules, IMPACT_RANK, ALERT_LEADS, GATE_CONFIGURED, isNewerVersion } from './utils.js'
 import { computeStats, computeAchievements } from './stats.js'
+import { RELEASE_NOTES } from './releaseNotes.js'
 import { Readout } from './components/Shared.jsx'
 import { NotesModal } from './components/NotesModal.jsx'
 import { WhatsNew } from './components/WhatsNew.jsx'
@@ -72,8 +73,9 @@ export default function App() {
       const v = await window.api.appVersion()
       const last = settings.lastSeenVersion
       if (last && last !== v) {
-        const r = await window.api.releaseNotes().catch(() => null)
-        setWhatsNew({ version: v, notes: r?.notes || '' })
+        const bundled = RELEASE_NOTES[v] || ''
+        const r = bundled ? null : await window.api.releaseNotes().catch(() => null)
+        setWhatsNew({ version: v, notes: bundled || r?.notes || '' })
       }
       if (last !== v) window.api.setSettings({ lastSeenVersion: v })
     })()
