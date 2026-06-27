@@ -48,11 +48,10 @@ export function FloatingEvents({ events, now, leadMin = 15 }) {
   const [collapsed, setCollapsed] = useState(false)
   const dot = (impact) => impact === 'High' ? T.down : impact === 'Medium' ? T.accent : T.faint
   const upcoming = (events || []).filter((e) => e.ts > now).slice(0, 5)
-  if (upcoming.length === 0) return null
 
   const next = upcoming[0]
   const soon = (e) => e.ts - now <= leadMin * 60000
-  const nextSoon = soon(next)
+  const nextSoon = next ? soon(next) : false
 
   if (collapsed) {
     return (
@@ -63,8 +62,14 @@ export function FloatingEvents({ events, now, leadMin = 15 }) {
         style={{ background: T.surface, border: `1px solid ${nextSoon ? T.down : T.accent}`, color: nextSoon ? T.down : T.accent, boxShadow: '0 10px 30px rgba(0,0,0,0.45)', ...mono }}
       >
         <CalendarClock size={14} />
-        <span style={{ color: T.dim }} className="max-w-[160px] truncate">{next.title}</span>
-        <span>{untilLabel(next.ts, now)}</span>
+        {next ? (
+          <>
+            <span style={{ color: T.dim }} className="max-w-[160px] truncate">{next.title}</span>
+            <span>{untilLabel(next.ts, now)}</span>
+          </>
+        ) : (
+          <span style={{ color: T.dim }}>News</span>
+        )}
         <ChevronUp size={14} style={{ color: T.faint }} />
       </button>
     )
@@ -73,7 +78,7 @@ export function FloatingEvents({ events, now, leadMin = 15 }) {
   return (
     <div
       className="fixed bottom-4 right-4 z-[60] w-72 rounded-xl overflow-hidden"
-      style={{ background: T.surface, border: `1px solid ${T.line}`, boxShadow: '0 12px 34px rgba(0,0,0,0.5)' }}
+      style={{ background: T.surface, border: `1px solid ${nextSoon ? T.down : T.accent}`, boxShadow: '0 12px 34px rgba(0,0,0,0.5)' }}
     >
       <div className="flex items-center gap-2 px-3 py-2" style={{ borderBottom: `1px solid ${T.line}`, background: T.surface2 }}>
         <CalendarClock size={14} style={{ color: T.accent }} />
@@ -83,7 +88,9 @@ export function FloatingEvents({ events, now, leadMin = 15 }) {
         </button>
       </div>
       <div className="px-3 py-2 space-y-1.5">
-        {upcoming.map((e, i) => {
+        {upcoming.length === 0 ? (
+          <p className="text-xs py-1" style={{ color: T.dim }}>No upcoming news on the calendar. You're clear to trade.</p>
+        ) : upcoming.map((e, i) => {
           const isSoon = soon(e)
           return (
             <div key={i} className="flex items-center gap-2 text-xs rounded px-1.5 py-1" style={isSoon ? { background: 'rgba(251,113,133,0.10)' } : undefined}>
