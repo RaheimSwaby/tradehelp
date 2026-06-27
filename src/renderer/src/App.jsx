@@ -50,6 +50,7 @@ export default function App() {
   const [updateReady, setUpdateReady] = useState(null)
   const [updateAvail, setUpdateAvail] = useState(null)
   const [playbook, setPlaybook] = useState([])
+  const [dayLogs, setDayLogs] = useState([])
 
   const hasApi = typeof window !== 'undefined' && window.api
 
@@ -62,6 +63,7 @@ export default function App() {
       setSettings(await window.api.getSettings())
       if (window.api.getLicense) setLicense(await window.api.getLicense())
       if (window.api.listPlaybook) setPlaybook(await window.api.listPlaybook())
+      if (window.api.listDayLogs) setDayLogs(await window.api.listDayLogs())
       setReady(true)
     })()
   }, [hasApi])
@@ -134,6 +136,9 @@ export default function App() {
   async function addPlaybookEntry(e) { if (hasApi && window.api.addPlaybookEntry) setPlaybook(await window.api.addPlaybookEntry(e)) }
   async function updatePlaybookEntry(e) { if (hasApi && window.api.updatePlaybookEntry) setPlaybook(await window.api.updatePlaybookEntry(e)) }
   async function deletePlaybookEntry(id) { if (hasApi && window.api.deletePlaybookEntry) setPlaybook(await window.api.deletePlaybookEntry(id)) }
+
+  async function addDayLog(e) { if (hasApi && window.api.addDayLog) setDayLogs(await window.api.addDayLog(e)) }
+  async function deleteDayLog(id) { if (hasApi && window.api.deleteDayLog) setDayLogs(await window.api.deleteDayLog(id)) }
 
   // ── Trade Mode derived state ──
   const rules = useMemo(() => parseRules(settings), [settings])
@@ -268,7 +273,7 @@ export default function App() {
           <Paywall onActivated={refreshLicense} />
         ) : (
           <>
-            {tab === 'journal' && <Journal trades={trades} onAdd={addTrade} onUpdate={updateTrade} onRemove={removeTrade} onNotes={setNotesView} onImport={importTrades} accounts={propFirmAccounts} />}
+            {tab === 'journal' && <Journal trades={trades} onAdd={addTrade} onUpdate={updateTrade} onRemove={removeTrade} onNotes={setNotesView} onImport={importTrades} accounts={propFirmAccounts} settings={settings} onSaveSettings={saveSettings} dayLogs={dayLogs} onAddDayLog={addDayLog} onDeleteDayLog={deleteDayLog} />}
             {tab === 'trade' && <TradeModeTab settings={settings} onSave={saveSettings} rules={rules} live={tradeMode} todayNet={todayNet} todayCount={todayTrades.length} weekNet={weekNet} goal={dailyGoal} maxLoss={maxLoss} onStart={startDay} onEnd={endSession} />}
             {tab === 'propfirm' && <PropFirm trades={trades} accounts={propFirmAccounts} onSave={savePropFirmAccounts} />}
             {tab === 'dashboard' && <Dashboard stats={stats} trades={trades} />}

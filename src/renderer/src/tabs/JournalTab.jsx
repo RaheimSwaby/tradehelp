@@ -1,13 +1,24 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react'
-import { Plus, Trash2, Upload, Paperclip, X, Pencil, ImagePlus, ChevronLeft, ChevronRight, Search } from 'lucide-react'
+import { Plus, Trash2, Upload, Paperclip, X, Pencil, ImagePlus, ChevronLeft, ChevronRight, Search, CalendarOff, Check, Coffee } from 'lucide-react'
 import { T, mono, inputStyle } from '../theme.js'
 import { fmt$, fmtN, nowLocalInput, parseLocal, holdMs, fmtDuration, EMOTIONS, SETUPS, WIN_REASONS, LOSS_REASONS, SELF_GRADES, pad2, MONTHS, downscale, fileToDataUrl } from '../utils.js'
 import { Field, Panel, GradeChip } from '../components/Shared.jsx'
 import { ImportModal } from '../widgets/ImportModal.jsx'
 import { AnnotateModal } from '../components/AnnotateModal.jsx'
 
+const NO_TRADE_REASONS = [
+  'Followed my rules — no clean setup',
+  'No setups / quiet market',
+  'Missed it — hesitated or distracted',
+  'Was unavailable / busy',
+  'Rules kept me out (news, lockout)',
+  'Other'
+]
+
+function parseList(v) { try { const a = JSON.parse(v || '[]'); return Array.isArray(a) ? a : [] } catch { return [] } }
+
 /* ───────── journal ───────── */
-export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, accounts = [] }) {
+export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, accounts = [], settings, onSaveSettings, dayLogs = [], onAddDayLog, onDeleteDayLog }) {
   const blank = { symbol: '', direction: 'Long', entry: '', exit: '', stop: '', target: '', size: '', riskAmount: '', pnl: '', fees: '', emotion: 'Neutral', setup: 'Pullback', notes: '', entryTime: nowLocalInput(), exitTime: nowLocalInput(), reason: '', account: '', selfSetup: '', selfExec: '' }
   const [f, setF] = useState(blank)
   const [images, setImages] = useState([])
@@ -17,6 +28,36 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
   const [query, setQuery] = useState('')
   const [outcome, setOutcome] = useState('all') // all | win | loss
   const fileRef = useRef(null)
+
+  // Simple journal mode + custom lists are persisted in settings.
+  const simple = settings?.simpleJournal === 'true'
+  // Editing an existing trade always shows the full form, even in simple mode.
+  const compact = simple && !editing
+  const customEmotions = useMemo(() => parseList(settings?.customEmotions), [settings])
+  const customSetups = useMemo(() => parseList(settings?.customSetups), [settings])
+  const allEmotions = useMemo(() => [...EMOTIONS, ...customEmotions], [customEmotions])
+  const [addingEmotion, setAddingEmotion] = useState(false)
+  const [newEmotion, setNewEmotion] = useState('')
+  const [addingSetup, setAddingSetup] = useState(false)
+  const [newSetup, setNewSetup] = useState('')
+  const [noTradeOpen, setNoTradeOpen] = useState(false)
+
+  function toggleSimple() { onSaveSettings?.({ simpleJournal: simple ? 'false' : 'true' }) }
+
+  function addEmotion() {
+    const v = newEmotion.trim()
+    if (!v) return
+    if (!allEmotions.includes(v)) onSaveSettings?.({ customEmotions: JSON.stringify([...customEmotions, v]) })
+    setF((p) => ({ ...p, emotion: v }))
+    setNewEmotion(''); setAddingEmotion(false)
+  }
+  function addSetup() {
+    const v = newSetup.trim()
+    if (!v) return
+    if (![...SETUPS, ...customSetups].includes(v)) onSaveSettings?.({ customSetups: JSON.stringify([...customSetups, v]) })
+    setF((p) => ({ ...p, setup: v }))
+    setNewSetup(''); setAddingSetup(false)
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -54,12 +95,13 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
   function cancelEdit() { setEditing(null); setF(blank) }
   const set = (k) => (e) => setF((p) => ({ ...p, [k]: e.target.value }))
 
-  // Setup suggestions = presets + any custom setups already used. Free-text, so you can type your own.
+  // Setup options = presets + saved custom setups + any already used on a trade.
   const setupOptions = useMemo(() => {
     const seen = new Set(SETUPS)
+    for (const s of customSetups) seen.add(s)
     for (const t of trades) if (t.setup) seen.add(t.setup)
     return [...seen]
-  }, [trades])
+  }, [trades, customSetups])
 
   const derivedPnl = useMemo(() => {
     const en = parseFloat(f.entry), ex = parseFloat(f.exit), sz = parseFloat(f.size)
@@ -119,7 +161,8 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
       pnl: isNaN(pnl) ? 0 : pnl, fees, rr: rr || 0,
       emotion: f.emotion, setup: f.setup.trim(), notes: f.notes.trim(),
       entryTime: f.entryTime ? f.entryTime.replace('T', ' ') : '',
-      exitTime: f.exitTime ? f.exitTime.replace('T', ' ') : '',
+      // In simple mode there's no separate exit time — mirror the entry time so the calendar/heatmap still place it.
+      exitTime: (compact ? f.entryTime : f.exitTime) ? (compact ? f.entryTime : f.exitTime).replace('T', ' ') : '',
       reason: f.reason, account: f.account, selfSetup: f.selfSetup, selfExec: f.selfExec
     }
     if (editing) {
@@ -139,29 +182,65 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
         <div className="flex items-center gap-2 mb-3">
           {editing ? <Pencil size={16} style={{ color: T.accent }} /> : <Plus size={16} style={{ color: T.accent }} />}
           <h2 className="text-sm font-semibold">{editing ? `Edit trade · ${editing.symbol}` : 'Log a trade'}</h2>
-          {editing && <button type="button" onClick={cancelEdit} className="ml-auto text-xs" style={{ color: T.dim }}>Cancel</button>}
+          {editing
+            ? <button type="button" onClick={cancelEdit} className="ml-auto text-xs" style={{ color: T.dim }}>Cancel</button>
+            : (
+              <button type="button" onClick={toggleSimple} title="Simple journal hides the advanced price/risk fields for a faster log"
+                className="ml-auto flex items-center gap-1.5 text-xs px-2 py-1 rounded-md"
+                style={{ background: simple ? T.accentSoft : T.surface2, color: simple ? T.accent : T.dim, border: `1px solid ${simple ? T.accent : T.line}` }}>
+                <span style={{ width: 9, height: 9, borderRadius: 3, background: simple ? T.accent : 'transparent', border: `1px solid ${simple ? T.accent : T.faint}`, display: 'inline-block' }} />
+                Simple journal
+              </button>
+            )}
         </div>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Symbol"><input style={inputStyle} className={inp} value={f.symbol} onChange={set('symbol')} placeholder="ES, BTC, AAPL" /></Field>
           <Field label="Direction">
             <select style={inputStyle} className={inp} value={f.direction} onChange={set('direction')}><option>Long</option><option>Short</option></select>
           </Field>
-          <Field label="Entry"><input style={inputStyle} className={inp} value={f.entry} onChange={set('entry')} inputMode="decimal" /></Field>
-          <Field label="Exit"><input style={inputStyle} className={inp} value={f.exit} onChange={set('exit')} inputMode="decimal" /></Field>
-          <Field label="Stop"><input style={inputStyle} className={inp} value={f.stop} onChange={set('stop')} inputMode="decimal" /></Field>
-          <Field label="Target"><input style={inputStyle} className={inp} value={f.target} onChange={set('target')} inputMode="decimal" /></Field>
-          <Field label="Size / contracts"><input style={inputStyle} className={inp} value={f.size} onChange={set('size')} inputMode="decimal" /></Field>
-          <Field label="Risk $"><input style={inputStyle} className={inp} value={f.riskAmount} onChange={set('riskAmount')} inputMode="decimal" /></Field>
+          {!compact && <>
+            <Field label="Entry"><input style={inputStyle} className={inp} value={f.entry} onChange={set('entry')} inputMode="decimal" /></Field>
+            <Field label="Exit"><input style={inputStyle} className={inp} value={f.exit} onChange={set('exit')} inputMode="decimal" /></Field>
+            <Field label="Stop"><input style={inputStyle} className={inp} value={f.stop} onChange={set('stop')} inputMode="decimal" /></Field>
+            <Field label="Target"><input style={inputStyle} className={inp} value={f.target} onChange={set('target')} inputMode="decimal" /></Field>
+            <Field label="Size / contracts"><input style={inputStyle} className={inp} value={f.size} onChange={set('size')} inputMode="decimal" /></Field>
+            <Field label="Risk $"><input style={inputStyle} className={inp} value={f.riskAmount} onChange={set('riskAmount')} inputMode="decimal" /></Field>
+          </>}
         </div>
         <div className="grid grid-cols-2 gap-3 mt-3">
-          <Field label="Entry time"><input type="datetime-local" style={inputStyle} className={inp} value={f.entryTime} onChange={set('entryTime')} /></Field>
-          <Field label="Exit time"><input type="datetime-local" style={inputStyle} className={inp} value={f.exitTime} onChange={set('exitTime')} /></Field>
+          <Field label={compact ? 'Date & time' : 'Entry time'}><input type="datetime-local" style={inputStyle} className={inp} value={f.entryTime} onChange={set('entryTime')} /></Field>
+          {!compact && <Field label="Exit time"><input type="datetime-local" style={inputStyle} className={inp} value={f.exitTime} onChange={set('exitTime')} /></Field>}
         </div>
         <div className="grid grid-cols-2 gap-3 mt-3">
-          <Field label="Emotion"><select style={inputStyle} className={inp} value={f.emotion} onChange={set('emotion')}>{EMOTIONS.map((e) => <option key={e}>{e}</option>)}</select></Field>
+          <Field label="Emotion">
+            <div className="flex gap-1.5">
+              <select style={inputStyle} className={inp} value={f.emotion} onChange={set('emotion')}>
+                {f.emotion && !allEmotions.includes(f.emotion) && <option value={f.emotion}>{f.emotion}</option>}
+                {allEmotions.map((e) => <option key={e}>{e}</option>)}
+              </select>
+              <button type="button" onClick={() => { setAddingEmotion((v) => !v); setAddingSetup(false) }} title="Add a custom emotion" className="shrink-0 rounded px-2" style={{ background: T.surface2, border: `1px solid ${T.line}`, color: T.accent }}><Plus size={14} /></button>
+            </div>
+            {addingEmotion && (
+              <div className="flex gap-1.5 mt-1.5">
+                <input autoFocus style={inputStyle} className={inp} value={newEmotion} onChange={(e) => setNewEmotion(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addEmotion() } if (e.key === 'Escape') setAddingEmotion(false) }} placeholder="New emotion" />
+                <button type="button" onClick={addEmotion} className="shrink-0 rounded px-2" style={{ background: T.accent, color: '#1A1306' }}><Check size={14} /></button>
+              </div>
+            )}
+          </Field>
           <Field label="Setup">
-            <input style={inputStyle} className={inp} value={f.setup} onChange={set('setup')} list="setup-options" placeholder="Pick or type your own" />
-            <datalist id="setup-options">{setupOptions.map((s) => <option key={s} value={s} />)}</datalist>
+            <div className="flex gap-1.5">
+              <select style={inputStyle} className={inp} value={f.setup} onChange={set('setup')}>
+                {!setupOptions.includes(f.setup) && f.setup && <option value={f.setup}>{f.setup}</option>}
+                {setupOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <button type="button" onClick={() => { setAddingSetup((v) => !v); setAddingEmotion(false) }} title="Add a custom setup" className="shrink-0 rounded px-2" style={{ background: T.surface2, border: `1px solid ${T.line}`, color: T.accent }}><Plus size={14} /></button>
+            </div>
+            {addingSetup && (
+              <div className="flex gap-1.5 mt-1.5">
+                <input autoFocus style={inputStyle} className={inp} value={newSetup} onChange={(e) => setNewSetup(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSetup() } if (e.key === 'Escape') setAddingSetup(false) }} placeholder="New setup" />
+                <button type="button" onClick={addSetup} className="shrink-0 rounded px-2" style={{ background: T.accent, color: '#1A1306' }}><Check size={14} /></button>
+              </div>
+            )}
           </Field>
         </div>
         <div className="mt-3">
@@ -172,21 +251,23 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
             </select>
           </Field>
         </div>
-        <div className="grid grid-cols-2 gap-3 mt-3">
-          <Field label="Setup grade (self)">
-            <select style={inputStyle} className={inp} value={f.selfSetup} onChange={set('selfSetup')}>
-              <option value="">— ungraded —</option>
-              {SELF_GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
-            </select>
-          </Field>
-          <Field label="Execution grade (self)">
-            <select style={inputStyle} className={inp} value={f.selfExec} onChange={set('selfExec')}>
-              <option value="">— ungraded —</option>
-              {SELF_GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
-            </select>
-          </Field>
-        </div>
-        {accounts.length > 0 && (
+        {!compact && (
+          <div className="grid grid-cols-2 gap-3 mt-3">
+            <Field label="Setup grade (self)">
+              <select style={inputStyle} className={inp} value={f.selfSetup} onChange={set('selfSetup')}>
+                <option value="">— ungraded —</option>
+                {SELF_GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
+              </select>
+            </Field>
+            <Field label="Execution grade (self)">
+              <select style={inputStyle} className={inp} value={f.selfExec} onChange={set('selfExec')}>
+                <option value="">— ungraded —</option>
+                {SELF_GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
+              </select>
+            </Field>
+          </div>
+        )}
+        {!compact && accounts.length > 0 && (
           <div className="mt-3">
             <Field label="Account (for per-account books)">
               <select style={inputStyle} className={inp} value={f.account} onChange={set('account')}>
@@ -196,14 +277,22 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
             </Field>
           </div>
         )}
-        <div className="grid grid-cols-2 gap-3 mt-3">
-          <Field label="P&L $ (before fees)">
-            <input style={inputStyle} className={inp} value={f.pnl} onChange={set('pnl')} inputMode="decimal" placeholder={derivedPnl != null ? `auto: ${fmtN(derivedPnl)}` : '—'} />
-          </Field>
-          <Field label="Fees / commissions $">
-            <input style={inputStyle} className={inp} value={f.fees} onChange={set('fees')} inputMode="decimal" placeholder="0" />
-          </Field>
-        </div>
+        {compact ? (
+          <div className="mt-3">
+            <Field label="P&L $ (net)">
+              <input style={inputStyle} className={inp} value={f.pnl} onChange={set('pnl')} inputMode="decimal" placeholder="e.g. 125 or -40" />
+            </Field>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3 mt-3">
+            <Field label="P&L $ (before fees)">
+              <input style={inputStyle} className={inp} value={f.pnl} onChange={set('pnl')} inputMode="decimal" placeholder={derivedPnl != null ? `auto: ${fmtN(derivedPnl)}` : '—'} />
+            </Field>
+            <Field label="Fees / commissions $">
+              <input style={inputStyle} className={inp} value={f.fees} onChange={set('fees')} inputMode="decimal" placeholder="0" />
+            </Field>
+          </div>
+        )}
         <div className="mt-3">
           <Field label="Notes"><textarea style={inputStyle} className={inp} rows={3} value={f.notes} onChange={set('notes')} placeholder="What did you see? What did you feel?" /></Field>
         </div>
@@ -239,14 +328,39 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
         </div>
         )}
         <div className="flex items-center justify-between mt-3 text-xs" style={{ color: T.dim }}>
-          <span>R:R {derivedRR != null ? `1:${fmtN(derivedRR, 1)}` : '—'}</span>
-          <span>Held {derivedHold != null ? fmtDuration(derivedHold) || '0m' : '—'}</span>
+          {!compact && <span>R:R {derivedRR != null ? `1:${fmtN(derivedRR, 1)}` : '—'}</span>}
+          {!compact && <span>Held {derivedHold != null ? fmtDuration(derivedHold) || '0m' : '—'}</span>}
           <span>Net {effNet != null ? fmt$(effNet) : '—'}</span>
         </div>
         <div className="flex gap-2 mt-3">
           <button type="button" onClick={submit} className="flex-1 rounded-md py-2 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306' }}>{editing ? 'Update trade' : 'Save trade'}</button>
           {editing && <button type="button" onClick={cancelEdit} className="rounded-md px-3 py-2 text-sm" style={{ background: T.surface2, color: T.text, border: `1px solid ${T.line}` }}>Cancel</button>}
         </div>
+
+        {!editing && (
+          <>
+            <button type="button" onClick={() => setNoTradeOpen(true)} className="w-full mt-2 flex items-center justify-center gap-1.5 rounded-md py-2 text-sm" style={{ background: 'transparent', color: T.dim, border: `1px dashed ${T.line}` }}>
+              <Coffee size={14} /> Log a no-trade day
+            </button>
+            {dayLogs.length > 0 && (
+              <div className="mt-3">
+                <div className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: T.dim }}><CalendarOff size={12} /> No-trade days · {dayLogs.length}</div>
+                <div className="space-y-1 max-h-48 overflow-y-auto">
+                  {dayLogs.slice(0, 30).map((d) => (
+                    <div key={d.id} className="flex items-start gap-2 text-xs px-2.5 py-1.5 rounded-lg" style={{ background: T.surface2 }}>
+                      <span style={{ ...mono, color: T.faint }} className="shrink-0">{d.date}</span>
+                      <div className="flex-1 min-w-0">
+                        <div style={{ color: T.text }}>{d.reason}{d.mood ? ` · ${d.mood}` : ''}</div>
+                        {d.note && <div style={{ color: T.dim }} className="truncate">{d.note}</div>}
+                      </div>
+                      <button type="button" onClick={() => onDeleteDayLog?.(d.id)} title="Delete" className="shrink-0" style={{ color: T.faint }}><X size={13} /></button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       <div className="rounded-xl overflow-hidden" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
@@ -323,6 +437,50 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
       </div>
       {importOpen && <ImportModal onClose={() => setImportOpen(false)} onImport={async (rows) => { await onImport(rows); setImportOpen(false) }} />}
       {annotating && <AnnotateModal src={annotating.dataUrl} onClose={() => setAnnotating(null)} onSave={(dataUrl, labels) => { setImages((p) => p.map((im) => (im.tmpId === annotating.tmpId ? { ...im, dataUrl, labels } : im))); setAnnotating(null) }} />}
+      {noTradeOpen && <NoTradeModal emotions={allEmotions} onClose={() => setNoTradeOpen(false)} onSave={async (entry) => { await onAddDayLog?.(entry); setNoTradeOpen(false) }} />}
+    </div>
+  )
+}
+
+/* ───────── no-trade day logger ───────── */
+function NoTradeModal({ emotions = [], onClose, onSave }) {
+  const today = new Date().toISOString().slice(0, 10)
+  const [date, setDate] = useState(today)
+  const [reason, setReason] = useState(NO_TRADE_REASONS[0])
+  const [mood, setMood] = useState('')
+  const [note, setNote] = useState('')
+  const inp = 'w-full rounded px-2 py-1.5 text-sm'
+  return (
+    <div className="fixed inset-0 flex items-center justify-center p-4 z-[70]" style={{ background: 'rgba(0,0,0,0.65)' }} onClick={onClose}>
+      <div className="rounded-2xl w-full max-w-md p-5 space-y-3" style={{ background: T.surface, border: `1px solid ${T.line}` }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-2">
+          <CalendarOff size={16} style={{ color: T.accent }} />
+          <span className="text-sm font-semibold">Log a no-trade day</span>
+          <button type="button" onClick={onClose} className="ml-auto" style={{ color: T.dim }}><X size={16} /></button>
+        </div>
+        <p className="text-xs" style={{ color: T.dim }}>Track the days you sat out — whether you stayed disciplined or missed one. It won't touch your P&L stats.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Date"><input type="date" style={inputStyle} className={inp} value={date} onChange={(e) => setDate(e.target.value)} /></Field>
+          <Field label="Mood (optional)">
+            <select style={inputStyle} className={inp} value={mood} onChange={(e) => setMood(e.target.value)}>
+              <option value="">—</option>
+              {emotions.map((e) => <option key={e}>{e}</option>)}
+            </select>
+          </Field>
+        </div>
+        <Field label="What happened?">
+          <select style={inputStyle} className={inp} value={reason} onChange={(e) => setReason(e.target.value)}>
+            {NO_TRADE_REASONS.map((r) => <option key={r}>{r}</option>)}
+          </select>
+        </Field>
+        <Field label="Note (optional)">
+          <textarea style={inputStyle} className={inp} rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Setup you saw, what you felt, what you'd do differently…" />
+        </Field>
+        <div className="flex gap-2 pt-1">
+          <button type="button" onClick={onClose} className="flex-1 rounded-lg py-2 text-sm" style={{ border: `1px solid ${T.line}`, color: T.dim }}>Cancel</button>
+          <button type="button" onClick={() => date && onSave({ date, reason, mood, note })} disabled={!date} className="flex-1 rounded-lg py-2 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306', opacity: date ? 1 : 0.5 }}>Save</button>
+        </div>
+      </div>
     </div>
   )
 }

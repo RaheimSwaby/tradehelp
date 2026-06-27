@@ -55,6 +55,15 @@ export function initDb() {
       createdAt TEXT,
       updatedAt TEXT
     );
+    CREATE TABLE IF NOT EXISTS day_logs (
+      id TEXT PRIMARY KEY,
+      date TEXT NOT NULL,
+      reason TEXT DEFAULT '',
+      mood TEXT DEFAULT '',
+      note TEXT DEFAULT '',
+      createdAt TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_day_logs_date ON day_logs(date);
   `)
 
   // Migrate older DBs that predate columns added above.
@@ -96,7 +105,11 @@ export function initDb() {
     lastSeenVersion: '',
     breakWeeks: '[]',
     onBreak: 'false',
-    breakSince: ''
+    breakSince: '',
+    // Journal preferences
+    simpleJournal: 'false',
+    customEmotions: '[]',
+    customSetups: '[]'
   }
   const ins = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)')
   for (const [k, v] of Object.entries(defaults)) ins.run(k, String(v))
@@ -197,6 +210,7 @@ const SETTINGS_KEYS = new Set([
   'breakWeeks', 'onBreak', 'breakSince',
   'trialStart', 'licenseKey', 'licenseInstanceId', 'licenseStatus',
   'achievements', 'propFirmAccounts', 'propFirm',
+  'simpleJournal', 'customEmotions', 'customSetups',
 ])
 
 export function setSettings(s) {
@@ -350,6 +364,31 @@ export function updatePlaybookEntry(e) {
 export function deletePlaybookEntry(id) {
   db.prepare('DELETE FROM playbook WHERE id = ?').run(String(id))
   return listPlaybook()
+}
+
+// ───── No-trade day logs ─────
+
+export function listDayLogs() {
+  return db.prepare('SELECT * FROM day_logs ORDER BY date DESC, createdAt DESC').all()
+}
+
+export function addDayLog(e) {
+  const row = {
+    id: randomUUID(),
+    date: String(e.date || '').slice(0, 10),
+    reason: String(e.reason || ''),
+    mood: String(e.mood || ''),
+    note: String(e.note || ''),
+    createdAt: new Date().toISOString(),
+  }
+  db.prepare(`INSERT INTO day_logs (id, date, reason, mood, note, createdAt)
+    VALUES (@id,@date,@reason,@mood,@note,@createdAt)`).run(row)
+  return listDayLogs()
+}
+
+export function deleteDayLog(id) {
+  db.prepare('DELETE FROM day_logs WHERE id = ?').run(String(id))
+  return listDayLogs()
 }
 
 // Daily snapshot of the SQLite file into userData/backups, keeping the last 7.

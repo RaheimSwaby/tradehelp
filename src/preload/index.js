@@ -27,6 +27,10 @@ const api = {
   updatePlaybookEntry: (e) => ipcRenderer.invoke('playbook:update', e),
   deletePlaybookEntry: (id) => ipcRenderer.invoke('playbook:delete', id),
 
+  listDayLogs: () => ipcRenderer.invoke('daylog:list'),
+  addDayLog: (e) => ipcRenderer.invoke('daylog:add', e),
+  deleteDayLog: (id) => ipcRenderer.invoke('daylog:delete', id),
+
   getSettings: () => ipcRenderer.invoke('settings:get'),
   setSettings: (s) => ipcRenderer.invoke('settings:set', s),
 

@@ -93,6 +93,10 @@ function registerIpc() {
   ipcMain.handle('playbook:update', (_e, entry) => db.updatePlaybookEntry(entry))
   ipcMain.handle('playbook:delete', (_e, id) => db.deletePlaybookEntry(id))
 
+  ipcMain.handle('daylog:list', () => db.listDayLogs())
+  ipcMain.handle('daylog:add', (_e, entry) => db.addDayLog(entry))
+  ipcMain.handle('daylog:delete', (_e, id) => db.deleteDayLog(id))
+
   ipcMain.handle('license:status', () => license.status(db))
   ipcMain.handle('license:activate', (_e, key) => license.activate(db, key))
   ipcMain.handle('license:deactivate', () => license.deactivate(db))
