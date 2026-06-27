@@ -84,22 +84,26 @@ export function computeStats(trades) {
     byHourDay[k].pnl += Number(t.pnl) || 0
     if ((Number(t.pnl) || 0) > 0) byHourDay[k].wins++
   }
-  // Roll up to per-hour totals for the advisory line
+  // Roll up to per-hour and per-day totals for the advisory
   const _hourTotals = {}
+  const _dayTotals = {}
   for (const [k, v] of Object.entries(byHourDay)) {
-    const h = k.split('-')[1]
+    const [day, h] = k.split('-')
     if (!_hourTotals[h]) _hourTotals[h] = { wins: 0, total: 0, pnl: 0 }
-    _hourTotals[h].wins += v.wins
-    _hourTotals[h].total += v.total
-    _hourTotals[h].pnl += v.pnl
+    _hourTotals[h].wins += v.wins; _hourTotals[h].total += v.total; _hourTotals[h].pnl += v.pnl
+    if (!_dayTotals[day]) _dayTotals[day] = { wins: 0, total: 0, pnl: 0 }
+    _dayTotals[day].wins += v.wins; _dayTotals[day].total += v.total; _dayTotals[day].pnl += v.pnl
   }
-  // Best/worst individual cell (day-hour combo) for the advisory
-  const _cellRanked = Object.entries(byHourDay)
+  const _rankBy = (map) => Object.entries(map)
     .filter(([, v]) => v.total >= 3)
-    .map(([k, v]) => { const [day, h] = k.split('-'); return { day, h, wr: (v.wins / v.total) * 100, total: v.total, pnl: v.pnl } })
+    .map(([k, v]) => ({ k, wr: (v.wins / v.total) * 100, total: v.total, pnl: v.pnl }))
     .sort((a, b) => b.wr - a.wr)
-  const bestHour = _cellRanked[0] || null
-  const worstHour = _cellRanked.length > 1 ? _cellRanked[_cellRanked.length - 1] : null
+  const _hRanked = _rankBy(_hourTotals)
+  const _dRanked = _rankBy(_dayTotals)
+  const bestHour = _hRanked[0] || null
+  const worstHour = _hRanked.length > 1 ? _hRanked[_hRanked.length - 1] : null
+  const bestDay = _dRanked[0] || null
+  const worstDay = _dRanked.length > 1 ? _dRanked[_dRanked.length - 1] : null
 
   // non-tilt streak: consecutive trades with no FOMO/greed/revenge tag (current + best)
   let ntCur = 0, ntBest = 0
@@ -123,7 +127,7 @@ export function computeStats(trades) {
     grossProfit, grossLoss, nonTiltStreak: ntCur, bestNonTilt: ntBest,
     reasonsWin: toReasonArr(reasonsWin), reasonsLoss: toReasonArr(reasonsLoss),
     byEmotion: groupPnl('emotion'), bySetup: groupPnl('setup'), byHour,
-    byHourDay, bestHour, worstHour
+    byHourDay, bestHour, worstHour, bestDay, worstDay
   }
 }
 

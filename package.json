@@ -1,73 +1,72 @@
-﻿{
-  "name": "tradehelp",
-  "version": "0.21.1",
-  "description": "Local-first trading journal with an offline AI coach (Electron + React + SQLite + Ollama)",
-  "main": "./out/main/index.js",
-  "license": "MIT",
-  "scripts": {
-    "dev": "electron-vite dev",
-    "build": "electron-vite build",
-    "preview": "electron-vite preview",
-    "dist": "electron-vite build && electron-builder",
-    "rebuild": "electron-builder install-app-deps",
-    "postinstall": "electron-builder install-app-deps",
-    "pretest": "npm rebuild better-sqlite3",
-    "test": "vitest run",
-    "posttest": "npm run rebuild",
-    "test:watch": "vitest"
-  },
-  "dependencies": {
-    "better-sqlite3": "^11.3.0",
-    "electron-updater": "^6.8.9",
-    "lucide-react": "^0.460.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "recharts": "^2.13.0"
-  },
-  "devDependencies": {
-    "@tailwindcss/vite": "^4.0.0",
-    "@vitejs/plugin-react": "^4.3.4",
-    "electron": "^33.2.0",
-    "electron-builder": "^25.1.8",
-    "electron-vite": "^2.3.0",
-    "tailwindcss": "^4.0.0",
-    "vite": "^5.4.11",
-    "vitest": "^2.0.0"
-  },
-  "build": {
-    "appId": "com.tradehelp.app",
-    "productName": "TradeHelp",
-    "artifactName": "${productName}-Setup.${ext}",
-    "asar": true,
-    "publish": [
-      {
-        "provider": "github",
-        "owner": "RaheimSwaby",
-        "repo": "tradehelp"
-      }
-    ],
-    "asarUnpack": [
-      "node_modules/better-sqlite3/**"
-    ],
-    "files": [
-      "out/**/*",
-      "package.json"
-    ],
-    "mac": {
-      "category": "public.app-category.finance",
-      "target": "dmg",
-      "icon": "build/icon.png",
-      "identity": null
-    },
-    "win": {
-      "target": "nsis",
-      "icon": "build/icon.ico"
-    },
-    "linux": {
-      "target": "AppImage",
-      "category": "Office",
-      "icon": "build/icon.png"
-    }
-  }
+{
+    "name":  "tradehelp",
+    "version":  "0.21.2",
+    "description":  "Local-first trading journal with an offline AI coach (Electron + React + SQLite + Ollama)",
+    "main":  "./out/main/index.js",
+    "license":  "MIT",
+    "scripts":  {
+                    "dev":  "electron-vite dev",
+                    "build":  "electron-vite build",
+                    "preview":  "electron-vite preview",
+                    "dist":  "electron-vite build \u0026\u0026 electron-builder",
+                    "rebuild":  "electron-builder install-app-deps",
+                    "postinstall":  "electron-builder install-app-deps",
+                    "pretest":  "npm rebuild better-sqlite3",
+                    "test":  "vitest run",
+                    "posttest":  "npm run rebuild",
+                    "test:watch":  "vitest"
+                },
+    "dependencies":  {
+                         "better-sqlite3":  "^11.3.0",
+                         "electron-updater":  "^6.8.9",
+                         "lucide-react":  "^0.460.0",
+                         "react":  "^18.3.1",
+                         "react-dom":  "^18.3.1",
+                         "recharts":  "^2.13.0"
+                     },
+    "devDependencies":  {
+                            "@tailwindcss/vite":  "^4.0.0",
+                            "@vitejs/plugin-react":  "^4.3.4",
+                            "electron":  "^33.2.0",
+                            "electron-builder":  "^25.1.8",
+                            "electron-vite":  "^2.3.0",
+                            "tailwindcss":  "^4.0.0",
+                            "vite":  "^5.4.11",
+                            "vitest":  "^2.0.0"
+                        },
+    "build":  {
+                  "appId":  "com.tradehelp.app",
+                  "productName":  "TradeHelp",
+                  "artifactName":  "${productName}-Setup.${ext}",
+                  "asar":  true,
+                  "publish":  [
+                                  {
+                                      "provider":  "github",
+                                      "owner":  "RaheimSwaby",
+                                      "repo":  "tradehelp"
+                                  }
+                              ],
+                  "asarUnpack":  [
+                                     "node_modules/better-sqlite3/**"
+                                 ],
+                  "files":  [
+                                "out/**/*",
+                                "package.json"
+                            ],
+                  "mac":  {
+                              "category":  "public.app-category.finance",
+                              "target":  "dmg",
+                              "icon":  "build/icon.png",
+                              "identity":  null
+                          },
+                  "win":  {
+                              "target":  "nsis",
+                              "icon":  "build/icon.ico"
+                          },
+                  "linux":  {
+                                "target":  "AppImage",
+                                "category":  "Office",
+                                "icon":  "build/icon.png"
+                            }
+              }
 }
-

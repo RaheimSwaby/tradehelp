@@ -19,7 +19,7 @@ function heatColor(wr, total) {
 
 function HeatMap({ stats }) {
   const [hovered, setHovered] = useState(null)
-  const { byHourDay = {}, bestHour, worstHour } = stats
+  const { byHourDay = {}, bestHour, worstHour, bestDay, worstDay } = stats
 
   const allHours = Object.keys(byHourDay).map((k) => parseInt(k.split('-')[1], 10))
   const minH = allHours.length ? Math.min(...allHours) : 9
@@ -35,14 +35,21 @@ function HeatMap({ stats }) {
   return (
     <Panel title="Performance heat map">
       {/* Advisory */}
-      {bestHour && (
-        <div className="flex flex-wrap gap-3 mb-4 text-xs">
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg" style={{ background: 'rgba(255,69,0,0.12)', border: '1px solid rgba(255,69,0,0.3)', color: '#ff6a33' }}>
-            🔥 Best: {bestHour.day} {fmt12(bestHour.h)}–{fmt12(String(parseInt(bestHour.h, 10) + 1).padStart(2, '0'))} · {fmtN(bestHour.wr, 0)}% WR across {bestHour.total} trades
-          </div>
+      {(bestHour || bestDay) && (
+        <div className="flex flex-wrap gap-2 mb-4 text-xs">
+          {bestHour && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg" style={{ background: 'rgba(255,69,0,0.12)', border: '1px solid rgba(255,69,0,0.3)', color: '#ff6a33' }}>
+              🔥 Best hour: {fmt12(bestHour.k)}–{fmt12(String(parseInt(bestHour.k, 10) + 1).padStart(2, '0'))} · {fmtN(bestHour.wr, 0)}% WR
+            </div>
+          )}
+          {bestDay && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg" style={{ background: 'rgba(255,69,0,0.08)', border: '1px solid rgba(255,69,0,0.25)', color: '#fb923c' }}>
+              📅 Best day: {bestDay.k} · {fmtN(bestDay.wr, 0)}% WR
+            </div>
+          )}
           {worstHour && (
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg" style={{ background: 'rgba(30,58,95,0.3)', border: '1px solid rgba(96,165,250,0.2)', color: '#93c5fd' }}>
-              ❄️ Worst: {worstHour.day} {fmt12(worstHour.h)} · {fmtN(worstHour.wr, 0)}% WR
+              ❄️ Worst hour: {fmt12(worstHour.k)} · {fmtN(worstHour.wr, 0)}% WR
             </div>
           )}
         </div>
