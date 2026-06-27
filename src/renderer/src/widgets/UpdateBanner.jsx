@@ -8,9 +8,9 @@ export function UpdateBanner({ info = {}, onInstall }) {
       <Sparkles size={18} style={{ color: T.accent }} />
       <div>
         <div className="text-sm font-semibold">{info.version ? `v${info.version} is ready` : 'Update ready'}</div>
-        <div className="text-xs" style={{ color: T.dim }}>Bug fixes &amp; performance improvements</div>
+        <div className="text-xs" style={{ color: T.dim }}>Installs automatically on next relaunch</div>
       </div>
-      <button type="button" onClick={onInstall} className="rounded-md px-3 py-1.5 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306' }}>Restart to update</button>
+      <button type="button" onClick={onInstall} className="rounded-md px-3 py-1.5 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306' }}>Restart now</button>
     </div>
   )
 }
