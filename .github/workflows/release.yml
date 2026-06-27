@@ -54,6 +54,10 @@ jobs:
         with:
           fetch-depth: 0
       - name: Add auto-generated release notes
-        run: gh release edit ${{ github.ref_name }} --generate-notes
+        run: |
+          NOTES=$(gh api repos/RaheimSwaby/tradehelp/releases/generate-notes \
+            -f tag_name="${{ github.ref_name }}" \
+            --jq '.body')
+          gh release edit "${{ github.ref_name }}" --notes "$NOTES"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
