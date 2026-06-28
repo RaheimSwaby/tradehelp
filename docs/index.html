@@ -71,6 +71,21 @@
   .js .reveal{opacity:0;transform:translateY(14px);transition:opacity .5s ease,transform .5s ease}
   .js .reveal.in{opacity:1;transform:none}
   @media (prefers-reduced-motion: reduce){.js .reveal{opacity:1;transform:none;transition:none}}
+
+  /* app screenshots framed in subtle window chrome */
+  .shot{position:relative;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface);box-shadow:0 18px 50px rgba(0,0,0,.45)}
+  .shot .bar{display:flex;align-items:center;gap:7px;padding:9px 13px;background:var(--surface2);border-bottom:1px solid var(--line)}
+  .shot .bar i{width:10px;height:10px;border-radius:50%;background:#3a4150;display:inline-block}
+  .shot .bar .t{margin-left:8px;font-size:12px;color:var(--faint)}
+  .frame{position:relative;min-height:140px}
+  .frame .ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;color:var(--faint);font-size:13px;font-family:ui-monospace,Consolas,monospace}
+  .frame img{position:relative;z-index:1;display:block;width:100%;height:auto;cursor:zoom-in}
+  .frame.has-img .ph{display:none}
+  .hero-shot{max-width:980px;margin:26px auto 0}
+  .shots-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:18px}
+  .lightbox{position:fixed;inset:0;z-index:100;display:none;align-items:center;justify-content:center;padding:24px;background:rgba(0,0,0,.86);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);cursor:zoom-out}
+  .lightbox.open{display:flex}
+  .lightbox img{max-width:95%;max-height:92%;border-radius:10px;border:1px solid var(--line);box-shadow:0 20px 60px rgba(0,0,0,.6)}
 </style>
 </head>
 <body>
@@ -108,6 +123,16 @@
   </div>
 </header>
 
+<div class="wrap">
+  <figure class="shot hero-shot">
+    <div class="bar"><i></i><i></i><i></i><span class="t">TradeHelp — Journal</span></div>
+    <div class="frame">
+      <span class="ph">shots/journal.png</span>
+      <img src="shots/journal.png" alt="TradeHelp journal — logging a trade beside the full searchable trade history" loading="lazy" onload="this.parentNode.classList.add('has-img')" onerror="this.remove()" />
+    </div>
+  </figure>
+</div>
+
 <div class="strip">
   <div class="wrap">
     <span><b>Local-first</b> — SQLite on your machine</span>
@@ -130,6 +155,31 @@
       <div class="card"><h3><span class="dot" style="background:var(--up)"></span>Rating &amp; achievements</h3><p>A 59–99 trader rating that grades your <em>process</em>, not luck, plus psychology-based achievements and a non-tilt streak.</p></div>
       <div class="card"><h3><span class="dot" style="background:var(--up)"></span>Reviews &amp; journal</h3><p>Weekly to year-to-date reviews with stats, an equity curve, a P&amp;L calendar and a saved written reflection — with an optional AI summary.</p></div>
       <div class="card"><h3><span class="dot" style="background:var(--down)"></span>Verified import</h3><p>Import any broker CSV — map the columns once — and your rating upgrades from “Self-reported” to “Verified”.</p></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>See it in action</h2>
+    <p class="lede">A focused dark desk that grades your process — here's what you actually work in.</p>
+    <div class="shots-grid">
+      <figure class="shot">
+        <div class="bar"><i></i><i></i><i></i><span class="t">Dashboard</span></div>
+        <div class="frame"><span class="ph">shots/dashboard.png</span><img src="shots/dashboard.png" alt="Dashboard — net P&amp;L, win rate, a P&amp;L calendar and a gradient equity curve" loading="lazy" onload="this.parentNode.classList.add('has-img')" onerror="this.remove()" /></div>
+      </figure>
+      <figure class="shot">
+        <div class="bar"><i></i><i></i><i></i><span class="t">Prop Firm</span></div>
+        <div class="frame"><span class="ph">shots/propfirm.png</span><img src="shots/propfirm.png" alt="Prop firm tracking — account cards with target and drawdown bars, plus payout log" loading="lazy" onload="this.parentNode.classList.add('has-img')" onerror="this.remove()" /></div>
+      </figure>
+      <figure class="shot">
+        <div class="bar"><i></i><i></i><i></i><span class="t">Trader rating</span></div>
+        <div class="frame"><span class="ph">shots/rating.png</span><img src="shots/rating.png" alt="Trader rating — process-graded attributes, achievements and tiered medals" loading="lazy" onload="this.parentNode.classList.add('has-img')" onerror="this.remove()" /></div>
+      </figure>
+      <figure class="shot">
+        <div class="bar"><i></i><i></i><i></i><span class="t">AI Coach</span></div>
+        <div class="frame"><span class="ph">shots/coach.png</span><img src="shots/coach.png" alt="AI coach — offline coaching that reads your real stats and recent trades" loading="lazy" onload="this.parentNode.classList.add('has-img')" onerror="this.remove()" /></div>
+      </figure>
     </div>
   </div>
 </section>
@@ -168,7 +218,7 @@
   (function () {
     var root = document.documentElement;
     root.classList.add('js');
-    var els = document.querySelectorAll('.card, section > .wrap > h2, section > .wrap > .lede, .privacy');
+    var els = document.querySelectorAll('.card, .shot, section > .wrap > h2, section > .wrap > .lede, .privacy');
     els.forEach(function (el) { el.classList.add('reveal'); });
     document.querySelectorAll('.grid .card').forEach(function (el, i) { el.style.transitionDelay = (i % 4) * 60 + 'ms'; });
     if (!('IntersectionObserver' in window)) { els.forEach(function (el) { el.classList.add('in'); }); return; }
@@ -176,6 +226,16 @@
       entries.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
     }, { rootMargin: '0px 0px -8% 0px' });
     els.forEach(function (el) { io.observe(el); });
+  })();
+
+  // Click-to-zoom lightbox for screenshots.
+  (function () {
+    var lb = document.createElement('div'); lb.className = 'lightbox';
+    var img = document.createElement('img'); lb.appendChild(img); document.body.appendChild(lb);
+    lb.addEventListener('click', function () { lb.classList.remove('open'); });
+    document.querySelectorAll('.frame img').forEach(function (el) {
+      el.addEventListener('click', function () { img.src = el.currentSrc || el.src; lb.classList.add('open'); });
+    });
   })();
 </script>
 </body>
