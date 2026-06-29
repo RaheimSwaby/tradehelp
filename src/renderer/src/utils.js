@@ -1,4 +1,4 @@
-// Gumroad checkout link for the $20 one-time product.
+// Gumroad checkout link for the $50 one-time product.
 export const CHECKOUT_URL = 'https://tradehelp.gumroad.com/l/oyftvr'
 // Until a real checkout link is set, the trial/paywall stays dormant so nobody hits a dead paywall.
 export const GATE_CONFIGURED = !CHECKOUT_URL.includes('YOUR-NAME')

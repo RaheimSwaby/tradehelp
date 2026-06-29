@@ -102,7 +102,7 @@ plumbing is already isolated in `ai.js`.
 
 ## Pricing
 
-A free 14-day trial, then a one-time **$20** unlock — no subscription. Licensing
+A free 14-day trial, then a one-time **$50** unlock — no subscription. Licensing
 is handled by a merchant-of-record (Gumroad): the app verifies a key once online,
 then works fully offline. One key activates up to 2 devices.
 

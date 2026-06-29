@@ -9,7 +9,7 @@ export function TrialBanner({ days }) {
     <div className="w-full" style={{ background: T.accentSoft, borderBottom: `1px solid ${T.line}` }}>
       <div className="max-w-6xl mx-auto px-4 py-1.5 text-xs flex items-center gap-2" style={{ color: T.accent }}>
         <span>Free trial — <strong>{days} day{days === 1 ? '' : 's'}</strong> left</span>
-        <button type="button" onClick={() => window.api.openExternal(CHECKOUT_URL)} className="ml-auto px-2.5 py-0.5 rounded-md font-semibold" style={{ background: T.accent, color: '#1A1306' }}>Get it — $20</button>
+        <button type="button" onClick={() => window.api.openExternal(CHECKOUT_URL)} className="ml-auto px-2.5 py-0.5 rounded-md font-semibold" style={{ background: T.accent, color: '#1A1306' }}>Get it — $50</button>
       </div>
     </div>
   )
@@ -31,8 +31,8 @@ export function Paywall({ onActivated }) {
     <div className="py-12 flex justify-center">
       <div className="rounded-2xl p-8 max-w-md w-full text-center" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
         <div className="text-lg font-semibold">Your free trial has ended</div>
-        <p className="text-sm mt-2" style={{ color: T.dim }}>Unlock TradeHelp for a one-time <span style={{ color: T.text }}>$20</span> — no subscription, works offline, yours forever.</p>
-        <button type="button" onClick={() => window.api.openExternal(CHECKOUT_URL)} className="w-full mt-5 rounded-md py-2.5 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306' }}>Get TradeHelp — $20</button>
+        <p className="text-sm mt-2" style={{ color: T.dim }}>Unlock TradeHelp for a one-time <span style={{ color: T.text }}>$50</span> — no subscription, works offline, yours forever.</p>
+        <button type="button" onClick={() => window.api.openExternal(CHECKOUT_URL)} className="w-full mt-5 rounded-md py-2.5 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306' }}>Get TradeHelp — $50</button>
         <div className="text-xs my-4" style={{ color: T.faint }}>Already bought it? Paste your key:</div>
         <input style={inputStyle} className="w-full rounded px-3 py-2 text-sm" value={key} onChange={(e) => setKey(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && activate()} placeholder="license key" />
         <button type="button" onClick={activate} disabled={busy} className="w-full mt-2 rounded-md py-2 text-sm font-semibold" style={{ background: T.surface2, color: T.text, border: `1px solid ${T.line}` }}>{busy ? 'Activating…' : 'Activate'}</button>
@@ -72,7 +72,7 @@ export function LicensePanel({ license, onChange }) {
           <Field label="License key"><input style={inputStyle} className={inp} value={key} onChange={(e) => setKey(e.target.value)} placeholder="paste your key" /></Field>
           <div className="flex gap-2 mt-3">
             <button type="button" onClick={activate} disabled={busy} className="rounded-md px-4 py-2 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306' }}>{busy ? 'Activating…' : 'Activate'}</button>
-            <button type="button" onClick={() => window.api.openExternal(CHECKOUT_URL)} className="rounded-md px-4 py-2 text-sm" style={{ background: T.surface2, color: T.text, border: `1px solid ${T.line}` }}>Buy — $20</button>
+            <button type="button" onClick={() => window.api.openExternal(CHECKOUT_URL)} className="rounded-md px-4 py-2 text-sm" style={{ background: T.surface2, color: T.text, border: `1px solid ${T.line}` }}>Buy — $50</button>
           </div>
         </>
       )}
