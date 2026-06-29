@@ -1,6 +1,10 @@
 // Two providers, one interface. Ollama keeps everything offline and free;
 // the cloud path works with any OpenAI-compatible endpoint using your own key.
 
+// Ollama defaults its context window to ~2-4k tokens regardless of how much we send,
+// which silently truncates the journal we feed the coach. Give it room to read all of it.
+const OLLAMA_NUM_CTX = 16384
+
 const trim = (u) => String(u || '').replace(/\/+$/, '')
 const stripDataPrefix = (u) => String(u || '').replace(/^data:image\/[\w+.-]+;base64,/, '')
 const hasImgs = (messages) => messages.some((m) => Array.isArray(m.images) && m.images.length)
@@ -35,7 +39,7 @@ export async function chat(settings, { system, messages }) {
   }
   const res = await fetch(`${trim(settings.ollamaUrl)}/api/chat`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: ollamaModelFor(settings, messages), stream: false, messages: ollamaMessages(system, messages) })
+    body: JSON.stringify({ model: ollamaModelFor(settings, messages), stream: false, messages: ollamaMessages(system, messages), options: { num_ctx: OLLAMA_NUM_CTX } })
   }).catch(() => { throw new Error('Cannot reach Ollama. Is it running? Try: ollama serve') })
   if (!res.ok) throw new Error(`Ollama ${res.status}: ${await res.text().catch(() => '')}`.slice(0, 200))
   const d = await res.json()
@@ -57,7 +61,7 @@ export async function chatStream(settings, { system, messages }, onChunk) {
   }
   const res = await fetch(`${trim(settings.ollamaUrl)}/api/chat`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: ollamaModelFor(settings, messages), stream: true, messages: ollamaMessages(system, messages) })
+    body: JSON.stringify({ model: ollamaModelFor(settings, messages), stream: true, messages: ollamaMessages(system, messages), options: { num_ctx: OLLAMA_NUM_CTX } })
   }).catch(() => { throw new Error('Cannot reach Ollama. Is it running? Try: ollama serve') })
   if (!res.ok) throw new Error(`Ollama ${res.status}: ${await res.text().catch(() => '')}`.slice(0, 200))
   return readStream(res, onChunk, false, (line) => {

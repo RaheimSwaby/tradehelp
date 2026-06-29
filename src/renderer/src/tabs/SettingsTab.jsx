@@ -215,6 +215,9 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
             <Field label="Ollama URL"><input style={inputStyle} className={inp} value={s.ollamaUrl || ''} onChange={set('ollamaUrl')} /></Field>
             <Field label="Model"><ModelSelect value={s.ollamaModel || ''} onChange={set('ollamaModel')} placeholder="llama3.2" /></Field>
             <Field label="Vision model (chart analysis)"><ModelSelect value={s.ollamaVisionModel || ''} onChange={set('ollamaVisionModel')} placeholder="llama3.2-vision" /></Field>
+            <p className="text-xs" style={{ color: T.faint }}>
+              Recommended for accurate coaching: <span style={mono} className="text-xs">qwen2.5:7b</span> or <span style={mono} className="text-xs">llama3.1:8b</span>. Minimum <span style={mono} className="text-xs">qwen2.5:3b</span> / <span style={mono} className="text-xs">llama3.2</span> (3B) — models under 3B tend to misread or invent trades. Pull one with e.g. <span style={mono} className="text-xs">ollama pull qwen2.5:7b</span>.
+            </p>
           </div>
         ) : (
           <div className="space-y-3 mt-3">

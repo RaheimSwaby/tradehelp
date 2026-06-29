@@ -365,7 +365,7 @@ TRADE ENTRIES (newest first):`
   return `${header}\n${kept.join('\n') || '(none)'}${coverage}`
 }
 
-export function fullJournalContext({ trades = [], stats, reviews = {}, playbook = [], dayLogs = [], goals = {}, settings = {} }, { includeWritten = true, maxChars = 60000 } = {}) {
+export function fullJournalContext({ trades = [], stats, reviews = {}, playbook = [], dayLogs = [], goals = {}, settings = {} }, { includeWritten = true, maxChars = 44000 } = {}) {
   let out = tradeContext(trades, stats, { includeWritten, maxChars: Math.floor(maxChars * 0.7) })
   const append = (title, lines) => {
     const clean = lines.filter(Boolean)

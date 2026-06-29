@@ -1,6 +1,7 @@
 // Bundled patch notes — shown in the "What's new" modal after an update.
 // Add an entry here with every release so users always see real notes.
 export const RELEASE_NOTES = {
+  '0.25.3': `• Fixed the AI Coach not actually seeing your journal — Ollama was silently truncating the data before the model read it (raised the context window). The coach now reliably reads your real trades instead of asking you to describe them\n• Added recommended-model guidance in Settings`,
   '0.25.2': `• AI Coach now reads your FULL journal — trades, written notes, reasons, self-grades, saved reviews, playbook, goals, rules and no-trade logs — so it coaches what you actually wrote instead of guessing from numbers\n• Hard guardrail added so the coach won't invent trades or notes that aren't in your data\n• Warning when your local model is too small (sub-2B) to read your journal reliably\n• Cloud users get a toggle for whether written notes leave the machine (local Ollama always gets everything)`,
   '0.25.1': `• Housekeeping and minor copy updates.`,
   '0.25.0': `• Proactive coach brief on the Dashboard — an at-a-glance process review that refreshes as your trades change, with an optional AI touch (toggle it in Settings)\n• Share report — export a clean PNG snapshot of your stats to share, with a date range and account label`,
