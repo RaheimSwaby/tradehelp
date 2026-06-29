@@ -313,17 +313,98 @@ export function computePropFirm(trades, cfg) {
   return { start, bal, netProfit, peak, curFloor, ddBuffer, maxDD, target, maxDaily, todayPnl, dailyRemaining, daysTraded, minDays, targetHit, daysHit, breached, floorBreached, dailyBreached, status, curve }
 }
 
-export function tradeContext(trades, stats) {
-  const recent = [...trades].slice(-12).map((t) =>
-    `${t.timestamp} ${t.symbol} ${t.direction} pnl=${fmtN(t.pnl)} rr=${t.rr ? fmtN(t.rr, 1) : '-'} setup=${t.setup} emotion=${t.emotion}`).join('\n')
-  const top = (arr) => arr.slice(0, 3).map((g) => `${g.name}(${fmtN(g.pnl)})`).join(', ')
-  return `STATS:
-trades=${stats.n} netPnL=${fmtN(stats.totalPnl)} winRate=${fmtN(stats.winRate, 1)}% profitFactor=${stats.profitFactor === Infinity ? 'inf' : fmtN(stats.profitFactor, 2)}
-avgWin=${fmtN(stats.avgWin)} avgLoss=${fmtN(stats.avgLoss)} maxDD=${fmtN(stats.maxDD)} avgRR=${fmtN(stats.avgRR, 1)} currentStreak=${stats.currentStreak}
-P&L by emotion: ${top(stats.byEmotion)}
-P&L by setup: ${top(stats.bySetup)}
-RECENT TRADES:
-${recent || '(none)'}`
+const promptText = (value, max = 1200) => String(value || '').replace(/\s+/g, ' ').trim().slice(0, max)
+const promptNum = (value) => Number.isFinite(Number(value)) ? fmtN(Number(value)) : '-'
+
+function tradePromptRow(t, includeWritten) {
+  const fields = [
+    `date=${t.entryTime || t.timestamp || '-'}`,
+    `symbol=${promptText(t.symbol, 30) || '-'}`,
+    `direction=${promptText(t.direction, 12) || '-'}`,
+    `account=${promptText(t.account, 50) || 'live/unassigned'}`,
+    `entry=${promptNum(t.entry)}`,
+    `exit=${promptNum(t.exit)}`,
+    `stop=${promptNum(t.stop)}`,
+    `target=${promptNum(t.target)}`,
+    `size=${promptNum(t.size)}`,
+    `risk=${promptNum(t.riskAmount)}`,
+    `pnl=${promptNum(t.pnl)}`,
+    `fees=${promptNum(t.fees)}`,
+    `rr=${t.rr ? fmtN(t.rr, 1) : '-'}`,
+    `setup=${promptText(t.setup, 80) || '-'}`,
+    `emotion=${promptText(t.emotion, 40) || '-'}`,
+    `reason=${promptText(t.reason, 160) || '-'}`,
+    `selfSetup=${promptText(t.selfSetup, 4) || '-'}`,
+    `selfExecution=${promptText(t.selfExec, 4) || '-'}`,
+    `source=${promptText(t.source, 20) || 'manual'}`
+  ]
+  if (includeWritten) fields.push(`notes=${promptText(t.notes) || '(none)'}`)
+  return fields.join(' | ')
+}
+
+export function tradeContext(trades, stats, { includeWritten = true, maxChars = 48000 } = {}) {
+  const top = (arr) => arr.slice(0, 5).map((g) => `${g.name}(pnl=${fmtN(g.pnl)}, n=${g.n}, wr=${fmtN(g.wr, 0)}%)`).join(', ')
+  const reasons = (arr) => arr.slice(0, 5).map((r) => `${r.name}(${r.n})`).join(', ')
+  const header = `AGGREGATED STATS (all ${stats.n} trades):
+netPnL=${fmtN(stats.totalPnl)} winRate=${fmtN(stats.winRate, 1)}% profitFactor=${stats.profitFactor === Infinity ? 'inf' : fmtN(stats.profitFactor, 2)} expectancy=${fmtN(stats.expectancy)}
+avgWin=${fmtN(stats.avgWin)} avgLoss=${fmtN(stats.avgLoss)} maxDD=${fmtN(stats.maxDD)} avgRR=${fmtN(stats.avgRR, 1)} currentStreak=${stats.currentStreak} nonTiltStreak=${stats.nonTiltStreak}
+P&L by emotion: ${top(stats.byEmotion) || '(none)'}
+P&L by setup: ${top(stats.bySetup) || '(none)'}
+Most common win reasons: ${reasons(stats.reasonsWin) || '(none)'}
+Most common loss reasons: ${reasons(stats.reasonsLoss) || '(none)'}
+
+TRADE ENTRIES (newest first):`
+  const rows = [...trades].reverse().map((t) => tradePromptRow(t, includeWritten))
+  const kept = []
+  let used = header.length
+  for (const row of rows) {
+    if (used + row.length + 1 > maxChars) break
+    kept.push(row); used += row.length + 1
+  }
+  const coverage = kept.length < rows.length ? `\n[Included ${kept.length} of ${rows.length} individual entries; aggregates above cover the full history.]` : ''
+  return `${header}\n${kept.join('\n') || '(none)'}${coverage}`
+}
+
+export function fullJournalContext({ trades = [], stats, reviews = {}, playbook = [], dayLogs = [], goals = {}, settings = {} }, { includeWritten = true, maxChars = 60000 } = {}) {
+  let out = tradeContext(trades, stats, { includeWritten, maxChars: Math.floor(maxChars * 0.7) })
+  const append = (title, lines) => {
+    const clean = lines.filter(Boolean)
+    if (!clean.length || out.length >= maxChars) return
+    const section = `\n\n${title}:\n${clean.join('\n')}`
+    out += section.slice(0, Math.max(0, maxChars - out.length))
+  }
+
+  append('GOALS AND RISK LIMITS', [
+    `weeklyGoal=${promptNum(goals.weekly)} monthlyGoal=${promptNum(goals.monthly)} dailyGoal=${promptNum(settings.dailyGoal)} maxDailyLoss=${promptNum(settings.maxDailyLoss)}`
+  ])
+
+  if (includeWritten) {
+    let rules = []
+    try { const parsed = JSON.parse(settings.tradeRules || '[]'); if (Array.isArray(parsed)) rules = parsed } catch {}
+    append('TRADING RULES', rules.map((r, i) => `${i + 1}. ${promptText(r, 500)}`))
+    append('SAVED REVIEWS', Object.entries(reviews || {}).sort(([a], [b]) => b.localeCompare(a)).map(([period, text]) => `${period}: ${promptText(text, 2400)}`))
+    append('PLAYBOOK', (playbook || []).map((p) => [
+      `Setup=${promptText(p.name, 100)}`,
+      `description=${promptText(p.description, 700) || '-'}`,
+      `criteria=${promptText(p.criteria, 900) || '-'}`,
+      `invalidation=${promptText(p.invalidation, 700) || '-'}`,
+      `targets=${promptText(p.targets, 700) || '-'}`,
+      `notes=${promptText(p.notes, 900) || '-'}`
+    ].join(' | ')))
+  }
+
+  append('NO-TRADE AND MISSED-DAY LOGS', [...(dayLogs || [])].reverse().map((d) => {
+    const base = `${d.date}: reason=${promptText(d.reason, 200) || '-'} | mood=${promptText(d.mood, 80) || '-'}`
+    return includeWritten ? `${base} | note=${promptText(d.note, 800) || '-'}` : base
+  }))
+
+  let accounts = []
+  try { const parsed = JSON.parse(settings.propFirmAccounts || '[]'); if (Array.isArray(parsed)) accounts = parsed } catch {}
+  append('PROP ACCOUNT RULES', accounts.map((a) =>
+    `name=${promptText(a.name || a.firm, 100) || a.id} | size=${promptNum(a.accountSize)} | target=${promptNum(a.target)} | maxDailyLoss=${promptNum(a.maxDailyLoss)} | maxDrawdown=${promptNum(a.maxDrawdown)} | drawdownType=${promptText(a.ddType, 30) || '-'} | minDays=${promptNum(a.minDays)}`
+  ))
+
+  return out
 }
 
 /* ───────── medals + weekly journaling streak ───────── */

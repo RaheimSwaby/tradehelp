@@ -77,6 +77,19 @@ function registerIpc() {
   })
   ipcMain.handle('data:openFolder', () => shell.openPath(app.getPath('userData')))
 
+  ipcMain.handle('report:savePng', async (_e, dataUrl, suggestedName) => {
+    const match = String(dataUrl || '').match(/^data:image\/png;base64,([A-Za-z0-9+/=]+)$/)
+    if (!match || match[1].length > 20_000_000) return { ok: false, error: 'Invalid report image.' }
+    const safeName = String(suggestedName || 'TradeHelp-report.png').replace(/[^a-z0-9._-]/gi, '-')
+    const { canceled, filePath } = await dialog.showSaveDialog(win, {
+      defaultPath: safeName,
+      filters: [{ name: 'PNG image', extensions: ['png'] }]
+    })
+    if (canceled || !filePath) return { ok: false, canceled: true }
+    try { writeFileSync(filePath, Buffer.from(match[1], 'base64')); return { ok: true, path: filePath } }
+    catch (e) { return { ok: false, error: String(e?.message || e) } }
+  })
+
   ipcMain.handle('images:list', (_e, tradeId) => db.listImages(tradeId))
   ipcMain.handle('images:get', (_e, id) => db.getImage(id))
   ipcMain.handle('images:add', (_e, tradeId, img) => db.addImage(tradeId, img))

@@ -1,10 +1,13 @@
 import React, { useState, useMemo } from 'react'
+import { Share2 } from 'lucide-react'
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, ReferenceLine, Tooltip, Cell } from 'recharts'
 import { T, mono } from '../theme.js'
 import { fmt$, fmtN } from '../utils.js'
 import { computeStats } from '../stats.js'
 import { Stat, Panel, EmptyChart } from '../components/Shared.jsx'
 import { PnlCalendar } from './JournalTab.jsx'
+import { CoachBriefCard } from '../components/CoachBriefCard.jsx'
+import { ShareReportModal } from '../components/ShareReportModal.jsx'
 
 const HMAP_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
@@ -136,8 +139,9 @@ function HeatMap({ stats }) {
 }
 
 /* ───────── dashboard ───────── */
-export function Dashboard({ stats, trades, accounts = [] }) {
+export function Dashboard({ stats, trades, accounts = [], settings, journalData, onSaveSettings, onOpenCoach }) {
   const [view, setView] = useState('all') // all | live | prop
+  const [shareOpen, setShareOpen] = useState(false)
   const hasProp = accounts.length > 0
   const propIds = useMemo(() => new Set(accounts.map((a) => a.id)), [accounts])
   const viewTrades = useMemo(() => {
@@ -151,8 +155,9 @@ export function Dashboard({ stats, trades, accounts = [] }) {
 
   return (
     <div className="space-y-4">
-      {hasProp && (
-        <div className="flex items-center gap-1.5">
+      <CoachBriefCard trades={viewTrades} stats={vStats} settings={settings} journalData={journalData} onSaveSettings={onSaveSettings} onOpenCoach={onOpenCoach} />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        {hasProp ? <div className="flex items-center gap-1.5">
           {[['all', 'All'], ['live', 'Live'], ['prop', 'Prop']].map(([k, label]) => (
             <button key={k} type="button" onClick={() => setView(k)} className="text-xs px-3 py-1.5 rounded-md font-semibold"
               style={{ background: view === k ? T.surface2 : 'transparent', color: view === k ? T.accent : T.dim, border: `1px solid ${view === k ? T.line : 'transparent'}` }}>
@@ -162,8 +167,12 @@ export function Dashboard({ stats, trades, accounts = [] }) {
           <span className="text-xs ml-1" style={{ color: T.faint }}>
             {view === 'prop' ? 'prop-tagged trades only' : view === 'live' ? 'live / personal trades only' : 'live + prop combined'}
           </span>
-        </div>
-      )}
+        </div> : <span />}
+        <button type="button" onClick={() => setShareOpen(true)} disabled={empty} className="flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-semibold"
+          style={{ background: empty ? T.surface2 : T.accent, color: empty ? T.faint : '#1A1306' }}>
+          <Share2 size={15} /> Share report
+        </button>
+      </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Stat label="Net P&L" value={fmt$(vStats.totalPnl)} tone={vStats.totalPnl >= 0 ? 'up' : 'down'} sub={`${vStats.n} trades`} />
         <Stat label="Win rate" value={`${fmtN(vStats.winRate, 1)}%`} sub={`expectancy ${fmt$(vStats.expectancy)}/trade`} />
@@ -212,6 +221,14 @@ export function Dashboard({ stats, trades, accounts = [] }) {
       </Panel>
 
       <HeatMap stats={vStats} />
+      {shareOpen && (
+        <ShareReportModal
+          trades={viewTrades}
+          accountLabel={view === 'prop' ? 'Prop accounts' : view === 'live' ? 'Live accounts' : 'All accounts'}
+          accent={T.accent}
+          onClose={() => setShareOpen(false)}
+        />
+      )}
     </div>
   )
 }

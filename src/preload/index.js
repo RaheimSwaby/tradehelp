@@ -10,6 +10,7 @@ const api = {
   exportData: () => ipcRenderer.invoke('data:export'),
   importData: () => ipcRenderer.invoke('data:import'),
   openDataFolder: () => ipcRenderer.invoke('data:openFolder'),
+  saveReportPng: (dataUrl, suggestedName) => ipcRenderer.invoke('report:savePng', dataUrl, suggestedName),
 
   listImages: (tradeId) => ipcRenderer.invoke('images:list', tradeId),
   getImage: (id) => ipcRenderer.invoke('images:get', id),

@@ -118,7 +118,11 @@ export function initDb() {
     // Journal preferences
     simpleJournal: 'false',
     customEmotions: '[]',
-    customSetups: '[]'
+    customSetups: '[]',
+    proactiveCoachEnabled: 'true',
+    coachBriefSnapshot: '',
+    coachBriefAttempt: '',
+    coachBriefText: ''
   }
   const ins = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)')
   for (const [k, v] of Object.entries(defaults)) ins.run(k, String(v))
@@ -220,6 +224,7 @@ const SETTINGS_KEYS = new Set([
   'trialStart', 'licenseKey', 'licenseInstanceId', 'licenseStatus',
   'achievements', 'propFirmAccounts', 'propFirm',
   'simpleJournal', 'customEmotions', 'customSetups',
+  'proactiveCoachEnabled', 'coachBriefSnapshot', 'coachBriefAttempt', 'coachBriefText',
 ])
 
 export function setSettings(s) {

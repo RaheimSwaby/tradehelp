@@ -285,12 +285,12 @@ export default function App() {
             {tab === 'journal' && <Journal trades={trades} onAdd={addTrade} onUpdate={updateTrade} onRemove={removeTrade} onNotes={setNotesView} onImport={importTrades} accounts={propFirmAccounts} settings={settings} onSaveSettings={saveSettings} dayLogs={dayLogs} onAddDayLog={addDayLog} onDeleteDayLog={deleteDayLog} />}
             {tab === 'trade' && <TradeModeTab settings={settings} onSave={saveSettings} rules={rules} live={tradeMode} todayNet={todayNet} todayCount={todayTrades.length} weekNet={weekNet} goal={dailyGoal} maxLoss={maxLoss} onStart={startDay} onEnd={endSession} />}
             {tab === 'propfirm' && <PropFirm trades={trades} accounts={propFirmAccounts} onSave={savePropFirmAccounts} payouts={payouts} onAddPayout={addPayout} onDeletePayout={deletePayout} />}
-            {tab === 'dashboard' && <Dashboard stats={stats} trades={trades} accounts={propFirmAccounts} />}
+            {tab === 'dashboard' && <Dashboard stats={stats} trades={trades} accounts={propFirmAccounts} settings={settings} journalData={{ reviews, playbook, dayLogs, goals }} onSaveSettings={saveSettings} onOpenCoach={() => setTab('coach')} />}
             {tab === 'psych' && <Psychology stats={stats} />}
             {tab === 'rating' && <Rating trades={trades} stats={stats} achievements={achievements} unlockedAt={unlockedAt} settings={settings} onSave={saveSettings} payouts={payouts} />}
             {tab === 'goals' && <Goals goals={goals} onSave={saveGoals} trades={trades} />}
-            {tab === 'reviews' && <Reviews trades={trades} reviews={reviews} onSave={saveReview} />}
-            {tab === 'coach' && <Coach trades={trades} stats={stats} settings={settings} events={events} now={now} />}
+            {tab === 'reviews' && <Reviews trades={trades} reviews={reviews} settings={settings} onSave={saveReview} />}
+            {tab === 'coach' && <Coach trades={trades} stats={stats} settings={settings} reviews={reviews} playbook={playbook} dayLogs={dayLogs} goals={goals} events={events} now={now} />}
             {tab === 'patterns' && <Patterns trades={trades} />}
             {tab === 'playbook' && <PlaybookTab entries={playbook} trades={trades} onAdd={addPlaybookEntry} onUpdate={updatePlaybookEntry} onDelete={deletePlaybookEntry} />}
             {tab === 'settings' && <SettingsTab settings={settings} onSave={saveSettings} license={license} onLicenseChange={refreshLicense} onReload={reloadAll} />}

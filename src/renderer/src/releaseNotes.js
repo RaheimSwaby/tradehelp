@@ -1,6 +1,7 @@
 // Bundled patch notes — shown in the "What's new" modal after an update.
 // Add an entry here with every release so users always see real notes.
 export const RELEASE_NOTES = {
+  '0.25.0': `• Proactive coach brief on the Dashboard — an at-a-glance process review that refreshes as your trades change, with an optional AI touch (toggle it in Settings)\n• Share report — export a clean PNG snapshot of your stats to share, with a date range and account label`,
   '0.24.2': `• Cosmetic polish — gradient-filled equity curve, frosted-glass floating widgets and pop-ups, hover lift on cards, aligned tabular numbers, and green/red accents on trade-history rows`,
   '0.24.1': `• New prop firm achievements — "First Payout" unlocks on your first one, and a "Payday" medal climbs an 8-tier ladder (Wood → Steel → Bronze → Silver → Gold → Platinum → Diamond → Legendary) as your payout count grows`,
   '0.24.0': `• Tag each trade as Live or a specific prop account right in the journal\n• Dashboard now has a Live / Prop / All toggle so your prop and live P&L stay separate (letter grade still combines both)\n• Prop accounts now count only the trades you tag to them by default — your live trades no longer leak in\n• Each account card shows two bars: progress toward target AND drawdown cushion\n• Track prop firm payouts — per account and an all-time log`,
