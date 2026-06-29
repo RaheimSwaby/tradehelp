@@ -5,6 +5,7 @@
     "main":  "./out/main/index.js",
     "license":  "MIT",
     "scripts":  {
+                    "predev":  "electron-builder install-app-deps",
                     "dev":  "electron-vite dev",
                     "build":  "electron-vite build",
                     "preview":  "electron-vite preview",
