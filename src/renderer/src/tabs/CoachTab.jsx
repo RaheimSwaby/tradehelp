@@ -2,19 +2,20 @@ import React, { useState, useEffect, useRef } from 'react'
 import { Bot, Sparkles, Send, Search } from 'lucide-react'
 import { T, mono, inputStyle } from '../theme.js'
 import { fmt$, fmtN, streamChat } from '../utils.js'
-import { tradeContext } from '../stats.js'
+import { fullJournalContext } from '../stats.js'
 import { Panel } from '../components/Shared.jsx'
 import { EventsPanel } from '../widgets/EventBanner.jsx'
 
 /* ───────── AI coach ───────── */
 const COACH_SYSTEM = `You are a trading performance coach embedded in a trader's personal journal app.
-You are given the trader's REAL aggregated stats and recent trades. Coach the PROCESS and PSYCHOLOGY:
-discipline, emotional patterns, position sizing behaviour, time-of-day performance, overtrading, revenge trading,
-cutting winners early, rule-breaking. Be specific and reference their actual numbers.
-Do NOT give buy/sell signals, price predictions, or personalized investment advice. Keep it tight (under ~180 words),
-direct, and supportive. If data is thin, say so honestly.`
+You are given the trader's REAL journal below: aggregated stats, individual trades (with their written notes, reasons and self-grades), saved reviews, playbook setups, goals, trading rules, and no-trade-day logs.
+Coach the PROCESS and PSYCHOLOGY: discipline, emotional patterns, position sizing, time-of-day performance, overtrading, revenge trading, cutting winners early, rule-breaking. Be specific and quote their actual numbers, notes and setups.
+CRITICAL: Use ONLY the data provided below. Never invent or assume trades, symbols, prices, dates, or notes, and never pull in examples from other traders or generic scenarios. If the trader asks about something that is not in the data, say you don't see it rather than guessing.
+Do NOT give buy/sell signals, price predictions, or personalized investment advice. Keep it tight (under ~180 words), direct, and supportive. If data is thin, say so honestly.`
 
-export function Coach({ trades, stats, settings, events, now }) {
+export function Coach({ trades, stats, settings, reviews = {}, playbook = [], dayLogs = [], goals = {}, events, now }) {
+  // Local Ollama always gets the full written record; cloud users can gate free-form text.
+  const includeWritten = settings?.provider !== 'cloud' || (settings?.cloudJournalAccess ?? 'true') !== 'false'
   const [msgs, setMsgs] = useState([])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
@@ -26,14 +27,16 @@ export function Coach({ trades, stats, settings, events, now }) {
   useEffect(() => () => cancelStreamRef.current?.(), [])
 
   const modelLabel = settings?.provider === 'cloud' ? settings?.cloudModel : settings?.ollamaModel
+  // Sub-2B models can't reliably read structured journal data and tend to fabricate trades.
+  const tinyModel = settings?.provider !== 'cloud' && [':0.5b', ':1b', ':1.5b', ':135m', ':360m', ':500m'].some((t) => String(modelLabel || '').toLowerCase().includes(t))
 
   async function ask(userText) {
     if (busy) return
     const next = [...msgs, { role: 'user', content: userText }]
     setMsgs(next); setInput(''); setBusy(true); setStreamText('')
     const apiMsgs = [
-      { role: 'user', content: `Here is my current journal data:\n\n${tradeContext(trades, stats)}` },
-      { role: 'assistant', content: 'Got it — I have your stats and recent trades in front of me.' },
+      { role: 'user', content: `Here is my current journal data:\n\n${fullJournalContext({ trades, stats, settings, reviews, playbook, dayLogs, goals }, { includeWritten })}` },
+      { role: 'assistant', content: 'Got it — I have your full journal in front of me: trades, notes, reviews, playbook, goals and rules.' },
       ...next
     ]
     try {
@@ -66,6 +69,11 @@ export function Coach({ trades, stats, settings, events, now }) {
           <span className="text-sm font-semibold">AI Coach</span>
           <span className="text-xs ml-auto" style={{ color: T.faint }}>{modelLabel || 'no model'} · not financial advice</span>
         </div>
+        {tinyModel && (
+          <div className="px-4 py-2 text-xs" style={{ background: 'rgba(251,113,133,0.10)', borderBottom: `1px solid ${T.line}`, color: T.down }}>
+            ⚠ <strong>{modelLabel}</strong> is a very small model — it may misread or invent trades. For accurate coaching, switch to a larger model (e.g. <span style={mono}>llama3.2</span> 3B, <span style={mono}>qwen2.5:7b</span>, or <span style={mono}>llama3.1:8b</span>) in Settings.
+          </div>
+        )}
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
           {msgs.length === 0 && (
             <div className="text-sm" style={{ color: T.dim }}>

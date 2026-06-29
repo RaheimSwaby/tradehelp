@@ -222,6 +222,10 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
             <Field label="Model"><input style={inputStyle} className={inp} value={s.cloudModel || ''} onChange={set('cloudModel')} /></Field>
             <Field label="API key (stored locally)"><input type="password" style={inputStyle} className={inp} value={s.cloudKey || ''} onChange={set('cloudKey')} /></Field>
             <TestKey type="cloud" value={s.cloudKey} url={s.cloudUrl} />
+            <label className="flex items-start gap-2 text-sm cursor-pointer" style={{ color: T.text }}>
+              <input type="checkbox" className="mt-0.5" checked={(s.cloudJournalAccess ?? 'true') !== 'false'} onChange={(e) => setS((p) => ({ ...p, cloudJournalAccess: String(e.target.checked) }))} />
+              <span>Send my written notes &amp; reviews to the cloud model<span className="block text-xs mt-0.5" style={{ color: T.faint }}>On: the coach reads your full journal — notes, reasons, reviews, playbook — for real coaching. Off: only structured numbers (P&amp;L, setups, grades) leave your machine. Local Ollama always gets everything.</span></span>
+            </label>
           </div>
         )}
         <label className="flex items-start gap-2 text-sm mt-4 cursor-pointer" style={{ color: T.text }}>
