@@ -33,6 +33,15 @@ function createWindow() {
 
   // electron-vite injects ELECTRON_RENDERER_URL in dev; load the built file otherwise.
   const devUrl = process.env.ELECTRON_RENDERER_URL
+  win.webContents.on('did-fail-load', (_event, code, description) => {
+    console.error(`[renderer] failed to load (${code}): ${description}`)
+  })
+  win.webContents.on('render-process-gone', (_event, details) => {
+    console.error('[renderer] process exited:', details.reason, details.exitCode)
+  })
+  win.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+    if (level >= 2) console.error(`[renderer] ${message} (${sourceId}:${line})`)
+  })
   if (devUrl) win.loadURL(devUrl)
   else win.loadFile(join(__dirname, '../renderer/index.html'))
 }

@@ -188,6 +188,22 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
       <LicensePanel license={license} onChange={onLicenseChange} />
       <DataPanel onReload={onReload} />
       <Panel title="Appearance">
+        <Field label="Theme">
+          <div className="flex gap-1.5 mt-1">
+            {[['dark', '🌙 Dark'], ['light', '☀️ Light']].map(([k, label]) => {
+              const active = (s.themeMode || 'dark') === k
+              return (
+                <button key={k} type="button"
+                  onClick={() => { const next = { ...s, themeMode: k }; setS(next); onSave(next) }}
+                  className="text-xs px-3 py-1.5 rounded-md font-semibold"
+                  style={{ background: active ? T.surface2 : 'transparent', color: active ? T.accent : T.dim, border: `1px solid ${active ? T.accent : T.line}` }}>
+                  {label}
+                </button>
+              )
+            })}
+          </div>
+        </Field>
+        <div className="mt-3" />
         <Field label="Accent color">
           <div className="flex flex-wrap gap-2 mt-1">
             {ACCENT_OPTIONS.map((o) => {

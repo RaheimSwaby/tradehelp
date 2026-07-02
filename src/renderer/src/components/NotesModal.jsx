@@ -54,7 +54,7 @@ export function NotesModal({ trade, onClose, onUpdate }) {
   }
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center p-4 z-50" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }} onClick={onClose}>
+    <div className="th-overlay fixed inset-0 flex items-center justify-center p-4 z-50" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }} onClick={onClose}>
       <div className="rounded-xl p-5 w-full max-w-2xl max-h-[88vh] overflow-y-auto" style={{ background: T.surface, border: `1px solid ${T.line}` }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between">
           <div>
@@ -122,7 +122,7 @@ export function NotesModal({ trade, onClose, onUpdate }) {
         ) : null}
       </div>
       {zoom && (
-        <div className="fixed inset-0 flex items-center justify-center p-6 z-[70]" style={{ background: 'rgba(0,0,0,0.92)' }} onClick={() => setZoom(null)}>
+        <div className="th-overlay fixed inset-0 flex items-center justify-center p-6 z-[70]" style={{ background: 'rgba(0,0,0,0.92)' }} onClick={() => setZoom(null)}>
           <img src={zoom} alt="" style={{ maxWidth: '95%', maxHeight: '95%', objectFit: 'contain' }} />
         </div>
       )}

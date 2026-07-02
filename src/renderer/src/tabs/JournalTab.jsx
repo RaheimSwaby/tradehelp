@@ -42,6 +42,31 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
   const [newSetup, setNewSetup] = useState('')
   const [noTradeOpen, setNoTradeOpen] = useState(false)
 
+  // Deleting is deferred while the undo toast is up — the DB delete unlinks
+  // screenshots, so committing early would make undo lossy.
+  const [pendingDelete, setPendingDelete] = useState(null) // { id, symbol }
+  const deleteTimerRef = useRef(null)
+  const pendingRef = useRef(null)
+  function requestDelete(t) {
+    if (pendingRef.current) commitDelete() // a second delete flushes the first
+    pendingRef.current = t.id
+    setPendingDelete({ id: t.id, symbol: t.symbol })
+    deleteTimerRef.current = setTimeout(commitDelete, 6000)
+  }
+  function commitDelete() {
+    clearTimeout(deleteTimerRef.current)
+    if (pendingRef.current) onRemove(pendingRef.current)
+    pendingRef.current = null
+    setPendingDelete(null)
+  }
+  function undoDelete() {
+    clearTimeout(deleteTimerRef.current)
+    pendingRef.current = null
+    setPendingDelete(null)
+  }
+  // Leaving the tab (unmount) commits any pending delete so it isn't lost.
+  useEffect(() => () => { if (pendingRef.current) { clearTimeout(deleteTimerRef.current); onRemove(pendingRef.current) } }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   function toggleSimple() { onSaveSettings?.({ simpleJournal: simple ? 'false' : 'true' }) }
 
   function addEmotion() {
@@ -62,13 +87,14 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     return trades.filter((t) => {
+      if (pendingDelete && t.id === pendingDelete.id) return false
       const pnl = Number(t.pnl) || 0
       if (outcome === 'win' && pnl < 0) return false
       if (outcome === 'loss' && pnl >= 0) return false
       if (!q) return true
       return [t.symbol, t.setup, t.emotion, t.reason, t.notes, t.direction].some((v) => String(v || '').toLowerCase().includes(q))
     })
-  }, [trades, query, outcome])
+  }, [trades, query, outcome, pendingDelete])
 
   const [page, setPage] = useState(0)
   const [pageSize, setPageSize] = useState(20)
@@ -410,7 +436,7 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
                     <td className="px-3 py-2" style={{ color: T.dim }}>{t.emotion}</td>
                     <td className="px-3 py-2 text-right whitespace-nowrap sticky right-0" style={{ background: T.surface }}>
                       <button type="button" onClick={() => startEdit(t)} title="Edit trade" style={{ color: T.dim }} className="mr-3 hover:opacity-70"><Pencil size={16} /></button>
-                      <button type="button" onClick={() => { if (window.confirm('Delete this trade? This cannot be undone.')) onRemove(t.id) }} title="Delete trade" style={{ color: T.down }} className="hover:opacity-70"><Trash2 size={16} /></button>
+                      <button type="button" onClick={() => requestDelete(t)} title="Delete trade" style={{ color: T.down }} className="hover:opacity-70"><Trash2 size={16} /></button>
                     </td>
                   </tr>
                 ))}
@@ -435,9 +461,17 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
         )}
         <div className="px-4 py-2 text-xs" style={{ color: T.faint, borderTop: `1px solid ${T.line}` }}>Double-click a row to open it — edit notes, view screenshots. Use ✏️ to edit the full trade.</div>
       </div>
-      {importOpen && <ImportModal onClose={() => setImportOpen(false)} onImport={async (rows) => { await onImport(rows); setImportOpen(false) }} />}
+      {importOpen && <ImportModal existing={trades} accounts={accounts} onClose={() => setImportOpen(false)} onImport={async (rows) => { await onImport(rows); setImportOpen(false) }} />}
       {annotating && <AnnotateModal src={annotating.dataUrl} onClose={() => setAnnotating(null)} onSave={(dataUrl, labels) => { setImages((p) => p.map((im) => (im.tmpId === annotating.tmpId ? { ...im, dataUrl, labels } : im))); setAnnotating(null) }} />}
       {noTradeOpen && <NoTradeModal emotions={allEmotions} onClose={() => setNoTradeOpen(false)} onSave={async (entry) => { await onAddDayLog?.(entry); setNoTradeOpen(false) }} />}
+      {pendingDelete && (
+        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[80] flex items-center gap-3 rounded-lg px-4 py-2.5 text-sm shadow-lg"
+          style={{ background: T.surface, border: `1px solid ${T.line}`, color: T.text }}>
+          <Trash2 size={14} style={{ color: T.down }} />
+          <span>Deleted <span className="font-semibold">{pendingDelete.symbol}</span></span>
+          <button type="button" onClick={undoDelete} className="font-semibold px-2 py-0.5 rounded" style={{ color: T.accent, border: `1px solid ${T.line}` }}>Undo</button>
+        </div>
+      )}
     </div>
   )
 }
@@ -451,7 +485,7 @@ function NoTradeModal({ emotions = [], onClose, onSave }) {
   const [note, setNote] = useState('')
   const inp = 'w-full rounded px-2 py-1.5 text-sm'
   return (
-    <div className="fixed inset-0 flex items-center justify-center p-4 z-[70]" style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }} onClick={onClose}>
+    <div className="th-overlay fixed inset-0 flex items-center justify-center p-4 z-[70]" style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }} onClick={onClose}>
       <div className="rounded-2xl w-full max-w-md p-5 space-y-3" style={{ background: T.surface, border: `1px solid ${T.line}` }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-2">
           <CalendarOff size={16} style={{ color: T.accent }} />

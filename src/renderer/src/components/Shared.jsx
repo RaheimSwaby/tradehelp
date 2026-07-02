@@ -2,13 +2,28 @@ import React from 'react'
 import { T, mono } from '../theme.js'
 import { executionGrade } from '../stats.js'
 
-export function Stat({ label, value, sub, tone }) {
+// Tiny inline sparkline for stat cards — normalizes the series into a 100×28 box.
+function Spark({ points, color }) {
+  if (!points || points.length < 2) return null
+  const min = Math.min(...points), max = Math.max(...points)
+  const span = max - min || 1
+  const pts = points.map((v, i) => `${(i / (points.length - 1)) * 100},${26 - ((v - min) / span) * 24}`).join(' ')
+  return (
+    <svg viewBox="0 0 100 28" preserveAspectRatio="none" className="w-full h-6 mt-1" aria-hidden="true">
+      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" vectorEffect="non-scaling-stroke" opacity="0.75" />
+    </svg>
+  )
+}
+
+export function Stat({ label, value, sub, tone, spark }) {
   const color = tone === 'up' ? T.up : tone === 'down' ? T.down : tone === 'accent' ? T.accent : T.text
   return (
     <div className="rounded-lg p-3 th-card" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
       <div className="text-xs uppercase tracking-wider" style={{ color: T.faint }}>{label}</div>
-      <div className="mt-1 text-xl font-semibold" style={{ ...mono, color }}>{value}</div>
+      {/* keyed span remounts when the value changes, replaying the slide-up */}
+      <div className="mt-1 text-xl font-semibold" style={{ ...mono, color }}><span key={String(value)} className="th-val">{value}</span></div>
       {sub && <div className="text-xs mt-0.5" style={{ color: T.dim }}>{sub}</div>}
+      <Spark points={spark} color={tone === 'down' ? T.down : T.accent} />
     </div>
   )
 }

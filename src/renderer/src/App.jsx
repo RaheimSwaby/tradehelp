@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react'
 import {
   BookOpen, LayoutDashboard, Brain, Target, Bot, Settings as SettingsIcon,
-  TrendingUp, Zap, Building2, ClipboardList, Gauge, ScanSearch, Play, BookMarked
+  Zap, Building2, ClipboardList, Gauge, ScanSearch, Play, BookMarked
 } from 'lucide-react'
 import { applyTheme, T, mono } from './theme.js'
 import { fmt$, fmtN, parseRules, IMPACT_RANK, ALERT_LEADS, GATE_CONFIGURED, isNewerVersion } from './utils.js'
@@ -26,6 +26,21 @@ import { Ticker } from './widgets/Ticker.jsx'
 import { EventBanner, FloatingEvents } from './widgets/EventBanner.jsx'
 import { UpdateBanner } from './widgets/UpdateBanner.jsx'
 import { UpdateAvailableBanner } from './widgets/UpdateAvailableBanner.jsx'
+
+/* ───────── logo mark: three ascending candles, tracks the live theme ───────── */
+function LogoMark({ size = 22 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="1" y="1" width="22" height="22" rx="6" fill={T.accentSoft} stroke={T.accent} strokeOpacity="0.35" />
+      <line x1="6" y1="10" x2="6" y2="20" stroke={T.down} strokeWidth="1.2" />
+      <rect x="4.6" y="12" width="2.8" height="5" rx="0.8" fill={T.down} />
+      <line x1="12" y1="6" x2="12" y2="17" stroke={T.accent} strokeWidth="1.2" />
+      <rect x="10.6" y="8" width="2.8" height="6" rx="0.8" fill={T.accent} />
+      <line x1="18" y1="3" x2="18" y2="13" stroke={T.up} strokeWidth="1.2" />
+      <rect x="16.6" y="4.5" width="2.8" height="6" rx="0.8" fill={T.up} />
+    </svg>
+  )
+}
 
 /* ───────── main app ───────── */
 export default function App() {
@@ -210,11 +225,14 @@ export default function App() {
   useEffect(() => { if (!toast) return; const id = setTimeout(() => setToast(null), 5000); return () => clearTimeout(id) }, [toast])
 
   // Re-theme the entire app when live. Runs every render; App is the only writer of T.
-  applyTheme(tradeMode, settings?.accentColor)
-  // Expose the live accent to CSS (used by .th-card hover borders).
+  applyTheme(tradeMode, settings?.accentColor, settings?.themeMode)
+  // Expose live theme values to CSS (card hover borders, focus rings, scrollbars)
+  // and keep the body backdrop in sync so overscroll doesn't flash the wrong color.
   useEffect(() => {
     document.documentElement.style.setProperty('--th-accent', T.accent)
-  }, [tradeMode, settings?.accentColor])
+    document.documentElement.style.setProperty('--th-line', T.line)
+    document.body.style.background = T.bg
+  }, [tradeMode, settings?.accentColor, settings?.themeMode])
 
   const TABS = [
     ['journal', 'Journal', BookOpen],
@@ -241,8 +259,10 @@ export default function App() {
       <div className="max-w-6xl mx-auto px-4 py-5">
         <header className="flex flex-wrap items-center justify-between gap-3 pb-4 mb-4" style={{ borderBottom: `1px solid ${T.line}` }}>
           <div className="flex items-center gap-2">
-            <TrendingUp size={20} style={{ color: T.accent }} />
-            <span className="text-lg font-semibold tracking-tight">TradeHelp</span>
+            <LogoMark />
+            <span className="text-lg font-semibold tracking-tight" style={{ color: T.text }}>
+              Trade<span style={{ color: T.accent }}>Help</span>
+            </span>
             <span className="text-xs px-1.5 py-0.5 rounded" style={{ color: tradeMode ? T.accent : T.faint, border: `1px solid ${tradeMode ? T.accent : T.line}` }}>{tradeMode ? 'live' : 'offline'}</span>
           </div>
           <div className="flex items-center gap-5 text-sm" style={mono}>
@@ -281,7 +301,7 @@ export default function App() {
         ) : GATE_CONFIGURED && license?.state === 'expired' ? (
           <Paywall onActivated={refreshLicense} />
         ) : (
-          <>
+          <div key={tab} className="th-fade">
             {tab === 'journal' && <Journal trades={trades} onAdd={addTrade} onUpdate={updateTrade} onRemove={removeTrade} onNotes={setNotesView} onImport={importTrades} accounts={propFirmAccounts} settings={settings} onSaveSettings={saveSettings} dayLogs={dayLogs} onAddDayLog={addDayLog} onDeleteDayLog={deleteDayLog} />}
             {tab === 'trade' && <TradeModeTab settings={settings} onSave={saveSettings} rules={rules} live={tradeMode} todayNet={todayNet} todayCount={todayTrades.length} weekNet={weekNet} goal={dailyGoal} maxLoss={maxLoss} onStart={startDay} onEnd={endSession} />}
             {tab === 'propfirm' && <PropFirm trades={trades} accounts={propFirmAccounts} onSave={savePropFirmAccounts} payouts={payouts} onAddPayout={addPayout} onDeletePayout={deletePayout} />}
@@ -294,7 +314,7 @@ export default function App() {
             {tab === 'patterns' && <Patterns trades={trades} />}
             {tab === 'playbook' && <PlaybookTab entries={playbook} trades={trades} onAdd={addPlaybookEntry} onUpdate={updatePlaybookEntry} onDelete={deletePlaybookEntry} />}
             {tab === 'settings' && <SettingsTab settings={settings} onSave={saveSettings} license={license} onLicenseChange={refreshLicense} onReload={reloadAll} />}
-          </>
+          </div>
         )}
       </div>
 

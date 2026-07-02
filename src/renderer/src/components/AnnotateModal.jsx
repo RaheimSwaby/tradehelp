@@ -107,7 +107,7 @@ export function AnnotateModal({ src, onSave, onClose }) {
   })
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center p-4 z-[80]" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={onClose}>
+    <div className="th-overlay fixed inset-0 flex items-center justify-center p-4 z-[80]" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={onClose}>
       <div className="rounded-xl p-4 max-w-[95vw] max-h-[92vh] overflow-y-auto" style={{ background: T.surface, border: `1px solid ${T.line}` }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
           <div className="text-sm font-semibold">Mark up chart</div>

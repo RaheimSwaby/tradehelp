@@ -3,9 +3,10 @@
 html, body, #root { height: 100%; }
 body { margin: 0; background: #0E1117; }
 
-/* tighten default scrollbars to match the dark desk theme */
+/* tighten default scrollbars to match the desk theme (var tracks light/dark) */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb { background: #2A3344; border-radius: 6px; }
+::-webkit-scrollbar-thumb { background: var(--th-line, #2A3344); border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: var(--th-accent, #F5B642); }
 ::-webkit-scrollbar-track { background: transparent; }
 
 /* lift + accent-glow on interactive cards (stat tiles, account & playbook cards) */
@@ -14,6 +15,41 @@ body { margin: 0; background: #0E1117; }
   transform: translateY(-2px);
   box-shadow: 0 8px 24px rgba(0,0,0,0.38);
   border-color: var(--th-accent, #F5B642) !important;
+}
+
+/* ── polish pass ── */
+/* tactile press feedback on every button */
+button { transition: opacity .12s ease, transform .1s ease, background .15s ease, color .15s ease, border-color .15s ease; }
+button:not(:disabled):active { transform: scale(0.97); }
+
+/* accent focus ring on inputs — replaces the browser default outline */
+input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: none;
+  border-color: var(--th-accent, #F5B642) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--th-accent, #F5B642) 25%, transparent);
+}
+
+/* tab content: quick fade-up when switching tabs */
+.th-fade { animation: th-fade .22s ease both; }
+@keyframes th-fade {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* modals: fade the backdrop, scale-in pop its dialog child */
+.th-overlay { animation: th-overlay .15s ease both; }
+@keyframes th-overlay { from { opacity: 0; } to { opacity: 1; } }
+.th-overlay > div { animation: th-pop .18s cubic-bezier(0.16, 1, 0.3, 1) both; }
+@keyframes th-pop {
+  from { opacity: 0; transform: scale(0.96) translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* stat values: subtle slide-up when the number changes (span is keyed by value) */
+.th-val { display: inline-block; animation: th-val .3s ease both; }
+@keyframes th-val {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
 }
 
 /* ticker tape marquee: two identical segments scrolled -50% for a seamless loop */

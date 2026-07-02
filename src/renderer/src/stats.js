@@ -9,6 +9,7 @@ export function computeStats(trades) {
   const wins = pnls.filter((p) => p > 0)
   const losses = pnls.filter((p) => p < 0)
   const totalPnl = pnls.reduce((a, b) => a + b, 0)
+  const totalFees = sorted.reduce((a, t) => a + (Number(t.fees) || 0), 0)
   const grossProfit = wins.reduce((a, b) => a + b, 0)
   const grossLoss = Math.abs(losses.reduce((a, b) => a + b, 0))
   const winRate = n ? (wins.length / n) * 100 : 0
@@ -122,7 +123,7 @@ export function computeStats(trades) {
   const toReasonArr = (o) => Object.entries(o).map(([name, m]) => ({ name, n: m })).sort((a, b) => b.n - a.n)
 
   return {
-    n, totalPnl, winRate, profitFactor, avgWin, avgLoss, expectancy, avgRR,
+    n, totalPnl, totalFees, winRate, profitFactor, avgWin, avgLoss, expectancy, avgRR,
     maxDD, currentStreak, bestWin, worstLoss, equity, daily, activeDays,
     grossProfit, grossLoss, nonTiltStreak: ntCur, bestNonTilt: ntBest,
     reasonsWin: toReasonArr(reasonsWin), reasonsLoss: toReasonArr(reasonsLoss),

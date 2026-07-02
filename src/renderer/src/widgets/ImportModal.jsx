@@ -5,13 +5,22 @@ import { fmt$, parseCSV, csvNum, csvDate, normDir, IMPORT_FIELDS } from '../util
 import { Field } from '../components/Shared.jsx'
 
 /* ───────── CSV import modal ───────── */
-export function ImportModal({ onClose, onImport }) {
+// Fingerprint a trade for duplicate detection. Only trades with a real entry
+// time are comparable — without one we can't tell a re-import from a genuinely
+// similar trade.
+const tradeKey = (t) => (t.entryTime ? `${t.symbol}|${t.entryTime}|${(Number(t.pnl) || 0).toFixed(2)}` : null)
+
+export function ImportModal({ onClose, onImport, existing = [], accounts = [] }) {
   const [data, setData] = useState(null) // { headers, rows }
   const [map, setMap] = useState({})
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState(null)
+  const [account, setAccount] = useState('')
+  const [includeDupes, setIncludeDupes] = useState(false)
   const fileRef = useRef(null)
   const inp = 'w-full rounded px-2 py-1.5 text-sm'
+
+  const existingKeys = useMemo(() => new Set(existing.map(tradeKey).filter(Boolean)), [existing])
 
   async function onFile(file) {
     if (!file) return
@@ -22,6 +31,9 @@ export function ImportModal({ onClose, onImport }) {
       const headers = all[0].map((h) => h.trim())
       const guessed = {}
       for (const [field, , re] of IMPORT_FIELDS) guessed[field] = headers.find((h) => re.test(h)) || ''
+      // A combined column like "Commissions & Fees" matches both guesses — keep it
+      // in one slot so the amount isn't counted twice.
+      if (guessed.commission && guessed.commission === guessed.fees) guessed.commission = ''
       // If no date column matched by header name, sniff the data for one — picks the
       // first unmapped column whose values mostly look like dates. Handles brokers
       // (e.g. TopstepX) whose date-column header we don't recognize, so trades keep
@@ -51,28 +63,35 @@ export function ImportModal({ onClose, onImport }) {
       if (!sym) return null
       const dir = normDir(cell(row, 'direction'))
       const entry = csvNum(cell(row, 'entry')), exit = csvNum(cell(row, 'exit')), size = csvNum(cell(row, 'size'))
-      const fees = map.fees ? Math.abs(csvNum(cell(row, 'fees'))) : 0
+      const feesOnly = map.fees ? Math.abs(csvNum(cell(row, 'fees'))) : 0
+      const commission = map.commission ? Math.abs(csvNum(cell(row, 'commission'))) : 0
+      const fees = feesOnly + commission
       const grossPnl = map.pnl ? csvNum(cell(row, 'pnl')) : (entry && exit && size ? (exit - entry) * size * (dir === 'Long' ? 1 : -1) : 0)
-      const pnl = grossPnl - fees // store net of fees
+      const pnl = grossPnl - fees // store net of fees + commission
       const et = csvDate(cell(row, 'entryTime')), xt = csvDate(cell(row, 'exitTime'))
-      return {
+      const t = {
         id: Date.now().toString(36) + Math.random().toString(16).slice(2),
         symbol: sym.toUpperCase(), direction: dir, entry, exit, stop: 0, target: 0, size, riskAmount: 0,
         pnl, fees, rr: 0, emotion: '', setup: '', notes: '', reason: '',
         entryTime: et, exitTime: xt,
         timestamp: et || xt || new Date().toISOString().slice(0, 16).replace('T', ' '), source: 'import'
       }
+      t.dupe = existingKeys.has(tradeKey(t))
+      return t
     }).filter(Boolean)
-  }, [data, map])
+  }, [data, map, existingKeys])
+
+  const dupeCount = built.filter((t) => t.dupe).length
+  const toImport = includeDupes ? built : built.filter((t) => !t.dupe)
 
   async function doImport() {
-    if (!built.length) { setErr('No rows had a symbol — check the Symbol mapping.'); return }
+    if (!toImport.length) { setErr(built.length ? 'Every row matched a trade you already have.' : 'No rows had a symbol — check the Symbol mapping.'); return }
     setBusy(true)
-    try { await onImport(built) } catch (e) { setErr(String(e?.message || e)); setBusy(false) }
+    try { await onImport(toImport.map(({ dupe, ...t }) => ({ ...t, account }))) } catch (e) { setErr(String(e?.message || e)); setBusy(false) }
   }
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center p-4 z-50" style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }} onClick={onClose}>
+    <div className="th-overlay fixed inset-0 flex items-center justify-center p-4 z-50" style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }} onClick={onClose}>
       <div className="rounded-xl w-full max-w-2xl max-h-[88vh] overflow-y-auto" style={{ background: T.surface, border: `1px solid ${T.line}` }} onClick={(e) => e.stopPropagation()}>
         <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${T.line}` }}>
           <div className="flex items-center gap-2"><Upload size={18} style={{ color: T.accent }} /><span className="text-sm font-semibold">Import trades from CSV</span></div>
@@ -100,18 +119,38 @@ export function ImportModal({ onClose, onImport }) {
                   </Field>
                 ))}
               </div>
+              {accounts.length > 0 && (
+                <Field label="Assign imported trades to">
+                  <select style={inputStyle} className={inp} value={account} onChange={(e) => setAccount(e.target.value)}>
+                    <option value="">Live / personal</option>
+                    {accounts.map((a) => <option key={a.id} value={a.id}>{a.label || 'Account'}</option>)}
+                  </select>
+                </Field>
+              )}
+              {dupeCount > 0 && (
+                <div className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
+                  <span style={{ color: T.dim }}>
+                    <span style={{ color: T.accent }}>{dupeCount} row{dupeCount === 1 ? '' : 's'}</span> match trades already in your journal (same symbol, entry time and P&L) — they'll be skipped.
+                  </span>
+                  <label className="flex items-center gap-1.5 shrink-0 cursor-pointer" style={{ color: T.dim }}>
+                    <input type="checkbox" checked={includeDupes} onChange={(e) => setIncludeDupes(e.target.checked)} />
+                    import anyway
+                  </label>
+                </div>
+              )}
               <div>
                 <div className="text-xs uppercase tracking-wider mb-1" style={{ color: T.faint }}>Preview</div>
                 <div className="overflow-x-auto rounded-lg" style={{ border: `1px solid ${T.line}` }}>
                   <table className="w-full text-xs" style={mono}>
-                    <thead><tr style={{ color: T.faint }}>{['Symbol', 'Dir', 'Entry', 'Exit', 'P&L', 'Entry time'].map((h) => <th key={h} className="text-left px-2 py-1 font-normal">{h}</th>)}</tr></thead>
+                    <thead><tr style={{ color: T.faint }}>{['Symbol', 'Dir', 'Entry', 'Exit', 'Fees', 'P&L (net)', 'Entry time'].map((h) => <th key={h} className="text-left px-2 py-1 font-normal">{h}</th>)}</tr></thead>
                     <tbody>
                       {built.slice(0, 3).map((t) => (
-                        <tr key={t.id} style={{ borderTop: `1px solid ${T.line}` }}>
+                        <tr key={t.id} style={{ borderTop: `1px solid ${T.line}`, opacity: t.dupe && !includeDupes ? 0.4 : 1 }}>
                           <td className="px-2 py-1">{t.symbol}</td>
                           <td className="px-2 py-1" style={{ color: t.direction === 'Long' ? T.up : T.down }}>{t.direction}</td>
                           <td className="px-2 py-1">{t.entry || '—'}</td>
                           <td className="px-2 py-1">{t.exit || '—'}</td>
+                          <td className="px-2 py-1" style={{ color: T.dim }}>{t.fees ? fmt$(t.fees) : '—'}</td>
                           <td className="px-2 py-1" style={{ color: t.pnl >= 0 ? T.up : T.down }}>{fmt$(t.pnl)}</td>
                           <td className="px-2 py-1" style={{ color: T.dim }}>{t.entryTime || '—'}</td>
                         </tr>
@@ -128,7 +167,7 @@ export function ImportModal({ onClose, onImport }) {
           <span className="text-xs" style={{ color: T.faint }}>Imported trades count as <span style={{ color: T.up }}>Verified</span> on your rating.</span>
           <div className="flex gap-2">
             {data && <button type="button" onClick={() => { setData(null); setMap({}); setErr(null) }} className="rounded-md px-3 py-2 text-sm" style={{ background: T.surface2, color: T.text, border: `1px solid ${T.line}` }}>Choose another</button>}
-            <button type="button" disabled={!data || busy} onClick={doImport} className="rounded-md px-4 py-2 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306', opacity: (!data || busy) ? 0.5 : 1 }}>{busy ? 'Importing…' : `Import ${built.length} trades`}</button>
+            <button type="button" disabled={!data || busy} onClick={doImport} className="rounded-md px-4 py-2 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306', opacity: (!data || busy) ? 0.5 : 1 }}>{busy ? 'Importing…' : `Import ${toImport.length} trade${toImport.length === 1 ? '' : 's'}`}</button>
           </div>
         </div>
       </div>
