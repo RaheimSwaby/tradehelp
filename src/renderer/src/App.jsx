@@ -26,6 +26,7 @@ import { Ticker } from './widgets/Ticker.jsx'
 import { EventBanner, FloatingEvents } from './widgets/EventBanner.jsx'
 import { UpdateBanner } from './widgets/UpdateBanner.jsx'
 import { UpdateAvailableBanner } from './widgets/UpdateAvailableBanner.jsx'
+import { Backdrop } from './components/Backdrop.jsx'
 
 /* ───────── logo mark: three ascending candles, tracks the live theme ───────── */
 function LogoMark({ size = 22 }) {
@@ -250,7 +251,9 @@ export default function App() {
   ]
 
   return (
-    <div style={{ background: T.bg, color: T.text, minHeight: '100vh', borderTop: `3px solid ${tradeMode ? T.accent : 'transparent'}`, transition: 'background .3s' }}>
+    <div style={{ color: T.text, minHeight: '100vh', borderTop: `3px solid ${tradeMode ? T.accent : 'transparent'}` }}>
+      {/* bg lives on <body> (synced above) so the z:-1 particle canvas shows through */}
+      <Backdrop variant={!settings?.backdrop || settings.backdrop === 'on' ? 'constellation' : settings.backdrop} />
       <Ticker settings={settings} />
       {updateAvail && <UpdateAvailableBanner info={updateAvail} onClose={() => setUpdateAvail(null)} />}
       {GATE_CONFIGURED && license?.state === 'trial' && <TrialBanner days={license.daysLeft} />}

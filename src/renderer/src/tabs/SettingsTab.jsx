@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { T, mono, inputStyle, ACCENT_OPTIONS } from '../theme.js'
 import { CHECKOUT_URL } from '../utils.js'
 import { Panel, Field } from '../components/Shared.jsx'
+import { BACKDROP_OPTIONS } from '../components/Backdrop.jsx'
 
 /* ───────── license & trial ───────── */
 export function TrialBanner({ days }) {
@@ -195,6 +196,23 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
               return (
                 <button key={k} type="button"
                   onClick={() => { const next = { ...s, themeMode: k }; setS(next); onSave(next) }}
+                  className="text-xs px-3 py-1.5 rounded-md font-semibold"
+                  style={{ background: active ? T.surface2 : 'transparent', color: active ? T.accent : T.dim, border: `1px solid ${active ? T.accent : T.line}` }}>
+                  {label}
+                </button>
+              )
+            })}
+          </div>
+        </Field>
+        <div className="mt-3" />
+        <Field label="Animated backdrop">
+          <div className="flex flex-wrap gap-1.5 mt-1">
+            {BACKDROP_OPTIONS.map(([k, label]) => {
+              const cur = !s.backdrop || s.backdrop === 'on' ? 'constellation' : s.backdrop
+              const active = cur === k
+              return (
+                <button key={k} type="button"
+                  onClick={() => { const next = { ...s, backdrop: k }; setS(next); onSave(next) }}
                   className="text-xs px-3 py-1.5 rounded-md font-semibold"
                   style={{ background: active ? T.surface2 : 'transparent', color: active ? T.accent : T.dim, border: `1px solid ${active ? T.accent : T.line}` }}>
                   {label}
