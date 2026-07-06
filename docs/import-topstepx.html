@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Import TopstepX Trades into a Trading Journal (CSV Guide)</title>
+<meta name="description" content="Step-by-step: export your TopstepX trade history to CSV and import it into TradeHelp. EnteredAt/ExitedAt times, fees and P&L map automatically — and each batch can be assigned to a prop account." />
+<link rel="canonical" href="https://raheimswaby.github.io/tradehelp/import-topstepx.html" />
+<link rel="icon" href="logo.svg" />
+<link rel="stylesheet" href="site.css" />
+</head>
+<body>
+<canvas id="bg-matrix" aria-hidden="true"></canvas>
+<div class="topbar"><div class="wrap"><nav>
+  <a class="brand" href="./"><img src="logo.svg" width="28" height="28" alt="" />Trade<span class="h">Help</span></a>
+  <div style="display:flex;gap:10px;align-items:center">
+    <a class="btn ghost" href="https://tradehelp.gumroad.com/l/oyftvr">Buy — $50</a>
+    <a class="btn" href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.exe">Download</a>
+  </div>
+</nav></div></div>
+
+<article><div class="wrap">
+  <h1>Import <span class="accent">TopstepX</span> trades into your journal</h1>
+  <p class="lede">Running a Topstep eval or funded account? Export your trades from TopstepX and TradeHelp journals them in one pass — mapped automatically, fees netted, and the whole batch assigned to the right prop account so your cushion math stays honest.</p>
+
+  <h2>Export from TopstepX</h2>
+  <ol class="steps">
+    <li>In TopstepX, open your <b>trade history / trades log</b> for the account you want to journal.</li>
+    <li>Set the date range you're after.</li>
+    <li>Use the <b>export to CSV</b> action — the file has columns like <code>ContractName, EnteredAt, ExitedAt, EntryPrice, ExitPrice, Fees, PnL, Size, Type</code>.</li>
+  </ol>
+
+  <h2>Import into TradeHelp</h2>
+  <ol class="steps">
+    <li>Open the <b>Journal</b> tab and click <b>Import CSV</b>.</li>
+    <li>Drop the file in — TradeHelp shows "<span class="mono">TopstepX export recognized</span>" with every column mapped.</li>
+    <li>Pick the matching prop account in <b>"Assign imported trades to"</b> so the trades count toward that account's target and drawdown.</li>
+    <li>Check the preview, click <b>Import</b>, and watch the account card update.</li>
+  </ol>
+
+  <h2>What TradeHelp handles for you</h2>
+  <ul>
+    <li><b>Timestamps that other journals miss</b> — TopstepX's <code>EnteredAt</code>/<code>ExitedAt</code> headers are recognized outright, so your trades keep their real dates and fill the hour-by-day heat map.</li>
+    <li><b>Fees netted into P&amp;L</b> and totaled on your dashboard.</li>
+    <li><b>Contract names cleaned</b> so symbols group consistently with manually logged trades.</li>
+    <li><b>Duplicates skipped</b> — re-export any time; only new trades come in.</li>
+    <li><b>Eval-aware journaling</b> — combined with <a href="prop-firm-trading-journal.html">per-account tracking</a>, imports keep each account's cushion, target progress and payout history accurate.</li>
+    <li><b>Rating turns Verified</b> from broker-sourced trades.</li>
+  </ul>
+
+  <p>Topstep traders often also run <a href="import-tradovate.html">Tradovate</a> or <a href="import-ninjatrader.html">NinjaTrader 8</a> — both exports are auto-recognized too.</p>
+
+  <div class="cta-box">
+    <h2>Keep your eval on the record — privately</h2>
+    <p>Your eval results live on your machine, not in a cloud. Free 14-day trial, then $50 once.</p>
+    <a class="btn" href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.exe">Download for Windows</a>
+    <p class="note">Also for <a href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.dmg">macOS</a> and <a href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.AppImage">Linux</a>.</p>
+  </div>
+</div></article>
+
+<footer><div class="wrap">
+  <div class="links">
+    <a href="./">Home</a>
+    <a href="vs-tradezella.html">vs TradeZella</a>
+    <a href="prop-firm-trading-journal.html">Prop-firm journal</a>
+    <a href="offline-trading-journal.html">Offline journal</a>
+    <a href="import-ninjatrader.html">Import: NinjaTrader</a>
+    <a href="import-tradovate.html">Import: Tradovate</a>
+    <a href="import-topstepx.html">Import: TopstepX</a>
+  </div>
+  TradeHelp — not financial advice. An educational journaling tool. · <a href="https://github.com/RaheimSwaby/tradehelp">Source on GitHub</a>
+</div></footer>
+<script src="matrix.js"></script>
+<script data-goatcounter="https://kingdd69.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
+</body>
+</html>

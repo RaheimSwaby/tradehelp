@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Trading Journal for Prop Firm Traders — evals, drawdown & payouts</title>
+<meta name="description" content="A trading journal built for prop-firm traders: per-account eval tracking, trailing drawdown cushion, payout logging, and a max-loss lockout that protects your account while you trade. $50 once, no subscription." />
+<link rel="canonical" href="https://raheimswaby.github.io/tradehelp/prop-firm-trading-journal.html" />
+<link rel="icon" href="logo.svg" />
+<link rel="stylesheet" href="site.css" />
+</head>
+<body>
+<canvas id="bg-matrix" aria-hidden="true"></canvas>
+<div class="topbar"><div class="wrap"><nav>
+  <a class="brand" href="./"><img src="logo.svg" width="28" height="28" alt="" />Trade<span class="h">Help</span></a>
+  <div style="display:flex;gap:10px;align-items:center">
+    <a class="btn ghost" href="https://tradehelp.gumroad.com/l/oyftvr">Buy — $50</a>
+    <a class="btn" href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.exe">Download</a>
+  </div>
+</nav></div></div>
+
+<article><div class="wrap">
+  <h1>The trading journal built for<br /><span class="accent">prop-firm traders</span></h1>
+  <p class="lede">Generic journals treat every trade the same. But if you're running evals and funded accounts, the questions that matter are different: <em>How much cushion do I have before the trailing drawdown? Which account is closest to breach? Am I actually netting payouts, or just recycling eval fees?</em> TradeHelp answers those on one screen.</p>
+
+  <h2>Built around how prop trading actually works</h2>
+  <h3>Every account tracked separately</h3>
+  <p>Add each eval or funded account — Topstep, Apex, TradeDay, MyFundedFutures, any firm — with its own profit target, daily loss limit and trailing drawdown. Templates for common 25K / 50K / 100K / 150K sizes fill the numbers in one click, and you can edit them to match your firm's exact rules.</p>
+  <h3>Two bars that tell the whole story</h3>
+  <p>Each account card shows progress toward target <b>and</b> remaining drawdown cushion, live from the trades you tag to it. The account closest to breach gets flagged, so you know exactly where you stand before you take the next trade.</p>
+  <h3>Tag trades where they belong</h3>
+  <p>Every trade is tagged Live or to a specific prop account right in the journal — and the dashboard has a Live / Prop / All toggle so your personal P&amp;L never blurs into your eval stats.</p>
+  <h3>Payouts, finally on the record</h3>
+  <p>Log every payout per account and see the all-time total. There's even an achievement ladder — your first payout unlocks a medal, and it climbs eight tiers as the payouts stack up.</p>
+  <h3>A lockout that saves evals</h3>
+  <p>Most blown evals die on one tilted afternoon. In Trade Mode, TradeHelp tracks your day against your max daily loss and throws a full-screen lockout when you hit it — plus a pre-trade checklist you confirm before going live, and warnings when high-impact news is minutes away.</p>
+
+  <h2>Import straight from your prop platform</h2>
+  <p>CSV exports from <a href="import-topstepx.html">TopstepX</a>, <a href="import-tradovate.html">Tradovate</a> and <a href="import-ninjatrader.html">NinjaTrader</a> are recognized automatically — columns map themselves, fees and commissions net into P&amp;L, duplicates get skipped on re-import, and you can assign the whole batch to a specific prop account in one dropdown. Imported trades also mark your trader rating as <b>Verified</b>.</p>
+
+  <div class="callout"><b>Private by design.</b> Your eval results, payout history and psychology notes live in a local database on your machine — no cloud, no account, nothing to leak. That matters when your trading record <em>is</em> your business.</div>
+
+  <h2>FAQ</h2>
+  <div class="faq">
+    <details><summary>Does it work with my firm?</summary><p>Yes — accounts are defined by numbers (target, daily loss, trailing drawdown, size), not by firm names, so any futures or forex prop firm's rules can be modeled, including multiple accounts at different firms simultaneously.</p></details>
+    <details><summary>Can I track evals and funded accounts at the same time?</summary><p>Yes. Add as many accounts as you like; each gets its own card, cushion math and payout log. Trades tagged to one account never count against another.</p></details>
+    <details><summary>Does the drawdown update automatically?</summary><p>The cushion recalculates from every trade you tag to the account. Trailing logic follows your equity high, the same way most firms compute it.</p></details>
+    <details><summary>What does it cost?</summary><p>$50 once — less than most single eval fees — with a free 14-day trial first. No subscription, no account. See <a href="vs-tradezella.html">how that compares</a> to subscription journals.</p></details>
+  </div>
+
+  <div class="cta-box">
+    <h2>Protect the eval. Keep the payout.</h2>
+    <p>Free for 14 days, everything unlocked. Then $50 once — about one blown eval fee, ever.</p>
+    <a class="btn" href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.exe">Download for Windows</a>
+    <p class="note">Also available for <a href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.dmg">macOS</a> and <a href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.AppImage">Linux</a>.</p>
+  </div>
+</div></article>
+
+<footer><div class="wrap">
+  <div class="links">
+    <a href="./">Home</a>
+    <a href="vs-tradezella.html">vs TradeZella</a>
+    <a href="prop-firm-trading-journal.html">Prop-firm journal</a>
+    <a href="offline-trading-journal.html">Offline journal</a>
+    <a href="import-ninjatrader.html">Import: NinjaTrader</a>
+    <a href="import-tradovate.html">Import: Tradovate</a>
+    <a href="import-topstepx.html">Import: TopstepX</a>
+  </div>
+  TradeHelp — not financial advice. An educational journaling tool. · <a href="https://github.com/RaheimSwaby/tradehelp">Source on GitHub</a>
+</div></footer>
+<script src="matrix.js"></script>
+<script data-goatcounter="https://kingdd69.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
+</body>
+</html>

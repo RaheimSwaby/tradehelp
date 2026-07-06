@@ -27,6 +27,7 @@ import { EventBanner, FloatingEvents } from './widgets/EventBanner.jsx'
 import { UpdateBanner } from './widgets/UpdateBanner.jsx'
 import { UpdateAvailableBanner } from './widgets/UpdateAvailableBanner.jsx'
 import { Backdrop } from './components/Backdrop.jsx'
+import { Onboarding } from './components/Onboarding.jsx'
 
 /* ───────── logo mark: three ascending candles, tracks the live theme ───────── */
 function LogoMark({ size = 22 }) {
@@ -65,6 +66,7 @@ export default function App() {
   const wnRef = useRef(false)
   const [updateReady, setUpdateReady] = useState(null)
   const [updateAvail, setUpdateAvail] = useState(null)
+  const [onboard, setOnboard] = useState(false)
   const [playbook, setPlaybook] = useState([])
   const [dayLogs, setDayLogs] = useState([])
   const [payouts, setPayouts] = useState([])
@@ -85,6 +87,12 @@ export default function App() {
       setReady(true)
     })()
   }, [hasApi])
+
+  // First-run wizard: fresh install only (no trades yet, never onboarded or skipped).
+  // Evaluated once when loading finishes so importing trades mid-wizard can't re-trigger it.
+  useEffect(() => {
+    if (ready && hasApi && settings && trades.length === 0 && settings.onboarded !== 'true') setOnboard(true)
+  }, [ready]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Show "What's new" once after an auto-update bumps the version (not on a fresh install).
   useEffect(() => {
@@ -335,6 +343,10 @@ export default function App() {
       {toast && <AchievementToast a={toast} onClose={() => setToast(null)} />}
       {updateReady && <UpdateBanner info={updateReady} onInstall={() => window.api.installUpdate()} />}
       {whatsNew && <WhatsNew info={whatsNew} onClose={() => setWhatsNew(null)} />}
+      {onboard && ready && hasApi && (!GATE_CONFIGURED || license?.state !== 'expired') && (
+        <Onboarding settings={settings} accounts={propFirmAccounts} onSaveSettings={saveSettings} onImport={importTrades}
+          onDone={(goTab) => { setOnboard(false); saveSettings({ onboarded: 'true' }); if (goTab) setTab(goTab) }} />
+      )}
     </div>
   )
 }

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Import NinjaTrader 8 Trades into a Trading Journal (CSV Guide)</title>
+<meta name="description" content="Step-by-step: export your NinjaTrader 8 trade history to CSV and import it into TradeHelp. Columns map automatically — Market pos., Profit, Commission and times are recognized out of the box." />
+<link rel="canonical" href="https://raheimswaby.github.io/tradehelp/import-ninjatrader.html" />
+<link rel="icon" href="logo.svg" />
+<link rel="stylesheet" href="site.css" />
+</head>
+<body>
+<canvas id="bg-matrix" aria-hidden="true"></canvas>
+<div class="topbar"><div class="wrap"><nav>
+  <a class="brand" href="./"><img src="logo.svg" width="28" height="28" alt="" />Trade<span class="h">Help</span></a>
+  <div style="display:flex;gap:10px;align-items:center">
+    <a class="btn ghost" href="https://tradehelp.gumroad.com/l/oyftvr">Buy — $50</a>
+    <a class="btn" href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.exe">Download</a>
+  </div>
+</nav></div></div>
+
+<article><div class="wrap">
+  <h1>Import <span class="accent">NinjaTrader 8</span> trades into your journal</h1>
+  <p class="lede">NinjaTrader's Trade Performance report exports a clean CSV — and TradeHelp recognizes it on sight. Two minutes from platform to journaled, verified trades.</p>
+
+  <h2>Export from NinjaTrader 8</h2>
+  <ol class="steps">
+    <li>In the Control Center, open <b>New&nbsp;→&nbsp;Trade Performance</b>.</li>
+    <li>Pick your account and date range, then run the report and switch the display to the <b>Trades</b> tab (the grid of individual trades).</li>
+    <li><b>Set the display unit to Currency ($)</b> — the toolbar dropdown that toggles Points / Ticks / Currency. The export follows whatever is displayed, and you want P&amp;L in dollars.</li>
+    <li>Right-click the trades grid and choose <b>Export…</b>, saving as CSV.</li>
+  </ol>
+
+  <div class="callout"><b>The one gotcha:</b> if the report is displaying Points when you export, your P&amp;L column will import as points, not dollars. Set the unit to Currency first (step 3) and everything lands correctly.</div>
+
+  <h2>Import into TradeHelp</h2>
+  <ol class="steps">
+    <li>Open the <b>Journal</b> tab and click <b>Import CSV</b>.</li>
+    <li>Drop the file in. TradeHelp detects the NinjaTrader export automatically — you'll see "<span class="mono">NinjaTrader 8 export recognized</span>" with every column pre-mapped.</li>
+    <li>Check the preview and click <b>Import</b>.</li>
+  </ol>
+
+  <h2>What TradeHelp handles for you</h2>
+  <ul>
+    <li><b>Direction</b> from the <code>Market pos.</code> column (Long / Short).</li>
+    <li><b>Symbols cleaned up</b> — "MNQ MAR24" becomes <code>MNQ</code>, so contract months don't fragment your stats.</li>
+    <li><b>Commission netted into P&amp;L</b> and tracked separately, with total fees shown on your dashboard.</li>
+    <li><b>Entry and exit times parsed</b>, powering the hour-by-day performance heat map.</li>
+    <li><b>Duplicates skipped</b> — re-export next month and only the new trades import.</li>
+    <li><b>Rating turns Verified</b> — broker-imported trades upgrade your trader rating from "Self-reported".</li>
+  </ul>
+
+  <p>Trading through Tradovate or TopstepX instead? See the <a href="import-tradovate.html">Tradovate guide</a> or the <a href="import-topstepx.html">TopstepX guide</a>. Any other platform's CSV works too — the generic mapper guesses columns from headers and lets you fix any it misses.</p>
+
+  <div class="cta-box">
+    <h2>Your NinjaTrader history, journaled in minutes</h2>
+    <p>Free 14-day trial — import everything and see your real stats today.</p>
+    <a class="btn" href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.exe">Download for Windows</a>
+    <p class="note">Also for <a href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.dmg">macOS</a> and <a href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.AppImage">Linux</a> · $50 once after the trial.</p>
+  </div>
+</div></article>
+
+<footer><div class="wrap">
+  <div class="links">
+    <a href="./">Home</a>
+    <a href="vs-tradezella.html">vs TradeZella</a>
+    <a href="prop-firm-trading-journal.html">Prop-firm journal</a>
+    <a href="offline-trading-journal.html">Offline journal</a>
+    <a href="import-ninjatrader.html">Import: NinjaTrader</a>
+    <a href="import-tradovate.html">Import: Tradovate</a>
+    <a href="import-topstepx.html">Import: TopstepX</a>
+  </div>
+  TradeHelp — not financial advice. An educational journaling tool. · <a href="https://github.com/RaheimSwaby/tradehelp">Source on GitHub</a>
+</div></footer>
+<script src="matrix.js"></script>
+<script data-goatcounter="https://kingdd69.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
+</body>
+</html>

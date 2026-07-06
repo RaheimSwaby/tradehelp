@@ -4,7 +4,8 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>TradeHelp — local-first trading journal & offline AI coach</title>
-<meta name="description" content="A desktop trading journal with an offline AI coach. Your trades live on your machine and never leave it. Free 14-day trial, then a one-time $50 — no subscription. For Windows." />
+<meta name="description" content="A desktop trading journal with an offline AI coach. Your trades live on your machine and never leave it. Free 14-day trial, then a one-time $50 — no subscription. Windows, macOS & Linux." />
+<link rel="canonical" href="https://raheimswaby.github.io/tradehelp/" />
 <link rel="icon" href="logo.svg" />
 <style>
   :root{
@@ -13,7 +14,9 @@
   }
   *{box-sizing:border-box;margin:0;padding:0}
   body{background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.6;-webkit-font-smoothing:antialiased}
-  /* soft accent glow behind the hero */
+  /* animated matrix rain, painted behind everything */
+  #bg-matrix{position:fixed;inset:0;width:100%;height:100%;z-index:-2;pointer-events:none;display:block}
+  /* soft accent glow behind the hero, over the matrix */
   body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;background:radial-gradient(72% 55% at 50% 0%, rgba(245,182,66,.12), transparent 70%)}
   .wrap{max-width:1040px;margin:0 auto;padding:0 24px}
   a{color:inherit;text-decoration:none}
@@ -50,6 +53,26 @@
   .card h3{font-size:16px;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:8px}
   .dot{width:9px;height:9px;border-radius:3px;display:inline-block}
   .card p{color:var(--dim);font-size:14.5px}
+
+  /* comparison table */
+  .compare{overflow-x:auto;border:1px solid var(--line);border-radius:14px}
+  table.cmp{width:100%;border-collapse:collapse;font-size:14.5px;min-width:520px}
+  table.cmp th,table.cmp td{text-align:left;padding:13px 16px;border-bottom:1px solid var(--line)}
+  table.cmp tr:last-child td{border-bottom:none}
+  table.cmp thead th{background:var(--surface2);color:var(--text);font-weight:600}
+  table.cmp thead th.us{color:var(--accent)}
+  table.cmp td{background:var(--surface);color:var(--dim)}
+  table.cmp td:first-child{color:var(--text);font-weight:500}
+  table.cmp td.us{color:var(--text)}
+  .yes{color:var(--up);font-weight:600}
+  .no{color:var(--down)}
+  .meh{color:var(--faint)}
+  .cmp-more{text-align:center;margin-top:22px}
+
+  .nav-links{display:flex;gap:22px;align-items:center;font-size:14px}
+  .nav-links a{color:var(--dim);transition:color .15s ease}
+  .nav-links a:hover{color:var(--text)}
+  @media (max-width:720px){.nav-links{display:none}}
 
   .privacy{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:34px;text-align:center}
   .privacy h2{margin-bottom:10px}
@@ -89,13 +112,19 @@
 </style>
 </head>
 <body>
+<canvas id="bg-matrix" aria-hidden="true"></canvas>
 <div class="topbar">
   <div class="wrap">
     <nav>
       <a class="brand" href="#"><img src="logo.svg" width="30" height="30" alt="" />Trade<span class="h">Help</span></a>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#compare">Compare</a>
+        <a href="#pricing">Pricing</a>
+      </div>
       <div style="display:flex;gap:10px;align-items:center">
         <a class="btn ghost" href="https://tradehelp.gumroad.com/l/oyftvr">Buy — $50</a>
-        <a class="btn" href="https://github.com/RaheimSwaby/tradehelp/releases/download/v0.27.0/TradeHelp-Setup.exe">Download</a>
+        <a class="btn" href="https://github.com/RaheimSwaby/tradehelp/releases/download/v0.28.0/TradeHelp-Setup.exe">Download</a>
       </div>
     </nav>
   </div>
@@ -107,7 +136,7 @@
     <h1>Your trading edge,<br /><span class="accent">on your machine.</span></h1>
     <p class="sub">A local-first trading journal with an offline AI coach. Log trades, grade your process, track prop-firm rules, and let AI read your charts — all without your data ever leaving your device.</p>
     <div class="cta">
-      <a class="btn" href="https://github.com/RaheimSwaby/tradehelp/releases/download/v0.27.0/TradeHelp-Setup.exe">
+      <a class="btn" href="https://github.com/RaheimSwaby/tradehelp/releases/download/v0.28.0/TradeHelp-Setup.exe">
         <img src="logo.svg" width="18" height="18" alt="" /> Download for Windows
       </a>
       <a class="btn ghost" href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.dmg">Download for macOS</a>
@@ -142,7 +171,7 @@
   </div>
 </div>
 
-<section>
+<section id="features">
   <div class="wrap">
     <h2>Everything in one place</h2>
     <p class="lede">A serious journal for serious traders — without the subscription or the cloud.</p>
@@ -154,7 +183,8 @@
       <div class="card"><h3><span class="dot" style="background:var(--accent)"></span>Prop-firm tracking</h3><p>Track one or many challenges — profit target, daily loss, trailing drawdown — with live cushion-to-breach and a tightest-account flag.</p></div>
       <div class="card"><h3><span class="dot" style="background:var(--up)"></span>Rating &amp; achievements</h3><p>A 59–99 trader rating that grades your <em>process</em>, not luck, plus psychology-based achievements and a non-tilt streak.</p></div>
       <div class="card"><h3><span class="dot" style="background:var(--up)"></span>Reviews &amp; journal</h3><p>Weekly to year-to-date reviews with stats, an equity curve, a P&amp;L calendar and a saved written reflection — with an optional AI summary.</p></div>
-      <div class="card"><h3><span class="dot" style="background:var(--down)"></span>Verified import</h3><p>Import any broker CSV — map the columns once — and your rating upgrades from “Self-reported” to “Verified”.</p></div>
+      <div class="card"><h3><span class="dot" style="background:var(--down)"></span>Verified import</h3><p>NinjaTrader, Tradovate and TopstepX exports are recognized on sight — any other CSV maps in a click — and your rating upgrades from “Self-reported” to “Verified”.</p></div>
+      <div class="card"><h3><span class="dot" style="background:var(--accent)"></span>Make it yours</h3><p>Light &amp; dark themes, eleven accent colors, and six animated backdrops — constellation, matrix rain, glow orbs, flames, drifting candles or a bouncing equalizer.</p></div>
     </div>
   </div>
 </section>
@@ -184,7 +214,31 @@
   </div>
 </section>
 
-<section>
+<section id="compare">
+  <div class="wrap">
+    <h2>TradeHelp vs TradeZella</h2>
+    <p class="lede">Both are serious journals. The difference is whether you own it or rent it.</p>
+    <div class="compare">
+      <table class="cmp">
+        <thead>
+          <tr><th></th><th class="us">TradeHelp</th><th>TradeZella</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Price</td><td class="us"><span class="yes">$50 once</span>, free updates</td><td class="meh">Subscription — ~$300+/yr</td></tr>
+          <tr><td>Your trades live</td><td class="us">On your machine (local SQLite)</td><td class="meh">Their cloud</td></tr>
+          <tr><td>Account required</td><td class="us"><span class="yes">None</span></td><td class="meh">Yes</td></tr>
+          <tr><td>Works offline</td><td class="us"><span class="yes">Fully</span></td><td class="no">No</td></tr>
+          <tr><td>AI coach</td><td class="us">Runs locally (Ollama) or your own key</td><td class="meh">Cloud only</td></tr>
+          <tr><td>Prop-firm tracking</td><td class="us">Per-account cushion, targets &amp; payouts</td><td class="meh">Basic</td></tr>
+          <tr><td>Live-session lockout</td><td class="us"><span class="yes">Yes</span> — checklist + max-loss stop</td><td class="no">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="cmp-more"><a class="btn ghost" href="vs-tradezella.html">See the full comparison →</a></div>
+  </div>
+</section>
+
+<section id="pricing">
   <div class="wrap">
     <h2>Simple pricing</h2>
     <p class="lede">Try everything free for 14 days. If it earns a place in your routine, unlock it forever.</p>
@@ -192,7 +246,7 @@
       <div style="font-size:46px;font-weight:700;letter-spacing:-.02em">$50<span style="font-size:16px;color:var(--dim);font-weight:400"> once</span></div>
       <p style="margin:10px auto 22px">No subscription. No account. Works offline. Free updates for life — and one key activates up to 2 devices.</p>
       <a class="btn" href="https://tradehelp.gumroad.com/l/oyftvr">Buy on Gumroad — $50</a>
-      <p class="note">14-day free trial included — <a href="https://github.com/RaheimSwaby/tradehelp/releases/download/v0.27.0/TradeHelp-Setup.exe" style="color:var(--dim);text-decoration:underline">download free</a> and start today.</p>
+      <p class="note">14-day free trial included — <a href="https://github.com/RaheimSwaby/tradehelp/releases/download/v0.28.0/TradeHelp-Setup.exe" style="color:var(--dim);text-decoration:underline">download free</a> and start today.</p>
     </div>
   </div>
 </section>
@@ -208,6 +262,12 @@
 
 <footer>
   <div class="wrap">
+    <p style="margin-bottom:10px">
+      <a href="vs-tradezella.html">TradeHelp vs TradeZella</a> ·
+      <a href="prop-firm-trading-journal.html">Journal for prop-firm traders</a> ·
+      <a href="offline-trading-journal.html">Offline trading journal</a> ·
+      Import guides: <a href="import-ninjatrader.html">NinjaTrader</a>, <a href="import-tradovate.html">Tradovate</a>, <a href="import-topstepx.html">TopstepX</a>
+    </p>
     TradeHelp — not financial advice. An educational journaling tool. ·
     <a href="https://github.com/RaheimSwaby/tradehelp">Source on GitHub</a>
   </div>
@@ -238,5 +298,7 @@
     });
   })();
 </script>
+<script src="matrix.js"></script>
+<script data-goatcounter="https://kingdd69.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
 </body>
 </html>

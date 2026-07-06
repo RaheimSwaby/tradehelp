@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TradeHelp vs TradeZella — one-time local journal vs cloud subscription</title>
+<meta name="description" content="An honest comparison of TradeHelp and TradeZella: $50 once vs an ongoing subscription, local-first storage vs cloud, offline AI coach vs web platform. Which trading journal fits you?" />
+<link rel="canonical" href="https://raheimswaby.github.io/tradehelp/vs-tradezella.html" />
+<link rel="icon" href="logo.svg" />
+<link rel="stylesheet" href="site.css" />
+</head>
+<body>
+<canvas id="bg-matrix" aria-hidden="true"></canvas>
+<div class="topbar"><div class="wrap"><nav>
+  <a class="brand" href="./"><img src="logo.svg" width="28" height="28" alt="" />Trade<span class="h">Help</span></a>
+  <div style="display:flex;gap:10px;align-items:center">
+    <a class="btn ghost" href="https://tradehelp.gumroad.com/l/oyftvr">Buy — $50</a>
+    <a class="btn" href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.exe">Download</a>
+  </div>
+</nav></div></div>
+
+<article><div class="wrap">
+  <h1>TradeHelp vs TradeZella:<br /><span class="accent">own your journal, or rent it?</span></h1>
+  <p class="lede">Both are serious trading journals. The real difference is philosophy: TradeZella is a polished cloud platform you subscribe to; TradeHelp is a desktop app you buy once, where your data never leaves your machine.</p>
+
+  <h2>Side by side</h2>
+  <table>
+    <tr><th></th><th>TradeHelp</th><th>TradeZella</th></tr>
+    <tr><td>Price</td><td class="yes">$50 one-time, free updates</td><td class="meh">Subscription — typically $300+/year</td></tr>
+    <tr><td>Where your trades live</td><td class="yes">On your computer (local SQLite)</td><td class="meh">Their cloud</td></tr>
+    <tr><td>Account required</td><td class="yes">None</td><td class="meh">Yes</td></tr>
+    <tr><td>Works offline</td><td class="yes">Fully</td><td class="no">No</td></tr>
+    <tr><td>AI coaching</td><td class="yes">Runs locally via Ollama (or your own API key)</td><td class="meh">Cloud-based</td></tr>
+    <tr><td>AI reads your chart screenshots</td><td class="yes">Yes — offline vision model</td><td class="meh">Limited</td></tr>
+    <tr><td>Prop-firm tracking</td><td class="yes">Per-account targets, trailing drawdown cushion, payout log &amp; achievements</td><td class="meh">Basic</td></tr>
+    <tr><td>Live-session guardrails</td><td class="yes">Trade Mode: pre-trade checklist, loss lockout, news warnings</td><td class="no">—</td></tr>
+    <tr><td>Automatic broker sync</td><td class="meh">CSV import (NinjaTrader, Tradovate, TopstepX auto-detected)</td><td class="yes">Yes, for many brokers</td></tr>
+    <tr><td>Access from any device</td><td class="meh">Desktop app (up to 2 devices per key)</td><td class="yes">Any browser</td></tr>
+    <tr><td>Trade replay / backtesting</td><td class="no">—</td><td class="yes">Yes</td></tr>
+  </table>
+  <p style="font-size:13px;color:var(--faint)">Pricing and features as listed publicly at the time of writing — check <a href="https://www.tradezella.com" rel="nofollow">tradezella.com</a> for their current plans.</p>
+
+  <h2>Choose TradeZella if…</h2>
+  <ul>
+    <li>You want automatic broker sync and are happy paying a subscription for it.</li>
+    <li>You journal from multiple devices or in a browser at work.</li>
+    <li>Trade replay and backtesting are a core part of your review process.</li>
+  </ul>
+
+  <h2>Choose TradeHelp if…</h2>
+  <ul>
+    <li>You'd rather pay <b>$50 once</b> than $300+ every year — the journal pays for itself in two months of any subscription.</li>
+    <li>Your P&amp;L, notes and psychology data are <b>nobody's business but yours</b> — everything stays on your machine, verifiable in the <a href="https://github.com/RaheimSwaby/tradehelp">open source</a>.</li>
+    <li>You trade <b>prop-firm evals</b> and want drawdown cushion, per-account P&amp;L and payout tracking built in — see the <a href="prop-firm-trading-journal.html">prop-firm journal page</a>.</li>
+    <li>You want an AI coach that reads your <em>actual</em> journal — trades, notes, self-grades — without any of it leaving your computer.</li>
+    <li>You want discipline tools at the moment they matter: a pre-trade checklist and a max-loss lockout while you're live.</li>
+  </ul>
+
+  <h2>FAQ</h2>
+  <div class="faq">
+    <details><summary>Can I move my TradeZella history into TradeHelp?</summary><p>Yes — export your trades from TradeZella as CSV, then use TradeHelp's Import. The column mapper handles any CSV with headers, and duplicate rows are detected and skipped if you import twice.</p></details>
+    <details><summary>Is TradeHelp really offline? What about the AI?</summary><p>The journal itself never needs internet. The AI coach runs on your own machine through <a href="https://ollama.com" rel="nofollow">Ollama</a> — a free, local model runner — so coaching works with the network cable unplugged. Optional extras (price ticker, economic calendar, updates) use the network only if you leave them on. More on the <a href="offline-trading-journal.html">offline journal page</a>.</p></details>
+    <details><summary>Is there a free trial?</summary><p>Yes — every download starts a 14-day free trial with everything unlocked. No account, no card. If it sticks, one $50 key activates up to 2 devices, forever.</p></details>
+  </div>
+
+  <div class="cta-box">
+    <h2>Try the $50-once journal free for 14 days</h2>
+    <p>No account. No subscription. Your data stays yours.</p>
+    <a class="btn" href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.exe">Download for Windows</a>
+    <p class="note">Also available for <a href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.dmg">macOS</a> and <a href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.AppImage">Linux</a>.</p>
+  </div>
+</div></article>
+
+<footer><div class="wrap">
+  <div class="links">
+    <a href="./">Home</a>
+    <a href="vs-tradezella.html">vs TradeZella</a>
+    <a href="prop-firm-trading-journal.html">Prop-firm journal</a>
+    <a href="offline-trading-journal.html">Offline journal</a>
+    <a href="import-ninjatrader.html">Import: NinjaTrader</a>
+    <a href="import-tradovate.html">Import: Tradovate</a>
+    <a href="import-topstepx.html">Import: TopstepX</a>
+  </div>
+  TradeHelp — not financial advice. An educational journaling tool. · <a href="https://github.com/RaheimSwaby/tradehelp">Source on GitHub</a>
+</div></footer>
+<script src="matrix.js"></script>
+<script data-goatcounter="https://kingdd69.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
+</body>
+</html>

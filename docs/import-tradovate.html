@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Import Tradovate Trades into a Trading Journal (CSV Guide)</title>
+<meta name="description" content="Step-by-step: export your Tradovate performance CSV and import it into TradeHelp. Buy/sell fills, timestamps and P&L are recognized automatically — even trade direction is worked out for you." />
+<link rel="canonical" href="https://raheimswaby.github.io/tradehelp/import-tradovate.html" />
+<link rel="icon" href="logo.svg" />
+<link rel="stylesheet" href="site.css" />
+</head>
+<body>
+<canvas id="bg-matrix" aria-hidden="true"></canvas>
+<div class="topbar"><div class="wrap"><nav>
+  <a class="brand" href="./"><img src="logo.svg" width="28" height="28" alt="" />Trade<span class="h">Help</span></a>
+  <div style="display:flex;gap:10px;align-items:center">
+    <a class="btn ghost" href="https://tradehelp.gumroad.com/l/oyftvr">Buy — $50</a>
+    <a class="btn" href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.exe">Download</a>
+  </div>
+</nav></div></div>
+
+<article><div class="wrap">
+  <h1>Import <span class="accent">Tradovate</span> trades into your journal</h1>
+  <p class="lede">Tradovate's performance export is a tidy CSV of matched round-trip trades. TradeHelp recognizes it instantly — including the part other journals fumble: the file has no Long/Short column, so TradeHelp works direction out from the fills.</p>
+
+  <h2>Export from Tradovate</h2>
+  <ol class="steps">
+    <li>In the Tradovate platform, open your <b>Performance</b> report (under Reports / account performance, depending on layout).</li>
+    <li>Select the account and date range you want to journal.</li>
+    <li>Use the <b>export / download CSV</b> action on the trades table — you'll get a file with columns like <code>symbol, qty, buyPrice, sellPrice, pnl, boughtTimestamp, soldTimestamp</code>.</li>
+  </ol>
+
+  <h2>Import into TradeHelp</h2>
+  <ol class="steps">
+    <li>Open the <b>Journal</b> tab and click <b>Import CSV</b>.</li>
+    <li>Drop the file in — TradeHelp shows "<span class="mono">Tradovate export recognized</span>" and maps everything for you.</li>
+    <li>Optionally assign the batch to a prop-firm account, check the preview, and click <b>Import</b>.</li>
+  </ol>
+
+  <h2>What TradeHelp handles for you</h2>
+  <ul>
+    <li><b>Direction inferred from fill order</b> — the export has no side column, so TradeHelp compares the bought and sold timestamps: bought first is a Long, sold first is a Short. Entry/exit prices and times orient themselves to match.</li>
+    <li><b>P&amp;L taken from the file's own <code>pnl</code> column</b>, including negative values in Tradovate's "$(25.00)" style.</li>
+    <li><b>Entry times parsed</b> into your heat map and hold-time stats.</li>
+    <li><b>Duplicates skipped</b> on re-import — export monthly and never double-count.</li>
+    <li><b>Rating turns Verified</b> once broker trades are in.</li>
+  </ul>
+
+  <div class="callout"><b>Note on fees:</b> Tradovate's performance export doesn't include a commissions column, so imported P&amp;L is as the file reports it. If you journal commissions, you can add fees per trade afterward, or import from your clearing statements instead.</div>
+
+  <p>Also trading via <a href="import-ninjatrader.html">NinjaTrader</a> or <a href="import-topstepx.html">TopstepX</a>? Those exports are auto-recognized too.</p>
+
+  <div class="cta-box">
+    <h2>From Tradovate export to real stats in minutes</h2>
+    <p>Free 14-day trial — everything unlocked, no account needed.</p>
+    <a class="btn" href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.exe">Download for Windows</a>
+    <p class="note">Also for <a href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.dmg">macOS</a> and <a href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.AppImage">Linux</a> · $50 once after the trial.</p>
+  </div>
+</div></article>
+
+<footer><div class="wrap">
+  <div class="links">
+    <a href="./">Home</a>
+    <a href="vs-tradezella.html">vs TradeZella</a>
+    <a href="prop-firm-trading-journal.html">Prop-firm journal</a>
+    <a href="offline-trading-journal.html">Offline journal</a>
+    <a href="import-ninjatrader.html">Import: NinjaTrader</a>
+    <a href="import-tradovate.html">Import: Tradovate</a>
+    <a href="import-topstepx.html">Import: TopstepX</a>
+  </div>
+  TradeHelp — not financial advice. An educational journaling tool. · <a href="https://github.com/RaheimSwaby/tradehelp">Source on GitHub</a>
+</div></footer>
+<script src="matrix.js"></script>
+<script data-goatcounter="https://kingdd69.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
+</body>
+</html>

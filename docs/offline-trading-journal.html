@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Offline Trading Journal — local-first, no cloud, no subscription</title>
+<meta name="description" content="TradeHelp is a fully offline trading journal: trades in a local SQLite database, an AI coach that runs on your own machine via Ollama, and a $50 one-time price. No cloud, no account, no subscription." />
+<link rel="canonical" href="https://raheimswaby.github.io/tradehelp/offline-trading-journal.html" />
+<link rel="icon" href="logo.svg" />
+<link rel="stylesheet" href="site.css" />
+</head>
+<body>
+<canvas id="bg-matrix" aria-hidden="true"></canvas>
+<div class="topbar"><div class="wrap"><nav>
+  <a class="brand" href="./"><img src="logo.svg" width="28" height="28" alt="" />Trade<span class="h">Help</span></a>
+  <div style="display:flex;gap:10px;align-items:center">
+    <a class="btn ghost" href="https://tradehelp.gumroad.com/l/oyftvr">Buy — $50</a>
+    <a class="btn" href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.exe">Download</a>
+  </div>
+</nav></div></div>
+
+<article><div class="wrap">
+  <h1>A trading journal that works<br /><span class="accent">completely offline</span></h1>
+  <p class="lede">Every popular trading journal is a cloud service: your P&amp;L, your losing streaks, your 2 a.m. revenge trades — all uploaded to someone else's server, behind someone else's login, for a monthly fee. TradeHelp is the opposite: a desktop app where everything stays on your machine.</p>
+
+  <h2>Why offline matters for a journal</h2>
+  <ul>
+    <li><b>Your edge stays yours.</b> Setups, entry criteria and stats are the product of years of screen time. They shouldn't live in a database you don't control.</li>
+    <li><b>Psychology notes are personal.</b> A real journal contains honest writing about fear, greed and tilt. That's diary-grade data — it deserves diary-grade privacy.</li>
+    <li><b>No vendor lock-in.</b> Trades, notes and screenshots live in a single SQLite file you can copy, back up and open with standard tools. If TradeHelp disappeared tomorrow, your data wouldn't.</li>
+    <li><b>No subscription treadmill.</b> Software you run locally can be sold once. TradeHelp is $50, one time, free updates included.</li>
+    <li><b>It's fast.</b> No spinners, no sync, no session timeouts. Your journal opens instantly, on a plane or in a dead spot.</li>
+  </ul>
+
+  <h2>Even the AI coach is offline</h2>
+  <p>TradeHelp's coach runs on your own hardware through <a href="https://ollama.com" rel="nofollow">Ollama</a>, the free local model runner. It reads your full journal — trades, written notes, self-grades, playbook, goals and rules — and coaches you on what you actually did, with none of it ever leaving the machine. Attach a chart screenshot and a local vision model reads that too.</p>
+  <p>Prefer a hosted model? Bring your own API key and it's a two-field switch — with a separate toggle controlling whether written notes are included in what leaves the machine. Your call, either way.</p>
+
+  <h2>What actually needs the internet</h2>
+  <p>Nothing, for journaling. Three optional extras use the network only if you turn them on: the live price ticker, the economic-events calendar, and update checks. Switch them off and TradeHelp is a fully air-gapped journal.</p>
+
+  <div class="callout"><b>Verifiable, not just promised.</b> TradeHelp's source is <a href="https://github.com/RaheimSwaby/tradehelp">public on GitHub</a> — you don't have to take a privacy policy's word for where your data goes. You can read the code.</div>
+
+  <h2>FAQ</h2>
+  <div class="faq">
+    <details><summary>Where exactly is my data stored?</summary><p>In a single SQLite database file in your user data folder (plus your chart screenshots alongside it). It's yours to copy, back up to a drive or private cloud, and restore by copying back.</p></details>
+    <details><summary>Do I need an account?</summary><p>No. There is nothing to sign up for — download, open, journal. Even the license is just a key you paste in once.</p></details>
+    <details><summary>How good is a local AI, really?</summary><p>Modern small models running through Ollama are genuinely capable coaches when they're fed structured data — and TradeHelp feeds them your full, real journal rather than asking you to describe your trading. Guardrails keep the coach from inventing trades that aren't in your data.</p></details>
+    <details><summary>Which platforms?</summary><p>Windows, macOS (Apple Silicon) and Linux. One $50 key activates up to 2 devices.</p></details>
+  </div>
+
+  <div class="cta-box">
+    <h2>Journal like it's nobody's business</h2>
+    <p>Because it isn't. Free 14-day trial, then $50 once.</p>
+    <a class="btn" href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.exe">Download for Windows</a>
+    <p class="note">Also available for <a href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.dmg">macOS</a> and <a href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.AppImage">Linux</a>.</p>
+  </div>
+</div></article>
+
+<footer><div class="wrap">
+  <div class="links">
+    <a href="./">Home</a>
+    <a href="vs-tradezella.html">vs TradeZella</a>
+    <a href="prop-firm-trading-journal.html">Prop-firm journal</a>
+    <a href="offline-trading-journal.html">Offline journal</a>
+    <a href="import-ninjatrader.html">Import: NinjaTrader</a>
+    <a href="import-tradovate.html">Import: Tradovate</a>
+    <a href="import-topstepx.html">Import: TopstepX</a>
+  </div>
+  TradeHelp — not financial advice. An educational journaling tool. · <a href="https://github.com/RaheimSwaby/tradehelp">Source on GitHub</a>
+</div></footer>
+<script src="matrix.js"></script>
+<script data-goatcounter="https://kingdd69.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
+</body>
+</html>

@@ -200,6 +200,52 @@ export const IMPORT_FIELDS = [
   ['exitTime', 'Exit time', /exit.*time|close.*time|time.*close|date.*close|exit.*date|closed|sell.*time|liquidat/i, false]
 ]
 
+// ── Named broker presets for the CSV importer ──
+// sig: lowercased headers that identify the export; map: field → exact header name;
+// post(t, get): fixes broker quirks the column map can't express — runs per row after
+// the generic build, with get(header) returning that column's raw cell.
+export const BROKER_PRESETS = [
+  {
+    key: 'ninjatrader', label: 'NinjaTrader 8',
+    sig: ['instrument', 'market pos.', 'entry price', 'exit price'],
+    map: { symbol: 'Instrument', direction: 'Market pos.', size: 'Qty', entry: 'Entry price', exit: 'Exit price', pnl: 'Profit', commission: 'Commission', entryTime: 'Entry time', exitTime: 'Exit time' },
+    post: (t) => { t.symbol = t.symbol.split(' ')[0] } // "MNQ MAR24" → "MNQ"
+  },
+  {
+    key: 'tradovate', label: 'Tradovate',
+    sig: ['buyprice', 'sellprice', 'boughttimestamp', 'soldtimestamp'],
+    map: { symbol: 'symbol', size: 'qty', pnl: 'pnl' },
+    // Performance exports have no side column — direction falls out of which fill came first.
+    post: (t, get) => {
+      const bt = csvDate(get('boughtTimestamp')), st = csvDate(get('soldTimestamp'))
+      const long = bt && st ? bt <= st : true
+      t.direction = long ? 'Long' : 'Short'
+      t.entry = long ? csvNum(get('buyPrice')) : csvNum(get('sellPrice'))
+      t.exit = long ? csvNum(get('sellPrice')) : csvNum(get('buyPrice'))
+      t.entryTime = long ? bt : st
+      t.exitTime = long ? st : bt
+      if (t.entryTime || t.exitTime) t.timestamp = t.entryTime || t.exitTime
+    }
+  },
+  {
+    key: 'topstepx', label: 'TopstepX',
+    sig: ['contractname', 'enteredat', 'exitedat'],
+    map: { symbol: 'ContractName', direction: 'Type', size: 'Size', entry: 'EntryPrice', exit: 'ExitPrice', pnl: 'PnL', fees: 'Fees', entryTime: 'EnteredAt', exitTime: 'ExitedAt' },
+    post: (t) => { t.symbol = t.symbol.replace(/^\//, '').replace(/^F\.US\./i, '') }
+  }
+]
+export const detectBrokerPreset = (headers) => {
+  const lower = headers.map((h) => String(h).trim().toLowerCase())
+  return BROKER_PRESETS.find((p) => p.sig.every((s) => lower.includes(s))) || null
+}
+// Resolve a preset's field→header map against the file's actual headers (case-insensitive).
+export function applyPresetMap(preset, headers) {
+  const find = (name) => headers.find((h) => h.trim().toLowerCase() === name.toLowerCase()) || ''
+  const m = {}
+  for (const [field, header] of Object.entries(preset.map)) m[field] = find(header)
+  return m
+}
+
 // ── economic-calendar helpers ──
 export const IMPACT_RANK = { High: 3, Medium: 2, Low: 1, Holiday: 0, None: 0 }
 export const ALERT_LEADS = [30, 15, 5] // minutes before a high-impact event to fire a notification
