@@ -81,6 +81,15 @@
   footer{border-top:1px solid var(--line);padding:28px 0;color:var(--faint);font-size:13px;text-align:center}
   footer a{color:var(--dim)}
 
+  /* mobile handoff — shown only to phone visitors, who can't install a desktop app */
+  .mobile-cta{display:none;max-width:520px;margin:22px auto 0;text-align:left;background:var(--surface);border:1px solid var(--accent);border-radius:12px;padding:16px}
+  .mobile-cta.show{display:block}
+  .mobile-cta .mc-title{font-size:15px;font-weight:700;color:var(--text)}
+  .mobile-cta p{color:var(--dim);font-size:13.5px;margin:6px 0 13px}
+  .mobile-cta .mc-row{display:flex;gap:8px;flex-wrap:wrap}
+  .mobile-cta .mc-btn{flex:1;min-width:150px;text-align:center;background:var(--accent);color:#1A1306;font-weight:600;padding:11px 14px;border-radius:9px;font-size:14px;border:none;cursor:pointer;font-family:inherit}
+  .mobile-cta .mc-btn.alt{background:var(--surface2);color:var(--text);border:1px solid var(--line)}
+
   .firstrun{max-width:520px;margin:16px auto 0;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:0 16px}
   .firstrun summary{cursor:pointer;color:var(--dim);font-size:13px;padding:12px 0;list-style:none}
   .firstrun summary::-webkit-details-marker{display:none}
@@ -143,6 +152,14 @@
       <a class="btn ghost" href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.AppImage">Linux</a>
     </div>
     <p class="note">Free 14-day trial, then $50 once · Windows, macOS (Apple Silicon) &amp; Linux</p>
+    <div class="mobile-cta" id="mobileCta">
+      <div class="mc-title">📱 TradeHelp is a desktop app</div>
+      <p>Looks like you're on a phone. Send yourself the link so it's ready when you're at your Windows or Mac computer.</p>
+      <div class="mc-row">
+        <a class="mc-btn" id="mcEmail" href="#">✉️ Email me the link</a>
+        <button type="button" class="mc-btn alt" id="mcShare">Copy link</button>
+      </div>
+    </div>
     <details class="firstrun">
       <summary>First launch? Quick note for Windows &amp; macOS</summary>
       <p><b>Windows:</b> SmartScreen may warn because the app isn't code-signed yet — click <b>More info → Run anyway</b>.</p>
@@ -296,6 +313,44 @@
     document.querySelectorAll('.frame img').forEach(function (el) {
       el.addEventListener('click', function () { img.src = el.currentSrc || el.src; lb.classList.add('open'); });
     });
+  })();
+</script>
+<script>
+  // Mobile handoff: phone visitors (most of our Instagram ad traffic) can't install
+  // a desktop app, so offer to send themselves the link for later. Email uses a
+  // prefilled mailto; the second button prefers the native share sheet (AirDrop /
+  // Messages / Mail to their own machine) and falls back to clipboard.
+  (function () {
+    var box = document.getElementById('mobileCta');
+    if (!box) return;
+    var isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
+      (window.matchMedia('(max-width:720px)').matches && 'ontouchstart' in window);
+    if (!isMobile) return;
+    box.classList.add('show');
+
+    var pageUrl = 'https://raheimswaby.github.io/tradehelp/';
+    var subject = 'Download TradeHelp on my computer';
+    var body = "Here's the link to download TradeHelp — a local-first trading journal — when I'm at my computer:\n\n" +
+      pageUrl + "\n\nWindows, macOS & Linux · free 14-day trial.";
+    document.getElementById('mcEmail').setAttribute('href',
+      'mailto:?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body));
+
+    var share = document.getElementById('mcShare');
+    if (navigator.share) {
+      share.textContent = 'Send to my computer';
+      share.addEventListener('click', function () {
+        navigator.share({ title: 'TradeHelp — desktop trading journal', url: pageUrl }).catch(function () {});
+      });
+    } else {
+      share.addEventListener('click', function () {
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(pageUrl).then(function () {
+            share.textContent = 'Link copied ✓';
+            setTimeout(function () { share.textContent = 'Copy link'; }, 2000);
+          });
+        }
+      });
+    }
   })();
 </script>
 <script src="matrix.js"></script>
