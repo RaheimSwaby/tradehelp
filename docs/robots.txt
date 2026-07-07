@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://raheimswaby.github.io/tradehelp/sitemap.xml
+Sitemap: https://trade-help.app/sitemap.xml
