@@ -225,6 +225,7 @@ export function Dashboard({ stats, trades, accounts = [], settings, journalData,
         <ShareReportModal
           trades={viewTrades}
           payouts={payouts}
+          dayLogs={journalData?.dayLogs || []}
           accountLabel={view === 'prop' ? 'Prop accounts' : view === 'live' ? 'Live accounts' : 'All accounts'}
           accent={T.accent}
           onClose={() => setShareOpen(false)}

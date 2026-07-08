@@ -1,4 +1,4 @@
-import { computeAchievements, computeRating, computeSelfGrade, computeStats, executionGrade, letterFor } from './stats.js'
+import { ACH_TIERS, computeAchievements, computeRating, computeSelfGrade, computeStats, executionGrade, letterFor } from './stats.js'
 
 export const DEFAULT_SHARE_OPTIONS = {
   rating: true,
@@ -43,7 +43,7 @@ function rangeLabel(trades, range) {
   return `${fmt(dates[0])} - ${fmt(dates[dates.length - 1])}`
 }
 
-export function buildShareReport(trades = [], range = '30', accountLabel = 'All accounts', payouts = []) {
+export function buildShareReport(trades = [], range = '30', accountLabel = 'All accounts', payouts = [], dayLogs = []) {
   const selected = tradesForShareRange(trades, range)
   const stats = computeStats(selected)
   const rating = computeRating(selected, stats)
@@ -51,7 +51,9 @@ export function buildShareReport(trades = [], range = '30', accountLabel = 'All 
   // Accolades are lifetime milestones, so compute them across ALL trades — not the
   // selected date range — otherwise a "Last 7 days" report would hide earned badges.
   const allStats = computeStats(trades)
-  const achievements = computeAchievements(trades, allStats, payouts).filter((a) => a.unlocked).map((a) => a.name)
+  const achievements = computeAchievements(trades, allStats, payouts, dayLogs)
+    .filter((a) => a.unlocked)
+    .map((a) => ({ name: a.name, tier: a.tier }))
   const avgExecution = selected.length
     ? Math.round(selected.reduce((sum, t) => sum + executionGrade(t).score, 0) / selected.length)
     : 0
@@ -141,22 +143,25 @@ export function drawShareReport(canvas, report, options = DEFAULT_SHARE_OPTIONS,
     y += 202
   }
 
-  // Accolades: unlocked achievement badges as a wrapped pill strip (max 2 rows).
+  // Accolades: unlocked achievement badges as a wrapped pill strip (max 2 rows),
+  // each stroked in its difficulty-tier color (bronze → silver → gold → diamond).
   if (options.achievements && report.achievements.length) {
     ctx.fillStyle = '#8A94A6'; ctx.font = '700 15px Arial, sans-serif'; ctx.fillText('ACCOLADES', pad, y + 4)
     y += 22
     const pillH = 40, gap = 10, padX = 18
     let px = pad, py = y, rows = 1
     ctx.font = '700 18px Arial, sans-serif'
-    for (const name of report.achievements) {
+    for (const a of report.achievements) {
+      const name = typeof a === 'string' ? a : a.name
+      const tierColor = (ACH_TIERS[typeof a === 'string' ? '' : a.tier] || { color: accent }).color
       const label = `★ ${name}`
       const pw = Math.min(ctx.measureText(label).width + padX * 2, W - pad * 2)
       if (px + pw > W - pad && px > pad) {
         if (rows >= 2) break // cap at two rows so it never crowds the stats below
         px = pad; py += pillH + gap; rows++
       }
-      rounded(ctx, px, py, pw, pillH, 10, '#1C2433', accent)
-      ctx.fillStyle = accent; ctx.font = '700 18px Arial, sans-serif'
+      rounded(ctx, px, py, pw, pillH, 10, '#1C2433', tierColor)
+      ctx.fillStyle = tierColor; ctx.font = '700 18px Arial, sans-serif'
       ctx.fillText(fitText(ctx, label, pw - padX * 2), px + padX, py + 26)
       px += pw + gap
     }

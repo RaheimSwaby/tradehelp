@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react'
 import { Brain, Lock, BadgeCheck, X } from 'lucide-react'
 import { T, mono } from '../theme.js'
-import { computeRating, computeAchievements, computeSelfGrade, computeMedals } from '../stats.js'
+import { computeRating, computeAchievements, computeSelfGrade, computeMedals, ACH_TIERS } from '../stats.js'
 import { thisWeekKey, nextWeekKey } from '../utils.js'
 import { Panel } from '../components/Shared.jsx'
 
@@ -147,11 +147,23 @@ export function AchievementShelf({ achievements, unlockedAt }) {
         {achievements.map((a) => {
           const Icon = a.Icon
           const u = a.unlocked
+          const tier = ACH_TIERS[a.tier] || ACH_TIERS.bronze
+          const c = tier.color
+          // Harder badge → cooler medal: tier-colored border/icon when unlocked,
+          // a glow for gold, and a full shine + gradient for diamond.
+          const glow = !u ? 'none'
+            : a.tier === 'diamond' ? `0 0 18px ${c}66, inset 0 0 14px ${c}22`
+            : a.tier === 'gold' ? `0 0 12px ${c}44`
+            : 'none'
+          const bg = u && a.tier === 'diamond'
+            ? `linear-gradient(150deg, ${T.surface2}, ${c}1F)`
+            : u && a.tier === 'gold' ? `linear-gradient(150deg, ${T.surface2}, ${c}14)` : T.surface2
           return (
-            <div key={a.id} className="rounded-lg p-3" style={{ background: T.surface2, border: `1px solid ${u ? T.accent : T.line}`, opacity: u ? 1 : 0.7 }}>
+            <div key={a.id} className="rounded-lg p-3" style={{ background: bg, border: `1px solid ${u ? c : T.line}`, boxShadow: glow, opacity: u ? 1 : 0.7 }}>
               <div className="flex items-center gap-2">
-                <Icon size={18} style={{ color: u ? T.accent : T.faint, flexShrink: 0 }} />
+                <Icon size={18} style={{ color: u ? c : T.faint, flexShrink: 0 }} />
                 <span className="text-sm font-semibold" style={{ color: u ? T.text : T.dim }}>{a.name}</span>
+                <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full shrink-0 font-semibold" style={{ color: u ? (a.tier === 'gold' || a.tier === 'diamond' ? '#1A1306' : T.bg) : T.faint, background: u ? c : 'transparent', border: `1px solid ${u ? c : T.line}` }}>{tier.label}</span>
               </div>
               <div className="text-xs mt-1" style={{ color: T.faint }}>{a.desc}</div>
               {u ? (
@@ -174,11 +186,13 @@ export function AchievementShelf({ achievements, unlockedAt }) {
 
 export function AchievementToast({ a, onClose }) {
   const Icon = a.Icon
+  const tier = ACH_TIERS[a.tier] || ACH_TIERS.bronze
+  const c = tier.color
   return (
-    <div className="fixed bottom-4 right-4 z-[80] rounded-xl p-3 flex items-center gap-3" style={{ background: T.surface, border: `1px solid ${T.accent}`, minWidth: 240, boxShadow: '0 10px 30px rgba(0,0,0,0.45)' }}>
-      <div className="rounded-lg p-2" style={{ background: T.accentSoft }}><Icon size={20} style={{ color: T.accent }} /></div>
+    <div className="fixed bottom-4 right-4 z-[80] rounded-xl p-3 flex items-center gap-3" style={{ background: T.surface, border: `1px solid ${c}`, minWidth: 240, boxShadow: `0 10px 30px rgba(0,0,0,0.45)${a.tier === 'gold' || a.tier === 'diamond' ? `, 0 0 16px ${c}55` : ''}` }}>
+      <div className="rounded-lg p-2" style={{ background: `${c}22` }}><Icon size={20} style={{ color: c }} /></div>
       <div className="flex-1">
-        <div className="text-xs" style={{ color: T.accent }}>Achievement unlocked</div>
+        <div className="text-xs" style={{ color: c }}>Achievement unlocked · {tier.label}</div>
         <div className="text-sm font-semibold">{a.name}</div>
       </div>
       <button type="button" onClick={onClose} style={{ color: T.faint }}><X size={16} /></button>

@@ -13,12 +13,12 @@ const CONTROLS = [
 
 const canvasBlob = (canvas) => new Promise((resolve) => canvas.toBlob(resolve, 'image/png'))
 
-export function ShareReportModal({ trades, accountLabel, accent, onClose, payouts = [] }) {
+export function ShareReportModal({ trades, accountLabel, accent, onClose, payouts = [], dayLogs = [] }) {
   const [range, setRange] = useState('30')
   const [options, setOptions] = useState(DEFAULT_SHARE_OPTIONS)
   const [status, setStatus] = useState('')
   const canvasRef = useRef(null)
-  const report = useMemo(() => buildShareReport(trades, range, accountLabel, payouts), [trades, range, accountLabel, payouts])
+  const report = useMemo(() => buildShareReport(trades, range, accountLabel, payouts, dayLogs), [trades, range, accountLabel, payouts, dayLogs])
 
   useEffect(() => {
     if (canvasRef.current) drawShareReport(canvasRef.current, report, options, accent)

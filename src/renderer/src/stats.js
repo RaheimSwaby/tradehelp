@@ -1,4 +1,4 @@
-import { Trophy, Brain, Snowflake, Shield, Target, BookOpen, Camera, TrendingUp, Calendar, Flame, Wallet, Banknote } from 'lucide-react'
+import { Trophy, Brain, Snowflake, Shield, Target, BookOpen, Camera, TrendingUp, Calendar, Flame, Wallet, Banknote, CalendarCheck, Coffee, Sunrise, Crosshair } from 'lucide-react'
 import { TILT, REASONS, clamp, fmtN, holdMs, periodKey, pad2 } from './utils.js'
 
 /* ───────── stats ───────── */
@@ -234,35 +234,73 @@ export function computeRating(trades, stats) {
 }
 
 // Achievements reward BEHAVIOUR, not P&L — and use "best ever" tallies so they stay earned.
-export function computeAchievements(trades, stats, payouts = []) {
+// Difficulty tiers — the harder the badge, the cooler the medal renders.
+export const ACH_TIERS = {
+  bronze: { label: 'Bronze', color: '#CD7F32' },
+  silver: { label: 'Silver', color: '#C0C9D6' },
+  gold: { label: 'Gold', color: '#FFD54A' },
+  diamond: { label: 'Diamond', color: '#7FE3F0' }
+}
+
+export function computeAchievements(trades, stats, payouts = [], dayLogs = []) {
   const sorted = [...trades].sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''))
-  let aGradeLosses = 0, stopSet = 0, withShots = 0, honoredCur = 0, honoredBest = 0
+  let aGradeLosses = 0, stopSet = 0, withShots = 0, honoredCur = 0, honoredBest = 0, planned = 0
   const dayTilt = {}
+  const days = {} // date → { pnl, tilt, honored } for streak/bounce-back logic
   for (const t of sorted) {
     const pnl = Number(t.pnl) || 0, risk = Number(t.riskAmount) || 0
-    const entry = Number(t.entry) || 0, stop = Number(t.stop) || 0
+    const entry = Number(t.entry) || 0, stop = Number(t.stop) || 0, target = Number(t.target) || 0
+    const stopOk = stop > 0 && entry > 0 && (t.direction === 'Long' ? stop < entry : stop > entry)
     if (executionGrade(t).score >= 85 && pnl < 0) aGradeLosses++
-    if (stop > 0 && entry > 0 && (t.direction === 'Long' ? stop < entry : stop > entry)) stopSet++
+    if (stopOk) stopSet++
+    if (stopOk && target > 0) planned++
     if ((t.imageCount || 0) > 0) withShots++
     const honored = pnl >= 0 || risk <= 0 || Math.abs(pnl) <= 1.1 * risk
     if (honored) { honoredCur++; honoredBest = Math.max(honoredBest, honoredCur) } else honoredCur = 0
     const d = (t.entryTime || t.timestamp || '').slice(0, 10)
-    if (d) { if (!(d in dayTilt)) dayTilt[d] = false; if (TILT.includes(t.emotion)) dayTilt[d] = true }
+    if (d) {
+      if (!(d in dayTilt)) dayTilt[d] = false
+      if (TILT.includes(t.emotion)) dayTilt[d] = true
+      if (!days[d]) days[d] = { pnl: 0, tilt: false, honored: true }
+      days[d].pnl += pnl
+      if (TILT.includes(t.emotion)) days[d].tilt = true
+      if (!honored) days[d].honored = false
+    }
   }
   let cleanRun = 0, cleanBest = 0
   for (const d of Object.keys(dayTilt).sort()) { if (!dayTilt[d]) { cleanRun++; cleanBest = Math.max(cleanBest, cleanRun) } else cleanRun = 0 }
+
+  const dayKeys = Object.keys(days).sort()
+  // Locked In: longest run of journaled trading days; gaps ≤3 calendar days keep
+  // the run alive so weekends don't break it.
+  let dayRun = dayKeys.length ? 1 : 0, dayBest = dayRun
+  for (let i = 1; i < dayKeys.length; i++) {
+    const gap = (new Date(dayKeys[i] + 'T00:00:00') - new Date(dayKeys[i - 1] + 'T00:00:00')) / 864e5
+    dayRun = gap <= 3 ? dayRun + 1 : 1
+    dayBest = Math.max(dayBest, dayRun)
+  }
+  // Bounce Back: a red day followed by a clean day — no tilt, every loss inside plan.
+  let bounceBacks = 0
+  for (let i = 1; i < dayKeys.length; i++) {
+    const prev = days[dayKeys[i - 1]], cur = days[dayKeys[i]]
+    if (prev.pnl < 0 && !cur.tilt && cur.honored) bounceBacks++
+  }
   const PF = stats.profitFactor === Infinity ? 99 : (stats.profitFactor || 0)
 
   const defs = [
-    { id: 'process', name: 'Process over Profit', Icon: Trophy, desc: '10 A-grade trades that still lost — right trade, accepted variance.', current: aGradeLosses, goal: 10 },
-    { id: 'zen', name: 'Zen Mode', Icon: Brain, desc: 'A 25-trade streak with no FOMO, greed or revenge.', current: stats.bestNonTilt, goal: 25 },
-    { id: 'coolweek', name: 'Cool Week', Icon: Snowflake, desc: '5 straight trading days with zero tilt.', current: cleanBest, goal: 5 },
-    { id: 'stophonored', name: 'Stop Honored', Icon: Shield, desc: '15 trades in a row with no loss past your planned risk.', current: honoredBest, goal: 15 },
-    { id: 'riskmgr', name: 'Risk Manager', Icon: Target, desc: '50 trades logged with a stop set.', current: stopSet, goal: 50 },
-    { id: 'journaler', name: 'Journaler', Icon: BookOpen, desc: '100 trades journaled.', current: stats.n, goal: 100 },
-    { id: 'reviewer', name: 'Reviewer', Icon: Camera, desc: 'Screenshots attached to 20 trades.', current: withShots, goal: 20 },
-    { id: 'edge', name: 'Edge Confirmed', Icon: TrendingUp, desc: 'Profit factor over 1.5 across 50+ trades.', current: Math.min(stats.n, 50), goal: 50, gate: PF > 1.5 },
-    { id: 'firstpayout', name: 'First Payout', Icon: Wallet, desc: 'Cashed your first prop firm payout.', current: (payouts?.length || 0) >= 1 ? 1 : 0, goal: 1 }
+    { id: 'process', name: 'Process over Profit', Icon: Trophy, tier: 'gold', desc: '10 A-grade trades that still lost — right trade, accepted variance.', current: aGradeLosses, goal: 10 },
+    { id: 'zen', name: 'Zen Mode', Icon: Brain, tier: 'gold', desc: 'A 25-trade streak with no FOMO, greed or revenge.', current: stats.bestNonTilt, goal: 25 },
+    { id: 'bounceback', name: 'Bounce Back', Icon: Sunrise, tier: 'silver', desc: '3 clean, tilt-free days right after a red day — no revenge, risk honored.', current: bounceBacks, goal: 3 },
+    { id: 'coolweek', name: 'Cool Week', Icon: Snowflake, tier: 'silver', desc: '5 straight trading days with zero tilt.', current: cleanBest, goal: 5 },
+    { id: 'lockedin', name: 'Locked In', Icon: CalendarCheck, tier: 'silver', desc: 'Journaled trades 10 trading days in a row — weekends don\'t break it.', current: dayBest, goal: 10 },
+    { id: 'satonhands', name: 'Sat On My Hands', Icon: Coffee, tier: 'bronze', desc: 'Logged 10 no-trade days — knowing when not to trade is a skill.', current: dayLogs?.length || 0, goal: 10 },
+    { id: 'stophonored', name: 'Stop Honored', Icon: Shield, tier: 'silver', desc: '15 trades in a row with no loss past your planned risk.', current: honoredBest, goal: 15 },
+    { id: 'riskmgr', name: 'Risk Manager', Icon: Target, tier: 'silver', desc: '50 trades logged with a stop set.', current: stopSet, goal: 50 },
+    { id: 'definedrisk', name: 'Defined Risk', Icon: Crosshair, tier: 'silver', desc: '25 trades entered with both a stop and a target set.', current: planned, goal: 25 },
+    { id: 'journaler', name: 'Journaler', Icon: BookOpen, tier: 'gold', desc: '100 trades journaled.', current: stats.n, goal: 100 },
+    { id: 'reviewer', name: 'Reviewer', Icon: Camera, tier: 'bronze', desc: 'Screenshots attached to 20 trades.', current: withShots, goal: 20 },
+    { id: 'edge', name: 'Edge Confirmed', Icon: TrendingUp, tier: 'diamond', desc: 'Profit factor over 1.5 across 50+ trades.', current: Math.min(stats.n, 50), goal: 50, gate: PF > 1.5 },
+    { id: 'firstpayout', name: 'First Payout', Icon: Wallet, tier: 'gold', desc: 'Cashed your first prop firm payout.', current: (payouts?.length || 0) >= 1 ? 1 : 0, goal: 1 }
   ]
   return defs.map((d) => ({
     ...d,
