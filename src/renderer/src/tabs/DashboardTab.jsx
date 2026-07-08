@@ -139,7 +139,7 @@ function HeatMap({ stats }) {
 }
 
 /* ───────── dashboard ───────── */
-export function Dashboard({ stats, trades, accounts = [], settings, journalData, onSaveSettings, onOpenCoach }) {
+export function Dashboard({ stats, trades, accounts = [], settings, journalData, onSaveSettings, onOpenCoach, payouts = [] }) {
   const [view, setView] = useState('all') // all | live | prop
   const [shareOpen, setShareOpen] = useState(false)
   const hasProp = accounts.length > 0
@@ -224,6 +224,7 @@ export function Dashboard({ stats, trades, accounts = [], settings, journalData,
       {shareOpen && (
         <ShareReportModal
           trades={viewTrades}
+          payouts={payouts}
           accountLabel={view === 'prop' ? 'Prop accounts' : view === 'live' ? 'Live accounts' : 'All accounts'}
           accent={T.accent}
           onClose={() => setShareOpen(false)}

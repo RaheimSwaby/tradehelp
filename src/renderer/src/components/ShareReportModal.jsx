@@ -5,6 +5,7 @@ import { buildShareReport, DEFAULT_SHARE_OPTIONS, drawShareReport } from '../sha
 
 const CONTROLS = [
   ['rating', 'Trader rating'], ['execution', 'Average execution grade'], ['selfGrades', 'Self-graded setup and execution'],
+  ['achievements', 'Achievements & accolades'],
   ['netPnl', 'Net P&L'], ['winRate', 'Win rate'], ['profitFactor', 'Profit factor'], ['expectancy', 'Expectancy'],
   ['drawdown', 'Maximum drawdown'], ['tradeCount', 'Trade count'], ['equity', 'Equity curve'],
   ['recentGrades', 'Recent trade grades'], ['symbols', 'Ticker symbols']
@@ -12,12 +13,12 @@ const CONTROLS = [
 
 const canvasBlob = (canvas) => new Promise((resolve) => canvas.toBlob(resolve, 'image/png'))
 
-export function ShareReportModal({ trades, accountLabel, accent, onClose }) {
+export function ShareReportModal({ trades, accountLabel, accent, onClose, payouts = [] }) {
   const [range, setRange] = useState('30')
   const [options, setOptions] = useState(DEFAULT_SHARE_OPTIONS)
   const [status, setStatus] = useState('')
   const canvasRef = useRef(null)
-  const report = useMemo(() => buildShareReport(trades, range, accountLabel), [trades, range, accountLabel])
+  const report = useMemo(() => buildShareReport(trades, range, accountLabel, payouts), [trades, range, accountLabel, payouts])
 
   useEffect(() => {
     if (canvasRef.current) drawShareReport(canvasRef.current, report, options, accent)
