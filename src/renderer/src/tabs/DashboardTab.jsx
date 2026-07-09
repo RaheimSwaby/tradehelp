@@ -1,15 +1,61 @@
 import React, { useState, useMemo } from 'react'
 import { Share2 } from 'lucide-react'
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, ReferenceLine, Tooltip, Cell } from 'recharts'
-import { T, mono } from '../theme.js'
+import { T, mono, withAlpha } from '../theme.js'
 import { fmt$, fmtN } from '../utils.js'
-import { computeStats } from '../stats.js'
+import { computeStats, computeLeaks } from '../stats.js'
 import { Stat, Panel, EmptyChart } from '../components/Shared.jsx'
 import { PnlCalendar } from './JournalTab.jsx'
 import { CoachBriefCard } from '../components/CoachBriefCard.jsx'
 import { ShareReportModal } from '../components/ShareReportModal.jsx'
 
 const HMAP_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
+// Leak finder — puts a dollar figure on your worst behavioral pattern. The point
+// isn't to shame; it's to make the cost of tilt concrete and, therefore, fixable.
+function LeakFinder({ trades }) {
+  const leak = useMemo(() => computeLeaks(trades), [trades])
+  if (!leak.taggedCount) return null // no emotion/reason tags yet — nothing to analyze
+  if (!leak.worst) {
+    return (
+      <div className="rounded-lg p-4" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
+        <div className="text-xs uppercase tracking-wider" style={{ color: T.faint }}>💸 Leak finder</div>
+        <div className="text-sm mt-1" style={{ color: T.up }}>No behavioral leaks detected — the trades where you flagged an emotion or reason are net positive. Keep it disciplined. 🧊</div>
+      </div>
+    )
+  }
+  const worst = leak.worst
+  const max = Math.abs(leak.leaks[0].pnl) || 1
+  return (
+    <div className="rounded-xl p-4" style={{ background: `linear-gradient(150deg, ${T.surface2}, ${withAlpha(T.down, 0.09)})`, border: `1px solid ${withAlpha(T.down, 0.4)}` }}>
+      <div className="text-xs uppercase tracking-wider font-semibold" style={{ color: T.down }}>💸 Your biggest leak</div>
+      <div className="mt-1.5 flex items-end justify-between gap-3 flex-wrap">
+        <div>
+          <div className="text-lg font-semibold" style={{ color: T.text }}>{worst.label} <span className="text-xs font-normal" style={{ color: T.dim }}>— {worst.blurb}</span></div>
+          <div className="text-xs mt-0.5" style={{ color: T.faint }}>{worst.n} trades tagged</div>
+        </div>
+        <div className="text-3xl font-extrabold" style={{ ...mono, color: T.down }}>{fmt$(worst.pnl)}</div>
+      </div>
+      {leak.leaks.length > 1 && (
+        <div className="mt-3 space-y-1.5">
+          {leak.leaks.slice(0, 4).map((c) => (
+            <div key={c.id} className="flex items-center gap-2">
+              <div className="text-xs w-28 shrink-0 truncate" style={{ color: T.dim }}>{c.label}</div>
+              <div className="h-2 rounded-full grow overflow-hidden" style={{ background: T.surface }}>
+                <div className="h-full rounded-full" style={{ width: `${(Math.abs(c.pnl) / max) * 100}%`, background: T.down, transition: 'width .4s' }} />
+              </div>
+              <div className="text-xs w-16 text-right shrink-0" style={{ ...mono, color: T.down }}>{fmt$(c.pnl)}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="text-xs mt-3" style={{ color: T.dim }}>
+        {leak.totalLeaked < 0 && <>Trades where tilt showed up have cost you <b style={{ color: T.down }}>{fmt$(leak.totalLeaked)}</b> in total. </>}
+        Every dollar here is fixable — that's the whole point.
+      </div>
+    </div>
+  )
+}
 
 function heatColor(wr, total) {
   if (!total || total < 2) return { bg: 'transparent', border: T.line, glow: 'none', text: T.faint }
@@ -183,6 +229,8 @@ export function Dashboard({ stats, trades, accounts = [], settings, journalData,
         <Stat label="Avg loser" value={fmt$(-vStats.avgLoss)} tone="down" />
         <Stat label="Streaks" value={String(vStats.currentStreak)} sub={`best ${vStats.bestWin}W · worst ${vStats.worstLoss}L`} />
       </div>
+
+      <LeakFinder trades={viewTrades} />
 
       <PnlCalendar trades={viewTrades} />
 

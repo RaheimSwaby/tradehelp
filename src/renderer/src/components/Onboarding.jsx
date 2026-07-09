@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Sparkles, ShieldCheck, Lock, Gauge, Zap, Upload, PencilLine, Building2 } from 'lucide-react'
+import { Sparkles, ShieldCheck, Lock, Gauge, Zap, Upload, PencilLine, Building2, MessagesSquare } from 'lucide-react'
 import { T, inputStyle } from '../theme.js'
 import { Field } from './Shared.jsx'
 import { parseRules } from '../utils.js'
@@ -103,6 +103,10 @@ export function Onboarding({ settings, accounts = [], onSaveSettings, onImport, 
                 <Building2 size={13} className="shrink-0" />
                 Trading a prop-firm challenge? Add your account in the Prop Firm tab — targets, drawdown and payouts are tracked per account.
               </div>
+              <button type="button" onClick={() => window.api?.openExternal?.('https://discord.gg/ATfcXSD4j')}
+                className="w-full rounded-lg p-3 flex gap-2 items-center justify-center text-sm font-semibold th-card" style={{ background: T.accentSoft, border: `1px solid ${T.accent}`, color: T.accent }}>
+                <MessagesSquare size={16} /> Join the TradeHelp Discord
+              </button>
             </div>
           )}
         </div>

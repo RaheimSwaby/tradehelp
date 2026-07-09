@@ -41,15 +41,27 @@ export function Patterns({ trades }) {
     setState({ phase: 'reading', done: 0, total: picks.length })
     try {
       const wins = [], losses = []
+      let winsRead = 0, lossesRead = 0, lastErr = ''
       for (const [side, t] of picks) {
         const url = await firstJpeg(t.id)
         let desc = '(no image)'
         if (url) {
           const res = await window.api.aiChat({ system: CHART_DESCRIBE_SYSTEM, messages: [{ role: 'user', content: `Describe this ${t.symbol} ${t.setup || ''} chart.`, images: [url] }] })
-          desc = res?.ok ? res.text : `(couldn't read: ${res?.error || 'error'})`
+          if (res?.ok) { desc = res.text; if (side === 'win') winsRead++; else lossesRead++ }
+          else { lastErr = res?.error || 'error'; desc = `(couldn't read: ${lastErr})` }
         }
         ;(side === 'win' ? wins : losses).push({ symbol: t.symbol, dataUrl: url, desc })
         setState((s) => (s?.phase === 'reading' ? { ...s, done: s.done + 1 } : s))
+      }
+      // If the model couldn't actually read the charts, stop here. Feeding the error
+      // text into the comparison makes the coach "analyze" its own error message
+      // (the classic "multimodal not supported" nonsense). Show an actionable fix.
+      if (winsRead === 0 || lossesRead === 0) {
+        const visionErr = /multimodal|does not support|vision|image/i.test(lastErr)
+        setState({ wins, losses, error: visionErr
+          ? 'Your AI model can\'t read chart images. In Settings → Model provider, set a vision model — e.g. "llama3.2-vision" (then run: ollama pull llama3.2-vision) — or use a cloud key with a vision-capable model like gpt-4o-mini.'
+          : `Couldn't read enough charts to compare${lastErr ? ` — ${lastErr}` : '.'}` })
+        return
       }
       const block = (label, arr) => `${label}:\n` + arr.map((x, i) => `${i + 1}. ${x.symbol}: ${x.desc}`).join('\n')
       const tag = setup === 'All setups' ? '' : ` ${setup}`

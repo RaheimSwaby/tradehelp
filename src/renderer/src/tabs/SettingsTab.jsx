@@ -3,7 +3,7 @@ import { T, mono, inputStyle, ACCENT_OPTIONS } from '../theme.js'
 import { CHECKOUT_URL } from '../utils.js'
 import { Panel, Field } from '../components/Shared.jsx'
 import { BACKDROP_OPTIONS } from '../components/Backdrop.jsx'
-import { Instagram } from 'lucide-react'
+import { Instagram, MessagesSquare } from 'lucide-react'
 
 /* ───────── license & trial ───────── */
 export function TrialBanner({ days }) {
@@ -336,13 +336,20 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
         <p className="text-sm" style={{ color: T.dim }}>
           Hit a bug or have an idea? TradeHelp is built by one trader — your feedback genuinely shapes what ships next.
         </p>
-        <button type="button" onClick={() => window.api.openExternal('https://instagram.com/tradehelp.io')}
-          className="mt-3 w-full rounded-md px-3 py-2.5 text-sm font-semibold flex items-center justify-center gap-2"
-          style={{ background: T.surface2, color: T.text, border: `1px solid ${T.line}` }}>
-          <Instagram size={16} style={{ color: T.accent }} /> Message us on Instagram
-        </button>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
+          <button type="button" onClick={() => window.api.openExternal('https://discord.gg/ATfcXSD4j')}
+            className="rounded-md px-3 py-2.5 text-sm font-semibold flex items-center justify-center gap-2"
+            style={{ background: T.accent, color: '#1A1306' }}>
+            <MessagesSquare size={16} /> Join our Discord
+          </button>
+          <button type="button" onClick={() => window.api.openExternal('https://instagram.com/tradehelp.io')}
+            className="rounded-md px-3 py-2.5 text-sm font-semibold flex items-center justify-center gap-2"
+            style={{ background: T.surface2, color: T.text, border: `1px solid ${T.line}` }}>
+            <Instagram size={16} style={{ color: T.accent }} /> Instagram
+          </button>
+        </div>
         <p className="mt-3 text-xs" style={{ color: T.faint }}>
-          DM <span style={{ color: T.accent }}>@tradehelp.io</span> for issues, questions or feature requests. A quick feedback form is coming soon.
+          Join the <span style={{ color: T.accent }}>Discord</span> to report bugs, request features and talk trades — or DM <span style={{ color: T.accent }}>@tradehelp.io</span> on Instagram. A quick feedback form is coming soon.
         </p>
       </Panel>
     </div>

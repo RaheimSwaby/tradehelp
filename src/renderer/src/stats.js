@@ -132,6 +132,38 @@ export function computeStats(trades) {
   }
 }
 
+/* ───────── leak finder: the dollar cost of behavioral patterns ─────────
+   Each leak matches trades by their emotion tag and/or self-diagnosed reason.
+   A trade can feed more than one leak (e.g. greedy AND oversized) — that's fine,
+   we're surfacing patterns, not partitioning P&L. */
+export const LEAK_DEFS = [
+  { id: 'revenge', label: 'Revenge trades', blurb: 'trading to win it back', emotions: ['Revenge'], reasons: ['Revenge trade'] },
+  { id: 'fomo', label: 'FOMO / chasing', blurb: 'chasing entries you missed', emotions: ['FOMO'], reasons: ['FOMO / chased'] },
+  { id: 'greed', label: 'Greed', blurb: 'overstaying or oversizing winners', emotions: ['Greedy'], reasons: ['Greed — overstayed/oversized'] },
+  { id: 'impatience', label: 'Impatience', blurb: 'forcing trades before the setup', emotions: [], reasons: ['Impatient — forced it'] },
+  { id: 'movedstop', label: 'Moving your stop', blurb: 'letting losers run past plan', emotions: [], reasons: ['Moved / ignored my stop'] },
+  { id: 'oversized', label: 'Oversizing', blurb: 'risking more than planned', emotions: [], reasons: ['Oversized'] },
+  { id: 'bored', label: 'Boredom trades', blurb: 'trading just to be in the market', emotions: ['Bored'], reasons: [] }
+]
+
+export function computeLeaks(trades = []) {
+  const cats = LEAK_DEFS.map((d) => ({ id: d.id, label: d.label, blurb: d.blurb, n: 0, pnl: 0 }))
+  const tagged = new Set()
+  for (const t of trades) {
+    const pnl = Number(t.pnl) || 0
+    LEAK_DEFS.forEach((d, i) => {
+      if ((t.emotion && d.emotions.includes(t.emotion)) || (t.reason && d.reasons.includes(t.reason))) {
+        cats[i].n += 1; cats[i].pnl += pnl; tagged.add(t)
+      }
+    })
+  }
+  // A real leak is a net-negative pattern with a meaningful sample.
+  const leaks = cats.filter((c) => c.n >= 2 && c.pnl < 0).sort((a, b) => a.pnl - b.pnl)
+  let totalLeaked = 0
+  for (const t of tagged) totalLeaked += Number(t.pnl) || 0
+  return { worst: leaks[0] || null, leaks, totalLeaked, taggedCount: tagged.size }
+}
+
 /* ───────── rating: grade the process, not the outcome ───────── */
 export function letterFor(score) {
   if (score >= 95) return { letter: 'A+', tone: 'up' }
