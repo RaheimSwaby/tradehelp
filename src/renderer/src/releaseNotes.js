@@ -1,6 +1,7 @@
 // Bundled patch notes — shown in the "What's new" modal after an update.
 // Add an entry here with every release so users always see real notes.
 export const RELEASE_NOTES = {
+  '0.31.2': `- NinjaTrader Orders CSV import - TradeHelp now recognizes Orders exports, ignores canceled bracket orders, and rebuilds filled orders into closed trades`,
   '0.31.1': `- Minor Pattern Recognition polish - compared charts now show date/P&L and can be opened full-size from the preview`,
   '0.31.0': `- Appearance 2.0 - new theme preset preview cards for Classic, Midnight, Clean Light, Terminal Green, Red Session, and Minimal Gray\n- Custom backgrounds - choose a local PNG/JPG/WEBP and tune opacity, blur, dim, and fill/fit/tile\n- Separate Go-Time colors - Trade Mode can now use its own serious session color\n- Profit/loss color styles - switch between classic, blue/red, green/orange, colorblind-safe, or minimal mono\n- Number font options - keep the default mono feel or switch to cleaner/softer number styling`,
   '0.30.1': `- New Money Rain backdrop - falling bills and dollar marks are now available in Settings -> Appearance\n- Subtle tab hover motion - tabs now lift, glow and nudge their icons when you float over them\n- Cleaner custom tab icons - Trade Mode and AI Coach now use app-specific SVG icons that inherit your accent color\n- Local dev fix - the app now installs the correct Electron SQLite binary before dev starts, preventing the better-sqlite3 NODE_MODULE_VERSION crash`,

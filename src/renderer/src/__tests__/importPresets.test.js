@@ -1,15 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { BROKER_PRESETS, detectBrokerPreset, applyPresetMap } from '../utils.js'
+import { BROKER_PRESETS, detectBrokerPreset, applyPresetMap, parseCSV } from '../utils.js'
 
 const presetByKey = (k) => BROKER_PRESETS.find((p) => p.key === k)
 
 const NT_HEADERS = ['Trade number', 'Instrument', 'Account', 'Strategy', 'Market pos.', 'Qty', 'Entry price', 'Exit price', 'Entry time', 'Exit time', 'Entry name', 'Exit name', 'Profit', 'Cum. net profit', 'Commission', 'MAE', 'MFE', 'ETD', 'Bars']
 const TDV_HEADERS = ['symbol', '_priceFormat', '_priceFormatType', '_tickSize', 'buyFillId', 'sellFillId', 'qty', 'buyPrice', 'sellPrice', 'pnl', 'boughtTimestamp', 'soldTimestamp', 'duration']
 const TSX_HEADERS = ['Id', 'ContractName', 'EnteredAt', 'ExitedAt', 'EntryPrice', 'ExitPrice', 'Fees', 'PnL', 'Size', 'Type']
+const NT_ORDERS_HEADERS = ['orderId', 'Account', 'Order ID', 'B/S', 'Contract', 'Product', 'avgPrice', 'filledQty', 'Fill Time', 'Status', 'Text', 'Type']
 
 describe('broker preset detection', () => {
   it('recognizes a NinjaTrader 8 trade performance export', () => {
     expect(detectBrokerPreset(NT_HEADERS)?.key).toBe('ninjatrader')
+  })
+  it('recognizes a NinjaTrader Orders export', () => {
+    expect(detectBrokerPreset(NT_ORDERS_HEADERS)?.key).toBe('ninjatrader-orders')
   })
   it('recognizes a Tradovate performance export', () => {
     expect(detectBrokerPreset(TDV_HEADERS)?.key).toBe('tradovate')
@@ -19,6 +23,52 @@ describe('broker preset detection', () => {
   })
   it('returns null for an unknown CSV', () => {
     expect(detectBrokerPreset(['Date', 'Ticker', 'Side', 'Amount'])).toBeNull()
+  })
+})
+
+describe('NinjaTrader Orders preset', () => {
+  it('rebuilds closed futures trades from filled order rows', () => {
+    const csv = `orderId,Account,Order ID,B/S,Contract,Product,avgPrice,filledQty,Fill Time,Status,Text,Type
+1,sim,1,Buy,MESH6,MES,6712.75,1,03/12/2026 10:00:24,Filled,multibracket,Market
+2,sim,2,Sell,MESH6,MES,6714.75,1,03/12/2026 10:18:37,Filled,Exit,Market
+3,sim,3,Sell,MESH6,MES,6709.75,1,03/16/2026 09:49:20,Filled,multibracket,Market
+4,sim,4,Buy,MESH6,MES,6716.50,1,03/16/2026 09:57:04,Filled,Exit,Market
+5,sim,5,Sell,MESH6,MES,6710.00,1,03/16/2026 10:00:00,Canceled,multibracket,Limit`
+    const [headers, ...rows] = parseCSV(csv)
+    const trades = presetByKey('ninjatrader-orders').buildRows(rows, headers, new Set())
+    expect(trades).toHaveLength(2)
+    expect(trades[0]).toMatchObject({
+      symbol: 'MES',
+      direction: 'Long',
+      entry: 6712.75,
+      exit: 6714.75,
+      size: 1,
+      pnl: 10,
+      entryTime: '2026-03-12 10:00',
+      exitTime: '2026-03-12 10:18'
+    })
+    expect(trades[1]).toMatchObject({
+      symbol: 'MES',
+      direction: 'Short',
+      entry: 6709.75,
+      exit: 6716.5,
+      size: 1,
+      pnl: -33.75,
+      entryTime: '2026-03-16 09:49',
+      exitTime: '2026-03-16 09:57'
+    })
+  })
+
+  it('splits scale-ins when one exit closes multiple fills', () => {
+    const csv = `orderId,Account,Order ID,B/S,Contract,Product,avgPrice,filledQty,Fill Time,Status,Text,Type
+1,sim,1,Sell,MESM6,MES,6717.50,1,03/16/2026 10:04:12,Filled,multibracket,Market
+2,sim,2,Sell,MESM6,MES,6717.50,1,03/16/2026 10:04:14,Filled,multibracket,Market
+3,sim,3,Buy,MESM6,MES,6719.00,2,03/16/2026 10:07:03,Filled,Exit,Market`
+    const [headers, ...rows] = parseCSV(csv)
+    const trades = presetByKey('ninjatrader-orders').buildRows(rows, headers, new Set())
+    expect(trades).toHaveLength(2)
+    expect(trades.map((t) => t.pnl)).toEqual([-7.5, -7.5])
+    expect(trades.every((t) => t.direction === 'Short' && t.size === 1)).toBe(true)
   })
 })
 

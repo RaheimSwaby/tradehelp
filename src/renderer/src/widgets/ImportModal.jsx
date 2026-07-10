@@ -67,6 +67,7 @@ export function ImportModal({ onClose, onImport, existing = [], accounts = [] })
 
   const built = useMemo(() => {
     if (!data) return []
+    if (preset?.buildRows) return preset.buildRows(data.rows, data.headers, existingKeys)
     const idx = (field) => (map[field] ? data.headers.indexOf(map[field]) : -1)
     const cell = (row, field) => { const i = idx(field); return i >= 0 ? row[i] : '' }
     return data.rows.map((row) => {

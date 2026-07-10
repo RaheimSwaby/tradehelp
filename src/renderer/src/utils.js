@@ -186,6 +186,98 @@ export function csvDate(v) {
   return out(new Date(s))
 }
 export const normDir = (v) => (/^\s*(s|sell|short|sld|sold)/i.test(String(v || '')) ? 'Short' : 'Long')
+const FUTURES_POINT_VALUE = {
+  ES: 50, MES: 5,
+  NQ: 20, MNQ: 2,
+  YM: 5, MYM: 0.5,
+  RTY: 50, M2K: 5,
+  CL: 1000, MCL: 100,
+  GC: 100, MGC: 10
+}
+const tradeKeyForImport = (t) => (t.entryTime ? `${t.symbol}|${t.entryTime}|${(Number(t.pnl) || 0).toFixed(2)}` : null)
+const rowGetter = (headers, row) => (name) => {
+  const i = headers.findIndex((h) => h.trim().toLowerCase() === String(name).trim().toLowerCase())
+  return i >= 0 ? row[i] : ''
+}
+
+function ninjaOrdersToTrades(rows, headers, existingKeys = new Set()) {
+  const filled = rows.map((row, i) => ({ row, i, get: rowGetter(headers, row) }))
+    .filter(({ get }) => String(get('Status')).trim().toLowerCase() === 'filled' && csvNum(get('filledQty') || get('Filled Qty')) > 0)
+    .map((x) => {
+      const symbol = String(x.get('Product') || x.get('Contract') || '').trim().toUpperCase()
+      const time = csvDate(x.get('Fill Time') || x.get('Timestamp') || x.get('Date'))
+      return {
+        ...x,
+        symbol,
+        account: String(x.get('Account') || '').trim(),
+        side: String(x.get('B/S') || '').trim().toLowerCase().startsWith('s') ? 'Sell' : 'Buy',
+        qty: csvNum(x.get('filledQty') || x.get('Filled Qty')),
+        price: csvNum(x.get('avgPrice') || x.get('Avg Fill Price') || x.get('decimalFillAvg')),
+        time,
+        text: String(x.get('Text') || '').trim(),
+        type: String(x.get('Type') || '').trim()
+      }
+    })
+    .filter((f) => f.symbol && f.time && f.price && f.qty)
+    .sort((a, b) => a.time.localeCompare(b.time) || a.i - b.i)
+
+  const books = new Map()
+  const trades = []
+  const openDir = (side) => (side === 'Buy' ? 'Long' : 'Short')
+
+  for (const f of filled) {
+    const key = `${f.account}|${f.symbol}`
+    const book = books.get(key) || []
+    let qty = f.qty
+    const dir = openDir(f.side)
+
+    while (qty > 0 && book.length && book[0].dir !== dir) {
+      const lot = book[0]
+      const closeQty = Math.min(qty, lot.qty)
+      const multiplier = FUTURES_POINT_VALUE[f.symbol] || FUTURES_POINT_VALUE[String(f.get('Contract') || '').match(/^[A-Z]+/)?.[0]] || 1
+      const pnl = lot.dir === 'Long'
+        ? (f.price - lot.price) * closeQty * multiplier
+        : (lot.price - f.price) * closeQty * multiplier
+      const t = {
+        id: Date.now().toString(36) + Math.random().toString(16).slice(2),
+        symbol: f.symbol,
+        direction: lot.dir,
+        entry: lot.price,
+        exit: f.price,
+        stop: 0,
+        target: 0,
+        size: closeQty,
+        riskAmount: 0,
+        pnl,
+        fees: 0,
+        rr: 0,
+        emotion: '',
+        setup: '',
+        notes: `Imported from NinjaTrader Orders export. Entry: ${lot.text || lot.type || 'fill'}; Exit: ${f.text || f.type || 'fill'}.`,
+        reason: '',
+        entryTime: lot.time,
+        exitTime: f.time,
+        timestamp: lot.time,
+        source: 'import'
+      }
+      t.dupe = existingKeys.has(tradeKeyForImport(t))
+      trades.push(t)
+      lot.qty -= closeQty
+      qty -= closeQty
+      if (lot.qty <= 0.000001) book.shift()
+    }
+
+    if (qty > 0) {
+      // If the export starts after a position was opened, an isolated "Exit" row
+      // cannot be reconstructed into a real trade, so leave it out.
+      if (!book.length && /^exit$/i.test(f.text)) continue
+      book.push({ dir, qty, price: f.price, time: f.time, text: f.text, type: f.type })
+    }
+
+    books.set(key, book)
+  }
+  return trades
+}
 // [field, label, header-guess regex, required]
 export const IMPORT_FIELDS = [
   ['symbol', 'Symbol', /symbol|ticker|instrument|contract|product/i, true],
@@ -205,6 +297,12 @@ export const IMPORT_FIELDS = [
 // post(t, get): fixes broker quirks the column map can't express — runs per row after
 // the generic build, with get(header) returning that column's raw cell.
 export const BROKER_PRESETS = [
+  {
+    key: 'ninjatrader-orders', label: 'NinjaTrader Orders',
+    sig: ['order id', 'b/s', 'contract', 'product', 'avgprice', 'filledqty', 'fill time', 'status'],
+    map: { symbol: 'Product', direction: 'B/S', size: 'filledQty', entry: 'avgPrice', entryTime: 'Fill Time' },
+    buildRows: ninjaOrdersToTrades
+  },
   {
     key: 'ninjatrader', label: 'NinjaTrader 8',
     sig: ['instrument', 'market pos.', 'entry price', 'exit price'],
