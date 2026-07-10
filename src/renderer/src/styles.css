@@ -29,6 +29,52 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--th-accent, #F5B642) 25%, transparent);
 }
 
+/* nav tabs: slight lift + glow when the mouse floats over them */
+.th-tab {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  transition: transform .16s ease, box-shadow .16s ease, background .16s ease, color .16s ease, border-color .16s ease;
+}
+.th-tab::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  z-index: -1;
+  border-radius: inherit;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--th-accent, #F5B642) 18%, transparent), transparent 58%);
+  opacity: 0;
+  transform: translateX(-8px);
+  transition: opacity .16s ease, transform .16s ease;
+}
+.th-tab svg { transition: filter .16s ease, transform .16s ease; }
+.th-tab:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, .18);
+}
+.th-tab:hover::before {
+  opacity: 1;
+  transform: translateX(0);
+}
+.th-tab:hover svg {
+  filter: drop-shadow(0 0 6px var(--th-accent, #F5B642));
+  transform: translateY(-1px) scale(1.05);
+}
+.th-tab-on svg { filter: drop-shadow(0 0 5px color-mix(in srgb, var(--th-accent, #F5B642) 60%, transparent)); }
+
+@media (prefers-reduced-motion: reduce) {
+  .th-tab,
+  .th-tab::before,
+  .th-tab svg {
+    transition: none;
+  }
+  .th-tab:hover,
+  .th-tab:hover svg,
+  .th-tab:hover::before {
+    transform: none;
+  }
+}
+
 /* tab content: quick fade-up when switching tabs */
 .th-fade { animation: th-fade .22s ease both; }
 @keyframes th-fade {

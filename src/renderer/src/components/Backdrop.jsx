@@ -29,6 +29,21 @@ function flame(ctx, x, y, hgt, wdt, lick, fill) {
   ctx.fill()
 }
 
+function roundedRect(ctx, x, y, w, h, r) {
+  const rr = Math.min(r, w / 2, h / 2)
+  ctx.beginPath()
+  ctx.moveTo(x + rr, y)
+  ctx.lineTo(x + w - rr, y)
+  ctx.quadraticCurveTo(x + w, y, x + w, y + rr)
+  ctx.lineTo(x + w, y + h - rr)
+  ctx.quadraticCurveTo(x + w, y + h, x + w - rr, y + h)
+  ctx.lineTo(x + rr, y + h)
+  ctx.quadraticCurveTo(x, y + h, x, y + h - rr)
+  ctx.lineTo(x, y + rr)
+  ctx.quadraticCurveTo(x, y, x + rr, y)
+  ctx.closePath()
+}
+
 // Each scene factory returns { resize(w, h), draw(ctx, w, h, dt, t, light) }.
 // resize() tops up / trims its population to match the viewport; draw() advances
 // one step (dt in ~60fps units, t the running clock) and paints.
@@ -286,6 +301,82 @@ const SCENES = {
     }
   },
 
+  money: () => {
+    const drops = []
+    const spawn = (w, h, initial) => {
+      const bill = Math.random() < 0.58
+      const scale = rand(0.78, 1.32)
+      return {
+        x: rand(-40, w + 40),
+        y: initial ? rand(-h * 0.2, h) : rand(-140, -20),
+        vy: bill ? rand(0.22, 0.62) : rand(0.28, 0.82),
+        drift: rand(-0.18, 0.18),
+        phase: rand(0, Math.PI * 2),
+        spin: rand(-0.018, 0.018),
+        rot: rand(-0.35, 0.35),
+        bill,
+        w: 42 * scale,
+        h: 22 * scale,
+        glyph: Math.random() < 0.72 ? '$' : '$$',
+        font: Math.round(rand(16, 22)),
+        alpha: rand(0.45, 0.9)
+      }
+    }
+    return {
+      resize(w, h) {
+        const n = Math.min(64, Math.max(24, Math.round((w * h) / 26000)))
+        while (drops.length < n) drops.push(spawn(w, h, true))
+        drops.length = n
+      },
+      draw(ctx, w, h, dt, t, light) {
+        const billFill = light ? 0.1 : 0.08
+        const billStroke = light ? 0.3 : 0.24
+        const markAlpha = light ? 0.34 : 0.28
+        for (const d of drops) {
+          d.y += d.vy * dt
+          d.x += (d.drift + Math.sin(t * 0.018 + d.phase) * 0.16) * dt
+          d.rot += d.spin * dt
+          if (d.y > h + 80 || d.x < -110 || d.x > w + 110) Object.assign(d, spawn(w, h, false))
+
+          ctx.save()
+          ctx.translate(d.x, d.y)
+          ctx.rotate(d.rot + Math.sin(t * 0.012 + d.phase) * 0.12)
+          if (d.bill) {
+            const x = -d.w / 2, y = -d.h / 2
+            roundedRect(ctx, x, y, d.w, d.h, 5)
+            ctx.fillStyle = withAlpha(T.up, billFill * d.alpha)
+            ctx.fill()
+            ctx.strokeStyle = withAlpha(T.up, billStroke * d.alpha)
+            ctx.lineWidth = 1.2
+            ctx.stroke()
+
+            roundedRect(ctx, x + 6, y + 5, d.w - 12, d.h - 10, 4)
+            ctx.strokeStyle = withAlpha(T.accent, (light ? 0.2 : 0.16) * d.alpha)
+            ctx.lineWidth = 0.8
+            ctx.stroke()
+
+            ctx.fillStyle = withAlpha(T.text, (light ? 0.36 : 0.3) * d.alpha)
+            ctx.font = `${Math.max(10, d.h * 0.55)}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`
+            ctx.textAlign = 'center'
+            ctx.textBaseline = 'middle'
+            ctx.fillText('$', 0, 0)
+
+            ctx.fillStyle = withAlpha(T.up, (light ? 0.28 : 0.22) * d.alpha)
+            ctx.beginPath(); ctx.arc(x + 9, y + d.h / 2, 2.1, 0, Math.PI * 2); ctx.fill()
+            ctx.beginPath(); ctx.arc(x + d.w - 9, y + d.h / 2, 2.1, 0, Math.PI * 2); ctx.fill()
+          } else {
+            ctx.fillStyle = withAlpha(T.accent, markAlpha * d.alpha)
+            ctx.font = `${d.font}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`
+            ctx.textAlign = 'center'
+            ctx.textBaseline = 'middle'
+            ctx.fillText(d.glyph, 0, 0)
+          }
+          ctx.restore()
+        }
+      }
+    }
+  },
+
   equalizer: () => {
     const BAR_W = 8, BAR_PITCH = 13 // bar + gap
     const SEG = 6, SEG_PITCH = 8 // LED segment + gap
@@ -341,6 +432,7 @@ export const BACKDROP_OPTIONS = [
   ['embers', '🔥 Flames'],
   ['candles', '🕯️ Candles'],
   ['equalizer', '🎚️ Equalizer'],
+  ['money', '$ Money Rain'],
   ['off', 'Off']
 ]
 

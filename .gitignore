@@ -5,6 +5,7 @@ dist/
 .DS_Store
 .vscode/
 /screenshots/
+.claude/
 
 # Personal NinjaTrader strategy — never publish
 /ninjatrader/

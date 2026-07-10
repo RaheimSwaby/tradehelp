@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react'
 import {
-  BookOpen, LayoutDashboard, Brain, Target, Bot, Settings as SettingsIcon,
-  Zap, Building2, ClipboardList, Gauge, ScanSearch, Play, BookMarked
+  LayoutDashboard, Brain, Target, Settings as SettingsIcon, Gauge, Play,
+  Feather, Landmark, ScrollText, Radar
 } from 'lucide-react'
+import { Whistle, PlayDiagram, CrosshairCandle } from './components/Icons.jsx'
 import { applyTheme, T, mono } from './theme.js'
 import { fmt$, fmtN, parseRules, IMPACT_RANK, ALERT_LEADS, GATE_CONFIGURED, isNewerVersion } from './utils.js'
 import { computeStats, computeAchievements } from './stats.js'
@@ -244,17 +245,17 @@ export default function App() {
   }, [tradeMode, settings?.accentColor, settings?.themeMode])
 
   const TABS = [
-    ['journal', 'Journal', BookOpen],
-    ['trade', 'Trade Mode', Zap],
-    ['propfirm', 'Prop Firm', Building2],
+    ['journal', 'Journal', Feather],
+    ['trade', 'Trade Mode', CrosshairCandle],
+    ['propfirm', 'Prop Firm', Landmark],
     ['dashboard', 'Dashboard', LayoutDashboard],
     ['psych', 'Psychology', Brain],
     ['rating', 'Rating', Gauge],
     ['goals', 'Goals', Target],
-    ['reviews', 'Reviews', ClipboardList],
-    ['coach', 'AI Coach', Bot],
-    ['patterns', 'Patterns', ScanSearch],
-    ['playbook', 'Playbook', BookMarked],
+    ['reviews', 'Reviews', ScrollText],
+    ['coach', 'AI Coach', Whistle],
+    ['patterns', 'Patterns', Radar],
+    ['playbook', 'Playbook', PlayDiagram],
     ['settings', 'Settings', SettingsIcon]
   ]
 
@@ -295,7 +296,7 @@ export default function App() {
             const active = tab === id
             return (
               <button key={id} type="button" onClick={() => setTab(id)}
-                className="flex items-center gap-2 px-3 py-2 rounded-md text-sm"
+                className={`th-tab flex items-center gap-2 px-3 py-2 rounded-md text-sm${active ? ' th-tab-on' : ''}`}
                 style={{ background: active ? T.surface2 : 'transparent', color: active ? T.accent : T.dim, border: `1px solid ${active ? T.line : 'transparent'}` }}>
                 <Icon size={15} /> {label}
               </button>
