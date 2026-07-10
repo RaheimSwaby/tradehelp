@@ -1,6 +1,6 @@
 {
     "name":  "tradehelp",
-    "version":  "0.30.1",
+    "version":  "0.31.0",
     "description":  "Local-first trading journal with an offline AI coach (Electron + React + SQLite + Ollama)",
     "main":  "./out/main/index.js",
     "license":  "MIT",
