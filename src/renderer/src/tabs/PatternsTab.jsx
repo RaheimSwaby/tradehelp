@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { ScanSearch } from 'lucide-react'
+import { ScanSearch, X } from 'lucide-react'
 import { T, inputStyle } from '../theme.js'
-import { toJpeg, streamChat } from '../utils.js'
+import { fmt$, toJpeg, streamChat } from '../utils.js'
 import { Panel, Field } from '../components/Shared.jsx'
 
 /* ───────── patterns: cross-trade chart comparison ───────── */
@@ -15,6 +15,7 @@ export function Patterns({ trades }) {
   const setups = useMemo(() => ['All setups', ...Array.from(new Set(withPics.map((t) => t.setup).filter(Boolean)))], [withPics])
   const [setup, setSetup] = useState('All setups')
   const [state, setState] = useState(null)
+  const [zoom, setZoom] = useState(null)
   useEffect(() => { setState(null) }, [setup])
 
   const pool = useMemo(() => withPics.filter((t) => setup === 'All setups' || t.setup === setup), [withPics, setup])
@@ -24,11 +25,11 @@ export function Patterns({ trades }) {
   const ready = winners.length > 0 && losers.length > 0
   const reading = state?.phase === 'reading'
 
-  async function firstJpeg(id) {
+  async function firstImage(id) {
     const metas = await window.api.listImages(id)
     if (!metas?.length) return null
     const img = await window.api.getImage(metas[0].id)
-    return img?.dataUrl ? await toJpeg(img.dataUrl) : null
+    return img?.dataUrl ? { ...img, jpeg: await toJpeg(img.dataUrl) } : null
   }
 
   async function run() {
@@ -43,14 +44,24 @@ export function Patterns({ trades }) {
       const wins = [], losses = []
       let winsRead = 0, lossesRead = 0, lastErr = ''
       for (const [side, t] of picks) {
-        const url = await firstJpeg(t.id)
+        const image = await firstImage(t.id)
+        const url = image?.jpeg
         let desc = '(no image)'
         if (url) {
           const res = await window.api.aiChat({ system: CHART_DESCRIBE_SYSTEM, messages: [{ role: 'user', content: `Describe this ${t.symbol} ${t.setup || ''} chart.`, images: [url] }] })
           if (res?.ok) { desc = res.text; if (side === 'win') winsRead++; else lossesRead++ }
           else { lastErr = res?.error || 'error'; desc = `(couldn't read: ${lastErr})` }
         }
-        ;(side === 'win' ? wins : losses).push({ symbol: t.symbol, dataUrl: url, desc })
+        ;(side === 'win' ? wins : losses).push({
+          tradeId: t.id,
+          symbol: t.symbol,
+          setup: t.setup,
+          timestamp: t.timestamp,
+          pnl: Number(t.pnl) || 0,
+          imageTag: image?.tag || '',
+          dataUrl: image?.dataUrl || '',
+          desc
+        })
         setState((s) => (s?.phase === 'reading' ? { ...s, done: s.done + 1 } : s))
       }
       // If the model couldn't actually read the charts, stop here. Feeding the error
@@ -74,6 +85,14 @@ export function Patterns({ trades }) {
     }
   }
 
+  const dateLabel = (ts) => {
+    const s = String(ts || '')
+    if (!s) return 'No date'
+    const d = new Date(s.replace(' ', 'T'))
+    if (Number.isNaN(d.getTime())) return s.slice(0, 16)
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+  }
+
   if (withPics.length === 0) {
     return <Panel title="Pattern finder"><div className="py-12 text-center text-sm" style={{ color: T.dim }}>Attach chart screenshots to a few winning and losing trades, then come back — this finds what separates them.</div></Panel>
   }
@@ -83,10 +102,21 @@ export function Patterns({ trades }) {
       <div className="text-xs uppercase tracking-wider mb-1.5" style={{ color }}>{title}</div>
       <div className="flex flex-wrap gap-2">
         {arr.map((x, i) => (
-          <div key={i} className="rounded overflow-hidden" style={{ border: `1px solid ${color}`, width: 130 }} title={x.desc}>
-            {x.dataUrl ? <img src={x.dataUrl} alt="" className="w-full" style={{ height: 70, objectFit: 'cover' }} /> : <div style={{ height: 70, background: T.surface2 }} />}
-            <div className="px-1.5 py-0.5 text-xs truncate" style={{ color: T.dim, background: T.surface2 }}>{x.symbol}</div>
-          </div>
+          <button key={x.tradeId || i} type="button"
+            onClick={() => x.dataUrl && setZoom(x)}
+            className="rounded overflow-hidden text-left"
+            style={{ border: `1px solid ${color}`, width: 156, background: T.surface2, cursor: x.dataUrl ? 'zoom-in' : 'default' }}
+            title={`${dateLabel(x.timestamp)} · ${fmt$(x.pnl)}\n${x.desc}`}>
+            {x.dataUrl ? <img src={x.dataUrl} alt={`${x.symbol} chart`} className="w-full" style={{ height: 82, objectFit: 'cover', background: '#000' }} /> : <div style={{ height: 82, background: T.surface2 }} />}
+            <div className="px-2 py-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold truncate" style={{ color: T.text }}>{x.symbol}</span>
+                <span className="text-[10px] shrink-0" style={{ color: x.pnl >= 0 ? T.up : T.down }}>{fmt$(x.pnl)}</span>
+              </div>
+              <div className="text-[10px] truncate mt-0.5" style={{ color: T.dim }}>{dateLabel(x.timestamp)}</div>
+              {(x.setup || x.imageTag) && <div className="text-[10px] truncate mt-0.5" style={{ color: T.faint }}>{x.setup || x.imageTag}</div>}
+            </div>
+          </button>
         ))}
       </div>
     </div>
@@ -132,6 +162,23 @@ export function Patterns({ trades }) {
             : <div className="text-sm whitespace-pre-wrap" style={{ color: '#F3D9A0' }}>{state.text}</div>}
           {state.text && <div className="text-xs mt-2" style={{ color: T.faint }}>AI pattern read · not financial advice</div>}
         </Panel>
+      )}
+
+      {zoom && (
+        <div className="th-overlay fixed inset-0 flex items-center justify-center p-6 z-[80]" style={{ background: 'rgba(0,0,0,0.92)' }} onClick={() => setZoom(null)}>
+          <button type="button" onClick={() => setZoom(null)} className="absolute top-4 right-4 rounded-md p-2" style={{ background: T.surface2, color: T.text, border: `1px solid ${T.line}` }} title="Close">
+            <X size={18} />
+          </button>
+          <div className="max-w-[96vw] max-h-[94vh]" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" style={{ color: T.dim }}>
+              <span style={{ color: T.text, fontWeight: 600 }}>{zoom.symbol}</span>
+              <span>{dateLabel(zoom.timestamp)}</span>
+              <span style={{ color: zoom.pnl >= 0 ? T.up : T.down }}>{fmt$(zoom.pnl)}</span>
+              {zoom.setup && <span>{zoom.setup}</span>}
+            </div>
+            <img src={zoom.dataUrl} alt={`${zoom.symbol} chart`} style={{ maxWidth: '96vw', maxHeight: '88vh', objectFit: 'contain', background: '#000' }} />
+          </div>
+        </div>
       )}
     </div>
   )
