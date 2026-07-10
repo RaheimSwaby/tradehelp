@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { T, mono, inputStyle, ACCENT_OPTIONS } from '../theme.js'
+import { T, mono, inputStyle, ACCENT_OPTIONS, THEME_PRESETS, GO_TIME_OPTIONS, PNL_STYLE_OPTIONS, FONT_OPTIONS } from '../theme.js'
 import { CHECKOUT_URL } from '../utils.js'
 import { Panel, Field } from '../components/Shared.jsx'
 import { BACKDROP_OPTIONS } from '../components/Backdrop.jsx'
@@ -171,12 +171,69 @@ function TestKey({ type, value, url }) {
 }
 
 /* ───────── settings ───────── */
+function PillButton({ active, children, onClick, title }) {
+  return (
+    <button type="button" title={title} onClick={onClick}
+      className="text-xs px-3 py-1.5 rounded-md font-semibold"
+      style={{ background: active ? T.surface2 : 'transparent', color: active ? T.accent : T.dim, border: `1px solid ${active ? T.accent : T.line}` }}>
+      {children}
+    </button>
+  )
+}
+
+function ThemePreview({ preset, active, onClick }) {
+  const p = preset.palette
+  return (
+    <button type="button" onClick={onClick}
+      className="text-left rounded-lg p-3 th-card"
+      style={{ background: p.surface, border: `1px solid ${active ? p.accent : p.line}`, color: p.text }}>
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-xs font-semibold truncate">{preset.name}</div>
+        <span className="w-3 h-3 rounded-full shrink-0" style={{ background: p.accent }} />
+      </div>
+      <div className="mt-3 rounded-md p-2" style={{ background: p.surface2, border: `1px solid ${p.line}` }}>
+        <div className="flex items-center gap-1.5">
+          <span className="h-1.5 w-8 rounded-full" style={{ background: p.accent }} />
+          <span className="h-1.5 w-5 rounded-full" style={{ background: p.line }} />
+          <span className="h-1.5 w-6 rounded-full ml-auto" style={{ background: p.up }} />
+        </div>
+        <div className="grid grid-cols-3 gap-1.5 mt-2">
+          <span className="h-5 rounded" style={{ background: p.bg, border: `1px solid ${p.line}` }} />
+          <span className="h-5 rounded" style={{ background: p.up, opacity: 0.7 }} />
+          <span className="h-5 rounded" style={{ background: p.down, opacity: 0.7 }} />
+        </div>
+      </div>
+    </button>
+  )
+}
+
 export function SettingsTab({ settings, onSave, license, onLicenseChange, onReload }) {
   const [s, setS] = useState(settings || {})
   const [test, setTest] = useState(null)
   useEffect(() => { setS(settings || {}) }, [settings])
   const set = (k) => (e) => setS((p) => ({ ...p, [k]: e.target.value }))
   const inp = 'w-full rounded px-2 py-1.5 text-sm'
+
+  function saveNext(next) {
+    setS(next)
+    onSave(next)
+  }
+
+  async function chooseBackground() {
+    const res = await window.api.chooseBackground?.()
+    if (res?.ok && res.settings) {
+      setS(res.settings)
+      onSave(res.settings)
+    }
+  }
+
+  async function clearBackground() {
+    const res = await window.api.clearBackground?.(s.customBackgroundFile)
+    if (res?.ok && res.settings) {
+      setS(res.settings)
+      onSave(res.settings)
+    }
+  }
 
   async function testConn() {
     setTest('Testing…')
@@ -189,6 +246,121 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <LicensePanel license={license} onChange={onLicenseChange} />
       <DataPanel onReload={onReload} />
+      <Panel title="Appearance 2.0">
+        <Field label="Theme presets">
+          <div className="grid grid-cols-2 gap-2 mt-1">
+            {THEME_PRESETS.map((p) => (
+              <ThemePreview key={p.key} preset={p} active={(s.themePreset || 'classic') === p.key}
+                onClick={() => saveNext({ ...s, themePreset: p.key, themeMode: p.mode, accentColor: p.accentKey })} />
+            ))}
+          </div>
+        </Field>
+        <div className="mt-3" />
+        <Field label="Theme mode">
+          <div className="flex flex-wrap gap-1.5 mt-1">
+            {[['dark', 'Dark'], ['light', 'Light']].map(([k, label]) => (
+              <PillButton key={k} active={(s.themeMode || 'dark') === k}
+                onClick={() => saveNext({ ...s, themeMode: k, themePreset: 'custom' })}>
+                {label}
+              </PillButton>
+            ))}
+          </div>
+        </Field>
+        <div className="mt-3" />
+        <Field label="Animated backdrop">
+          <div className="flex flex-wrap gap-1.5 mt-1">
+            {BACKDROP_OPTIONS.map(([k, label]) => {
+              const cur = !s.backdrop || s.backdrop === 'on' ? 'constellation' : s.backdrop
+              return (
+                <PillButton key={k} active={cur === k} onClick={() => saveNext({ ...s, backdrop: k })}>
+                  {label}
+                </PillButton>
+              )
+            })}
+          </div>
+        </Field>
+        <div className="mt-3" />
+        <Field label="Accent color">
+          <div className="flex flex-wrap gap-2 mt-1">
+            {ACCENT_OPTIONS.map((o) => (
+              <button key={o.key} type="button" title={o.key}
+                onClick={() => saveNext({ ...s, accentColor: o.key, themePreset: 'custom' })}
+                className="w-8 h-8 rounded-full"
+                style={{ background: o.accent, border: `2px solid ${(s.accentColor || 'amber') === o.key ? T.text : 'transparent'}`, outline: (s.accentColor || 'amber') === o.key ? `1px solid ${o.accent}` : 'none' }} />
+            ))}
+          </div>
+        </Field>
+        <div className="mt-3" />
+        <Field label="Go-Time color">
+          <div className="flex flex-wrap gap-1.5 mt-1">
+            {GO_TIME_OPTIONS.map((o) => (
+              <PillButton key={o.key} active={(s.goTimeAccent || 'orange') === o.key}
+                onClick={() => saveNext({ ...s, goTimeAccent: o.key })}>
+                <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ background: o.accent }} />{o.label}</span>
+              </PillButton>
+            ))}
+          </div>
+        </Field>
+        <div className="mt-3" />
+        <Field label="Profit / loss style">
+          <div className="flex flex-wrap gap-1.5 mt-1">
+            {PNL_STYLE_OPTIONS.map((o) => (
+              <PillButton key={o.key} active={(s.pnlStyle || 'classic') === o.key}
+                onClick={() => saveNext({ ...s, pnlStyle: o.key })}>
+                {o.label}
+              </PillButton>
+            ))}
+          </div>
+        </Field>
+        <div className="mt-3" />
+        <Field label="Number font">
+          <div className="flex flex-wrap gap-1.5 mt-1">
+            {FONT_OPTIONS.map((o) => (
+              <PillButton key={o.key} active={(s.fontStyle || 'default') === o.key}
+                onClick={() => saveNext({ ...s, fontStyle: o.key })}>
+                {o.label}
+              </PillButton>
+            ))}
+          </div>
+        </Field>
+        <div className="mt-4 rounded-lg p-3" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-xs font-semibold">Custom background image</div>
+              <div className="text-xs mt-0.5" style={{ color: T.faint }}>{s.customBackgroundFile ? 'Local background is active.' : 'Add a PNG, JPG, or WEBP under 12 MB.'}</div>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <button type="button" onClick={chooseBackground} className="rounded-md px-3 py-1.5 text-xs font-semibold" style={{ background: T.accent, color: '#1A1306' }}>Choose</button>
+              {s.customBackgroundFile && <button type="button" onClick={clearBackground} className="rounded-md px-3 py-1.5 text-xs" style={{ background: T.surface, color: T.dim, border: `1px solid ${T.line}` }}>Remove</button>}
+            </div>
+          </div>
+          {s.customBackgroundFile && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
+              <Field label={`Opacity ${s.customBackgroundOpacity || 22}%`}>
+                <input type="range" min="0" max="70" value={s.customBackgroundOpacity || 22}
+                  onChange={(e) => saveNext({ ...s, customBackgroundOpacity: e.target.value })} className="w-full" />
+              </Field>
+              <Field label={`Blur ${s.customBackgroundBlur || 0}px`}>
+                <input type="range" min="0" max="18" value={s.customBackgroundBlur || 0}
+                  onChange={(e) => saveNext({ ...s, customBackgroundBlur: e.target.value })} className="w-full" />
+              </Field>
+              <Field label={`Dim ${s.customBackgroundDim || 42}%`}>
+                <input type="range" min="0" max="80" value={s.customBackgroundDim || 42}
+                  onChange={(e) => saveNext({ ...s, customBackgroundDim: e.target.value })} className="w-full" />
+              </Field>
+              <Field label="Fit">
+                <select style={inputStyle} className="w-full rounded px-2 py-1.5 text-xs" value={s.customBackgroundFit || 'cover'}
+                  onChange={(e) => saveNext({ ...s, customBackgroundFit: e.target.value })}>
+                  <option value="cover">Fill</option>
+                  <option value="contain">Fit</option>
+                  <option value="auto">Tile</option>
+                </select>
+              </Field>
+            </div>
+          )}
+        </div>
+      </Panel>
+      {false && (
       <Panel title="Appearance">
         <Field label="Theme">
           <div className="flex gap-1.5 mt-1">
@@ -238,6 +410,7 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
         </Field>
         <p className="text-xs mt-3" style={{ color: T.faint }}>Recolors buttons, highlights and the active tab across the app. Trade Mode keeps its own "go time" color.</p>
       </Panel>
+      )}
       <Panel title="Model provider">
         <Field label="Provider">
           <select style={inputStyle} className={inp} value={s.provider || 'ollama'} onChange={set('provider')}>

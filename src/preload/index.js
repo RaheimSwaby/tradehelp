@@ -38,6 +38,9 @@ const api = {
 
   getSettings: () => ipcRenderer.invoke('settings:get'),
   setSettings: (s) => ipcRenderer.invoke('settings:set', s),
+  chooseBackground: () => ipcRenderer.invoke('appearance:background:choose'),
+  getBackground: (file) => ipcRenderer.invoke('appearance:background:get', file),
+  clearBackground: (file) => ipcRenderer.invoke('appearance:background:clear', file),
 
   aiChat: (payload) => ipcRenderer.invoke('ai:chat', payload),
   aiChatStream: (payload, { onChunk, onDone, onError }) => {

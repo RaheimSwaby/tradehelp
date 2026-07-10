@@ -28,6 +28,7 @@ import { EventBanner, FloatingEvents } from './widgets/EventBanner.jsx'
 import { UpdateBanner } from './widgets/UpdateBanner.jsx'
 import { UpdateAvailableBanner } from './widgets/UpdateAvailableBanner.jsx'
 import { Backdrop } from './components/Backdrop.jsx'
+import { CustomBackground } from './components/CustomBackground.jsx'
 import { Onboarding } from './components/Onboarding.jsx'
 
 /* ───────── logo mark: three ascending candles, tracks the live theme ───────── */
@@ -71,6 +72,7 @@ export default function App() {
   const [playbook, setPlaybook] = useState([])
   const [dayLogs, setDayLogs] = useState([])
   const [payouts, setPayouts] = useState([])
+  const [customBg, setCustomBg] = useState('')
 
   const hasApi = typeof window !== 'undefined' && window.api
 
@@ -235,14 +237,36 @@ export default function App() {
   useEffect(() => { if (!toast) return; const id = setTimeout(() => setToast(null), 5000); return () => clearTimeout(id) }, [toast])
 
   // Re-theme the entire app when live. Runs every render; App is the only writer of T.
-  applyTheme(tradeMode, settings?.accentColor, settings?.themeMode)
+  applyTheme(tradeMode, settings?.accentColor, settings?.themeMode, settings)
   // Expose live theme values to CSS (card hover borders, focus rings, scrollbars)
   // and keep the body backdrop in sync so overscroll doesn't flash the wrong color.
   useEffect(() => {
     document.documentElement.style.setProperty('--th-accent', T.accent)
     document.documentElement.style.setProperty('--th-line', T.line)
     document.body.style.background = T.bg
-  }, [tradeMode, settings?.accentColor, settings?.themeMode])
+  }, [
+    tradeMode,
+    settings?.themePreset,
+    settings?.accentColor,
+    settings?.goTimeAccent,
+    settings?.pnlStyle,
+    settings?.fontStyle,
+    settings?.themeMode
+  ])
+
+  useEffect(() => {
+    let alive = true
+    async function loadBackground() {
+      if (!hasApi || !settings?.customBackgroundFile || !window.api.getBackground) {
+        setCustomBg('')
+        return
+      }
+      const res = await window.api.getBackground(settings.customBackgroundFile).catch(() => null)
+      if (alive) setCustomBg(res?.ok ? res.dataUrl : '')
+    }
+    loadBackground()
+    return () => { alive = false }
+  }, [hasApi, settings?.customBackgroundFile])
 
   const TABS = [
     ['journal', 'Journal', Feather],
@@ -262,6 +286,7 @@ export default function App() {
   return (
     <div style={{ color: T.text, minHeight: '100vh', borderTop: `3px solid ${tradeMode ? T.accent : 'transparent'}` }}>
       {/* bg lives on <body> (synced above) so the z:-1 particle canvas shows through */}
+      <CustomBackground dataUrl={customBg} settings={settings} />
       <Backdrop variant={!settings?.backdrop || settings.backdrop === 'on' ? 'constellation' : settings.backdrop} />
       <Ticker settings={settings} />
       {updateAvail && <UpdateAvailableBanner info={updateAvail} onClose={() => setUpdateAvail(null)} />}

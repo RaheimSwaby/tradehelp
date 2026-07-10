@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron'
-import { join } from 'path'
-import { writeFileSync, readFileSync } from 'fs'
+import { extname, join } from 'path'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'fs'
 import * as db from './db.js'
 import { chat, chatStream, models } from './ai.js'
 import { fetchPrice, fetchQuotes } from './price.js'
@@ -11,9 +11,22 @@ import { testKey } from './keytest.js'
 
 let win
 let settingsCache = null
+const BG_MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' }
 function cachedSettings() {
   if (!settingsCache) settingsCache = db.getSettings()
   return settingsCache
+}
+
+function appearanceDir() {
+  const dir = join(app.getPath('userData'), 'appearance')
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+  return dir
+}
+
+function backgroundPath(file) {
+  const name = String(file || '')
+  if (!/^custom-background\.(png|jpg|jpeg|webp)$/i.test(name)) return ''
+  return join(appearanceDir(), name)
 }
 
 function createWindow() {
@@ -164,6 +177,46 @@ function registerIpc() {
 
   ipcMain.handle('settings:get', () => db.getSettings())
   ipcMain.handle('settings:set', (_e, s) => { const r = db.setSettings(s); settingsCache = r; return r })
+  ipcMain.handle('appearance:background:choose', async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+      properties: ['openFile'],
+      filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp'] }]
+    })
+    if (canceled || !filePaths?.[0]) return { ok: false, canceled: true }
+    try {
+      const src = filePaths[0]
+      const ext = extname(src).toLowerCase()
+      if (!BG_MIME[ext]) return { ok: false, error: 'Use a PNG, JPG, JPEG, or WEBP image.' }
+      if (statSync(src).size > 12_000_000) return { ok: false, error: 'Background image must be under 12 MB.' }
+      const file = `custom-background${ext}`
+      copyFileSync(src, join(appearanceDir(), file))
+      const r = db.setSettings({ customBackgroundFile: file })
+      settingsCache = r
+      return { ok: true, settings: r }
+    } catch (e) {
+      return { ok: false, error: String(e?.message || e) }
+    }
+  })
+  ipcMain.handle('appearance:background:get', (_e, file) => {
+    try {
+      const p = backgroundPath(file)
+      if (!p || !existsSync(p)) return { ok: false }
+      const ext = extname(p).toLowerCase()
+      const mime = BG_MIME[ext] || 'image/png'
+      return { ok: true, dataUrl: `data:${mime};base64,${readFileSync(p).toString('base64')}` }
+    } catch (e) {
+      return { ok: false, error: String(e?.message || e) }
+    }
+  })
+  ipcMain.handle('appearance:background:clear', (_e, file) => {
+    try {
+      const p = backgroundPath(file)
+      if (p && existsSync(p)) unlinkSync(p)
+    } catch {}
+    const r = db.setSettings({ customBackgroundFile: '' })
+    settingsCache = r
+    return { ok: true, settings: r }
+  })
 
   ipcMain.handle('ai:chat', async (_e, payload) => {
     try {
