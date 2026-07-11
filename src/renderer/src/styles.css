@@ -34,7 +34,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  transition: transform .16s ease, box-shadow .16s ease, background .16s ease, color .16s ease, border-color .16s ease;
+  transition: transform .24s ease, box-shadow .35s ease, background .24s ease, color .24s ease, border-color .24s ease;
 }
 .th-tab::before {
   content: "";
@@ -45,9 +45,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   background: linear-gradient(135deg, color-mix(in srgb, var(--th-accent, #F5B642) 18%, transparent), transparent 58%);
   opacity: 0;
   transform: translateX(-8px);
-  transition: opacity .16s ease, transform .16s ease;
+  transition: opacity .35s ease, transform .35s ease;
 }
-.th-tab svg { transition: filter .16s ease, transform .16s ease; }
+.th-tab svg { transition: filter .45s ease, transform .24s ease; }
 .th-tab:hover {
   transform: translateY(-1px);
   box-shadow: 0 8px 18px rgba(0, 0, 0, .18);
@@ -60,13 +60,31 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   filter: drop-shadow(0 0 6px var(--th-accent, #F5B642));
   transform: translateY(-1px) scale(1.05);
 }
-.th-tab-on svg { filter: drop-shadow(0 0 5px color-mix(in srgb, var(--th-accent, #F5B642) 60%, transparent)); }
+.th-tab-on svg {
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--th-accent, #F5B642) 60%, transparent));
+  animation: th-tab-sprite-glow 1.25s ease both;
+}
+@keyframes th-tab-sprite-glow {
+  0% {
+    filter: drop-shadow(0 0 0 color-mix(in srgb, var(--th-accent, #F5B642) 0%, transparent));
+    transform: translateY(0) scale(1);
+  }
+  28% {
+    filter: drop-shadow(0 0 10px color-mix(in srgb, var(--th-accent, #F5B642) 85%, transparent));
+    transform: translateY(-1px) scale(1.08);
+  }
+  100% {
+    filter: drop-shadow(0 0 5px color-mix(in srgb, var(--th-accent, #F5B642) 60%, transparent));
+    transform: translateY(0) scale(1);
+  }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .th-tab,
   .th-tab::before,
   .th-tab svg {
     transition: none;
+    animation: none;
   }
   .th-tab:hover,
   .th-tab:hover svg,
@@ -76,7 +94,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 }
 
 /* tab content: quick fade-up when switching tabs */
-.th-fade { animation: th-fade .22s ease both; }
+.th-fade { animation: th-fade .38s ease both; }
 @keyframes th-fade {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: none; }
