@@ -387,12 +387,12 @@ export function computePropFirm(trades, cfg) {
 const promptText = (value, max = 1200) => String(value || '').replace(/\s+/g, ' ').trim().slice(0, max)
 const promptNum = (value) => Number.isFinite(Number(value)) ? fmtN(Number(value)) : '-'
 
-function tradePromptRow(t, includeWritten) {
+function tradePromptRow(t, includeWritten, accountName) {
   const fields = [
     `date=${t.entryTime || t.timestamp || '-'}`,
     `symbol=${promptText(t.symbol, 30) || '-'}`,
     `direction=${promptText(t.direction, 12) || '-'}`,
-    `account=${promptText(t.account, 50) || 'live/unassigned'}`,
+    `account=${accountName ? accountName(t.account) : (promptText(t.account, 50) || 'Live')}`,
     `entry=${promptNum(t.entry)}`,
     `exit=${promptNum(t.exit)}`,
     `stop=${promptNum(t.stop)}`,
@@ -402,18 +402,18 @@ function tradePromptRow(t, includeWritten) {
     `pnl=${promptNum(t.pnl)}`,
     `fees=${promptNum(t.fees)}`,
     `rr=${t.rr ? fmtN(t.rr, 1) : '-'}`,
-    `setup=${promptText(t.setup, 80) || '-'}`,
-    `emotion=${promptText(t.emotion, 40) || '-'}`,
-    `reason=${promptText(t.reason, 160) || '-'}`,
-    `selfSetup=${promptText(t.selfSetup, 4) || '-'}`,
-    `selfExecution=${promptText(t.selfExec, 4) || '-'}`,
+    `setup=${promptText(t.setup, 80) || '(none)'}`,
+    `emotion=${promptText(t.emotion, 40) || '(none)'}`,
+    `reason=${promptText(t.reason, 160) || '(none)'}`,
+    `selfSetup=${promptText(t.selfSetup, 4) || '(none)'}`,
+    `selfExecution=${promptText(t.selfExec, 4) || '(none)'}`,
     `source=${promptText(t.source, 20) || 'manual'}`
   ]
   if (includeWritten) fields.push(`notes=${promptText(t.notes) || '(none)'}`)
   return fields.join(' | ')
 }
 
-export function tradeContext(trades, stats, { includeWritten = true, maxChars = 48000 } = {}) {
+export function tradeContext(trades, stats, { includeWritten = true, maxChars = 48000, accountName } = {}) {
   const top = (arr) => arr.slice(0, 5).map((g) => `${g.name}(pnl=${fmtN(g.pnl)}, n=${g.n}, wr=${fmtN(g.wr, 0)}%)`).join(', ')
   const reasons = (arr) => arr.slice(0, 5).map((r) => `${r.name}(${r.n})`).join(', ')
   const header = `AGGREGATED STATS (all ${stats.n} trades):
@@ -424,8 +424,8 @@ P&L by setup: ${top(stats.bySetup) || '(none)'}
 Most common win reasons: ${reasons(stats.reasonsWin) || '(none)'}
 Most common loss reasons: ${reasons(stats.reasonsLoss) || '(none)'}
 
-TRADE ENTRIES (newest first):`
-  const rows = [...trades].reverse().map((t) => tradePromptRow(t, includeWritten))
+TRADE ENTRIES (newest first). Field notes: account = which account the trade was on ("Live" = personal/non-prop); size = number of contracts/shares (NOT dollars); entry/exit/stop/target = prices; pnl/risk/fees = dollar amounts; a field shown as "(none)" was left blank/untagged — never infer, guess, or invent a value for it:`
+  const rows = [...trades].reverse().map((t) => tradePromptRow(t, includeWritten, accountName))
   const kept = []
   let used = header.length
   for (const row of rows) {
@@ -437,12 +437,48 @@ TRADE ENTRIES (newest first):`
 }
 
 export function fullJournalContext({ trades = [], stats, reviews = {}, playbook = [], dayLogs = [], goals = {}, settings = {} }, { includeWritten = true, maxChars = 44000 } = {}) {
-  let out = tradeContext(trades, stats, { includeWritten, maxChars: Math.floor(maxChars * 0.7) })
+  let accounts = []
+  try { const parsed = JSON.parse(settings.propFirmAccounts || '[]'); if (Array.isArray(parsed)) accounts = parsed } catch {}
+  const accById = {}
+  for (const a of accounts) accById[a.id] = a
+  // Trades reference an account by id; show the human label so the coach can break
+  // results down per account (an empty id is the personal "Live" account).
+  const accountName = (id) => {
+    if (!id) return 'Live'
+    const a = accById[id]
+    return a ? (promptText(a.label || a.name || a.firm, 60) || id) : id
+  }
+
+  let out = tradeContext(trades, stats, { includeWritten, maxChars: Math.floor(maxChars * 0.7), accountName })
   const append = (title, lines) => {
     const clean = lines.filter(Boolean)
     if (!clean.length || out.length >= maxChars) return
     const section = `\n\n${title}:\n${clean.join('\n')}`
     out += section.slice(0, Math.max(0, maxChars - out.length))
+  }
+
+  // Per-account aggregates, pre-computed so the coach can quote account-level totals
+  // without (mis)counting the raw trade list itself. Only shown when trades span
+  // more than one account — otherwise it just restates the portfolio stats above.
+  const byAccount = {}
+  for (const t of trades) { const name = accountName(t.account); (byAccount[name] || (byAccount[name] = [])).push(t) }
+  const acctNames = Object.keys(byAccount)
+  if (acctNames.length > 1) {
+    const lines = acctNames
+      .map((name) => ({ name, s: computeStats(byAccount[name]) }))
+      .sort((a, b) => b.s.n - a.s.n)
+      .map(({ name, s }) => `account=${name} | trades=${s.n} | netPnL=${fmtN(s.totalPnl)} | winRate=${fmtN(s.winRate, 1)}% | avgWin=${fmtN(s.avgWin)} | avgLoss=${fmtN(s.avgLoss)} | profitFactor=${s.profitFactor === Infinity ? 'inf' : fmtN(s.profitFactor, 2)} | maxDD=${fmtN(s.maxDD)}`)
+    append('PER-ACCOUNT SUMMARY (already computed — cite these exact figures for account-level totals; do not recompute or estimate)', lines)
+  }
+
+  // The personal/live account has a real funded balance the trader sets — give it
+  // to the coach so it can reason about balance/return instead of guessing off prices.
+  const liveCapital = Number(settings.liveCapital) || 0
+  if (liveCapital > 0) {
+    const ls = computeStats(trades.filter((t) => !accById[t.account]))
+    append('LIVE ACCOUNT (the trader\'s real personal account; startingCapital is its size; all dollar amounts)', [
+      `startingCapital=${fmtN(liveCapital)} | currentBalance=${fmtN(liveCapital + ls.totalPnl)} | netPnL=${fmtN(ls.totalPnl)} | trades=${ls.n} | maxDrawdown=${fmtN(ls.maxDD)}`
+    ])
   }
 
   append('GOALS AND RISK LIMITS', [
@@ -469,10 +505,8 @@ export function fullJournalContext({ trades = [], stats, reviews = {}, playbook 
     return includeWritten ? `${base} | note=${promptText(d.note, 800) || '-'}` : base
   }))
 
-  let accounts = []
-  try { const parsed = JSON.parse(settings.propFirmAccounts || '[]'); if (Array.isArray(parsed)) accounts = parsed } catch {}
   append('PROP ACCOUNT RULES', accounts.map((a) =>
-    `name=${promptText(a.name || a.firm, 100) || a.id} | size=${promptNum(a.accountSize)} | target=${promptNum(a.target)} | maxDailyLoss=${promptNum(a.maxDailyLoss)} | maxDrawdown=${promptNum(a.maxDrawdown)} | drawdownType=${promptText(a.ddType, 30) || '-'} | minDays=${promptNum(a.minDays)}`
+    `name=${promptText(a.label || a.name || a.firm, 100) || a.id} | size=${promptNum(a.accountSize)} | target=${promptNum(a.target)} | maxDailyLoss=${promptNum(a.maxDailyLoss)} | maxDrawdown=${promptNum(a.maxDrawdown)} | drawdownType=${promptText(a.ddType, 30) || '-'} | minDays=${promptNum(a.minDays)}`
   ))
 
   return out
