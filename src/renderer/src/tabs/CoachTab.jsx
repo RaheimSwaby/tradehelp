@@ -16,7 +16,7 @@ Many trades are logged without an emotion, setup, or reason — these show as "(
 For account-level totals (net P&L, win rate, trade count), use the numbers in the PER-ACCOUNT SUMMARY directly — they are already computed. Do not re-derive them from the trade list.
 Do NOT give buy/sell signals, price predictions, or personalized investment advice. Keep it tight (under ~180 words), direct, and supportive. If data is thin, say so honestly.`
 
-export function Coach({ trades, stats, settings, reviews = {}, playbook = [], dayLogs = [], goals = {}, events, now }) {
+export function Coach({ trades, stats, settings, reviews = {}, playbook = [], dayLogs = [], goals = {}, payouts = [], events, now }) {
   // Local Ollama always gets the full written record; cloud users can gate free-form text.
   const includeWritten = settings?.provider !== 'cloud' || (settings?.cloudJournalAccess ?? 'true') !== 'false'
   const [msgs, setMsgs] = useState([])
@@ -38,7 +38,7 @@ export function Coach({ trades, stats, settings, reviews = {}, playbook = [], da
     const next = [...msgs, { role: 'user', content: userText }]
     setMsgs(next); setInput(''); setBusy(true); setStreamText('')
     const apiMsgs = [
-      { role: 'user', content: `Here is my current journal data:\n\n${fullJournalContext({ trades, stats, settings, reviews, playbook, dayLogs, goals }, { includeWritten })}` },
+      { role: 'user', content: `Here is my current journal data:\n\n${fullJournalContext({ trades, stats, settings, reviews, playbook, dayLogs, goals, payouts }, { includeWritten })}` },
       { role: 'assistant', content: 'Got it — I have your full journal in front of me: trades, notes, reviews, playbook, goals and rules.' },
       ...next
     ]

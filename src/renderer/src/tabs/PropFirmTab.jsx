@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo } from 'react'
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, ReferenceLine, Tooltip } from 'recharts'
 import { CheckSquare, Square, Plus, Trash2, Wallet } from 'lucide-react'
 import { T, mono, inputStyle } from '../theme.js'
@@ -261,36 +261,79 @@ function PropAccounts({ trades, accounts, onSave, payouts = [], onAddPayout, onD
   )
 }
 
+function CapitalAction({ mode, capital, onSave, onCancel }) {
+  const [amount, setAmount] = useState('')
+  const amt = parseFloat(amount) || 0
+  const title = mode === 'set' ? 'Set starting capital' : mode === 'edit' ? 'Adjust capital' : 'Add funds'
+  const next = mode === 'add' ? capital + amt : amt
+  const save = () => {
+    if (amt <= 0) return
+    onSave(String(next))
+    setAmount('')
+  }
+  const inp = 'w-full rounded px-2 py-1.5 text-sm'
+  return (
+    <div className="rounded-lg p-3 space-y-2" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-sm font-semibold">{title}</div>
+        <button type="button" onClick={onCancel} className="text-xs px-2 py-1 rounded-md" style={{ color: T.dim, border: `1px solid ${T.line}` }}>Cancel</button>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 items-end">
+        <Field label={mode === 'add' ? 'Funds to add $' : 'Capital $'}>
+          <input autoFocus style={inputStyle} className={inp} value={amount} onChange={(e) => setAmount(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') save() }} inputMode="decimal" placeholder={mode === 'add' ? 'e.g. 500' : 'e.g. 5000'} />
+        </Field>
+        <button type="button" onClick={save} disabled={amt <= 0} className="rounded-md px-3 py-2 text-sm font-semibold"
+          style={{ background: T.accent, color: '#1A1306', opacity: amt > 0 ? 1 : 0.5 }}>
+          {mode === 'add' ? 'Add funds' : 'Save capital'}
+        </button>
+      </div>
+      {mode === 'add' && amt > 0 && <div className="text-xs" style={{ color: T.faint }}>New capital: <span style={{ ...mono, color: T.text }}>{fmt$(next)}</span></div>}
+    </div>
+  )
+}
+
 // Your personal / live account: capital you funded it with + P&L from every trade
 // not tagged to a prop account, plus a withdrawal log.
 function LiveAccount({ trades, accounts = [], settings = {}, onSaveSettings, payouts = [], onAddPayout, onDeletePayout }) {
   const propIds = useMemo(() => new Set(accounts.map((a) => a.id)), [accounts])
   const liveTrades = useMemo(() => trades.filter((t) => !propIds.has(t.account)), [trades, propIds])
   const s = useMemo(() => computeStats(liveTrades), [liveTrades])
-  const [cap, setCap] = useState(settings.liveCapital || '')
-  useEffect(() => { setCap(settings.liveCapital || '') }, [settings.liveCapital])
-  const capital = parseFloat(cap) || 0
+  const [capitalMode, setCapitalMode] = useState(null)
+  const capital = parseFloat(settings.liveCapital) || 0
   const withdrawn = payouts.filter((p) => p.accountId === 'live').reduce((a, p) => a + (Number(p.amount) || 0), 0)
-  const balance = capital + s.totalPnl
-  const inp = 'w-full rounded px-2 py-1.5 text-sm'
-  const saveCap = () => onSaveSettings?.({ liveCapital: String(parseFloat(cap) || 0) })
+  const balance = capital + s.totalPnl - withdrawn
+  const saveCapital = (value) => {
+    onSaveSettings?.({ liveCapital: value })
+    setCapitalMode(null)
+  }
   return (
     <div className="space-y-4">
-      <Panel title="Live / personal account">
-        <div className="flex flex-wrap items-end gap-3">
-          <Field label="Account capital $">
-            <input style={{ ...inputStyle, maxWidth: 170 }} className={inp} value={cap} onChange={(e) => setCap(e.target.value)} onBlur={saveCap}
-              onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur() }} inputMode="decimal" placeholder="e.g. 5000" />
-          </Field>
-          <div className="text-xs pb-2" style={{ color: T.faint }}>What you funded this account with — balance = capital + net P&amp;L.</div>
-        </div>
+      <Panel title="Live / personal account" right={capital > 0 && <button type="button" onClick={() => setCapitalMode('add')} className="text-xs px-2 py-1 rounded-md font-semibold" style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}` }}>+ Add funds</button>}>
+        {capitalMode ? (
+          <CapitalAction mode={capitalMode} capital={capital} onSave={saveCapital} onCancel={() => setCapitalMode(null)} />
+        ) : capital > 0 ? (
+          <div className="flex flex-wrap items-center gap-3 rounded-lg px-3 py-2" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
+            <Wallet size={16} style={{ color: T.accent }} />
+            <div>
+              <div className="text-xs uppercase tracking-wider" style={{ color: T.faint }}>Saved account capital</div>
+              <div className="text-lg font-bold" style={{ ...mono, color: T.text }}>{fmt$(capital)}</div>
+            </div>
+            <button type="button" onClick={() => setCapitalMode('edit')} className="ml-auto text-xs px-2 py-1 rounded-md" style={{ color: T.dim, border: `1px solid ${T.line}` }}>Adjust</button>
+          </div>
+        ) : (
+          <div className="rounded-lg px-3 py-3 flex flex-wrap items-center gap-3" style={{ background: T.surface2, border: `1px dashed ${T.line}` }}>
+            <div className="text-sm" style={{ color: T.dim }}>Set your starting capital once so balance and return stats have a real anchor.</div>
+            <button type="button" onClick={() => setCapitalMode('set')} className="rounded-md px-3 py-2 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306' }}>Set capital</button>
+          </div>
+        )}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
-          <Stat label="Balance" value={fmt$(balance)} tone={balance >= capital ? 'up' : 'down'} sub={`capital ${fmt$(capital)}`} />
+          <Stat label="Balance" value={fmt$(balance)} tone={balance >= capital ? 'up' : 'down'} sub={`capital ${fmt$(capital)}${withdrawn > 0 ? ` - ${fmt$(withdrawn)} withdrawn` : ''}`} />
           <Stat label="Net P&L" value={fmt$(s.totalPnl)} tone={s.totalPnl >= 0 ? 'up' : 'down'} sub={`${s.n} trade${s.n === 1 ? '' : 's'}`} />
           <Stat label="Win rate" value={s.n ? `${fmtN(s.winRate, 1)}%` : '—'} />
           <Stat label="Max drawdown" value={fmt$(-s.maxDD)} tone="down" sub={withdrawn > 0 ? `${fmt$(withdrawn)} withdrawn` : 'peak-to-trough'} />
         </div>
-        {capital === 0 && <div className="text-xs mt-3" style={{ color: T.faint }}>Set your account capital above so your balance, return and drawdown are tracked — and so the AI Coach knows how big this account is.</div>}
+        <div className="text-xs mt-3" style={{ color: T.faint }}>Balance = saved capital + net P&amp;L - withdrawals. Add funds changes saved capital; withdrawals are logged below.</div>
       </Panel>
       <PayoutPanel payouts={payouts} accountId="live" noun="withdrawal" onAdd={onAddPayout} onDelete={onDeletePayout} />
     </div>

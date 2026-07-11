@@ -1,6 +1,7 @@
 // Bundled patch notes — shown in the "What's new" modal after an update.
 // Add an entry here with every release so users always see real notes.
 export const RELEASE_NOTES = {
+  '0.32.1': `- Accounts tab - Prop Firm is now Accounts, with separate Live and Prop views\n- Live account tracking - set starting capital, track balance, withdrawals, net P&L, win rate, and max drawdown for personal trades\n- AI coach account context - the coach now reads real live-account stats instead of guessing from market prices\n- Tab polish - active tab icons now get a longer, smoother glow pulse`,
   '0.32.0': `- Accounts tab - Prop Firm is now Accounts, with separate Live and Prop views\n- Live account tracking - set starting capital, track balance, withdrawals, net P&L, win rate, and max drawdown for personal trades\n- AI coach account context - the coach now reads real live-account stats instead of guessing from market prices\n- Tab polish - active tab icons now get a longer, smoother glow pulse`,
   '0.31.2': `- NinjaTrader Orders CSV import - TradeHelp now recognizes Orders exports, ignores canceled bracket orders, and rebuilds filled orders into closed trades`,
   '0.31.1': `- Minor Pattern Recognition polish - compared charts now show date/P&L and can be opened full-size from the preview`,

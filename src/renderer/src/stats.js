@@ -436,7 +436,7 @@ TRADE ENTRIES (newest first). Field notes: account = which account the trade was
   return `${header}\n${kept.join('\n') || '(none)'}${coverage}`
 }
 
-export function fullJournalContext({ trades = [], stats, reviews = {}, playbook = [], dayLogs = [], goals = {}, settings = {} }, { includeWritten = true, maxChars = 44000 } = {}) {
+export function fullJournalContext({ trades = [], stats, reviews = {}, playbook = [], dayLogs = [], goals = {}, settings = {}, payouts = [] }, { includeWritten = true, maxChars = 44000 } = {}) {
   let accounts = []
   try { const parsed = JSON.parse(settings.propFirmAccounts || '[]'); if (Array.isArray(parsed)) accounts = parsed } catch {}
   const accById = {}
@@ -476,8 +476,9 @@ export function fullJournalContext({ trades = [], stats, reviews = {}, playbook 
   const liveCapital = Number(settings.liveCapital) || 0
   if (liveCapital > 0) {
     const ls = computeStats(trades.filter((t) => !accById[t.account]))
+    const withdrawn = (payouts || []).filter((p) => p.accountId === 'live').reduce((a, p) => a + (Number(p.amount) || 0), 0)
     append('LIVE ACCOUNT (the trader\'s real personal account; startingCapital is its size; all dollar amounts)', [
-      `startingCapital=${fmtN(liveCapital)} | currentBalance=${fmtN(liveCapital + ls.totalPnl)} | netPnL=${fmtN(ls.totalPnl)} | trades=${ls.n} | maxDrawdown=${fmtN(ls.maxDD)}`
+      `startingCapital=${fmtN(liveCapital)} | currentBalance=${fmtN(liveCapital + ls.totalPnl - withdrawn)} | netPnL=${fmtN(ls.totalPnl)} | withdrawals=${fmtN(withdrawn)} | trades=${ls.n} | maxDrawdown=${fmtN(ls.maxDD)}`
     ])
   }
 
