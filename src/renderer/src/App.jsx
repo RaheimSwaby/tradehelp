@@ -271,7 +271,7 @@ export default function App() {
   const TABS = [
     ['journal', 'Journal', Feather],
     ['trade', 'Trade Mode', CrosshairCandle],
-    ['propfirm', 'Prop Firm', Landmark],
+    ['propfirm', 'Accounts', Landmark],
     ['dashboard', 'Dashboard', LayoutDashboard],
     ['psych', 'Psychology', Brain],
     ['rating', 'Rating', Gauge],
@@ -341,7 +341,7 @@ export default function App() {
           <div key={tab} className="th-fade">
             {tab === 'journal' && <Journal trades={trades} onAdd={addTrade} onUpdate={updateTrade} onRemove={removeTrade} onNotes={setNotesView} onImport={importTrades} accounts={propFirmAccounts} settings={settings} onSaveSettings={saveSettings} dayLogs={dayLogs} onAddDayLog={addDayLog} onDeleteDayLog={deleteDayLog} />}
             {tab === 'trade' && <TradeModeTab settings={settings} onSave={saveSettings} rules={rules} live={tradeMode} todayNet={todayNet} todayCount={todayTrades.length} weekNet={weekNet} goal={dailyGoal} maxLoss={maxLoss} onStart={startDay} onEnd={endSession} />}
-            {tab === 'propfirm' && <PropFirm trades={trades} accounts={propFirmAccounts} onSave={savePropFirmAccounts} payouts={payouts} onAddPayout={addPayout} onDeletePayout={deletePayout} />}
+            {tab === 'propfirm' && <PropFirm trades={trades} accounts={propFirmAccounts} onSave={savePropFirmAccounts} settings={settings} onSaveSettings={saveSettings} payouts={payouts} onAddPayout={addPayout} onDeletePayout={deletePayout} />}
             {tab === 'dashboard' && <Dashboard stats={stats} trades={trades} accounts={propFirmAccounts} settings={settings} journalData={{ reviews, playbook, dayLogs, goals }} payouts={payouts} onSaveSettings={saveSettings} onOpenCoach={() => setTab('coach')} />}
             {tab === 'psych' && <Psychology stats={stats} />}
             {tab === 'rating' && <Rating trades={trades} stats={stats} achievements={achievements} unlockedAt={unlockedAt} settings={settings} onSave={saveSettings} payouts={payouts} />}

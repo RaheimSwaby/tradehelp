@@ -1,13 +1,14 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, ReferenceLine, Tooltip } from 'recharts'
 import { CheckSquare, Square, Plus, Trash2, Wallet } from 'lucide-react'
 import { T, mono, inputStyle } from '../theme.js'
-import { fmt$, clamp, PROP_PRESETS } from '../utils.js'
-import { computePropFirm } from '../stats.js'
+import { fmt$, fmtN, clamp, PROP_PRESETS } from '../utils.js'
+import { computePropFirm, computeStats } from '../stats.js'
 import { Stat, Panel, Field } from '../components/Shared.jsx'
 
-// Per-account or all-time payout log. accountId fixed = scoped to one account.
-function PayoutPanel({ payouts = [], accounts = [], accountId, onAdd, onDelete }) {
+// Per-account or all-time payout/withdrawal log. accountId fixed = scoped to one account.
+function PayoutPanel({ payouts = [], accounts = [], accountId, onAdd, onDelete, noun = 'payout' }) {
+  const Noun = noun[0].toUpperCase() + noun.slice(1)
   const [adding, setAdding] = useState(false)
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [amount, setAmount] = useState('')
@@ -24,10 +25,10 @@ function PayoutPanel({ payouts = [], accounts = [], accountId, onAdd, onDelete }
     setAmount(''); setNote(''); setAdding(false)
   }
   return (
-    <Panel title={accountId ? 'Payouts' : 'All-time payouts'} right={<span className="text-sm" style={{ ...mono, color: total >= 0 ? T.up : T.down }}>{fmt$(total)}</span>}>
+    <Panel title={accountId ? `${Noun}s` : `All-time ${noun}s`} right={<span className="text-sm" style={{ ...mono, color: total >= 0 ? T.up : T.down }}>{fmt$(total)}</span>}>
       {!adding ? (
         <button type="button" onClick={() => setAdding(true)} className="w-full flex items-center justify-center gap-1.5 rounded-md py-2 text-sm" style={{ background: 'transparent', color: T.dim, border: `1px dashed ${T.line}` }}>
-          <Plus size={14} /> Log a payout
+          <Plus size={14} /> Log a {noun}
         </button>
       ) : (
         <div className="space-y-2 rounded-lg p-3" style={{ background: T.surface2 }}>
@@ -223,7 +224,7 @@ export function PropFirmDetail({ trades, acc, onBack, onEdit, onDelete, payouts 
   )
 }
 
-export function PropFirm({ trades, accounts, onSave, payouts = [], onAddPayout, onDeletePayout }) {
+function PropAccounts({ trades, accounts, onSave, payouts = [], onAddPayout, onDeletePayout }) {
   const [view, setView] = useState('overview')
   function upsert(acc) {
     const next = accounts.some((a) => a.id === acc.id) ? accounts.map((a) => (a.id === acc.id ? acc : a)) : [...accounts, acc]
@@ -256,6 +257,63 @@ export function PropFirm({ trades, accounts, onSave, payouts = [], onAddPayout, 
         {rows.map(({ acc, r }) => <AccountCard key={acc.id} acc={acc} r={r} tight={tight?.acc.id === acc.id} payout={payoutByAccount[acc.id] || 0} onClick={() => setView({ detail: acc.id })} />)}
       </div>
       <PayoutPanel payouts={payouts} accounts={accounts} onAdd={onAddPayout} onDelete={onDeletePayout} />
+    </div>
+  )
+}
+
+// Your personal / live account: capital you funded it with + P&L from every trade
+// not tagged to a prop account, plus a withdrawal log.
+function LiveAccount({ trades, accounts = [], settings = {}, onSaveSettings, payouts = [], onAddPayout, onDeletePayout }) {
+  const propIds = useMemo(() => new Set(accounts.map((a) => a.id)), [accounts])
+  const liveTrades = useMemo(() => trades.filter((t) => !propIds.has(t.account)), [trades, propIds])
+  const s = useMemo(() => computeStats(liveTrades), [liveTrades])
+  const [cap, setCap] = useState(settings.liveCapital || '')
+  useEffect(() => { setCap(settings.liveCapital || '') }, [settings.liveCapital])
+  const capital = parseFloat(cap) || 0
+  const withdrawn = payouts.filter((p) => p.accountId === 'live').reduce((a, p) => a + (Number(p.amount) || 0), 0)
+  const balance = capital + s.totalPnl
+  const inp = 'w-full rounded px-2 py-1.5 text-sm'
+  const saveCap = () => onSaveSettings?.({ liveCapital: String(parseFloat(cap) || 0) })
+  return (
+    <div className="space-y-4">
+      <Panel title="Live / personal account">
+        <div className="flex flex-wrap items-end gap-3">
+          <Field label="Account capital $">
+            <input style={{ ...inputStyle, maxWidth: 170 }} className={inp} value={cap} onChange={(e) => setCap(e.target.value)} onBlur={saveCap}
+              onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur() }} inputMode="decimal" placeholder="e.g. 5000" />
+          </Field>
+          <div className="text-xs pb-2" style={{ color: T.faint }}>What you funded this account with — balance = capital + net P&amp;L.</div>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+          <Stat label="Balance" value={fmt$(balance)} tone={balance >= capital ? 'up' : 'down'} sub={`capital ${fmt$(capital)}`} />
+          <Stat label="Net P&L" value={fmt$(s.totalPnl)} tone={s.totalPnl >= 0 ? 'up' : 'down'} sub={`${s.n} trade${s.n === 1 ? '' : 's'}`} />
+          <Stat label="Win rate" value={s.n ? `${fmtN(s.winRate, 1)}%` : '—'} />
+          <Stat label="Max drawdown" value={fmt$(-s.maxDD)} tone="down" sub={withdrawn > 0 ? `${fmt$(withdrawn)} withdrawn` : 'peak-to-trough'} />
+        </div>
+        {capital === 0 && <div className="text-xs mt-3" style={{ color: T.faint }}>Set your account capital above so your balance, return and drawdown are tracked — and so the AI Coach knows how big this account is.</div>}
+      </Panel>
+      <PayoutPanel payouts={payouts} accountId="live" noun="withdrawal" onAdd={onAddPayout} onDelete={onDeletePayout} />
+    </div>
+  )
+}
+
+export function PropFirm({ trades, accounts = [], onSave, payouts = [], onAddPayout, onDeletePayout, settings = {}, onSaveSettings }) {
+  const [sub, setSub] = useState('live')
+  const tabs = [['live', 'Live'], ['prop', accounts.length ? `Prop · ${accounts.length}` : 'Prop']]
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-1.5">
+        {tabs.map(([k, label]) => (
+          <button key={k} type="button" onClick={() => setSub(k)} className="text-xs px-3 py-1.5 rounded-md font-semibold"
+            style={{ background: sub === k ? T.surface2 : 'transparent', color: sub === k ? T.accent : T.dim, border: `1px solid ${sub === k ? T.line : 'transparent'}` }}>
+            {label}
+          </button>
+        ))}
+        <span className="text-xs ml-1" style={{ color: T.faint }}>{sub === 'live' ? 'your personal account' : 'prop-firm challenges'}</span>
+      </div>
+      {sub === 'live'
+        ? <LiveAccount trades={trades} accounts={accounts} settings={settings} onSaveSettings={onSaveSettings} payouts={payouts} onAddPayout={onAddPayout} onDeletePayout={onDeletePayout} />
+        : <PropAccounts trades={trades} accounts={accounts} onSave={onSave} payouts={payouts} onAddPayout={onAddPayout} onDeletePayout={onDeletePayout} />}
     </div>
   )
 }
