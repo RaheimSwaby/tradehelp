@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react'
 import {
   LayoutDashboard, Brain, Target, Settings as SettingsIcon, Gauge, Play,
-  Feather, Landmark, ScrollText, Radar
+  Feather, Landmark, ScrollText, Radar, CalendarClock
 } from 'lucide-react'
 import { Whistle, PlayDiagram, CrosshairCandle } from './components/Icons.jsx'
 import { applyTheme, T, mono } from './theme.js'
@@ -30,6 +30,8 @@ import { UpdateAvailableBanner } from './widgets/UpdateAvailableBanner.jsx'
 import { Backdrop } from './components/Backdrop.jsx'
 import { CustomBackground } from './components/CustomBackground.jsx'
 import { Onboarding } from './components/Onboarding.jsx'
+import { DailyReport } from './components/DailyReport.jsx'
+import { lastTradingDay } from './coachInsights.js'
 
 /* ───────── logo mark: three ascending candles, tracks the live theme ───────── */
 function LogoMark({ size = 22 }) {
@@ -69,12 +71,18 @@ export default function App() {
   const [updateReady, setUpdateReady] = useState(null)
   const [updateAvail, setUpdateAvail] = useState(null)
   const [onboard, setOnboard] = useState(false)
+  const [dailyReport, setDailyReport] = useState(null)
+  const drRef = useRef(false)
   const [playbook, setPlaybook] = useState([])
   const [dayLogs, setDayLogs] = useState([])
   const [payouts, setPayouts] = useState([])
   const [customBg, setCustomBg] = useState('')
 
   const hasApi = typeof window !== 'undefined' && window.api
+  const reportDay = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10)
+    return lastTradingDay(trades, today)
+  }, [trades])
 
   useEffect(() => {
     (async () => {
@@ -96,6 +104,20 @@ export default function App() {
   useEffect(() => {
     if (ready && hasApi && settings && trades.length === 0 && settings.onboarded !== 'true') setOnboard(true)
   }, [ready]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Daily report: once per app launch, surface a review of the last trading day.
+  useEffect(() => {
+    if (drRef.current || !ready || !hasApi || !settings || settings.dailyReportEnabled === 'false') return
+    if (reportDay) { drRef.current = true; setDailyReport(reportDay) }
+  }, [ready, hasApi, settings, reportDay])
+
+  function closeDailyReport() {
+    setDailyReport(null)
+  }
+
+  function openDailyReport() {
+    if (reportDay) setDailyReport(reportDay)
+  }
 
   // Show "What's new" once after an auto-update bumps the version (not on a fresh install).
   useEffect(() => {
@@ -313,6 +335,11 @@ export default function App() {
                 <Play size={14} /> Start day
               </button>
             )}
+            {reportDay && !dailyReport && !tradeMode && (settings?.dailyReportEnabled ?? 'true') !== 'false' && (
+              <button type="button" onClick={openDailyReport} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm" style={{ background: T.surface2, color: T.dim, border: `1px solid ${T.line}` }}>
+                <CalendarClock size={14} /> Review
+              </button>
+            )}
           </div>
         </header>
 
@@ -372,6 +399,10 @@ export default function App() {
       {onboard && ready && hasApi && (!GATE_CONFIGURED || license?.state !== 'expired') && (
         <Onboarding settings={settings} accounts={propFirmAccounts} onSaveSettings={saveSettings} onImport={importTrades}
           onDone={(goTab) => { setOnboard(false); saveSettings({ onboarded: 'true' }); if (goTab) setTab(goTab) }} />
+      )}
+      {dailyReport && !onboard && !tradeMode && (!GATE_CONFIGURED || license?.state !== 'expired') && (
+        <DailyReport trades={trades} date={dailyReport} settings={settings}
+          onClose={closeDailyReport} onOpenCoach={() => { closeDailyReport(); setTab('coach') }} />
       )}
     </div>
   )

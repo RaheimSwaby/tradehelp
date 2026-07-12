@@ -443,6 +443,10 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
           <input type="checkbox" className="mt-0.5" checked={(s.proactiveCoachEnabled ?? 'true') !== 'false'} onChange={(e) => setS((p) => ({ ...p, proactiveCoachEnabled: String(e.target.checked) }))} />
           <span>Proactive coach brief<span className="block text-xs mt-0.5" style={{ color: T.faint }}>Automatically adds one AI-enhanced process review when your trade snapshot changes. Turn this off to use only the built-in rule-based brief.</span></span>
         </label>
+        <label className="flex items-start gap-2 text-sm mt-3 cursor-pointer" style={{ color: T.text }}>
+          <input type="checkbox" className="mt-0.5" checked={(s.dailyReportEnabled ?? 'true') !== 'false'} onChange={(e) => { const next = { ...s, dailyReportEnabled: String(e.target.checked) }; setS(next); onSave(next) }} />
+          <span>Daily session review on launch<span className="block text-xs mt-0.5" style={{ color: T.faint }}>A floating card recaps your last trading day every time you open the app. Close it when done, or reopen it from the top bar.</span></span>
+        </label>
         <div className="flex gap-2 mt-4">
           <button type="button" onClick={() => onSave(s)} className="rounded-md px-3 py-2 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306' }}>Save</button>
           <button type="button" onClick={testConn} className="rounded-md px-3 py-2 text-sm" style={{ background: T.surface2, color: T.text, border: `1px solid ${T.line}` }}>Test Ollama</button>
