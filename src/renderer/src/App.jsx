@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 import { Whistle, PlayDiagram, CrosshairCandle } from './components/Icons.jsx'
 import { applyTheme, T, mono } from './theme.js'
-import { fmt$, fmtN, parseRules, IMPACT_RANK, ALERT_LEADS, GATE_CONFIGURED, isNewerVersion } from './utils.js'
+import { fmt$, fmtN, parseRules, IMPACT_RANK, ALERT_LEADS, GATE_CONFIGURED, isNewerVersion, thisWeekKey } from './utils.js'
 import { computeStats, computeAchievements } from './stats.js'
 import { RELEASE_NOTES } from './releaseNotes.js'
 import { Readout } from './components/Shared.jsx'
@@ -31,7 +31,8 @@ import { Backdrop } from './components/Backdrop.jsx'
 import { CustomBackground } from './components/CustomBackground.jsx'
 import { Onboarding } from './components/Onboarding.jsx'
 import { DailyReport } from './components/DailyReport.jsx'
-import { lastTradingDay } from './coachInsights.js'
+import { EasterEggNudge } from './components/EasterEggNudge.jsx'
+import { buildEasterEggNudges, lastTradingDay } from './coachInsights.js'
 
 /* ───────── logo mark: three ascending candles, tracks the live theme ───────── */
 function LogoMark({ size = 22 }) {
@@ -73,6 +74,8 @@ export default function App() {
   const [onboard, setOnboard] = useState(false)
   const [dailyReport, setDailyReport] = useState(null)
   const drRef = useRef(false)
+  const [nudge, setNudge] = useState(null)
+  const nudgeRef = useRef(false)
   const [playbook, setPlaybook] = useState([])
   const [dayLogs, setDayLogs] = useState([])
   const [payouts, setPayouts] = useState([])
@@ -158,6 +161,7 @@ export default function App() {
   }, [hasApi])
 
   const stats = useMemo(() => computeStats(trades), [trades])
+  const easterNudges = useMemo(() => buildEasterEggNudges(trades, stats), [trades, stats])
 
   async function addTrade(t, images = []) {
     if (!hasApi) return
@@ -193,6 +197,30 @@ export default function App() {
 
   async function addPayout(e) { if (hasApi && window.api.addPayout) setPayouts(await window.api.addPayout(e)) }
   async function deletePayout(id) { if (hasApi && window.api.deletePayout) setPayouts(await window.api.deletePayout(id)) }
+
+  function seenNudges() {
+    try { const arr = JSON.parse(settings?.easterEggSeen || '[]'); if (Array.isArray(arr)) return arr } catch {}
+    return []
+  }
+  async function dismissNudge(mark = true) {
+    const cur = nudge
+    setNudge(null)
+    if (mark && cur) {
+      const next = [...new Set([...seenNudges(), cur.id])].slice(-80)
+      await saveSettings({ easterEggSeen: JSON.stringify(next) })
+    }
+  }
+  async function takeNudgeBreak() {
+    await saveSettings({ onBreak: 'true', breakSince: thisWeekKey() })
+    await dismissNudge(true)
+  }
+
+  useEffect(() => {
+    if (nudgeRef.current || !ready || !settings || settings.easterEggEnabled === 'false') return
+    const seen = new Set(seenNudges())
+    const next = easterNudges.find((x) => !seen.has(x.id))
+    if (next) { nudgeRef.current = true; setNudge(next) }
+  }, [ready, settings, easterNudges]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Trade Mode derived state ──
   const rules = useMemo(() => parseRules(settings), [settings])
@@ -396,6 +424,9 @@ export default function App() {
       {toast && <AchievementToast a={toast} onClose={() => setToast(null)} />}
       {updateReady && <UpdateBanner info={updateReady} onInstall={() => window.api.installUpdate()} />}
       {whatsNew && <WhatsNew info={whatsNew} onClose={() => setWhatsNew(null)} />}
+      {nudge && !dailyReport && !onboard && !tradeMode && (!GATE_CONFIGURED || license?.state !== 'expired') && (
+        <EasterEggNudge nudge={nudge} onClose={() => dismissNudge(true)} onBreak={takeNudgeBreak} />
+      )}
       {onboard && ready && hasApi && (!GATE_CONFIGURED || license?.state !== 'expired') && (
         <Onboarding settings={settings} accounts={propFirmAccounts} onSaveSettings={saveSettings} onImport={importTrades}
           onDone={(goTab) => { setOnboard(false); saveSettings({ onboarded: 'true' }); if (goTab) setTab(goTab) }} />
