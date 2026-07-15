@@ -31,6 +31,7 @@ import { Backdrop } from './components/Backdrop.jsx'
 import { CustomBackground } from './components/CustomBackground.jsx'
 import { Onboarding } from './components/Onboarding.jsx'
 import { DailyReport } from './components/DailyReport.jsx'
+import { FeedbackPrompt } from './components/FeedbackPrompt.jsx'
 import { EasterEggNudge } from './components/EasterEggNudge.jsx'
 import { buildEasterEggNudges, lastTradingDay } from './coachInsights.js'
 
@@ -74,6 +75,8 @@ export default function App() {
   const [onboard, setOnboard] = useState(false)
   const [dailyReport, setDailyReport] = useState(null)
   const drRef = useRef(false)
+  const [feedbackPrompt, setFeedbackPrompt] = useState(false)
+  const fbRef = useRef(false)
   const [nudge, setNudge] = useState(null)
   const nudgeRef = useRef(false)
   const [playbook, setPlaybook] = useState([])
@@ -120,6 +123,24 @@ export default function App() {
 
   function openDailyReport() {
     if (reportDay) setDailyReport(reportDay)
+  }
+
+  // Feedback nudge: once ever, after the trader has journaled enough to have a real
+  // opinion (20+ trades). Rendered only when nothing else is popped up.
+  useEffect(() => {
+    if (fbRef.current || !ready || !hasApi || !settings) return
+    if (settings.feedbackPromptSeen || trades.length < 20) return
+    fbRef.current = true
+    setFeedbackPrompt(true)
+  }, [ready, hasApi, settings, trades.length])
+
+  function endFeedbackPrompt() {
+    setFeedbackPrompt(false)
+    saveSettings({ feedbackPromptSeen: 'done' })
+  }
+  function shareFeedback() {
+    window.api?.openExternal?.('https://discord.gg/ATfcXSD4j')
+    endFeedbackPrompt()
   }
 
   // Show "What's new" once after an auto-update bumps the version (not on a fresh install).
@@ -434,6 +455,9 @@ export default function App() {
       {dailyReport && !onboard && !tradeMode && (!GATE_CONFIGURED || license?.state !== 'expired') && (
         <DailyReport trades={trades} date={dailyReport} settings={settings}
           onClose={closeDailyReport} onOpenCoach={() => { closeDailyReport(); setTab('coach') }} />
+      )}
+      {feedbackPrompt && !dailyReport && !onboard && !nudge && !tradeMode && (!GATE_CONFIGURED || license?.state !== 'expired') && (
+        <FeedbackPrompt onShare={shareFeedback} onDismiss={endFeedbackPrompt} />
       )}
     </div>
   )
