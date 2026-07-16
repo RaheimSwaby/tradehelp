@@ -1,9 +1,9 @@
 // Bundled patch notes — shown in the "What's new" modal after an update.
 // Add an entry here with every release so users always see real notes.
 
-// 0.35.1 is a fix-up on 0.35.0, so it deliberately shows the same 0.35 notes
-// rather than announcing itself. Anyone arriving from 0.34.x still gets the
-// full 0.35 feature list either way.
+// 0.35.1 / 0.35.2 are fix-ups on 0.35.0, so they deliberately show the same 0.35
+// notes rather than announcing themselves. Anyone arriving from 0.34.x still gets
+// the full 0.35 feature list either way.
 const V035_NOTES = `• Position sizing — size a plan from your risk budget (futures, stocks, crypto)
 • Multi-fill trades — log scale-ins and partial exits with average-cost P&L
 • Plan scoring — prefill from your playbook, then score how you executed
@@ -14,6 +14,7 @@ const V035_NOTES = `• Position sizing — size a plan from your risk budget (f
 • Screen recordings — attach a recording to a trade and play it back`
 
 export const RELEASE_NOTES = {
+  '0.35.2': V035_NOTES,
   '0.35.1': V035_NOTES,
   '0.35.0': V035_NOTES,
   '0.34.1': `• Commitment and pre-trade-plan pop-ups now open centered on screen
