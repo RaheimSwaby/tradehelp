@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { CheckSquare, Square, Zap, Play, Plus, Trash2, AlertTriangle, Target } from 'lucide-react'
 import { T, mono, inputStyle } from '../theme.js'
 import { fmt$, fmtN, clamp, untilLabel } from '../utils.js'
@@ -21,14 +21,28 @@ export function TradeModeTab({ settings, onSave, rules, live, todayNet, todayCou
   const [g, setG] = useState(String(goal || ''))
   const [ml, setMl] = useState(String(maxLoss || ''))
   const [saved, setSaved] = useState(false)
-  useEffect(() => { setList(rules) }, [rules])
+  const cleanRules = (l) => (l || []).map((r) => String(r || '').trim()).filter(Boolean)
+  // Key the sync on rule CONTENT, not array identity: `rules` is rebuilt on every
+  // settings write (achievements, daily-report flags, …), and depending on its
+  // identity wiped in-progress rule edits whenever an unrelated setting saved.
+  const savedKey = useMemo(() => JSON.stringify(cleanRules(rules)), [rules])
+  useEffect(() => { setList(rules) }, [savedKey]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { setG(String(goal || '')); setMl(String(maxLoss || '')) }, [goal, maxLoss])
 
+  // Rules used to persist only via "Save rules & limits", which sits below a separate
+  // panel — so deleting or editing a rule looked done but reverted to the defaults on
+  // restart. Commit on the discrete moments (delete, leaving a field) instead. Never
+  // mid-keystroke: that would round-trip through settings and fight the sync above.
+  function commitRules(next) {
+    const clean = cleanRules(next)
+    if (JSON.stringify(clean) === savedKey) return
+    onSave({ tradeRules: JSON.stringify(clean) })
+  }
   const edit = (i, v) => setList((p) => p.map((r, j) => (j === i ? v : r)))
   const add = () => setList((p) => [...p, ''])
-  const remove = (i) => setList((p) => p.filter((_, j) => j !== i))
+  const remove = (i) => { const next = list.filter((_, j) => j !== i); setList(next); commitRules(next) }
   function save() {
-    const clean = list.map((r) => r.trim()).filter(Boolean)
+    const clean = cleanRules(list)
     setList(clean)
     onSave({ tradeRules: JSON.stringify(clean), dailyGoal: parseFloat(g) || 0, maxDailyLoss: parseFloat(ml) || 0 })
     setSaved(true); setTimeout(() => setSaved(false), 1500)
@@ -51,7 +65,7 @@ export function TradeModeTab({ settings, onSave, rules, live, todayNet, todayCou
               {list.map((r, i) => (
                 <div key={i} className="flex items-center gap-2">
                   <span style={{ color: T.faint }} className="text-xs w-5 text-right">{i + 1}.</span>
-                  <input style={inputStyle} className={inp} value={r} onChange={(e) => edit(i, e.target.value)} placeholder="e.g. Stop-loss set before entry" />
+                  <input style={inputStyle} className={inp} value={r} onChange={(e) => edit(i, e.target.value)} onBlur={() => commitRules(list)} placeholder="e.g. Stop-loss set before entry" />
                   <button type="button" onClick={() => remove(i)} title="Remove" style={{ color: T.faint }}><Trash2 size={15} /></button>
                 </div>
               ))}
