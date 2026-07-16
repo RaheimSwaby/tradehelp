@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { Upload, X } from 'lucide-react'
 import { T, mono, inputStyle } from '../theme.js'
 import { fmt$, parseCSV, csvNum, csvDate, normDir, IMPORT_FIELDS, BROKER_PRESETS, detectBrokerPreset, applyPresetMap } from '../utils.js'
@@ -109,7 +110,7 @@ export function ImportModal({ onClose, onImport, existing = [], accounts = [] })
     try { await onImport(toImport.map(({ dupe, ...t }) => ({ ...t, account }))) } catch (e) { setErr(String(e?.message || e)); setBusy(false) }
   }
 
-  return (
+  return createPortal(
     <div className="th-overlay fixed inset-0 flex items-center justify-center p-4 z-50" style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }} onClick={onClose}>
       <div className="rounded-xl w-full max-w-2xl max-h-[88vh] overflow-y-auto" style={{ background: T.surface, border: `1px solid ${T.line}` }} onClick={(e) => e.stopPropagation()}>
         <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${T.line}` }}>
@@ -211,6 +212,7 @@ export function ImportModal({ onClose, onImport, existing = [], accounts = [] })
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

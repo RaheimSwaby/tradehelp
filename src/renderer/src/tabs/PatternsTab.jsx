@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { ScanSearch, X } from 'lucide-react'
 import { T, inputStyle } from '../theme.js'
 import { fmt$, toJpeg, streamChat } from '../utils.js'
@@ -162,7 +163,7 @@ export function Patterns({ trades, onOpenTrade }) {
         </Panel>
       )}
 
-      {zoom && (
+      {zoom && createPortal(
         <div className="th-overlay fixed inset-0 flex items-center justify-center p-6 z-[80]" style={{ background: 'rgba(0,0,0,0.92)' }} onClick={() => setZoom(null)}>
           <button type="button" onClick={() => setZoom(null)} className="absolute top-4 right-4 rounded-md p-2" style={{ background: T.surface2, color: T.text, border: `1px solid ${T.line}` }} title="Close">
             <X size={18} />
@@ -176,7 +177,8 @@ export function Patterns({ trades, onOpenTrade }) {
             </div>
             <img src={zoom.dataUrl} alt={`${zoom.symbol} chart`} style={{ maxWidth: '96vw', maxHeight: '88vh', objectFit: 'contain', background: '#000' }} />
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

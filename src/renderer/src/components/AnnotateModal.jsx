@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Pencil, Minus, Square, ArrowUpRight, Undo2, Eraser } from 'lucide-react'
 import { T } from '../theme.js'
 import { loadImg } from '../utils.js'
@@ -106,7 +107,7 @@ export function AnnotateModal({ src, onSave, onClose }) {
     background: active ? T.accentSoft : T.surface2, color: active ? T.accent : T.dim, border: `1px solid ${active ? T.accent : T.line}`
   })
 
-  return (
+  return createPortal(
     <div className="th-overlay fixed inset-0 flex items-center justify-center p-4 z-[80]" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={onClose}>
       <div className="rounded-xl p-4 max-w-[95vw] max-h-[92vh] overflow-y-auto" style={{ background: T.surface, border: `1px solid ${T.line}` }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
@@ -151,6 +152,7 @@ export function AnnotateModal({ src, onSave, onClose }) {
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

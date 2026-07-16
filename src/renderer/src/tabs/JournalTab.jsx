@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { Plus, Trash2, Upload, Paperclip, X, Pencil, ImagePlus, Video, ChevronLeft, ChevronRight, Search, CalendarOff, Check, Coffee, Bookmark, ArrowUp, ArrowDown } from 'lucide-react'
 import { T, mono, inputStyle } from '../theme.js'
 import { fmt$, fmtN, nowLocalInput, parseLocal, holdMs, fmtDuration, EMOTIONS, SETUPS, WIN_REASONS, LOSS_REASONS, SELF_GRADES, pad2, MONTHS, downscale, fileToDataUrl } from '../utils.js'
@@ -769,7 +770,7 @@ function NoTradeModal({ emotions = [], onClose, onSave }) {
   const [mood, setMood] = useState('')
   const [note, setNote] = useState('')
   const inp = 'w-full rounded px-2 py-1.5 text-sm'
-  return (
+  return createPortal(
     <div className="th-overlay fixed inset-0 flex items-center justify-center p-4 z-[70]" style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }} onClick={onClose}>
       <div className="rounded-2xl w-full max-w-md p-5 space-y-3" style={{ background: T.surface, border: `1px solid ${T.line}` }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-2">
@@ -800,7 +801,8 @@ function NoTradeModal({ emotions = [], onClose, onSave }) {
           <button type="button" onClick={() => date && onSave({ date, reason, mood, note })} disabled={!date} className="flex-1 rounded-lg py-2 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306', opacity: date ? 1 : 0.5 }}>Save</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
