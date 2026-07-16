@@ -1,15 +1,14 @@
 // Bundled patch notes — shown in the "What's new" modal after an update.
 // Add an entry here with every release so users always see real notes.
 export const RELEASE_NOTES = {
-  '0.35.0': `• Playbook → Plan → Execution scoring — prefill a plan from a setup, size it from local instrument specs, lock the intent, and compare it with the linked trade
-• Risk-based position sizing — editable futures, stock, crypto, and custom instrument profiles stay on your machine
-• Multi-fill trades — record scale-ins, partial exits, fees, and ordered fills with average-cost P&L and fill-aware session replay
-• Review → Commitment — turn a periodic review into one measurable next-period focus
-• Saved Journal searches — save and reopen rolling natural-language filters such as “losing NQ trades last week”
-• Session comparison — compare two trade days side by side with normalized equity curves and transparent metric deltas
-• Similar charts — find visually related screenshots across trades with local-only fingerprints; no chart is sent to AI or the cloud
-• Screen recordings — attach local MP4, WebM, MOV, or M4V recordings to a trade and play them from trade details
-• Portable backups now include fills, instrument profiles, saved searches, playbook entries, payouts, and plan score snapshots`,
+  '0.35.0': `• Position sizing — size a plan from your risk budget using local instrument specs (futures, stocks, crypto)
+• Multi-fill trades — log scale-ins and partial exits with average-cost P&L
+• Plan scoring — prefill a plan from your playbook, then see how closely you actually executed it
+• Turn a review into a commitment — end a periodic review with one measurable focus
+• Saved searches — keep your favourite journal searches one click away
+• Session comparison — put two trading days side by side
+• Similar charts — find look-alike setups across your screenshots, all on your machine
+• Screen recordings — attach a recording to a trade and play it back`,
   '0.34.1': `• Commitment and pre-trade-plan pop-ups now open centered on screen
 • Achievement unlocks now pop in from the side with an animated medal
 • New commitment achievements — Kept My Word, Habit Builder and Ironclad Discipline

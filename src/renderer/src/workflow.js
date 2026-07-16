@@ -282,7 +282,9 @@ function dominantValue(rows, key) {
   return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0] || ''
 }
 
-export function executionGrade(score) {
+// Named distinctly from stats.js's executionGrade(trade) — that one takes a trade and
+// returns an object; this takes a numeric score and returns the letter.
+export function executionGradeLetter(score) {
   if (!Number.isFinite(score)) return ''
   if (score >= 93) return 'A+'
   if (score >= 85) return 'A'
@@ -333,7 +335,7 @@ export function summarizeTradeSession(trades = [], plans = [], date = '') {
     totalRisk: sessionTrades.reduce((sum, trade) => sum + (Number(trade.riskAmount) || 0), 0),
     avgRR: rrValues.length ? rrValues.reduce((sum, value) => sum + value, 0) / rrValues.length : null,
     executionScore,
-    executionGrade: executionGrade(executionScore),
+    executionGrade: executionGradeLetter(executionScore),
     linkedPlanCount: linkedPlans.length,
     scoredPlanCount: scoredPlans.length,
     firstEntryMs,
