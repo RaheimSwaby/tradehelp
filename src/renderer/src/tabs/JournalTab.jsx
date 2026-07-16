@@ -284,7 +284,10 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
   const fillProfile = useMemo(() => selectInstrumentProfile(profiles, f.symbol, fillProfileId), [profiles, f.symbol, fillProfileId])
   const fillProfileMismatch = useMemo(() => {
     if (!fillProfile || !String(f.symbol || '').trim()) return false
-    if (exactFillProfile && String(fillProfile.id) === String(exactFillProfile.id)) return false
+    // When the symbol has its own profile, anything else is a mismatch — including the
+    // 1x generic fallback, which would silently under-report futures P&L.
+    if (exactFillProfile) return String(fillProfile.id) !== String(exactFillProfile.id)
+    // With no match, generic stock is the only defensible pick.
     return String(fillProfile.symbol || '').toUpperCase() !== 'STOCK'
   }, [fillProfile, exactFillProfile, f.symbol])
   const fillPreview = useMemo(() => {
@@ -508,8 +511,11 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
               <div className="space-y-2 mt-3">
                 <div>
                   <label className="block text-xs mb-1" style={{ color: T.dim }}>Instrument profile for fill P&amp;L</label>
-                  <select style={inputStyle} className="w-full rounded px-2 py-1.5 text-xs" value={fillProfileId} onChange={(event) => setFillProfileId(event.target.value)}>
-                    <option value="">Choose a profile…</option>
+                  {/* Show the symbol's auto-match as selected. fillProfile already resolves
+                      from the symbol when nothing is picked, so binding the raw id made the
+                      dropdown read "Choose a profile…" while an auto-match was in force. */}
+                  <select style={inputStyle} className="w-full rounded px-2 py-1.5 text-xs" value={fillProfileId || exactFillProfile?.id || ''} onChange={(event) => setFillProfileId(event.target.value)}>
+                    {!exactFillProfile && <option value="">Choose a profile…</option>}
                     {fillProfileOptions.map((profile) => {
                       const isExact = exactFillProfile && String(profile.id) === String(exactFillProfile.id)
                       const isStock = String(profile.symbol || '').toUpperCase() === 'STOCK'
@@ -519,6 +525,8 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
                   </select>
                   {fillProfileMismatch ? (
                     <div className="text-[10px] mt-1" style={{ color: T.down }}>{fillProfile.symbol} tick economics don’t match {f.symbol}. Fill P&amp;L will use {fillProfile.symbol}’s tick value — pick this symbol’s profile unless you mean this.</div>
+                  ) : exactFillProfile && !fillProfileId ? (
+                    <div className="text-[10px] mt-1" style={{ color: T.up }}>Auto-matched from {f.symbol} — tick {exactFillProfile.tickSize} = {fmt$(exactFillProfile.tickValue)}. Change it only if you mean to.</div>
                   ) : !exactFillProfile && genericStockProfile ? (
                     <div className="text-[10px] mt-1" style={{ color: T.faint }}>No profile matches {f.symbol || 'this symbol'}. Generic stock is an explicit 1× fallback; futures need their own profile for correct P&amp;L.</div>
                   ) : null}
