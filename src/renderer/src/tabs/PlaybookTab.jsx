@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react'
-import { Plus, Edit2, Trash2, X, BookMarked, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, Edit2, Trash2, X, BookMarked, ChevronDown, ChevronUp, ClipboardList } from 'lucide-react'
 import { T, mono } from '../theme.js'
 import { fmt$, fmtN } from '../utils.js'
 
@@ -20,7 +20,7 @@ function wrColor(wr) {
   return T.down
 }
 
-export function PlaybookTab({ entries, trades, onAdd, onUpdate, onDelete }) {
+export function PlaybookTab({ entries, trades, onAdd, onUpdate, onDelete, onPlan }) {
   const [editing, setEditing] = useState(null)
   const [expanded, setExpanded] = useState(null)
 
@@ -120,6 +120,11 @@ export function PlaybookTab({ entries, trades, onAdd, onUpdate, onDelete }) {
                   </div>
                 )}
                 <div className="flex items-center gap-2 shrink-0 ml-1">
+                  <button
+                    onClick={(ev) => { ev.stopPropagation(); onPlan?.(e) }}
+                    className="p-1 rounded" style={{ color: T.accent }}
+                    title="Plan a trade from this setup"
+                  ><ClipboardList size={13} /></button>
                   <button
                     onClick={(ev) => { ev.stopPropagation(); setEditing({ ...e }) }}
                     className="p-1 rounded" style={{ color: T.dim }}

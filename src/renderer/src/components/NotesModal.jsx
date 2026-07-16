@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { X, Sparkles, Trash2 } from 'lucide-react'
+import { X, Sparkles, Trash2, Video } from 'lucide-react'
 import { T, mono } from '../theme.js'
 import { fmt$, fmtN, holdMs, fmtDuration, toJpeg } from '../utils.js'
 import { streamChat } from '../utils.js'
@@ -8,9 +8,17 @@ import { LazyImage } from './LazyImage.jsx'
 
 const VISION_SYSTEM = `You are a trading chart analyst inside a trader's journal. You are shown the screenshot(s) of ONE trade plus its details (symbol, direction, setup, outcome, R:R, emotion). Read the chart: describe the visible price structure (trend, key levels, candle behaviour), then judge whether the entry/exit and the stated setup look clean and consistent with what's on the chart — including any 'Before' vs 'After' images. Some charts may have the trader's OWN markers drawn on them (e.g. Entry, Stop, Target) — treat those as ground truth for where those levels are, rather than guessing from the candles. Finish with ONE concrete, specific thing to repeat or fix next time. Do NOT predict future prices or give buy/sell signals. Keep it under ~160 words, concrete and direct.`
 
-/* ───────── trade detail modal (notes + screenshots) ───────── */
-export function NotesModal({ trade, onClose, onUpdate }) {
+function formatFileSize(value) {
+  const bytes = Number(value) || 0
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)} MB`
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
+}
+
+/* ───────── trade detail modal (notes + screenshots + recordings) ───────── */
+export function NotesModal({ trade, onClose, onUpdate, onAttachmentsChange }) {
   const [imgs, setImgs] = useState(null)
+  const [videos, setVideos] = useState(null)
   const [zoom, setZoom] = useState(null)
   const [analysis, setAnalysis] = useState(null) // { loading } | { text } | { error }
   const [notes, setNotes] = useState(trade.notes || '')
@@ -23,11 +31,24 @@ export function NotesModal({ trade, onClose, onUpdate }) {
   }
   useEffect(() => {
     let live = true
-    if (window.api?.listImages) window.api.listImages(trade.id).then((r) => { if (live) setImgs(r) })
-    else setImgs([])
+    Promise.all([
+      window.api?.listImages ? window.api.listImages(trade.id).catch(() => []) : Promise.resolve([]),
+      window.api?.listTradeVideos ? window.api.listTradeVideos(trade.id).catch(() => []) : Promise.resolve([])
+    ]).then(([nextImages, nextVideos]) => {
+      if (!live) return
+      setImgs(nextImages)
+      setVideos(nextVideos)
+    })
     return () => { live = false }
   }, [trade.id])
-  async function del(id) { setImgs(await window.api.deleteImage(id)) }
+  async function del(id) {
+    setImgs(await window.api.deleteImage(id))
+    await onAttachmentsChange?.()
+  }
+  async function delVideo(id) {
+    setVideos(await window.api.deleteTradeVideo(id))
+    await onAttachmentsChange?.()
+  }
 
   async function analyze() {
     if (!imgs?.length || analysis?.loading) return
@@ -118,6 +139,28 @@ export function NotesModal({ trade, onClose, onUpdate }) {
                 {!analysis.loading && <div className="text-xs mt-2" style={{ color: T.faint }}>AI chart read · not financial advice</div>}
               </div>
             )}
+          </div>
+        ) : null}
+        {videos === null ? (
+          <div className="mt-4 text-xs" style={{ color: T.faint }}>Loading screen recordings…</div>
+        ) : videos.length > 0 ? (
+          <div className="mt-4">
+            <div className="flex items-center gap-1.5 text-xs uppercase tracking-wider mb-2" style={{ color: T.faint }}><Video size={13} /> Screen recordings</div>
+            <div className="space-y-3">
+              {videos.map((video) => (
+                <div key={video.id} className="rounded-lg overflow-hidden" style={{ border: `1px solid ${T.line}` }}>
+                  <div className="flex items-center gap-2 px-3 py-2" style={{ background: T.surface2 }}>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-xs" title={video.originalName} style={{ color: T.text }}>{video.originalName || 'Screen recording'}</div>
+                      <div className="text-[10px]" style={{ color: T.faint }}>{formatFileSize(video.size)}</div>
+                    </div>
+                    <button type="button" onClick={() => delVideo(video.id)} title="Delete recording" style={{ color: T.faint }}><Trash2 size={13} /></button>
+                  </div>
+                  <video src={video.url} controls preload="metadata" playsInline className="block w-full" style={{ maxHeight: 420, background: '#000' }} />
+                </div>
+              ))}
+            </div>
+            <div className="text-[10px] mt-2" style={{ color: T.faint }}>Recordings stay local and are not included in AI chart analysis. Playback depends on the recording codec supported by this app.</div>
           </div>
         ) : null}
       </div>

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react'
-import { Share2 } from 'lucide-react'
+import { Share2, GitCompareArrows } from 'lucide-react'
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, ReferenceLine, Tooltip, Cell } from 'recharts'
 import { T, mono, withAlpha } from '../theme.js'
 import { fmt$, fmtN } from '../utils.js'
@@ -10,6 +10,7 @@ import { CoachBriefCard } from '../components/CoachBriefCard.jsx'
 import { CoachCommitmentCard } from '../components/CoachCommitmentCard.jsx'
 import { ShareReportModal } from '../components/ShareReportModal.jsx'
 import { DayReplayModal } from '../components/DayReplayModal.jsx'
+import { SessionCompareModal } from '../components/SessionCompareModal.jsx'
 
 const HMAP_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
@@ -191,6 +192,7 @@ export function Dashboard({ stats, trades, accounts = [], settings, journalData,
   const [view, setView] = useState('all') // all | live | prop
   const [shareOpen, setShareOpen] = useState(false)
   const [selectedDay, setSelectedDay] = useState(null)
+  const [compareOpen, setCompareOpen] = useState(false)
   const hasProp = accounts.length > 0
   const propIds = useMemo(() => new Set(accounts.map((a) => a.id)), [accounts])
   const viewTrades = useMemo(() => {
@@ -254,6 +256,16 @@ export function Dashboard({ stats, trades, accounts = [], settings, journalData,
 
       <LeakFinder trades={viewTrades} />
 
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl px-3 py-2.5" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
+        <div>
+          <div className="text-sm font-semibold">Session review</div>
+          <div className="text-xs mt-0.5" style={{ color: T.faint }}>Select a calendar day to replay it, or compare two trade days side by side.</div>
+        </div>
+        <button type="button" onClick={() => setCompareOpen(true)} className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-semibold"
+          style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}` }}>
+          <GitCompareArrows size={15} /> Compare sessions
+        </button>
+      </div>
       <PnlCalendar trades={viewTrades} plans={viewPlans} dayLogs={journalData?.dayLogs || []} onSelectDay={setSelectedDay} />
 
       <Panel title="Equity curve">
@@ -291,6 +303,14 @@ export function Dashboard({ stats, trades, accounts = [], settings, journalData,
       </Panel>
 
       <HeatMap stats={vStats} />
+      {compareOpen && (
+        <SessionCompareModal
+          trades={viewTrades}
+          plans={viewPlans}
+          onOpenTrade={(trade) => { setCompareOpen(false); onOpenTrade?.(trade) }}
+          onClose={() => setCompareOpen(false)}
+        />
+      )}
       {selectedDay && (
         <DayReplayModal
           date={selectedDay}

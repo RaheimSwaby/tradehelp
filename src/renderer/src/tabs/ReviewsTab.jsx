@@ -1,16 +1,18 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, ReferenceLine, Tooltip } from 'recharts'
-import { Sparkles } from 'lucide-react'
+import { Sparkles, Target } from 'lucide-react'
 import { T, mono, inputStyle } from '../theme.js'
 import { fmt$, fmtN, periodKey, periodLabel, streamChat } from '../utils.js'
 import { computeStats, letterFor, executionGrade, tradeContext } from '../stats.js'
-import { Stat, Panel } from '../components/Shared.jsx'
+import { Stat, Panel, Field } from '../components/Shared.jsx'
 import { GroupTable, ReasonList } from './PsychologyTab.jsx'
+import { COMMITMENT_RULE_META } from '../components/CoachCommitmentCard.jsx'
+import { reviewCommitmentSuggestion } from '../workflow.js'
 
 /* ───────── periodic reviews ───────── */
 const REVIEW_SYSTEM = `You are a trading coach writing a short periodic review. Given the trader's aggregated stats and trades for ONE period, summarize how the period went using their real numbers, name 1-2 strengths and 1-2 leaks (revenge, FOMO, overtrading, cutting winners early, oversizing), then give 2 concrete focus points for next period. No price predictions or buy/sell advice. Under ~170 words.`
 
-export function Reviews({ trades, reviews, onSave }) {
+export function Reviews({ trades, reviews, onSave, activeCommitment, onAddCommitment }) {
   const [gran, setGran] = useState('week')
   const [sel, setSel] = useState('')
   const isAll = gran === 'all'
@@ -38,7 +40,31 @@ export function Reviews({ trades, reviews, onSave }) {
   const [text, setText] = useState('')
   const [saved, setSaved] = useState(false)
   const [ai, setAi] = useState(null)
+  const [commitmentDraft, setCommitmentDraft] = useState(() => reviewCommitmentSuggestion(periodTrades))
+  const [commitmentBusy, setCommitmentBusy] = useState(false)
+  const [commitmentStarted, setCommitmentStarted] = useState(false)
   useEffect(() => { setText(reviews?.[period] || ''); setAi(null) }, [period, reviews])
+  useEffect(() => { setCommitmentDraft(reviewCommitmentSuggestion(periodTrades)); setCommitmentStarted(false) }, [period, periodTrades])
+
+  function chooseCommitmentRule(ruleType) {
+    const meta = COMMITMENT_RULE_META[ruleType]
+    const ruleValue = meta.defaultValue
+    setCommitmentDraft({ ruleType, ruleValue, title: meta.describe(ruleValue), targetCount: 10 })
+  }
+  function changeCommitmentValue(ruleValue) {
+    const meta = COMMITMENT_RULE_META[commitmentDraft.ruleType]
+    setCommitmentDraft((current) => ({ ...current, ruleValue, title: meta.describe(ruleValue) }))
+  }
+  async function startReviewCommitment() {
+    if (activeCommitment && !window.confirm(`Replace the active commitment “${activeCommitment.title}”? It will be archived and this review focus will become active.`)) return
+    setCommitmentBusy(true)
+    try {
+      const started = await onAddCommitment?.({ ...commitmentDraft, source: `review:${gran}:${period}` })
+      if (started !== false) setCommitmentStarted(true)
+    } finally {
+      setCommitmentBusy(false)
+    }
+  }
 
   function save() { onSave(period, text); setSaved(true); setTimeout(() => setSaved(false), 1500) }
   async function summarize() {
@@ -114,6 +140,25 @@ export function Reviews({ trades, reviews, onSave }) {
           <ReasonList title="Why you lost" rows={stats.reasonsLoss} tone="down" />
         </div>
       </div>
+
+      <Panel title="Next-period commitment" right={<Target size={15} style={{ color: T.accent }} />}>
+        <p className="text-xs mb-3" style={{ color: T.faint }}>TradeHelp proposes a deterministic, measurable rule from this period. Adjust it before handing it to the coach tracker.</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <Field label="Rule">
+            <select style={inputStyle} className="w-full rounded px-2 py-1.5 text-sm" value={commitmentDraft.ruleType} onChange={(event) => chooseCommitmentRule(event.target.value)}>
+              {Object.entries(COMMITMENT_RULE_META).map(([key, meta]) => <option key={key} value={key}>{meta.label}</option>)}
+            </select>
+          </Field>
+          <Field label={COMMITMENT_RULE_META[commitmentDraft.ruleType]?.label || 'Value'}>
+            {COMMITMENT_RULE_META[commitmentDraft.ruleType]?.input === 'none'
+              ? <div className="rounded px-2 py-1.5 text-sm" style={{ background: T.surface2, border: `1px solid ${T.line}`, color: T.dim }}>Required on every trade</div>
+              : <input type={COMMITMENT_RULE_META[commitmentDraft.ruleType]?.input || 'text'} min={COMMITMENT_RULE_META[commitmentDraft.ruleType]?.input === 'number' ? 1 : undefined} style={inputStyle} className="w-full rounded px-2 py-1.5 text-sm" value={commitmentDraft.ruleValue} onChange={(event) => changeCommitmentValue(event.target.value)} />}
+          </Field>
+          <Field label="Measure next trades"><input type="number" min="1" max="100" style={inputStyle} className="w-full rounded px-2 py-1.5 text-sm" value={commitmentDraft.targetCount} onChange={(event) => setCommitmentDraft((current) => ({ ...current, targetCount: Math.max(1, Math.min(100, Number(event.target.value) || 1)) }))} /></Field>
+        </div>
+        <div className="mt-3"><Field label="Commitment title"><input style={inputStyle} className="w-full rounded px-3 py-2 text-sm" value={commitmentDraft.title} onChange={(event) => setCommitmentDraft((current) => ({ ...current, title: event.target.value }))} /></Field></div>
+        <div className="flex items-center gap-3 mt-3"><button type="button" onClick={startReviewCommitment} disabled={commitmentBusy || !commitmentDraft.ruleValue || !commitmentDraft.title.trim()} className="rounded-md px-4 py-2 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306', opacity: commitmentBusy || !commitmentDraft.title.trim() ? 0.5 : 1 }}>{commitmentBusy ? 'Starting…' : activeCommitment ? 'Replace active commitment' : 'Start commitment'}</button>{commitmentStarted && <span className="text-xs" style={{ color: T.up }}>Commitment started ✓</span>}</div>
+      </Panel>
 
       <Panel title="Your review" right={
         <button type="button" onClick={summarize} disabled={ai?.loading} className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-md" style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}` }}><Sparkles size={13} /> {ai?.loading ? 'Thinking…' : 'AI summary'}</button>

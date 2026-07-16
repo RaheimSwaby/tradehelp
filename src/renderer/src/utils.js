@@ -1,3 +1,5 @@
+import { defaultInstrumentProfile, instrumentMultiplier } from './workflow.js'
+
 // Gumroad checkout link for the $50 one-time product.
 export const CHECKOUT_URL = 'https://tradehelp.gumroad.com/l/oyftvr'
 // Until a real checkout link is set, the trial/paywall stays dormant so nobody hits a dead paywall.
@@ -186,14 +188,6 @@ export function csvDate(v) {
   return out(new Date(s))
 }
 export const normDir = (v) => (/^\s*(s|sell|short|sld|sold)/i.test(String(v || '')) ? 'Short' : 'Long')
-const FUTURES_POINT_VALUE = {
-  ES: 50, MES: 5,
-  NQ: 20, MNQ: 2,
-  YM: 5, MYM: 0.5,
-  RTY: 50, M2K: 5,
-  CL: 1000, MCL: 100,
-  GC: 100, MGC: 10
-}
 const tradeKeyForImport = (t) => (t.entryTime ? `${t.symbol}|${t.entryTime}|${(Number(t.pnl) || 0).toFixed(2)}` : null)
 const rowGetter = (headers, row) => (name) => {
   const i = headers.findIndex((h) => h.trim().toLowerCase() === String(name).trim().toLowerCase())
@@ -234,7 +228,8 @@ function ninjaOrdersToTrades(rows, headers, existingKeys = new Set()) {
     while (qty > 0 && book.length && book[0].dir !== dir) {
       const lot = book[0]
       const closeQty = Math.min(qty, lot.qty)
-      const multiplier = FUTURES_POINT_VALUE[f.symbol] || FUTURES_POINT_VALUE[String(f.get('Contract') || '').match(/^[A-Z]+/)?.[0]] || 1
+      const profile = defaultInstrumentProfile(f.symbol) || defaultInstrumentProfile(String(f.get('Contract') || ''))
+      const multiplier = profile ? instrumentMultiplier(profile) : 1
       const pnl = lot.dir === 'Long'
         ? (f.price - lot.price) * closeQty * multiplier
         : (lot.price - f.price) * closeQty * multiplier

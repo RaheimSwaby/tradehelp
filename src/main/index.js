@@ -1,6 +1,8 @@
-import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron'
+import { app, BrowserWindow, ipcMain, shell, dialog, protocol, net } from 'electron'
 import { extname, join } from 'path'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'fs'
+import { randomUUID } from 'crypto'
+import { pathToFileURL } from 'url'
 import * as db from './db.js'
 import { chat, chatStream, models } from './ai.js'
 import { fetchPrice, fetchQuotes } from './price.js'
@@ -11,7 +13,17 @@ import { testKey } from './keytest.js'
 
 let win
 let settingsCache = null
+let videoPickCleanupTimer = null
+const VIDEO_SCHEME = 'tradehelp-media'
+const VIDEO_PICK_TTL_MS = 15 * 60 * 1000
+const MAX_VIDEO_PICKS = 10
+const pendingVideoPicks = new Map()
 const BG_MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' }
+
+protocol.registerSchemesAsPrivileged([{
+  scheme: VIDEO_SCHEME,
+  privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true }
+}])
 function cachedSettings() {
   if (!settingsCache) settingsCache = db.getSettings()
   return settingsCache
@@ -27,6 +39,57 @@ function backgroundPath(file) {
   const name = String(file || '')
   if (!/^custom-background\.(png|jpg|jpeg|webp)$/i.test(name)) return ''
   return join(appearanceDir(), name)
+}
+
+function purgeExpiredVideoPicks() {
+  const now = Date.now()
+  for (const [token, picked] of pendingVideoPicks) {
+    if (picked.expiresAt <= now) pendingVideoPicks.delete(token)
+  }
+}
+
+function publicVideo(video) {
+  return { ...video, url: `${VIDEO_SCHEME}://video/${encodeURIComponent(video.id)}` }
+}
+
+function publicVideos(videos) {
+  return videos.map(publicVideo)
+}
+
+function safeVideoError(error, fallback) {
+  const message = String(error?.message || '')
+  if (/^(Use an MP4|The selected recording|Each recording|Trade not found)/.test(message)) return message
+  return fallback
+}
+
+function registerVideoProtocol() {
+  protocol.handle(VIDEO_SCHEME, async (request) => {
+    try {
+      if (request.method !== 'GET' && request.method !== 'HEAD') return new Response(null, { status: 405 })
+      const url = new URL(request.url)
+      const id = decodeURIComponent(url.pathname.replace(/^\/+/, ''))
+      if (url.hostname !== 'video' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+        return new Response(null, { status: 404 })
+      }
+      const video = db.getTradeVideoFile(id)
+      if (!video) return new Response(null, { status: 404 })
+      const response = await net.fetch(pathToFileURL(video.path).toString(), {
+        method: request.method,
+        headers: request.headers,
+        bypassCustomProtocolHandlers: true
+      })
+      const headers = new Headers(response.headers)
+      headers.set('Content-Type', video.mimeType)
+      headers.set('Cache-Control', 'private, no-store')
+      return new Response(request.method === 'HEAD' ? null : response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers
+      })
+    } catch {
+      return new Response(null, { status: 404 })
+    }
+  })
 }
 
 function createWindow() {
@@ -62,6 +125,9 @@ function createWindow() {
 app.whenReady().then(() => {
   app.setAppUserModelId('com.tradehelp.app') // so Windows notifications show "TradeHelp", not "electron.app"
   db.initDb()
+  registerVideoProtocol()
+  videoPickCleanupTimer = setInterval(purgeExpiredVideoPicks, 60_000)
+  videoPickCleanupTimer.unref?.()
   db.backupDb()
   registerIpc()
   createWindow()
@@ -69,6 +135,11 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
+})
+
+app.on('before-quit', () => {
+  if (videoPickCleanupTimer) clearInterval(videoPickCleanupTimer)
+  pendingVideoPicks.clear()
 })
 
 app.on('window-all-closed', () => {
@@ -81,6 +152,18 @@ function registerIpc() {
   ipcMain.handle('trades:update', (_e, t) => db.updateTrade(t))
   ipcMain.handle('trades:import', (_e, rows) => db.importTrades(rows))
   ipcMain.handle('trades:delete', (_e, id) => db.deleteTrade(id))
+  ipcMain.handle('fills:list', (_e, tradeId) => db.listTradeFills(tradeId))
+  ipcMain.handle('fills:replace', (_e, tradeId, fills) => db.replaceTradeFills(tradeId, fills))
+
+  ipcMain.handle('profiles:list', () => db.listInstrumentProfiles())
+  ipcMain.handle('profiles:add', (_e, profile) => db.addInstrumentProfile(profile))
+  ipcMain.handle('profiles:update', (_e, profile) => db.updateInstrumentProfile(profile))
+  ipcMain.handle('profiles:delete', (_e, id) => db.deleteInstrumentProfile(id))
+
+  ipcMain.handle('searches:list', () => db.listSavedSearches())
+  ipcMain.handle('searches:add', (_e, search) => db.addSavedSearch(search))
+  ipcMain.handle('searches:update', (_e, search) => db.updateSavedSearch(search))
+  ipcMain.handle('searches:delete', (_e, id) => db.deleteSavedSearch(id))
 
   ipcMain.handle('data:export', async () => {
     const { canceled, filePath } = await dialog.showSaveDialog(win, {
@@ -116,6 +199,64 @@ function registerIpc() {
   ipcMain.handle('images:get', (_e, id) => db.getImage(id))
   ipcMain.handle('images:add', (_e, tradeId, img) => db.addImage(tradeId, img))
   ipcMain.handle('images:delete', (_e, id) => db.deleteImage(id))
+  ipcMain.handle('images:fingerprint', (_e, id, fingerprint, version) => db.updateImageFingerprint(id, fingerprint, version))
+
+  ipcMain.handle('videos:pick', async (event) => {
+    purgeExpiredVideoPicks()
+    const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+      properties: ['openFile', 'multiSelections'],
+      filters: [{ name: 'Screen recordings', extensions: ['mp4', 'webm', 'mov', 'm4v'] }]
+    })
+    if (canceled || !filePaths?.length) return { ok: false, canceled: true }
+    if (filePaths.length > MAX_VIDEO_PICKS) return { ok: false, error: `Choose no more than ${MAX_VIDEO_PICKS} recordings at once.` }
+    try {
+      const inspected = filePaths.map((filePath) => db.inspectTradeVideoSource(filePath))
+      const files = inspected.map((video) => {
+        const token = randomUUID()
+        pendingVideoPicks.set(token, {
+          ownerId: event.sender.id,
+          sourcePath: video.sourcePath,
+          originalName: video.originalName,
+          expiresAt: Date.now() + VIDEO_PICK_TTL_MS
+        })
+        return { token, name: video.originalName, mimeType: video.mimeType, size: video.size }
+      })
+      return { ok: true, files }
+    } catch (error) {
+      return { ok: false, error: safeVideoError(error, 'The selected recording could not be read.') }
+    }
+  })
+  ipcMain.handle('videos:discardPicked', (event, tokens) => {
+    for (const token of new Set(Array.isArray(tokens) ? tokens.map(String) : [])) {
+      const picked = pendingVideoPicks.get(token)
+      if (picked?.ownerId === event.sender.id) pendingVideoPicks.delete(token)
+    }
+    return { ok: true }
+  })
+  ipcMain.handle('videos:addPicked', (event, tradeId, tokens) => {
+    purgeExpiredVideoPicks()
+    const selected = [...new Set(Array.isArray(tokens) ? tokens.map(String) : [])]
+    const errors = []
+    if (selected.length > MAX_VIDEO_PICKS) {
+      return { ok: false, videos: publicVideos(db.listTradeVideos(tradeId)), errors: [`Attach no more than ${MAX_VIDEO_PICKS} recordings at once.`] }
+    }
+    for (const token of selected) {
+      const picked = pendingVideoPicks.get(token)
+      if (!picked || picked.ownerId !== event.sender.id) {
+        errors.push('A selected recording expired. Choose it again.')
+        continue
+      }
+      pendingVideoPicks.delete(token)
+      try {
+        db.addTradeVideoFromPath(tradeId, picked.sourcePath)
+      } catch (error) {
+        errors.push(`${picked.originalName}: ${safeVideoError(error, 'The recording could not be copied into TradeHelp.')}`)
+      }
+    }
+    return { ok: errors.length === 0, videos: publicVideos(db.listTradeVideos(tradeId)), errors }
+  })
+  ipcMain.handle('videos:list', (_event, tradeId) => publicVideos(db.listTradeVideos(tradeId)))
+  ipcMain.handle('videos:delete', (_event, id) => publicVideos(db.deleteTradeVideo(id)))
 
   ipcMain.handle('plans:list', () => db.listTradePlans())
   ipcMain.handle('plans:add', (_e, plan) => db.addTradePlan(plan))

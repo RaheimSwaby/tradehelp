@@ -34,6 +34,7 @@ import { DailyReport } from './components/DailyReport.jsx'
 import { FeedbackPrompt } from './components/FeedbackPrompt.jsx'
 import { EasterEggNudge } from './components/EasterEggNudge.jsx'
 import { buildEasterEggNudges, lastTradingDay } from './coachInsights.js'
+import { dHashDataUrl, IMAGE_FINGERPRINT_VERSION } from './workflow.js'
 
 /* ───────── logo mark: three ascending candles, tracks the live theme ───────── */
 function LogoMark({ size = 22 }) {
@@ -86,6 +87,9 @@ export default function App() {
   const [payouts, setPayouts] = useState([])
   const [tradePlans, setTradePlans] = useState([])
   const [commitments, setCommitments] = useState([])
+  const [instrumentProfiles, setInstrumentProfiles] = useState([])
+  const [savedSearches, setSavedSearches] = useState([])
+  const [planPrefill, setPlanPrefill] = useState(null)
   const [workflowMsg, setWorkflowMsg] = useState(null)
   const [customBg, setCustomBg] = useState('')
 
@@ -108,6 +112,8 @@ export default function App() {
       if (window.api.listPayouts) setPayouts(await window.api.listPayouts())
       if (window.api.listTradePlans) setTradePlans(await window.api.listTradePlans())
       if (window.api.listCommitments) setCommitments(await window.api.listCommitments())
+      if (window.api.listInstrumentProfiles) setInstrumentProfiles(await window.api.listInstrumentProfiles())
+      if (window.api.listSavedSearches) setSavedSearches(await window.api.listSavedSearches())
       setReady(true)
     })()
   }, [hasApi])
@@ -200,29 +206,63 @@ export default function App() {
     ])
     setTrades(nextTrades); setTradePlans(nextPlans); setCommitments(nextCommitments)
   }
-  async function addTrade(t, images = []) {
+  async function withImageFingerprint(image) {
+    if (!image?.dataUrl || (image.fingerprint && Number(image.fingerprintVersion) === IMAGE_FINGERPRINT_VERSION)) return image
+    try {
+      return { ...image, fingerprint: await dHashDataUrl(image.dataUrl), fingerprintVersion: IMAGE_FINGERPRINT_VERSION }
+    } catch {
+      return image
+    }
+  }
+  async function addTrade(t, images = [], videoTokens = []) {
     if (!hasApi) return
     await window.api.addTrade(t)
-    for (const im of images) { try { await window.api.addImage(t.id, im) } catch { /* skip a bad image, keep the trade */ } }
+    for (const im of images) {
+      try { await window.api.addImage(t.id, await withImageFingerprint(im)) } catch { /* skip a bad image, keep the trade */ }
+    }
+    let videoErrors = []
+    if (videoTokens.length && window.api.addPickedTradeVideos) {
+      try {
+        const result = await window.api.addPickedTradeVideos(t.id, videoTokens)
+        videoErrors = Array.isArray(result?.errors) ? result.errors : []
+      } catch {
+        videoErrors = ['Screen recordings could not be attached.']
+      }
+    }
     await refreshWorkflow()
+    return { videoErrors }
   }
-  async function updateTrade(t, images = []) {
+  async function updateTrade(t, images = [], videoTokens = []) {
     if (!hasApi) return
     await window.api.updateTrade(t)
-    for (const im of images) { try { await window.api.addImage(t.id, im) } catch { /* skip a bad image, keep the trade update */ } }
+    for (const im of images) {
+      try { await window.api.addImage(t.id, await withImageFingerprint(im)) } catch { /* skip a bad image, keep the trade update */ }
+    }
+    let videoErrors = []
+    if (videoTokens.length && window.api.addPickedTradeVideos) {
+      try {
+        const result = await window.api.addPickedTradeVideos(t.id, videoTokens)
+        videoErrors = Array.isArray(result?.errors) ? result.errors : []
+      } catch {
+        videoErrors = ['Screen recordings could not be attached.']
+      }
+    }
     await refreshWorkflow()
+    return { videoErrors }
   }
   async function removeTrade(id) { if (hasApi) { await window.api.deleteTrade(id); await refreshWorkflow() } }
   async function importTrades(rows) { if (hasApi) { await window.api.importTrades(rows); await refreshWorkflow() } }
   async function reloadAll() {
     if (!hasApi) return
-    const [nextTrades, nextGoals, nextReviews, nextSettings, nextPlans, nextCommitments] = await Promise.all([
+    const [nextTrades, nextGoals, nextReviews, nextSettings, nextPlans, nextCommitments, nextProfiles, nextSearches] = await Promise.all([
       window.api.listTrades(), window.api.getGoals(), window.api.getReviews(), window.api.getSettings(),
       window.api.listTradePlans ? window.api.listTradePlans() : [],
-      window.api.listCommitments ? window.api.listCommitments() : []
+      window.api.listCommitments ? window.api.listCommitments() : [],
+      window.api.listInstrumentProfiles ? window.api.listInstrumentProfiles() : [],
+      window.api.listSavedSearches ? window.api.listSavedSearches() : []
     ])
     setTrades(nextTrades); setGoals(nextGoals); setReviews(nextReviews); setSettings(nextSettings)
-    setTradePlans(nextPlans); setCommitments(nextCommitments)
+    setTradePlans(nextPlans); setCommitments(nextCommitments); setInstrumentProfiles(nextProfiles); setSavedSearches(nextSearches)
   }
   async function saveGoals(g) { if (hasApi) setGoals(await window.api.setGoals(g)) }
   async function saveReview(period, text) { if (hasApi) setReviews(await window.api.setReview(period, text)) }
@@ -246,16 +286,25 @@ export default function App() {
   // transition, a linked trade that no longer exists, …). Surface the reason instead of
   // failing silently, and leave local state untouched when the write is rejected.
   async function runWorkflow(op, apply) {
-    try { const next = await op(); if (next) apply(next) }
-    catch (e) { setWorkflowMsg(e?.message || 'That action could not be completed.') }
+    try { const next = await op(); if (next) apply(next); return true }
+    catch (e) { setWorkflowMsg(e?.message || 'That action could not be completed.'); return false }
   }
   async function addTradePlan(plan) { if (hasApi && window.api.addTradePlan) await runWorkflow(() => window.api.addTradePlan(plan), setTradePlans) }
   async function updateTradePlan(plan) { if (hasApi && window.api.updateTradePlan) await runWorkflow(() => window.api.updateTradePlan(plan), setTradePlans) }
   async function deleteTradePlan(id) { if (hasApi && window.api.deleteTradePlan) await runWorkflow(() => window.api.deleteTradePlan(id), setTradePlans) }
 
-  async function addCommitment(commitment) { if (hasApi && window.api.addCommitment) await runWorkflow(() => window.api.addCommitment(commitment), setCommitments) }
+  async function addCommitment(commitment) { if (hasApi && window.api.addCommitment) return runWorkflow(() => window.api.addCommitment(commitment), setCommitments); return false }
   async function updateCommitment(commitment) { if (hasApi && window.api.updateCommitment) await runWorkflow(() => window.api.updateCommitment(commitment), setCommitments) }
   async function deleteCommitment(id) { if (hasApi && window.api.deleteCommitment) await runWorkflow(() => window.api.deleteCommitment(id), setCommitments) }
+
+  async function addInstrumentProfile(profile) { const next = await window.api.addInstrumentProfile(profile); setInstrumentProfiles(next); return next }
+  async function updateInstrumentProfile(profile) { const next = await window.api.updateInstrumentProfile(profile); setInstrumentProfiles(next); return next }
+  async function deleteInstrumentProfile(id) { const next = await window.api.deleteInstrumentProfile(id); setInstrumentProfiles(next); return next }
+  async function addSavedSearch(search) { const next = await window.api.addSavedSearch(search); setSavedSearches(next); return next }
+  async function updateSavedSearch(search) { const next = await window.api.updateSavedSearch(search); setSavedSearches(next); return next }
+  async function deleteSavedSearch(id) { const next = await window.api.deleteSavedSearch(id); setSavedSearches(next); return next }
+  async function refreshSavedSearches() { const next = await window.api.listSavedSearches(); setSavedSearches(next); return next }
+  function planFromPlaybook(entry) { setPlanPrefill(entry); setTab('trade') }
 
   // Auto-dismiss the workflow error toast so it never lingers.
   useEffect(() => {
@@ -467,23 +516,23 @@ export default function App() {
           <Paywall onActivated={refreshLicense} />
         ) : (
           <div key={tab} className="th-fade">
-            {tab === 'journal' && <Journal trades={trades} onAdd={addTrade} onUpdate={updateTrade} onRemove={removeTrade} onNotes={setNotesView} onImport={importTrades} accounts={propFirmAccounts} settings={settings} onSaveSettings={saveSettings} dayLogs={dayLogs} onAddDayLog={addDayLog} onDeleteDayLog={deleteDayLog} />}
-            {tab === 'trade' && <TradeModeTab settings={settings} onSave={saveSettings} rules={rules} live={tradeMode} todayNet={todayNet} todayCount={todayTrades.length} weekNet={weekNet} goal={dailyGoal} maxLoss={maxLoss} onStart={startDay} onEnd={endSession} plans={tradePlans} trades={trades} accounts={propFirmAccounts} playbook={playbook} commitment={activeCommitment} onAddPlan={addTradePlan} onUpdatePlan={updateTradePlan} onDeletePlan={deleteTradePlan} />}
+            {tab === 'journal' && <Journal trades={trades} onAdd={addTrade} onUpdate={updateTrade} onRemove={removeTrade} onNotes={setNotesView} onImport={importTrades} accounts={propFirmAccounts} profiles={instrumentProfiles} savedSearches={savedSearches} onAddSavedSearch={addSavedSearch} onUpdateSavedSearch={updateSavedSearch} onDeleteSavedSearch={deleteSavedSearch} onRefreshSavedSearches={refreshSavedSearches} settings={settings} onSaveSettings={saveSettings} dayLogs={dayLogs} onAddDayLog={addDayLog} onDeleteDayLog={deleteDayLog} />}
+            {tab === 'trade' && <TradeModeTab settings={settings} onSave={saveSettings} rules={rules} live={tradeMode} todayNet={todayNet} todayCount={todayTrades.length} weekNet={weekNet} goal={dailyGoal} maxLoss={maxLoss} onStart={startDay} onEnd={endSession} plans={tradePlans} trades={trades} accounts={propFirmAccounts} playbook={playbook} profiles={instrumentProfiles} planPrefill={planPrefill} onConsumePlanPrefill={() => setPlanPrefill(null)} commitment={activeCommitment} onAddPlan={addTradePlan} onUpdatePlan={updateTradePlan} onDeletePlan={deleteTradePlan} />}
             {tab === 'propfirm' && <PropFirm trades={trades} accounts={propFirmAccounts} onSave={savePropFirmAccounts} settings={settings} onSaveSettings={saveSettings} payouts={payouts} onAddPayout={addPayout} onDeletePayout={deletePayout} />}
             {tab === 'dashboard' && <Dashboard stats={stats} trades={trades} accounts={propFirmAccounts} settings={settings} journalData={{ reviews, playbook, dayLogs, goals }} payouts={payouts} plans={tradePlans} commitments={commitments} onAddCommitment={addCommitment} onUpdateCommitment={updateCommitment} onDeleteCommitment={deleteCommitment} onSaveSettings={saveSettings} onOpenCoach={() => setTab('coach')} onOpenTrade={setNotesView} />}
             {tab === 'psych' && <Psychology stats={stats} />}
             {tab === 'rating' && <Rating trades={trades} stats={stats} achievements={achievements} unlockedAt={unlockedAt} settings={settings} onSave={saveSettings} payouts={payouts} />}
             {tab === 'goals' && <Goals goals={goals} onSave={saveGoals} trades={trades} />}
-            {tab === 'reviews' && <Reviews trades={trades} reviews={reviews} settings={settings} onSave={saveReview} />}
+            {tab === 'reviews' && <Reviews trades={trades} reviews={reviews} settings={settings} onSave={saveReview} activeCommitment={activeCommitment} onAddCommitment={addCommitment} />}
             {tab === 'coach' && <Coach trades={trades} stats={stats} settings={settings} reviews={reviews} playbook={playbook} dayLogs={dayLogs} goals={goals} payouts={payouts} events={events} now={now} />}
-            {tab === 'patterns' && <Patterns trades={trades} />}
-            {tab === 'playbook' && <PlaybookTab entries={playbook} trades={trades} onAdd={addPlaybookEntry} onUpdate={updatePlaybookEntry} onDelete={deletePlaybookEntry} />}
-            {tab === 'settings' && <SettingsTab settings={settings} onSave={saveSettings} license={license} onLicenseChange={refreshLicense} onReload={reloadAll} />}
+            {tab === 'patterns' && <Patterns trades={trades} onOpenTrade={setNotesView} />}
+            {tab === 'playbook' && <PlaybookTab entries={playbook} trades={trades} onAdd={addPlaybookEntry} onUpdate={updatePlaybookEntry} onDelete={deletePlaybookEntry} onPlan={planFromPlaybook} />}
+            {tab === 'settings' && <SettingsTab settings={settings} onSave={saveSettings} license={license} onLicenseChange={refreshLicense} onReload={reloadAll} profiles={instrumentProfiles} onAddProfile={addInstrumentProfile} onUpdateProfile={updateInstrumentProfile} onDeleteProfile={deleteInstrumentProfile} />}
           </div>
         )}
       </div>
 
-      {notesView && <NotesModal trade={notesView} onClose={() => setNotesView(null)} onUpdate={updateTrade} />}
+      {notesView && <NotesModal trade={notesView} onClose={() => setNotesView(null)} onUpdate={updateTrade} onAttachmentsChange={refreshWorkflow} />}
       {preflight && (
         <Preflight rules={rules} checks={checks} setChecks={setChecks}
           snapshot={{ todayNet, todayCount: todayTrades.length, weekNet }}

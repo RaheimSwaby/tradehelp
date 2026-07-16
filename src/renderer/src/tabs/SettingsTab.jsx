@@ -3,7 +3,7 @@ import { T, mono, inputStyle, ACCENT_OPTIONS, THEME_PRESETS, GO_TIME_OPTIONS, PN
 import { CHECKOUT_URL } from '../utils.js'
 import { Panel, Field } from '../components/Shared.jsx'
 import { BACKDROP_OPTIONS } from '../components/Backdrop.jsx'
-import { Instagram, MessagesSquare } from 'lucide-react'
+import { Instagram, MessagesSquare, Plus, Pencil, Trash2, X } from 'lucide-react'
 
 /* ───────── license & trial ───────── */
 export function TrialBanner({ days }) {
@@ -100,9 +100,85 @@ export function DataPanel({ onReload }) {
         <button type="button" onClick={() => window.api.openDataFolder()} className="rounded-md px-3 py-2 text-sm" style={{ background: T.surface2, color: T.text, border: `1px solid ${T.line}` }}>Open data folder</button>
       </div>
       {msg && <div className="mt-3 text-xs" style={{ color: T.dim }}>{msg}</div>}
-      <p className="text-xs mt-2" style={{ color: T.faint }}>JSON exports include journal records and day logs but exclude screenshot files and API keys. For a complete backup with charts, copy the entire data folder. A daily SQLite backup is also kept there.</p>
+      <p className="text-xs mt-2" style={{ color: T.faint }}>JSON exports include journal records and day logs but exclude screenshot and recording files, plus API keys. For a complete backup with all attachments, copy the entire data folder. A daily SQLite backup is also kept there.</p>
     </Panel>
   )
+}
+
+const BLANK_PROFILE = { symbol: '', name: '', assetClass: 'Futures', tickSize: '', tickValue: '', quantityStep: '1' }
+
+function InstrumentProfilesPanel({ profiles = [], onAdd, onUpdate, onDelete }) {
+  const [editing, setEditing] = useState(null)
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const inp = 'w-full rounded px-2 py-1.5 text-sm'
+  const set = (key) => (event) => setEditing((current) => ({ ...current, [key]: event.target.value }))
+
+  async function save() {
+    if (!editing || busy) return
+    setBusy(true); setError('')
+    try {
+      const payload = {
+        ...editing, symbol: editing.symbol.trim().toUpperCase(), name: editing.name.trim(), assetClass: editing.assetClass.trim(),
+        tickSize: Number(editing.tickSize), tickValue: Number(editing.tickValue), quantityStep: Number(editing.quantityStep)
+      }
+      if (editing.id) await onUpdate(payload)
+      else await onAdd(payload)
+      setEditing(null)
+    } catch (reason) {
+      setError(reason?.message || 'Instrument profile could not be saved.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function remove(profile) {
+    if (!window.confirm(`Delete the ${profile.symbol} instrument profile? Existing trades and frozen plans are not changed.`)) return
+    setError('')
+    try { await onDelete(profile.id) } catch (reason) { setError(reason?.message || 'Instrument profile could not be deleted.') }
+  }
+
+  return (
+    <Panel title="Instrument profiles" right={
+      <button type="button" onClick={() => { setError(''); setEditing({ ...BLANK_PROFILE }) }} className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold" style={{ background: T.accent, color: '#1A1306' }}><Plus size={13} /> Add profile</button>
+    }>
+      <p className="text-xs mb-3" style={{ color: T.faint }}>Tick economics drive plan sizing and multi-fill P&amp;L. Futures contracts match their root profile; a generic stock fallback is used only when explicitly selected.</p>
+      {error && <div className="rounded-md px-3 py-2 mb-3 text-xs" style={{ color: T.down, border: `1px solid ${T.down}`, background: T.surface2 }}>{error}</div>}
+      <div className="space-y-1.5 max-h-72 overflow-y-auto">
+        {profiles.map((profile) => (
+          <div key={profile.id} className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 items-center rounded-lg px-3 py-2 text-xs" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
+            <div className="min-w-0"><strong>{profile.symbol}</strong> · <span style={{ color: T.dim }}>{profile.name || profile.assetClass || 'Custom'}</span><div style={{ ...mono, color: T.faint }}>tick {profile.tickSize} = {fmtProfileMoney(profile.tickValue)} · step {profile.quantityStep}</div></div>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => { setError(''); setEditing({ ...profile, tickSize: String(profile.tickSize), tickValue: String(profile.tickValue), quantityStep: String(profile.quantityStep) }) }} title="Edit profile" style={{ color: T.dim }}><Pencil size={14} /></button>
+              <button type="button" onClick={() => remove(profile)} title="Delete profile" style={{ color: T.down }}><Trash2 size={14} /></button>
+            </div>
+          </div>
+        ))}
+      </div>
+      {editing && (
+        <div className="fixed inset-0 z-[75] flex items-end sm:items-center justify-center p-3" style={{ background: 'rgba(0,0,0,0.68)', backdropFilter: 'blur(4px)' }} onClick={() => setEditing(null)}>
+          <div className="w-full max-w-lg max-h-[92vh] overflow-y-auto rounded-2xl p-5" style={{ background: T.surface, border: `1px solid ${T.line}` }} onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-center mb-4"><strong className="text-sm">{editing.id ? 'Edit instrument profile' : 'New instrument profile'}</strong><button type="button" onClick={() => setEditing(null)} className="ml-auto" style={{ color: T.faint }}><X size={17} /></button></div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field label="Symbol *"><input autoFocus style={inputStyle} className={inp} value={editing.symbol} onChange={set('symbol')} placeholder="AAPL" /></Field>
+              <Field label="Name"><input style={inputStyle} className={inp} value={editing.name} onChange={set('name')} placeholder="Apple shares" /></Field>
+              <Field label="Asset class"><input style={inputStyle} className={inp} value={editing.assetClass} onChange={set('assetClass')} placeholder="Stock, Futures, Crypto" /></Field>
+              <Field label="Tick size *"><input style={inputStyle} className={inp} value={editing.tickSize} onChange={set('tickSize')} inputMode="decimal" /></Field>
+              <Field label="Tick value *"><input style={inputStyle} className={inp} value={editing.tickValue} onChange={set('tickValue')} inputMode="decimal" /></Field>
+              <Field label="Quantity step *"><input style={inputStyle} className={inp} value={editing.quantityStep} onChange={set('quantityStep')} inputMode="decimal" /></Field>
+            </div>
+            {error && <div className="mt-3 text-xs" style={{ color: T.down }}>{error}</div>}
+            <div className="flex gap-2 mt-4"><button type="button" onClick={() => setEditing(null)} className="flex-1 rounded-lg py-2 text-sm" style={{ border: `1px solid ${T.line}`, color: T.dim }}>Cancel</button><button type="button" onClick={save} disabled={busy || !editing.symbol.trim()} className="flex-1 rounded-lg py-2 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306', opacity: busy || !editing.symbol.trim() ? 0.5 : 1 }}>{busy ? 'Saving…' : 'Save profile'}</button></div>
+          </div>
+        </div>
+      )}
+    </Panel>
+  )
+}
+
+function fmtProfileMoney(value) {
+  const number = Number(value) || 0
+  return `$${number.toLocaleString(undefined, { maximumFractionDigits: 6 })}`
 }
 
 /* ───────── model picker: text field + browse button + clickable chips ───────── */
@@ -207,7 +283,7 @@ function ThemePreview({ preset, active, onClick }) {
   )
 }
 
-export function SettingsTab({ settings, onSave, license, onLicenseChange, onReload }) {
+export function SettingsTab({ settings, onSave, license, onLicenseChange, onReload, profiles = [], onAddProfile, onUpdateProfile, onDeleteProfile }) {
   const [s, setS] = useState(settings || {})
   const [test, setTest] = useState(null)
   useEffect(() => { setS(settings || {}) }, [settings])
@@ -246,6 +322,7 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <LicensePanel license={license} onChange={onLicenseChange} />
       <DataPanel onReload={onReload} />
+      <InstrumentProfilesPanel profiles={profiles} onAdd={onAddProfile} onUpdate={onUpdateProfile} onDelete={onDeleteProfile} />
       <Panel title="Appearance 2.0">
         <Field label="Theme presets">
           <div className="grid grid-cols-2 gap-2 mt-1">

@@ -122,17 +122,36 @@ export function DayReplayModal({ date, trades = [], plans = [], dayLogs = [], co
     for (const trade of dayTrades) {
       const entryTime = trade.entryTime || trade.timestamp || `${date} 12:00`
       const exitTime = trade.exitTime || entryTime
-      items.push({
-        id: `entry-${trade.id}`, kind: 'entry', rawTime: entryTime,
-        sortTime: momentValue(entryTime), title: `${trade.symbol} ${trade.direction} opened`, trade,
-        plan: planByTradeId.get(String(trade.id)) || null
-      })
-      items.push({
-        id: `exit-${trade.id}`, kind: 'exit', rawTime: exitTime,
-        sortTime: momentValue(exitTime) + 1, title: `${trade.symbol} closed ${fmt$(trade.pnl)}`, trade,
-        plan: planByTradeId.get(String(trade.id)) || null,
-        commitmentResults: commitmentByTrade.get(String(trade.id)) || []
-      })
+      const normalizedFills = Array.isArray(trade.fills) && trade.fills.length
+        ? [...trade.fills].sort((a, b) => (Number(a.sequence) || 0) - (Number(b.sequence) || 0) || String(a.filledAt || '').localeCompare(String(b.filledAt || '')) || String(a.id || '').localeCompare(String(b.id || '')))
+        : []
+      if (normalizedFills.length) {
+        const lastExitIndex = normalizedFills.reduce((last, fill, index) => fill.kind === 'exit' ? index : last, -1)
+        normalizedFills.forEach((fill, index) => {
+          const kind = fill.kind === 'exit' ? 'exit' : 'entry'
+          const rawTime = fill.filledAt || (kind === 'exit' ? exitTime : entryTime)
+          items.push({
+            id: `fill-${trade.id}-${fill.id || index}`, kind, rawTime,
+            sortTime: momentValue(rawTime, kind === 'exit' ? exitTime : entryTime) + (index / 1000),
+            title: `${trade.symbol} ${kind} fill · ${fill.side || '—'} ${fmtN(fill.quantity, 2)} @ ${fmtN(fill.price, 2)}`,
+            trade, fill, settlesTrade: kind === 'exit' && index === lastExitIndex,
+            plan: planByTradeId.get(String(trade.id)) || null,
+            commitmentResults: kind === 'exit' && index === lastExitIndex ? (commitmentByTrade.get(String(trade.id)) || []) : []
+          })
+        })
+      } else {
+        items.push({
+          id: `entry-${trade.id}`, kind: 'entry', rawTime: entryTime,
+          sortTime: momentValue(entryTime), title: `${trade.symbol} ${trade.direction} opened`, trade,
+          plan: planByTradeId.get(String(trade.id)) || null
+        })
+        items.push({
+          id: `exit-${trade.id}`, kind: 'exit', rawTime: exitTime,
+          sortTime: momentValue(exitTime) + 1, title: `${trade.symbol} closed ${fmt$(trade.pnl)}`, trade,
+          plan: planByTradeId.get(String(trade.id)) || null,
+          commitmentResults: commitmentByTrade.get(String(trade.id)) || []
+        })
+      }
     }
     for (const dayLog of dayLogEntries) {
       items.push({ id: `daylog-${dayLog.id}`, kind: 'daylog', rawTime: `${date} 12:00`, sortTime: momentValue(`${date} 12:00`), title: dayLog.reason || 'No-trade day', dayLog })
@@ -140,7 +159,7 @@ export function DayReplayModal({ date, trades = [], plans = [], dayLogs = [], co
     items.sort((a, b) => a.sortTime - b.sortTime || a.id.localeCompare(b.id))
     let cumulative = 0
     return items.map((item) => {
-      if (item.kind === 'exit') cumulative += Number(item.trade?.pnl) || 0
+      if (item.kind === 'exit' && (!item.fill || item.settlesTrade)) cumulative += Number(item.trade?.pnl) || 0
       return { ...item, cumulative }
     })
   }, [dayPlans, dayTrades, dayLogEntries, tradeById, planByTradeId, commitmentByTrade, date])
@@ -251,6 +270,15 @@ export function DayReplayModal({ date, trades = [], plans = [], dayLogs = [], co
 
                     {(active.kind === 'entry' || active.kind === 'exit') && active.trade && (
                       <>
+                        {active.fill && (
+                          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mt-3 rounded-lg p-3" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
+                            <div><span className="text-[10px] uppercase tracking-wider" style={{ color: T.faint }}>Event</span><div className="text-xs capitalize" style={{ color: T.text }}>{active.fill.kind} · {active.fill.side}</div></div>
+                            <div><span className="text-[10px] uppercase tracking-wider" style={{ color: T.faint }}>Quantity</span><div className="text-xs" style={{ ...mono, color: T.text }}>{fmtN(active.fill.quantity, 4)}</div></div>
+                            <div><span className="text-[10px] uppercase tracking-wider" style={{ color: T.faint }}>Price</span><div className="text-xs" style={{ ...mono, color: T.text }}>{fmtN(active.fill.price, 4)}</div></div>
+                            <div><span className="text-[10px] uppercase tracking-wider" style={{ color: T.faint }}>Fee</span><div className="text-xs" style={{ ...mono, color: T.text }}>{fmt$(Number(active.fill.fee) || 0)}</div></div>
+                            <div><span className="text-[10px] uppercase tracking-wider" style={{ color: T.faint }}>Time</span><div className="text-xs" style={{ ...mono, color: T.text }}>{displayTime(active.fill.filledAt || active.rawTime)}</div></div>
+                          </div>
+                        )}
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-3 text-xs">
                           <div><span style={{ color: T.faint }}>Entry</span><div style={{ ...mono, color: T.text }}>{valueOrDash(active.trade.entry)}</div></div>
                           <div><span style={{ color: T.faint }}>Exit</span><div style={{ ...mono, color: T.text }}>{valueOrDash(active.trade.exit)}</div></div>

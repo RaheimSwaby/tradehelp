@@ -259,7 +259,7 @@ export function parseJournalQuery(rawQuery, { trades = [], accounts = [], now = 
     let from
     if (unit.startsWith('month')) from = shiftMonthsClamped(today, -amount)
     else from = addDays(today, -(amount * (unit.startsWith('week') ? 7 : 1)) + 1)
-    add({ id: `date:${from.getTime()}:${tomorrow.getTime()}`, kind: 'dateRange', from: from.getTime(), to: tomorrow.getTime(), label: `Date: ${match[0].trim()}`, detail: 'Uses the trade entry date, including today.' })
+    add({ id: `date-relative:${match[0].trim().toLowerCase()}`, kind: 'dateRange', from: from.getTime(), to: tomorrow.getTime(), label: `Date: ${match[0].trim()}`, detail: 'Uses the trade entry date, including today.' })
   })
   consume(/\b(this|last)\s+(week|month)\b/gi, (match) => {
     const current = match[1].toLowerCase() === 'this'
@@ -267,13 +267,13 @@ export function parseJournalQuery(rawQuery, { trades = [], accounts = [], now = 
     const periodStart = week ? startOfWeek(today) : startOfMonth(today)
     const from = current ? periodStart : (week ? addDays(periodStart, -7) : shiftMonths(periodStart, -1))
     const to = current ? tomorrow : periodStart
-    add({ id: `date:${from.getTime()}:${to.getTime()}`, kind: 'dateRange', from: from.getTime(), to: to.getTime(), label: `Date: ${match[0].trim()}`, detail: `Uses the trade entry date and ${week ? 'Monday' : 'the first day of the month'} as the boundary.` })
+    add({ id: `date-relative:${match[0].trim().toLowerCase()}`, kind: 'dateRange', from: from.getTime(), to: to.getTime(), label: `Date: ${match[0].trim()}`, detail: `Uses the trade entry date and ${week ? 'Monday' : 'the first day of the month'} as the boundary.` })
   })
   consume(/\b(today|yesterday)\b/gi, (match) => {
     const isToday = match[1].toLowerCase() === 'today'
     const from = isToday ? today : addDays(today, -1)
     const to = isToday ? tomorrow : today
-    add({ id: `date:${from.getTime()}:${to.getTime()}`, kind: 'dateRange', from: from.getTime(), to: to.getTime(), label: `Date: ${match[0].trim()}`, detail: 'Uses the trade entry date in local time.' })
+    add({ id: `date-relative:${match[1].toLowerCase()}`, kind: 'dateRange', from: from.getTime(), to: to.getTime(), label: `Date: ${match[0].trim()}`, detail: 'Uses the trade entry date in local time.' })
   })
   consume(/\b(on|since|before|after)\s+(\d{4}-\d{2}-\d{2})\b/gi, (match) => {
     const date = startOfDay(new Date(`${match[2]}T00:00:00`))

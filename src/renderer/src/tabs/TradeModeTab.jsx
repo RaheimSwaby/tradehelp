@@ -16,7 +16,7 @@ export function Check({ on, label, onClick }) {
   )
 }
 
-export function TradeModeTab({ settings, onSave, rules, live, todayNet, todayCount, weekNet, goal, maxLoss, onStart, onEnd, plans = [], trades = [], accounts = [], playbook = [], commitment, onAddPlan, onUpdatePlan, onDeletePlan }) {
+export function TradeModeTab({ settings, onSave, rules, live, todayNet, todayCount, weekNet, goal, maxLoss, onStart, onEnd, plans = [], trades = [], accounts = [], playbook = [], profiles = [], planPrefill, onConsumePlanPrefill, commitment, onAddPlan, onUpdatePlan, onDeletePlan }) {
   const [list, setList] = useState(rules)
   const [g, setG] = useState(String(goal || ''))
   const [ml, setMl] = useState(String(maxLoss || ''))
@@ -40,7 +40,7 @@ export function TradeModeTab({ settings, onSave, rules, live, todayNet, todayCou
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-5">
       <div className="space-y-4">
-        <TradePlansPanel plans={plans} trades={trades} accounts={accounts} playbook={playbook} onAdd={onAddPlan} onUpdate={onUpdatePlan} onDelete={onDeletePlan} />
+        <TradePlansPanel plans={plans} trades={trades} accounts={accounts} playbook={playbook} profiles={profiles} prefill={planPrefill} onConsumePrefill={onConsumePlanPrefill} onAdd={onAddPlan} onUpdate={onUpdatePlan} onDelete={onDeletePlan} />
         <Panel title="Your trading rules" right={
           <button type="button" onClick={add} className="flex items-center gap-1 text-xs px-2 py-1 rounded-md" style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}` }}><Plus size={13} /> Add rule</button>
         }>

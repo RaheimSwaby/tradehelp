@@ -6,6 +6,18 @@ const api = {
   updateTrade: (t) => ipcRenderer.invoke('trades:update', t),
   importTrades: (rows) => ipcRenderer.invoke('trades:import', rows),
   deleteTrade: (id) => ipcRenderer.invoke('trades:delete', id),
+  listTradeFills: (tradeId) => ipcRenderer.invoke('fills:list', tradeId),
+  replaceTradeFills: (tradeId, fills) => ipcRenderer.invoke('fills:replace', tradeId, fills),
+
+  listInstrumentProfiles: () => ipcRenderer.invoke('profiles:list'),
+  addInstrumentProfile: (profile) => ipcRenderer.invoke('profiles:add', profile),
+  updateInstrumentProfile: (profile) => ipcRenderer.invoke('profiles:update', profile),
+  deleteInstrumentProfile: (id) => ipcRenderer.invoke('profiles:delete', id),
+
+  listSavedSearches: () => ipcRenderer.invoke('searches:list'),
+  addSavedSearch: (search) => ipcRenderer.invoke('searches:add', search),
+  updateSavedSearch: (search) => ipcRenderer.invoke('searches:update', search),
+  deleteSavedSearch: (id) => ipcRenderer.invoke('searches:delete', id),
 
   exportData: () => ipcRenderer.invoke('data:export'),
   importData: () => ipcRenderer.invoke('data:import'),
@@ -16,6 +28,13 @@ const api = {
   getImage: (id) => ipcRenderer.invoke('images:get', id),
   addImage: (tradeId, img) => ipcRenderer.invoke('images:add', tradeId, img),
   deleteImage: (id) => ipcRenderer.invoke('images:delete', id),
+  updateImageFingerprint: (id, fingerprint, version) => ipcRenderer.invoke('images:fingerprint', id, fingerprint, version),
+
+  pickTradeVideos: () => ipcRenderer.invoke('videos:pick'),
+  discardPickedTradeVideos: (tokens) => ipcRenderer.invoke('videos:discardPicked', tokens),
+  addPickedTradeVideos: (tradeId, tokens) => ipcRenderer.invoke('videos:addPicked', tradeId, tokens),
+  listTradeVideos: (tradeId) => ipcRenderer.invoke('videos:list', tradeId),
+  deleteTradeVideo: (id) => ipcRenderer.invoke('videos:delete', id),
 
   listTradePlans: () => ipcRenderer.invoke('plans:list'),
   addTradePlan: (plan) => ipcRenderer.invoke('plans:add', plan),

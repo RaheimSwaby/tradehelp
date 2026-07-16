@@ -1,11 +1,21 @@
 import Database from 'better-sqlite3'
 import { app } from 'electron'
-import { join } from 'path'
-import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync, readdirSync } from 'fs'
+import { basename, extname, join } from 'path'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync, unlinkSync, readdirSync } from 'fs'
 import { randomUUID } from 'crypto'
+import { INSTRUMENT_PROFILE_DEFAULT_LIST, instrumentRootSymbol } from '../renderer/src/workflow.js'
 
 let db
 let imagesDir
+let videosDir
+
+export const TRADE_VIDEO_MAX_BYTES = 2 * 1024 * 1024 * 1024
+const TRADE_VIDEO_MIME = {
+  '.mp4': 'video/mp4',
+  '.m4v': 'video/mp4',
+  '.webm': 'video/webm',
+  '.mov': 'video/quicktime'
+}
 
 export function initDb() {
   // Stored in the per-user app data dir so it survives app updates.
@@ -14,6 +24,8 @@ export function initDb() {
 
   imagesDir = join(app.getPath('userData'), 'screenshots')
   if (!existsSync(imagesDir)) mkdirSync(imagesDir, { recursive: true })
+  videosDir = join(app.getPath('userData'), 'videos')
+  if (!existsSync(videosDir)) mkdirSync(videosDir, { recursive: true })
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS trades (
@@ -24,6 +36,40 @@ export function initDb() {
       emotion TEXT, setup TEXT, notes TEXT, timestamp TEXT,
       entryTime TEXT, exitTime TEXT, reason TEXT, source TEXT, account TEXT,
       selfSetup TEXT, selfExec TEXT
+    );
+    CREATE TABLE IF NOT EXISTS trade_fills (
+      id TEXT PRIMARY KEY,
+      tradeId TEXT,
+      kind TEXT,
+      side TEXT,
+      quantity REAL,
+      price REAL,
+      fee REAL,
+      filledAt TEXT,
+      sequence INTEGER,
+      sourceRef TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_trade_fills_tradeId ON trade_fills(tradeId);
+    CREATE INDEX IF NOT EXISTS idx_trade_fills_filledAt ON trade_fills(filledAt);
+    CREATE TABLE IF NOT EXISTS instrument_profiles (
+      id TEXT PRIMARY KEY,
+      symbol TEXT UNIQUE,
+      name TEXT,
+      assetClass TEXT,
+      tickSize REAL,
+      tickValue REAL,
+      quantityStep REAL,
+      createdAt TEXT,
+      updatedAt TEXT
+    );
+    CREATE TABLE IF NOT EXISTS saved_searches (
+      id TEXT PRIMARY KEY,
+      name TEXT,
+      query TEXT,
+      outcome TEXT,
+      dismissedFilterIds TEXT,
+      createdAt TEXT,
+      updatedAt TEXT
     );
     CREATE TABLE IF NOT EXISTS goals (
       id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -38,9 +84,21 @@ export function initDb() {
       file TEXT,
       tag TEXT,
       caption TEXT,
-      createdAt TEXT
+      createdAt TEXT,
+      fingerprint TEXT DEFAULT '',
+      fingerprintVersion INTEGER DEFAULT 0
     );
     CREATE INDEX IF NOT EXISTS idx_trade_images_tradeId ON trade_images(tradeId);
+    CREATE TABLE IF NOT EXISTS trade_videos (
+      id TEXT PRIMARY KEY,
+      tradeId TEXT,
+      file TEXT,
+      originalName TEXT,
+      mimeType TEXT,
+      size INTEGER,
+      createdAt TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_trade_videos_tradeId ON trade_videos(tradeId);
     CREATE TABLE IF NOT EXISTS trade_plans (
       id TEXT PRIMARY KEY,
       status TEXT NOT NULL DEFAULT 'draft',
@@ -60,6 +118,16 @@ export function initDb() {
       resolvedAt TEXT DEFAULT '',
       linkedTradeId TEXT DEFAULT '',
       screenshotFile TEXT DEFAULT '',
+      playbookEntryId TEXT DEFAULT '',
+      plannedQuantity REAL DEFAULT 0,
+      sizingTickSize REAL DEFAULT 0,
+      sizingTickValue REAL DEFAULT 0,
+      sizingQuantityStep REAL DEFAULT 0,
+      sizingRiskPerUnit REAL DEFAULT 0,
+      scoreVersion INTEGER DEFAULT 0,
+      planScore REAL DEFAULT 0,
+      executionScore REAL DEFAULT 0,
+      scoreDetail TEXT DEFAULT '',
       createdAt TEXT,
       updatedAt TEXT
     );
@@ -128,10 +196,38 @@ export function initDb() {
   for (const [name, type] of [['entryTime', 'TEXT'], ['exitTime', 'TEXT'], ['reason', 'TEXT'], ['source', 'TEXT'], ['account', 'TEXT'], ['fees', 'REAL'], ['selfSetup', 'TEXT'], ['selfExec', 'TEXT']]) {
     if (!tradeCols.has(name)) db.exec(`ALTER TABLE trades ADD COLUMN ${name} ${type}`)
   }
+  const imageCols = new Set(db.prepare('PRAGMA table_info(trade_images)').all().map((c) => c.name))
+  if (!imageCols.has('fingerprint')) db.exec("ALTER TABLE trade_images ADD COLUMN fingerprint TEXT DEFAULT ''")
+  if (!imageCols.has('fingerprintVersion')) db.exec('ALTER TABLE trade_images ADD COLUMN fingerprintVersion INTEGER DEFAULT 0')
+  const planCols = new Set(db.prepare('PRAGMA table_info(trade_plans)').all().map((c) => c.name))
+  for (const [name, definition] of [
+    ['playbookEntryId', "TEXT DEFAULT ''"], ['plannedQuantity', 'REAL DEFAULT 0'],
+    ['sizingTickSize', 'REAL DEFAULT 0'], ['sizingTickValue', 'REAL DEFAULT 0'],
+    ['sizingQuantityStep', 'REAL DEFAULT 0'], ['sizingRiskPerUnit', 'REAL DEFAULT 0'],
+    ['scoreVersion', 'INTEGER DEFAULT 0'], ['planScore', 'REAL DEFAULT 0'],
+    ['executionScore', 'REAL DEFAULT 0'], ['scoreDetail', "TEXT DEFAULT ''"]
+  ]) {
+    if (!planCols.has(name)) db.exec(`ALTER TABLE trade_plans ADD COLUMN ${name} ${definition}`)
+  }
   const commitmentCols = new Set(db.prepare('PRAGMA table_info(coach_commitments)').all().map((c) => c.name))
   if (!commitmentCols.has('baselineTradeIds')) db.exec("ALTER TABLE coach_commitments ADD COLUMN baselineTradeIds TEXT DEFAULT '[]'")
 
   db.prepare('INSERT OR IGNORE INTO goals (id, weekly, monthly) VALUES (1, 500, 2000)').run()
+
+  const profileSeedKey = '_instrumentProfilesSeededV1'
+  if (db.prepare('SELECT value FROM settings WHERE key = ?').get(profileSeedKey)?.value !== 'true') {
+    const seedProfile = db.prepare(`INSERT OR IGNORE INTO instrument_profiles
+      (id,symbol,name,assetClass,tickSize,tickValue,quantityStep,createdAt,updatedAt)
+      VALUES (?,?,?,?,?,?,?,?,?)`)
+    const seededAt = new Date().toISOString()
+    const seedProfiles = db.transaction(() => {
+      for (const profile of INSTRUMENT_PROFILE_DEFAULT_LIST) {
+        seedProfile.run(profile.id, profile.symbol, profile.name, profile.assetClass, profile.tickSize, profile.tickValue, profile.quantityStep, seededAt, seededAt)
+      }
+      db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(profileSeedKey, 'true')
+    })
+    seedProfiles()
+  }
 
   const defaults = {
     provider: 'ollama',
@@ -202,14 +298,120 @@ const num = (v) => {
   return Number.isFinite(n) ? n : 0
 }
 
-export const listTrades = () =>
-  db.prepare(`
-    SELECT t.*, COUNT(i.id) AS imageCount
+function positiveNumber(value, label) {
+  const number = Number(value)
+  if (!Number.isFinite(number) || number <= 0) throw new Error(`${label} must be positive`)
+  return number
+}
+
+function instrumentProfileRow(e = {}, current = {}, preserveUpdatedAt = false) {
+  const symbol = String(e.symbol ?? current.symbol ?? '').trim().toUpperCase()
+  if (!symbol) throw new Error('Instrument symbol is required')
+  const now = new Date().toISOString()
+  return {
+    id: String(e.id || current.id || randomUUID()), symbol,
+    name: String(e.name ?? current.name ?? '').trim(),
+    assetClass: String(e.assetClass ?? current.assetClass ?? '').trim(),
+    tickSize: positiveNumber(e.tickSize ?? current.tickSize, 'Tick size'),
+    tickValue: positiveNumber(e.tickValue ?? current.tickValue, 'Tick value'),
+    quantityStep: positiveNumber(e.quantityStep ?? current.quantityStep, 'Quantity step'),
+    createdAt: String(current.createdAt || e.createdAt || now),
+    updatedAt: preserveUpdatedAt ? String(e.updatedAt || e.createdAt || now) : now
+  }
+}
+
+export function listInstrumentProfiles() {
+  return db.prepare('SELECT * FROM instrument_profiles ORDER BY symbol ASC').all()
+}
+
+export function addInstrumentProfile(e = {}) {
+  const row = instrumentProfileRow(e)
+  if (db.prepare('SELECT 1 FROM instrument_profiles WHERE symbol = ?').get(row.symbol)) throw new Error('An instrument profile already uses that symbol')
+  db.prepare(`INSERT INTO instrument_profiles
+    (id,symbol,name,assetClass,tickSize,tickValue,quantityStep,createdAt,updatedAt)
+    VALUES (@id,@symbol,@name,@assetClass,@tickSize,@tickValue,@quantityStep,@createdAt,@updatedAt)`).run(row)
+  return listInstrumentProfiles()
+}
+
+export function updateInstrumentProfile(e = {}) {
+  const current = db.prepare('SELECT * FROM instrument_profiles WHERE id = ?').get(String(e.id || ''))
+  if (!current) return listInstrumentProfiles()
+  const row = instrumentProfileRow(e, current)
+  if (db.prepare('SELECT 1 FROM instrument_profiles WHERE symbol = ? AND id <> ?').get(row.symbol, row.id)) throw new Error('An instrument profile already uses that symbol')
+  db.prepare(`UPDATE instrument_profiles SET symbol=@symbol,name=@name,assetClass=@assetClass,
+    tickSize=@tickSize,tickValue=@tickValue,quantityStep=@quantityStep,updatedAt=@updatedAt WHERE id=@id`).run(row)
+  return listInstrumentProfiles()
+}
+
+export function deleteInstrumentProfile(id) {
+  db.prepare('DELETE FROM instrument_profiles WHERE id = ?').run(String(id))
+  return listInstrumentProfiles()
+}
+
+function parseDismissedFilterIds(value) {
+  if (Array.isArray(value)) return value.map(String)
+  try {
+    const parsed = JSON.parse(String(value || '[]'))
+    return Array.isArray(parsed) ? parsed.map(String) : []
+  } catch {
+    return []
+  }
+}
+
+function publicSavedSearch(row) {
+  return row ? { ...row, dismissedFilterIds: parseDismissedFilterIds(row.dismissedFilterIds) } : null
+}
+
+export function listSavedSearches() {
+  return db.prepare('SELECT * FROM saved_searches ORDER BY createdAt ASC, rowid ASC').all().map(publicSavedSearch)
+}
+
+export function addSavedSearch(e = {}) {
+  const now = new Date().toISOString()
+  const row = {
+    id: String(e.id || randomUUID()), name: String(e.name || ''), query: String(e.query || ''),
+    outcome: String(e.outcome || ''), dismissedFilterIds: JSON.stringify(parseDismissedFilterIds(e.dismissedFilterIds)),
+    createdAt: String(e.createdAt || now), updatedAt: now
+  }
+  db.prepare(`INSERT INTO saved_searches (id,name,query,outcome,dismissedFilterIds,createdAt,updatedAt)
+    VALUES (@id,@name,@query,@outcome,@dismissedFilterIds,@createdAt,@updatedAt)`).run(row)
+  return listSavedSearches()
+}
+
+export function updateSavedSearch(e = {}) {
+  const current = db.prepare('SELECT * FROM saved_searches WHERE id = ?').get(String(e.id || ''))
+  if (!current) return listSavedSearches()
+  const row = {
+    id: current.id, name: String(e.name ?? current.name ?? ''), query: String(e.query ?? current.query ?? ''),
+    outcome: String(e.outcome ?? current.outcome ?? ''),
+    dismissedFilterIds: JSON.stringify(parseDismissedFilterIds(e.dismissedFilterIds ?? current.dismissedFilterIds)),
+    updatedAt: new Date().toISOString()
+  }
+  db.prepare(`UPDATE saved_searches SET name=@name,query=@query,outcome=@outcome,
+    dismissedFilterIds=@dismissedFilterIds,updatedAt=@updatedAt WHERE id=@id`).run(row)
+  return listSavedSearches()
+}
+
+export function deleteSavedSearch(id) {
+  db.prepare('DELETE FROM saved_searches WHERE id = ?').run(String(id))
+  return listSavedSearches()
+}
+
+export function listTradeFills(tradeId) {
+  return db.prepare(`SELECT id,tradeId,kind,side,quantity,price,fee,filledAt,sequence,sourceRef
+    FROM trade_fills WHERE tradeId = ? ORDER BY sequence ASC, filledAt ASC, rowid ASC`).all(String(tradeId))
+}
+
+export function listTrades() {
+  const rows = db.prepare(`
+    SELECT t.*,
+      (SELECT COUNT(*) FROM trade_images i WHERE i.tradeId = t.id) AS imageCount,
+      (SELECT COUNT(*) FROM trade_videos v WHERE v.tradeId = t.id) AS videoCount
     FROM trades t
-    LEFT JOIN trade_images i ON i.tradeId = t.id
-    GROUP BY t.id
     ORDER BY t.timestamp ASC, t.rowid ASC
   `).all()
+  return rows.map((row) => ({ ...row, fills: listTradeFills(row.id) }))
+}
 
 function buildRow(t) {
   return {
@@ -235,8 +437,111 @@ const INSERT_TRADE = `
     (@id, @symbol, @direction, @entry, @exit, @stop, @target, @size, @riskAmount, @pnl, @fees, @rr, @emotion, @setup, @notes, @timestamp, @entryTime, @exitTime, @reason, @source, @account, @selfSetup, @selfExec)
 `
 
+function sanitizeTradeFills(tradeId, fills) {
+  if (!Array.isArray(fills) || fills.length === 0) throw new Error('At least one fill is required')
+  return fills.map((fill, index) => {
+    const kind = String(fill?.kind || '').trim().toLowerCase()
+    const side = String(fill?.side || '').trim().toLowerCase()
+    const quantity = Number(fill?.quantity)
+    const price = Number(fill?.price)
+    const fee = fill?.fee == null || fill.fee === '' ? 0 : Number(fill.fee)
+    if (kind !== 'entry' && kind !== 'exit') throw new Error('Fill kind must be entry or exit')
+    if (side !== 'buy' && side !== 'sell') throw new Error('Fill side must be buy or sell')
+    if (!Number.isFinite(quantity) || quantity <= 0) throw new Error('Fill quantity must be positive')
+    if (!Number.isFinite(price) || price <= 0) throw new Error('Fill price must be positive')
+    if (!Number.isFinite(fee) || fee < 0) throw new Error('Fill fee cannot be negative')
+    const sequenceValue = Number(fill?.sequence)
+    return {
+      id: String(fill?.id || randomUUID()), tradeId: String(tradeId), kind, side, quantity, price, fee,
+      filledAt: String(fill?.filledAt || ''),
+      sequence: Number.isInteger(sequenceValue) ? sequenceValue : index,
+      sourceRef: String(fill?.sourceRef || ''), _index: index
+    }
+  })
+}
+
+function summarizeTradeFills(trade, fills) {
+  const ordered = [...fills].sort((a, b) => a.sequence - b.sequence || a.filledAt.localeCompare(b.filledAt) || a._index - b._index)
+  const firstEntry = ordered.find((fill) => fill.kind === 'entry')
+  if (!firstEntry) throw new Error('At least one entry fill is required')
+  const direction = firstEntry.side === 'buy' ? 'Long' : 'Short'
+  const entrySide = direction === 'Long' ? 'buy' : 'sell'
+  const exitSide = direction === 'Long' ? 'sell' : 'buy'
+  const profileSymbol = String(trade.symbol || '').trim().toUpperCase()
+  const profile = db.prepare('SELECT tickSize,tickValue FROM instrument_profiles WHERE symbol = ?').get(profileSymbol)
+    || db.prepare('SELECT tickSize,tickValue FROM instrument_profiles WHERE symbol = ?').get(instrumentRootSymbol(profileSymbol))
+  const multiplier = profile && Number(profile.tickSize) > 0 ? Number(profile.tickValue) / Number(profile.tickSize) : 1
+  let exposure = 0
+  let averageCost = 0
+  let peakExposure = 0
+  let realized = 0
+  let fees = 0
+  let entryQuantity = 0
+  let entryNotional = 0
+  let exitQuantity = 0
+  let exitNotional = 0
+  let entryTime = ''
+  let exitTime = ''
+  for (const fill of ordered) {
+    fees += fill.fee
+    if (fill.kind === 'entry') {
+      if (fill.side !== entrySide) throw new Error(`${direction} entry fills must be ${entrySide}`)
+      averageCost = ((averageCost * exposure) + (fill.price * fill.quantity)) / (exposure + fill.quantity)
+      exposure += fill.quantity
+      peakExposure = Math.max(peakExposure, exposure)
+      entryQuantity += fill.quantity
+      entryNotional += fill.price * fill.quantity
+      if (!entryTime) entryTime = fill.filledAt
+    } else {
+      if (fill.side !== exitSide) throw new Error(`${direction} exit fills must be ${exitSide}`)
+      if (exposure <= 0 || fill.quantity > exposure + 1e-9) throw new Error('Fill exits beyond the current exposure or flips the position')
+      realized += (direction === 'Long' ? fill.price - averageCost : averageCost - fill.price) * fill.quantity * multiplier
+      exposure = Math.max(0, exposure - fill.quantity)
+      if (exposure === 0) averageCost = 0
+      exitQuantity += fill.quantity
+      exitNotional += fill.price * fill.quantity
+      exitTime = fill.filledAt
+    }
+  }
+  return {
+    direction,
+    entry: entryQuantity ? entryNotional / entryQuantity : 0,
+    exit: exitQuantity ? exitNotional / exitQuantity : 0,
+    size: peakExposure,
+    fees,
+    pnl: realized - fees,
+    entryTime,
+    exitTime
+  }
+}
+
+const INSERT_FILL = dbRow => db.prepare(`INSERT INTO trade_fills
+  (id,tradeId,kind,side,quantity,price,fee,filledAt,sequence,sourceRef)
+  VALUES (@id,@tradeId,@kind,@side,@quantity,@price,@fee,@filledAt,@sequence,@sourceRef)`).run(dbRow)
+
+function replaceTradeFillsInTransaction(tradeId, fills) {
+  const key = String(tradeId)
+  const trade = db.prepare('SELECT * FROM trades WHERE id = ?').get(key)
+  if (!trade) throw new Error('Trade not found')
+  const sanitized = sanitizeTradeFills(key, fills)
+  const summary = summarizeTradeFills(trade, sanitized)
+  db.prepare('DELETE FROM trade_fills WHERE tradeId = ?').run(key)
+  for (const { _index, ...fill } of sanitized) INSERT_FILL(fill)
+  db.prepare(`UPDATE trades SET direction=@direction,entry=@entry,exit=@exit,size=@size,fees=@fees,
+    pnl=@pnl,entryTime=@entryTime,exitTime=@exitTime WHERE id=@id`).run({ id: key, ...summary })
+}
+
+export function replaceTradeFills(tradeId, fills) {
+  db.transaction(() => replaceTradeFillsInTransaction(tradeId, fills))()
+  refreshCommitmentResults()
+  return listTradeFills(tradeId)
+}
+
 export function addTrade(t) {
-  db.prepare(INSERT_TRADE).run(buildRow(t))
+  db.transaction(() => {
+    db.prepare(INSERT_TRADE).run(buildRow(t))
+    if (Array.isArray(t?.fills)) replaceTradeFillsInTransaction(t.id, t.fills)
+  })()
   refreshCommitmentResults()
   return listTrades()
 }
@@ -259,6 +564,7 @@ export function updateTrade(t) {
       size=@size, riskAmount=@riskAmount, pnl=@pnl, fees=@fees, rr=@rr, emotion=@emotion, setup=@setup,
       notes=@notes, timestamp=@timestamp, entryTime=@entryTime, exitTime=@exitTime,
       reason=@reason, source=@source, account=@account, selfSetup=@selfSetup, selfExec=@selfExec WHERE id=@id`).run(row)
+    if (Array.isArray(t?.fills)) replaceTradeFillsInTransaction(row.id, t.fills)
     const detach = db.prepare("UPDATE trade_plans SET status = 'locked', linkedTradeId = '', resolvedAt = '', updatedAt = ? WHERE id = ?")
     for (const plan of db.prepare('SELECT * FROM trade_plans WHERE linkedTradeId = ?').all(row.id)) {
       try { validatePlanLink(plan, row.id) } catch { detach.run(now, plan.id) }
@@ -274,9 +580,14 @@ export function deleteTrade(id) {
   for (const img of db.prepare('SELECT file FROM trade_images WHERE tradeId = ?').all(key)) {
     try { unlinkSync(join(imagesDir, img.file)) } catch {}
   }
+  for (const video of db.prepare('SELECT file FROM trade_videos WHERE tradeId = ?').all(key)) {
+    try { unlinkSync(join(videosDir, video.file)) } catch {}
+  }
   const now = new Date().toISOString()
   const tx = db.transaction(() => {
     db.prepare('DELETE FROM trade_images WHERE tradeId = ?').run(key)
+    db.prepare('DELETE FROM trade_videos WHERE tradeId = ?').run(key)
+    db.prepare('DELETE FROM trade_fills WHERE tradeId = ?').run(key)
     db.prepare(`DELETE FROM commitment_results WHERE tradeId = ? AND commitmentId IN
       (SELECT id FROM coach_commitments WHERE status = 'active')`).run(key)
     db.prepare("UPDATE trade_plans SET status = CASE WHEN status = 'executed' THEN 'locked' ELSE status END, linkedTradeId = '', resolvedAt = '', updatedAt = ? WHERE linkedTradeId = ?").run(now, key)
@@ -339,40 +650,70 @@ export function setSettings(s) {
 const EXT_MIME = { webp: 'image/webp', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif' }
 const WRITE_MIME = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' }
 
-export function addImage(tradeId, { dataUrl, tag, caption } = {}) {
+export function addImage(tradeId, { dataUrl, tag, caption, fingerprint = '', fingerprintVersion = 0 } = {}) {
   const m = String(dataUrl || '').match(/^data:(image\/[\w+.-]+);base64,(.+)$/s)
   if (!m) throw new Error('Bad image data')
   const ext = WRITE_MIME[m[1]]
   if (!ext) throw new Error('Unsupported image type')
+  const normalizedFingerprint = fingerprint === '' ? '' : normalizeFingerprint(fingerprint)
+  const normalizedVersion = fingerprint === '' && Number(fingerprintVersion) === 0 ? 0 : positiveFingerprintVersion(fingerprintVersion)
   const file = `${randomUUID()}.${ext}`
   writeFileSync(join(imagesDir, file), Buffer.from(m[2], 'base64'))
   const row = {
     id: randomUUID(), tradeId: String(tradeId), file,
-    tag: String(tag || ''), caption: String(caption || ''), createdAt: new Date().toISOString()
+    tag: String(tag || ''), caption: String(caption || ''), createdAt: new Date().toISOString(),
+    fingerprint: normalizedFingerprint, fingerprintVersion: normalizedVersion
   }
-  db.prepare('INSERT INTO trade_images (id, tradeId, file, tag, caption, createdAt) VALUES (@id, @tradeId, @file, @tag, @caption, @createdAt)').run(row)
-  return { id: row.id, tradeId: row.tradeId, tag: row.tag, caption: row.caption }
+  try {
+    db.prepare(`INSERT INTO trade_images
+      (id,tradeId,file,tag,caption,createdAt,fingerprint,fingerprintVersion)
+      VALUES (@id,@tradeId,@file,@tag,@caption,@createdAt,@fingerprint,@fingerprintVersion)`).run(row)
+  } catch (error) {
+    try { unlinkSync(join(imagesDir, file)) } catch {}
+    throw error
+  }
+  return { id: row.id, tradeId: row.tradeId, tag: row.tag, caption: row.caption, fingerprint: row.fingerprint, fingerprintVersion: row.fingerprintVersion }
 }
 
 // Returns metadata only — no file I/O. Call getImage(id) to fetch a single image's data URL.
 export function listImages(tradeId) {
   return db
-    .prepare('SELECT id, tag, caption FROM trade_images WHERE tradeId = ? ORDER BY rowid ASC')
+    .prepare('SELECT id,tradeId,tag,caption,fingerprint,fingerprintVersion FROM trade_images WHERE tradeId = ? ORDER BY rowid ASC')
     .all(String(tradeId))
-    .map((r) => ({ id: r.id, tag: r.tag, caption: r.caption }))
 }
 
 // Reads one image from disk on demand. Returns null if the record or file is missing.
 export function getImage(id) {
-  const r = db.prepare('SELECT id, file, tag, caption FROM trade_images WHERE id = ?').get(String(id))
+  const r = db.prepare('SELECT id,tradeId,file,tag,caption,fingerprint,fingerprintVersion FROM trade_images WHERE id = ?').get(String(id))
   if (!r) return null
   try {
     const mime = EXT_MIME[(r.file.split('.').pop() || 'png').toLowerCase()] || 'image/png'
     const dataUrl = `data:${mime};base64,${readFileSync(join(imagesDir, r.file)).toString('base64')}`
-    return { id: r.id, tag: r.tag, caption: r.caption, dataUrl }
+    return { id: r.id, tradeId: r.tradeId, tag: r.tag, caption: r.caption, fingerprint: r.fingerprint, fingerprintVersion: r.fingerprintVersion, dataUrl }
   } catch {
     return null
   }
+}
+
+function normalizeFingerprint(value) {
+  const fingerprint = String(value || '').trim()
+  if (!/^[0-9a-f]{16}$/i.test(fingerprint)) throw new Error('Fingerprint must be exactly 16 hexadecimal characters')
+  return fingerprint.toLowerCase()
+}
+
+function positiveFingerprintVersion(value) {
+  const version = Number(value)
+  if (!Number.isInteger(version) || version <= 0) throw new Error('Fingerprint version must be a positive integer')
+  return version
+}
+
+export function updateImageFingerprint(id, fingerprint, version) {
+  const key = String(id)
+  const row = db.prepare('SELECT tradeId FROM trade_images WHERE id = ?').get(key)
+  if (!row) throw new Error('Image not found')
+  db.prepare('UPDATE trade_images SET fingerprint = ?, fingerprintVersion = ? WHERE id = ?')
+    .run(normalizeFingerprint(fingerprint), positiveFingerprintVersion(version), key)
+  return listImages(row.tradeId)
 }
 
 export function deleteImage(id) {
@@ -381,6 +722,65 @@ export function deleteImage(id) {
   try { unlinkSync(join(imagesDir, row.file)) } catch {}
   db.prepare('DELETE FROM trade_images WHERE id = ?').run(String(id))
   return listImages(row.tradeId)
+}
+
+/* ───────── trade screen recordings (copied locally; streamed by the main process) ───────── */
+export function inspectTradeVideoSource(sourcePath) {
+  const path = String(sourcePath || '')
+  const extension = extname(path).toLowerCase()
+  const mimeType = TRADE_VIDEO_MIME[extension]
+  if (!mimeType) throw new Error('Use an MP4, WebM, MOV, or M4V recording.')
+  const stats = statSync(path)
+  if (!stats.isFile()) throw new Error('The selected recording is not a file.')
+  if (stats.size <= 0) throw new Error('The selected recording is empty.')
+  if (stats.size > TRADE_VIDEO_MAX_BYTES) throw new Error('Each recording must be 2 GB or smaller.')
+  return { sourcePath: path, originalName: basename(path), extension, mimeType, size: stats.size }
+}
+
+export function addTradeVideoFromPath(tradeId, sourcePath) {
+  const key = String(tradeId || '')
+  if (!db.prepare('SELECT 1 FROM trades WHERE id = ?').get(key)) throw new Error('Trade not found')
+  const source = inspectTradeVideoSource(sourcePath)
+  const file = `${randomUUID()}${source.extension}`
+  const destination = join(videosDir, file)
+  copyFileSync(source.sourcePath, destination)
+  const row = {
+    id: randomUUID(), tradeId: key, file,
+    originalName: source.originalName.slice(0, 500), mimeType: source.mimeType,
+    size: source.size, createdAt: new Date().toISOString()
+  }
+  try {
+    db.prepare(`INSERT INTO trade_videos
+      (id,tradeId,file,originalName,mimeType,size,createdAt)
+      VALUES (@id,@tradeId,@file,@originalName,@mimeType,@size,@createdAt)`).run(row)
+  } catch (error) {
+    try { unlinkSync(destination) } catch {}
+    throw error
+  }
+  return listTradeVideos(key)
+}
+
+export function listTradeVideos(tradeId) {
+  return db.prepare(`SELECT id,tradeId,originalName,mimeType,size,createdAt
+    FROM trade_videos WHERE tradeId = ? ORDER BY createdAt ASC, rowid ASC`).all(String(tradeId))
+}
+
+export function getTradeVideoFile(id) {
+  const row = db.prepare(`SELECT id,tradeId,file,originalName,mimeType,size,createdAt
+    FROM trade_videos WHERE id = ?`).get(String(id))
+  if (!row) return null
+  const path = join(videosDir, row.file)
+  if (!existsSync(path)) return null
+  return { ...row, path }
+}
+
+export function deleteTradeVideo(id) {
+  const key = String(id)
+  const row = db.prepare('SELECT file,tradeId FROM trade_videos WHERE id = ?').get(key)
+  if (!row) return []
+  try { unlinkSync(join(videosDir, row.file)) } catch {}
+  db.prepare('DELETE FROM trade_videos WHERE id = ?').run(key)
+  return listTradeVideos(row.tradeId)
 }
 
 /* ───────── pre-trade plans ───────── */
@@ -409,10 +809,23 @@ function storePlanScreenshot(dataUrl) {
   return file
 }
 
+function scoreDetailText(value) {
+  if (value == null || value === '') return ''
+  if (typeof value === 'string') {
+    try { return JSON.stringify(JSON.parse(value)) } catch { return JSON.stringify(value) }
+  }
+  return JSON.stringify(value)
+}
+
+function parsedScoreDetail(value) {
+  if (!value) return {}
+  try { return JSON.parse(value) } catch { return value }
+}
+
 function publicPlan(row) {
   if (!row) return null
   const { screenshotFile, ...plan } = row
-  return { ...plan, hasScreenshot: Boolean(screenshotFile) }
+  return { ...plan, scoreDetail: parsedScoreDetail(plan.scoreDetail), hasScreenshot: Boolean(screenshotFile) }
 }
 
 function validatePlanLink(plan, tradeId) {
@@ -465,13 +878,23 @@ export function addTradePlan(e = {}) {
     riskAmount: num(e.riskAmount), confidence: Math.max(0, Math.min(100, Math.round(num(e.confidence)))),
     thesis: String(e.thesis || '').trim(), invalidation: String(e.invalidation || '').trim(),
     plannedAt: String(e.plannedAt || localStamp()),
-    lockedAt: '', resolvedAt: '', linkedTradeId: '',
-    screenshotFile, createdAt: now, updatedAt: now
+    lockedAt: '', resolvedAt: '', linkedTradeId: '', screenshotFile,
+    playbookEntryId: String(e.playbookEntryId || ''), plannedQuantity: num(e.plannedQuantity),
+    sizingTickSize: num(e.sizingTickSize), sizingTickValue: num(e.sizingTickValue),
+    sizingQuantityStep: num(e.sizingQuantityStep), sizingRiskPerUnit: num(e.sizingRiskPerUnit),
+    scoreVersion: Math.max(0, Math.trunc(num(e.scoreVersion))), planScore: num(e.planScore),
+    executionScore: num(e.executionScore), scoreDetail: scoreDetailText(e.scoreDetail),
+    createdAt: now, updatedAt: now
   }
   try {
     db.prepare(`INSERT INTO trade_plans
-      (id,status,symbol,direction,account,setup,plannedEntry,plannedStop,plannedTarget,riskAmount,confidence,thesis,invalidation,plannedAt,lockedAt,resolvedAt,linkedTradeId,screenshotFile,createdAt,updatedAt)
-      VALUES (@id,@status,@symbol,@direction,@account,@setup,@plannedEntry,@plannedStop,@plannedTarget,@riskAmount,@confidence,@thesis,@invalidation,@plannedAt,@lockedAt,@resolvedAt,@linkedTradeId,@screenshotFile,@createdAt,@updatedAt)`).run(row)
+      (id,status,symbol,direction,account,setup,plannedEntry,plannedStop,plannedTarget,riskAmount,confidence,thesis,invalidation,
+       plannedAt,lockedAt,resolvedAt,linkedTradeId,screenshotFile,playbookEntryId,plannedQuantity,sizingTickSize,sizingTickValue,
+       sizingQuantityStep,sizingRiskPerUnit,scoreVersion,planScore,executionScore,scoreDetail,createdAt,updatedAt)
+      VALUES (@id,@status,@symbol,@direction,@account,@setup,@plannedEntry,@plannedStop,@plannedTarget,@riskAmount,@confidence,
+       @thesis,@invalidation,@plannedAt,@lockedAt,@resolvedAt,@linkedTradeId,@screenshotFile,@playbookEntryId,@plannedQuantity,
+       @sizingTickSize,@sizingTickValue,@sizingQuantityStep,@sizingRiskPerUnit,@scoreVersion,@planScore,@executionScore,@scoreDetail,
+       @createdAt,@updatedAt)`).run(row)
   } catch (error) {
     if (screenshotFile) { try { unlinkSync(join(imagesDir, screenshotFile)) } catch {} }
     throw error
@@ -495,6 +918,7 @@ export function updateTradePlan(e = {}) {
   const now = new Date().toISOString()
   const terminal = ['executed', 'skipped', 'canceled'].includes(requestedStatus)
   const source = editable ? { ...current, ...e } : current
+  const linkingExecution = current.status === 'locked' && requestedStatus === 'executed'
   const linkedTradeId = requestedStatus === 'executed'
     ? validatePlanLink(current, current.status === 'executed' ? current.linkedTradeId : e.linkedTradeId)
     : ''
@@ -508,14 +932,25 @@ export function updateTradePlan(e = {}) {
     plannedAt: String(source.plannedAt || current.plannedAt || localStamp()),
     lockedAt: requestedStatus === 'draft' ? '' : String(current.lockedAt || e.lockedAt || now),
     resolvedAt: terminal ? String(current.resolvedAt || e.resolvedAt || now) : '',
-    linkedTradeId, screenshotFile, createdAt: current.createdAt, updatedAt: now
+    linkedTradeId, screenshotFile,
+    playbookEntryId: String(source.playbookEntryId || ''), plannedQuantity: num(source.plannedQuantity),
+    sizingTickSize: num(source.sizingTickSize), sizingTickValue: num(source.sizingTickValue),
+    sizingQuantityStep: num(source.sizingQuantityStep), sizingRiskPerUnit: num(source.sizingRiskPerUnit),
+    scoreVersion: Math.max(0, Math.trunc(num(source.scoreVersion))), planScore: num(source.planScore),
+    executionScore: num(linkingExecution ? e.executionScore : source.executionScore),
+    scoreDetail: scoreDetailText(linkingExecution ? (e.scoreDetail ?? current.scoreDetail) : source.scoreDetail),
+    createdAt: current.createdAt, updatedAt: now
   }
   try {
     db.prepare(`UPDATE trade_plans SET
       status=@status,symbol=@symbol,direction=@direction,account=@account,setup=@setup,
       plannedEntry=@plannedEntry,plannedStop=@plannedStop,plannedTarget=@plannedTarget,riskAmount=@riskAmount,
       confidence=@confidence,thesis=@thesis,invalidation=@invalidation,plannedAt=@plannedAt,lockedAt=@lockedAt,
-      resolvedAt=@resolvedAt,linkedTradeId=@linkedTradeId,screenshotFile=@screenshotFile,updatedAt=@updatedAt WHERE id=@id`).run(row)
+      resolvedAt=@resolvedAt,linkedTradeId=@linkedTradeId,screenshotFile=@screenshotFile,
+      playbookEntryId=@playbookEntryId,plannedQuantity=@plannedQuantity,sizingTickSize=@sizingTickSize,
+      sizingTickValue=@sizingTickValue,sizingQuantityStep=@sizingQuantityStep,sizingRiskPerUnit=@sizingRiskPerUnit,
+      scoreVersion=@scoreVersion,planScore=@planScore,executionScore=@executionScore,scoreDetail=@scoreDetail,
+      updatedAt=@updatedAt WHERE id=@id`).run(row)
   } catch (error) {
     if (newFile) { try { unlinkSync(join(imagesDir, newFile)) } catch {} }
     throw error
@@ -712,18 +1147,26 @@ export function setReview(period, text) {
 /* ───────── backup / export / import ───────── */
 const SECRET_KEYS = ['cloudKey', 'finnhubKey', 'fmpKey', 'licenseKey', 'licenseInstanceId']
 
-// Portable JSON snapshot of journal records (API keys and screenshot files excluded).
+// Portable JSON snapshot of journal records (API keys and binary attachments excluded).
 export function getAllData() {
   const settings = getSettings()
   for (const k of SECRET_KEYS) delete settings[k]
   return {
-    app: 'tradehelp', version: 3, exportedAt: new Date().toISOString(),
+    app: 'tradehelp', version: 4, exportedAt: new Date().toISOString(),
     trades: db.prepare('SELECT * FROM trades').all(),
+    tradeFills: db.prepare(`SELECT id,tradeId,kind,side,quantity,price,fee,filledAt,sequence,sourceRef
+      FROM trade_fills ORDER BY tradeId,sequence,filledAt,rowid`).all(),
+    instrumentProfiles: listInstrumentProfiles(),
+    savedSearches: listSavedSearches(),
     tradePlans: db.prepare(`SELECT id,status,symbol,direction,account,setup,plannedEntry,plannedStop,plannedTarget,
-      riskAmount,confidence,thesis,invalidation,plannedAt,lockedAt,resolvedAt,linkedTradeId,createdAt,updatedAt FROM trade_plans`).all(),
+      riskAmount,confidence,thesis,invalidation,plannedAt,lockedAt,resolvedAt,linkedTradeId,playbookEntryId,
+      plannedQuantity,sizingTickSize,sizingTickValue,sizingQuantityStep,sizingRiskPerUnit,scoreVersion,planScore,
+      executionScore,scoreDetail,createdAt,updatedAt FROM trade_plans`).all().map((plan) => ({ ...plan, scoreDetail: parsedScoreDetail(plan.scoreDetail) })),
     commitments: db.prepare('SELECT * FROM coach_commitments').all(),
     commitmentResults: db.prepare('SELECT * FROM commitment_results').all(),
+    playbook: listPlaybook(),
     dayLogs: listDayLogs(),
+    payouts: listPayouts(),
     goals: getGoals(),
     reviews: getReviews(),
     settings
@@ -731,6 +1174,8 @@ export function getAllData() {
 }
 
 export function restoreData(data) {
+  const version = Number(data?.version || 3)
+  if (version !== 3 && version !== 4) throw new Error('Unsupported backup version')
   const tx = db.transaction((d) => {
     if (Array.isArray(d.trades)) {
       const ins = db.prepare(`INSERT OR REPLACE INTO trades
@@ -738,11 +1183,57 @@ export function restoreData(data) {
         VALUES (@id,@symbol,@direction,@entry,@exit,@stop,@target,@size,@riskAmount,@pnl,@fees,@rr,@emotion,@setup,@notes,@timestamp,@entryTime,@exitTime,@reason,@source,@account,@selfSetup,@selfExec)`)
       for (const t of d.trades) ins.run(buildRow(t))
     }
+    if (Array.isArray(d.instrumentProfiles)) {
+      const insert = db.prepare(`INSERT OR REPLACE INTO instrument_profiles
+        (id,symbol,name,assetClass,tickSize,tickValue,quantityStep,createdAt,updatedAt)
+        VALUES (@id,@symbol,@name,@assetClass,@tickSize,@tickValue,@quantityStep,@createdAt,@updatedAt)`)
+      for (const profile of d.instrumentProfiles) insert.run(instrumentProfileRow(profile, {}, true))
+    }
+    if (Array.isArray(d.tradeFills)) {
+      const grouped = new Map()
+      const restoredTradeIds = new Set(Array.isArray(d.trades) ? d.trades.map((trade) => String(trade.id || '')).filter(Boolean) : [])
+      for (const fill of d.tradeFills) {
+        const tradeId = String(fill?.tradeId || '')
+        if (!tradeId) continue
+        restoredTradeIds.add(tradeId)
+        if (!grouped.has(tradeId)) grouped.set(tradeId, [])
+        grouped.get(tradeId).push(fill)
+      }
+      const tradeExists = db.prepare('SELECT 1 FROM trades WHERE id = ?')
+      const remove = db.prepare('DELETE FROM trade_fills WHERE tradeId = ?')
+      for (const tradeId of restoredTradeIds) remove.run(tradeId)
+      for (const [tradeId, fills] of grouped) {
+        if (tradeExists.get(tradeId)) replaceTradeFillsInTransaction(tradeId, fills)
+      }
+    }
+    if (Array.isArray(d.savedSearches)) {
+      const upsert = db.prepare(`INSERT INTO saved_searches (id,name,query,outcome,dismissedFilterIds,createdAt,updatedAt)
+        VALUES (@id,@name,@query,@outcome,@dismissedFilterIds,@createdAt,@updatedAt)
+        ON CONFLICT(id) DO UPDATE SET name=excluded.name,query=excluded.query,outcome=excluded.outcome,
+        dismissedFilterIds=excluded.dismissedFilterIds,updatedAt=excluded.updatedAt`)
+      for (const search of d.savedSearches) {
+        const now = new Date().toISOString()
+        upsert.run({
+          id: String(search.id || randomUUID()), name: String(search.name || ''), query: String(search.query || ''),
+          outcome: String(search.outcome || ''), dismissedFilterIds: JSON.stringify(parseDismissedFilterIds(search.dismissedFilterIds)),
+          createdAt: String(search.createdAt || now), updatedAt: String(search.updatedAt || now)
+        })
+      }
+    }
     if (Array.isArray(d.tradePlans)) {
       const ins = db.prepare(`INSERT OR REPLACE INTO trade_plans
-        (id,status,symbol,direction,account,setup,plannedEntry,plannedStop,plannedTarget,riskAmount,confidence,thesis,invalidation,plannedAt,lockedAt,resolvedAt,linkedTradeId,screenshotFile,createdAt,updatedAt)
-        VALUES (@id,@status,@symbol,@direction,@account,@setup,@plannedEntry,@plannedStop,@plannedTarget,@riskAmount,@confidence,@thesis,@invalidation,@plannedAt,@lockedAt,@resolvedAt,@linkedTradeId,@screenshotFile,@createdAt,@updatedAt)`)
+        (id,status,symbol,direction,account,setup,plannedEntry,plannedStop,plannedTarget,riskAmount,confidence,thesis,invalidation,
+         plannedAt,lockedAt,resolvedAt,linkedTradeId,screenshotFile,playbookEntryId,plannedQuantity,sizingTickSize,sizingTickValue,
+         sizingQuantityStep,sizingRiskPerUnit,scoreVersion,planScore,executionScore,scoreDetail,createdAt,updatedAt)
+        VALUES (@id,@status,@symbol,@direction,@account,@setup,@plannedEntry,@plannedStop,@plannedTarget,@riskAmount,@confidence,
+         @thesis,@invalidation,@plannedAt,@lockedAt,@resolvedAt,@linkedTradeId,@screenshotFile,@playbookEntryId,@plannedQuantity,
+         @sizingTickSize,@sizingTickValue,@sizingQuantityStep,@sizingRiskPerUnit,@scoreVersion,@planScore,@executionScore,@scoreDetail,
+         @createdAt,@updatedAt)`)
       const existingScreenshot = db.prepare('SELECT screenshotFile FROM trade_plans WHERE id = ?')
+      const clearRestoredLink = db.prepare("UPDATE trade_plans SET linkedTradeId = '', resolvedAt = '', status = CASE WHEN status = 'executed' THEN 'locked' ELSE status END WHERE id = ?")
+      for (const plan of d.tradePlans) {
+        if (plan?.id) clearRestoredLink.run(String(plan.id))
+      }
       for (const p of d.tradePlans) {
         const planId = String(p.id || randomUUID())
         const symbol = String(p.symbol || '').toUpperCase()
@@ -768,6 +1259,11 @@ export function restoreData(data) {
           plannedAt: String(p.plannedAt || localStamp()), lockedAt,
           resolvedAt: terminal ? String(p.resolvedAt || p.updatedAt || new Date().toISOString()) : '', linkedTradeId,
           screenshotFile: String(existingScreenshot.get(planId)?.screenshotFile || ''),
+          playbookEntryId: String(p.playbookEntryId || ''), plannedQuantity: num(p.plannedQuantity),
+          sizingTickSize: num(p.sizingTickSize), sizingTickValue: num(p.sizingTickValue),
+          sizingQuantityStep: num(p.sizingQuantityStep), sizingRiskPerUnit: num(p.sizingRiskPerUnit),
+          scoreVersion: Math.max(0, Math.trunc(num(p.scoreVersion))), planScore: num(p.planScore),
+          executionScore: num(p.executionScore), scoreDetail: scoreDetailText(p.scoreDetail),
           createdAt: String(p.createdAt || new Date().toISOString()), updatedAt: String(p.updatedAt || new Date().toISOString())
         })
       }
@@ -812,6 +1308,20 @@ export function restoreData(data) {
         ins.run(commitmentId, tradeId, String(result.day || '').slice(0, 10), result.adhered ? 1 : 0, String(result.detail || ''), String(result.evaluatedAt || new Date().toISOString()))
       }
     }
+    if (Array.isArray(d.playbook)) {
+      const ins = db.prepare(`INSERT OR REPLACE INTO playbook
+        (id,name,description,criteria,invalidation,targets,notes,createdAt,updatedAt)
+        VALUES (@id,@name,@description,@criteria,@invalidation,@targets,@notes,@createdAt,@updatedAt)`)
+      for (const entry of d.playbook) {
+        const now = new Date().toISOString()
+        ins.run({
+          id: String(entry.id || randomUUID()), name: String(entry.name || ''), description: String(entry.description || ''),
+          criteria: String(entry.criteria || ''), invalidation: String(entry.invalidation || ''),
+          targets: String(entry.targets || ''), notes: String(entry.notes || ''),
+          createdAt: String(entry.createdAt || now), updatedAt: String(entry.updatedAt || now)
+        })
+      }
+    }
     if (Array.isArray(d.dayLogs)) {
       const ins = db.prepare(`INSERT OR REPLACE INTO day_logs (id,date,reason,mood,note,createdAt)
         VALUES (@id,@date,@reason,@mood,@note,@createdAt)`)
@@ -823,19 +1333,35 @@ export function restoreData(data) {
         })
       }
     }
+    if (Array.isArray(d.payouts)) {
+      const ins = db.prepare(`INSERT OR REPLACE INTO payouts (id,accountId,date,amount,note,createdAt)
+        VALUES (@id,@accountId,@date,@amount,@note,@createdAt)`)
+      for (const payout of d.payouts) {
+        ins.run({
+          id: String(payout.id || randomUUID()), accountId: String(payout.accountId || ''),
+          date: String(payout.date || '').slice(0, 10), amount: num(payout.amount), note: String(payout.note || ''),
+          createdAt: String(payout.createdAt || new Date().toISOString())
+        })
+      }
+    }
     if (d.goals) setGoals(d.goals)
     if (d.reviews) for (const [p, text] of Object.entries(d.reviews)) setReview(p, text)
     if (d.settings) setSettings(d.settings)
   })
   tx(data || {})
-  refreshCommitmentResults()
-  if (!Array.isArray(data?.commitmentResults) && Array.isArray(data?.commitments)) {
-    for (const commitment of data.commitments) {
-      if (commitment.status === 'completed' && commitment.id) refreshCommitmentResults(String(commitment.id), true)
+  if (!Array.isArray(data?.commitmentResults)) {
+    refreshCommitmentResults()
+    if (Array.isArray(data?.commitments)) {
+      for (const commitment of data.commitments) {
+        if (commitment.status === 'completed' && commitment.id) refreshCommitmentResults(String(commitment.id), true)
+      }
     }
   }
   return {
-    trades: listTrades(), tradePlans: listTradePlans(), commitments: listCoachCommitments(),
+    trades: listTrades(), tradeFills: db.prepare('SELECT * FROM trade_fills ORDER BY tradeId,sequence,filledAt,rowid').all(),
+    instrumentProfiles: listInstrumentProfiles(), savedSearches: listSavedSearches(), tradePlans: listTradePlans(),
+    commitments: listCoachCommitments(), commitmentResults: db.prepare('SELECT * FROM commitment_results').all(),
+    playbook: listPlaybook(), dayLogs: listDayLogs(), payouts: listPayouts(),
     goals: getGoals(), reviews: getReviews(), settings: getSettings()
   }
 }

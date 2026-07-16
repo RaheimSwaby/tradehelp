@@ -3,6 +3,7 @@ import { ScanSearch, X } from 'lucide-react'
 import { T, inputStyle } from '../theme.js'
 import { fmt$, toJpeg, streamChat } from '../utils.js'
 import { Panel, Field } from '../components/Shared.jsx'
+import { SimilarCharts } from '../components/SimilarCharts.jsx'
 
 /* ───────── patterns: cross-trade chart comparison ───────── */
 // Cross-trade comparison runs in two passes so it works on weak local models too:
@@ -10,7 +11,7 @@ import { Panel, Field } from '../components/Shared.jsx'
 const CHART_DESCRIBE_SYSTEM = `You are a chart analyst. In 1-2 sentences, state ONLY what is visible in this trading chart: trend direction, notable levels, candle structure, and where price sits in its recent range. Be factual and concise. No advice, no predictions.`
 const COMPARE_SYSTEM = `You are a trading coach. You are given short factual descriptions of a trader's WINNING chart setups and, separately, their LOSING ones. Compare the two groups: what do the winners share, what recurring condition or mistake shows up in the losers, the single clearest visual difference, and ONE concrete rule to add to their pre-trade checklist. Give 2-4 specific points, then the rule. Under ~180 words. No price predictions or buy/sell calls.`
 
-export function Patterns({ trades }) {
+export function Patterns({ trades, onOpenTrade }) {
   const withPics = useMemo(() => trades.filter((t) => (t.imageCount || 0) > 0), [trades])
   const setups = useMemo(() => ['All setups', ...Array.from(new Set(withPics.map((t) => t.setup).filter(Boolean)))], [withPics])
   const [setup, setSetup] = useState('All setups')
@@ -93,10 +94,6 @@ export function Patterns({ trades }) {
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
   }
 
-  if (withPics.length === 0) {
-    return <Panel title="Pattern finder"><div className="py-12 text-center text-sm" style={{ color: T.dim }}>Attach chart screenshots to a few winning and losing trades, then come back — this finds what separates them.</div></Panel>
-  }
-
   const Thumbs = ({ title, arr, color }) => (
     <div>
       <div className="text-xs uppercase tracking-wider mb-1.5" style={{ color }}>{title}</div>
@@ -124,6 +121,7 @@ export function Patterns({ trades }) {
 
   return (
     <div className="space-y-4">
+      <SimilarCharts trades={trades} onOpenTrade={onOpenTrade} />
       <Panel title="Compare winners vs losers">
         <p className="text-sm mb-3" style={{ color: T.dim }}>
           The AI reads up to {MAX} winning and {MAX} losing charts for a setup, then tells you what visually separates them. Runs on your machine — the read is as good as your vision model (best with llama3.2-vision or a cloud key).
