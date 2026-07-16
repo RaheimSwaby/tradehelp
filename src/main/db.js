@@ -393,7 +393,7 @@ const PLAN_TRANSITIONS = {
   canceled: new Set(['canceled'])
 }
 const COMMITMENT_STATUSES = new Set(['active', 'completed', 'archived'])
-const COMMITMENT_RULES = new Set(['max_trades_day', 'max_risk', 'latest_entry', 'setup_only'])
+const COMMITMENT_RULES = new Set(['max_trades_day', 'max_risk', 'latest_entry', 'setup_only', 'min_rr', 'require_stop', 'max_daily_loss'])
 
 function localStamp(date = new Date()) {
   return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16).replace('T', ' ')
@@ -543,7 +543,7 @@ function tradeMoment(t) {
 
 function tradeDay(t) { return String(t.entryTime || t.timestamp || '').slice(0, 10) }
 
-function evaluateCommitment(c, t, dayPosition) {
+function evaluateCommitment(c, t, dayPosition, dayPnlBefore = 0) {
   if (c.ruleType === 'max_trades_day') {
     const limit = Math.max(1, parseInt(c.ruleValue, 10) || 1)
     return { adhered: dayPosition <= limit, detail: `Trade ${dayPosition} of ${limit} allowed today` }
@@ -560,6 +560,20 @@ function evaluateCommitment(c, t, dayPosition) {
     const entryMinutes = match ? Number(match[1]) * 60 + Number(match[2]) : NaN
     const limitMinutes = Number.isFinite(h) && Number.isFinite(m) ? h * 60 + m : NaN
     return { adhered: Number.isFinite(entryMinutes) && Number.isFinite(limitMinutes) && entryMinutes <= limitMinutes, detail: match ? `Entered ${match[1]}:${match[2]} · cutoff ${c.ruleValue}` : 'No entry time recorded' }
+  }
+  if (c.ruleType === 'min_rr') {
+    const min = Math.max(0, Number(c.ruleValue) || 0)
+    const rr = Number(t.rr) || 0
+    return { adhered: rr > 0 && rr >= min, detail: rr > 0 ? `R:R 1:${rr.toFixed(2)} · min 1:${min}` : 'No R:R recorded' }
+  }
+  if (c.ruleType === 'require_stop') {
+    const entry = Number(t.entry) || 0, stop = Number(t.stop) || 0
+    const ok = stop > 0 && entry > 0 && (t.direction === 'Long' ? stop < entry : stop > entry)
+    return { adhered: ok, detail: ok ? 'Stop-loss set before entry' : 'No stop-loss recorded' }
+  }
+  if (c.ruleType === 'max_daily_loss') {
+    const limit = Math.max(0, Number(c.ruleValue) || 0)
+    return { adhered: dayPnlBefore > -limit, detail: `Day P&L $${dayPnlBefore.toFixed(2)} at entry · stop by -$${limit.toFixed(2)}` }
   }
   const allowed = String(c.ruleValue || '').split(',').map((v) => v.trim().toLowerCase()).filter(Boolean)
   const setup = String(t.setup || '').trim().toLowerCase()
@@ -584,11 +598,15 @@ function refreshCommitmentResults(onlyId = '', includeCompleted = false) {
   const trades = db.prepare("SELECT * FROM trades ORDER BY COALESCE(NULLIF(entryTime, ''), timestamp) ASC, rowid ASC").all()
   const dayCounts = new Map()
   const dayPositionByTrade = new Map()
+  const dayRunningPnl = new Map()
+  const dayPnlBeforeTrade = new Map()
   for (const trade of trades) {
     const day = tradeDay(trade)
     const position = (dayCounts.get(day) || 0) + 1
     dayCounts.set(day, position)
     dayPositionByTrade.set(String(trade.id), position)
+    dayPnlBeforeTrade.set(String(trade.id), dayRunningPnl.get(day) || 0)
+    dayRunningPnl.set(day, (dayRunningPnl.get(day) || 0) + (Number(trade.pnl) || 0))
   }
   const remove = db.prepare('DELETE FROM commitment_results WHERE commitmentId = ?')
   const insert = db.prepare(`INSERT INTO commitment_results
@@ -605,7 +623,7 @@ function refreshCommitmentResults(onlyId = '', includeCompleted = false) {
         .slice(0, target)
       for (const t of eligible) {
         const day = tradeDay(t)
-        const result = evaluateCommitment(c, t, dayPositionByTrade.get(String(t.id)) || 1)
+        const result = evaluateCommitment(c, t, dayPositionByTrade.get(String(t.id)) || 1, dayPnlBeforeTrade.get(String(t.id)) || 0)
         insert.run(c.id, String(t.id), day, result.adhered ? 1 : 0, result.detail, new Date().toISOString())
       }
       const completed = c.status === 'completed' || eligible.length >= target

@@ -11,8 +11,8 @@ function trade(overrides = {}) {
   }
 }
 
-const ach = (trades, { payouts = [], dayLogs = [] } = {}) =>
-  computeAchievements(trades, computeStats(trades), payouts, dayLogs)
+const ach = (trades, { payouts = [], dayLogs = [], commitments = [] } = {}) =>
+  computeAchievements(trades, computeStats(trades), payouts, dayLogs, commitments)
 const byId = (list, id) => list.find((a) => a.id === id)
 
 describe('achievement tiers', () => {
@@ -56,6 +56,26 @@ describe('Locked In', () => {
     // A week-long hole resets the run
     const broken = [...days.slice(0, 5), '06-15', '06-16'].map((d) => trade({ timestamp: `2026-${d} 09:30` }))
     expect(byId(ach(broken), 'lockedin').current).toBe(5)
+  })
+})
+
+describe('Commitment achievements', () => {
+  const done = (adherenceRate) => ({ status: 'completed', adherenceRate })
+  it('Kept My Word unlocks on the first completed commitment', () => {
+    expect(byId(ach([]), 'committed').unlocked).toBe(false)
+    expect(byId(ach([], { commitments: [done(60)] }), 'committed').unlocked).toBe(true)
+  })
+  it('Habit Builder needs three completed commitments', () => {
+    expect(byId(ach([], { commitments: [done(80), done(70)] }), 'habitbuilder').unlocked).toBe(false)
+    expect(byId(ach([], { commitments: [done(80), done(70), done(90)] }), 'habitbuilder').unlocked).toBe(true)
+  })
+  it('Ironclad Discipline needs a completed commitment with 90%+ adherence', () => {
+    // An active commitment never counts, even at 100%.
+    expect(byId(ach([], { commitments: [{ status: 'active', adherenceRate: 100 }] }), 'ironclad').unlocked).toBe(false)
+    expect(byId(ach([], { commitments: [done(85)] }), 'ironclad').unlocked).toBe(false)
+    const a = byId(ach([], { commitments: [done(95)] }), 'ironclad')
+    expect(a.current).toBe(95)
+    expect(a.unlocked).toBe(true)
   })
 })
 

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   X, ChevronLeft, ChevronRight, Play, Pause, ClipboardList,
   LogIn, LogOut, CheckCircle2, XCircle, CalendarOff, Image as ImageIcon
@@ -163,7 +164,7 @@ export function DayReplayModal({ date, trades = [], plans = [], dayLogs = [], co
   const active = timeline[step] || null
   const activeMeta = active ? eventMeta(active.kind) : null
 
-  return (
+  return createPortal(
     <div className="th-overlay fixed inset-0 z-[70] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)' }} onClick={onClose}>
       <div className="w-full max-w-5xl max-h-[90vh] overflow-y-auto rounded-2xl" style={{ background: T.surface, border: `1px solid ${T.line}` }} onClick={(event) => event.stopPropagation()}>
         <div className="sticky top-0 z-10 flex items-center gap-3 px-5 py-4" style={{ background: T.surface, borderBottom: `1px solid ${T.line}` }}>
@@ -287,6 +288,7 @@ export function DayReplayModal({ date, trades = [], plans = [], dayLogs = [], co
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

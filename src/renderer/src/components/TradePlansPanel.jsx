@@ -1,4 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   Plus, Pencil, Trash2, Lock, Link2, SkipForward, Ban, X,
   ImagePlus, ClipboardList, CheckCircle2
@@ -66,7 +67,7 @@ function TradePlanModal({ plan, accounts, playbook, onClose, onSave }) {
     }
   }
 
-  return (
+  return createPortal(
     <div className="th-overlay fixed inset-0 z-[75] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)' }} onClick={onClose}>
       <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl p-5" style={{ background: T.surface, border: `1px solid ${T.line}` }} onClick={(event) => event.stopPropagation()}>
         <div className="flex items-center gap-2 mb-4">
@@ -123,7 +124,8 @@ function TradePlanModal({ plan, accounts, playbook, onClose, onSave }) {
           <button type="button" onClick={save} disabled={!form.symbol.trim() || busy} className="flex-1 rounded-lg py-2 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306', opacity: form.symbol.trim() && !busy ? 1 : 0.5 }}>{busy ? 'Saving…' : 'Save draft'}</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 

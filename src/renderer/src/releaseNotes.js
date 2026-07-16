@@ -1,6 +1,9 @@
 // Bundled patch notes — shown in the "What's new" modal after an update.
 // Add an entry here with every release so users always see real notes.
 export const RELEASE_NOTES = {
+  '0.34.1': `• Commitment and pre-trade-plan pop-ups now open centered on screen
+• New commitment achievements — Kept My Word, Habit Builder and Ironclad Discipline
+• More commitment rules — minimum R:R, stop-loss required, and a daily loss limit`,
   '0.34.0': `• Pre-trade plans — lock in your setup, levels and risk before entry, then link the real trade to compare plan vs. execution
 • Session replay — click any day on the calendar to step through the whole session in order
 • Coach commitments — pick one habit to measure, with automatic pass/miss tracking

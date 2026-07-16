@@ -1,4 +1,4 @@
-import { Trophy, Brain, Snowflake, Shield, Target, BookOpen, Camera, TrendingUp, Calendar, Flame, Wallet, Banknote, CalendarCheck, Coffee, Sunrise, Crosshair } from 'lucide-react'
+import { Trophy, Brain, Snowflake, Shield, Target, BookOpen, Camera, TrendingUp, Calendar, Flame, Wallet, Banknote, CalendarCheck, Coffee, Sunrise, Crosshair, Handshake, Repeat, ShieldCheck } from 'lucide-react'
 import { TILT, REASONS, clamp, fmtN, holdMs, periodKey, pad2 } from './utils.js'
 
 /* ───────── stats ───────── */
@@ -274,7 +274,7 @@ export const ACH_TIERS = {
   diamond: { label: 'Diamond', color: '#7FE3F0' }
 }
 
-export function computeAchievements(trades, stats, payouts = [], dayLogs = []) {
+export function computeAchievements(trades, stats, payouts = [], dayLogs = [], commitments = []) {
   const sorted = [...trades].sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''))
   let aGradeLosses = 0, stopSet = 0, withShots = 0, honoredCur = 0, honoredBest = 0, planned = 0
   const dayTilt = {}
@@ -319,6 +319,11 @@ export function computeAchievements(trades, stats, payouts = [], dayLogs = []) {
   }
   const PF = stats.profitFactor === Infinity ? 99 : (stats.profitFactor || 0)
 
+  // Commitment adherence — reward sticking to a chosen focus, not just starting one.
+  // Only completed commitments (a full run of measured trades) count.
+  const doneCommitments = (commitments || []).filter((c) => c.status === 'completed')
+  const bestAdherence = doneCommitments.reduce((m, c) => Math.max(m, Number(c.adherenceRate) || 0), 0)
+
   const defs = [
     { id: 'process', name: 'Process over Profit', Icon: Trophy, tier: 'gold', desc: '10 A-grade trades that still lost — right trade, accepted variance.', current: aGradeLosses, goal: 10 },
     { id: 'zen', name: 'Zen Mode', Icon: Brain, tier: 'gold', desc: 'A 25-trade streak with no FOMO, greed or revenge.', current: stats.bestNonTilt, goal: 25 },
@@ -332,7 +337,10 @@ export function computeAchievements(trades, stats, payouts = [], dayLogs = []) {
     { id: 'journaler', name: 'Journaler', Icon: BookOpen, tier: 'gold', desc: '100 trades journaled.', current: stats.n, goal: 100 },
     { id: 'reviewer', name: 'Reviewer', Icon: Camera, tier: 'bronze', desc: 'Screenshots attached to 20 trades.', current: withShots, goal: 20 },
     { id: 'edge', name: 'Edge Confirmed', Icon: TrendingUp, tier: 'diamond', desc: 'Profit factor over 1.5 across 50+ trades.', current: Math.min(stats.n, 50), goal: 50, gate: PF > 1.5 },
-    { id: 'firstpayout', name: 'First Payout', Icon: Wallet, tier: 'gold', desc: 'Cashed your first prop firm payout.', current: (payouts?.length || 0) >= 1 ? 1 : 0, goal: 1 }
+    { id: 'firstpayout', name: 'First Payout', Icon: Wallet, tier: 'gold', desc: 'Cashed your first prop firm payout.', current: (payouts?.length || 0) >= 1 ? 1 : 0, goal: 1 },
+    { id: 'committed', name: 'Kept My Word', Icon: Handshake, tier: 'bronze', desc: 'Completed your first coach commitment — a full run of trades measured against one rule.', current: doneCommitments.length, goal: 1 },
+    { id: 'habitbuilder', name: 'Habit Builder', Icon: Repeat, tier: 'silver', desc: 'Completed 3 coach commitments — process is becoming routine.', current: doneCommitments.length, goal: 3 },
+    { id: 'ironclad', name: 'Ironclad Discipline', Icon: ShieldCheck, tier: 'diamond', desc: 'Completed a commitment with 90%+ of trades following your rule.', current: Math.round(bestAdherence), goal: 90 }
   ]
   return defs.map((d) => ({
     ...d,

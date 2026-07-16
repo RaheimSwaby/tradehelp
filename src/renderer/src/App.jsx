@@ -341,7 +341,7 @@ export default function App() {
   }, [now, watchedEvents, eventsEnabled])
 
   // ── achievements ──
-  const achievements = useMemo(() => computeAchievements(trades, stats, payouts, dayLogs), [trades, stats, payouts, dayLogs])
+  const achievements = useMemo(() => computeAchievements(trades, stats, payouts, dayLogs, commitments), [trades, stats, payouts, dayLogs, commitments])
   const unlockedAt = useMemo(() => { try { return JSON.parse(settings?.achievements || '{}') } catch { return {} } }, [settings])
   useEffect(() => {
     if (!hasApi || !settings) return

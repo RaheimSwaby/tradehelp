@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Target, Plus, X, Archive, Trash2, CheckCircle2, XCircle } from 'lucide-react'
 import { T, mono, inputStyle } from '../theme.js'
 import { fmt$, fmtN } from '../utils.js'
@@ -24,6 +25,21 @@ export const COMMITMENT_RULE_META = {
     label: 'Allowed setup only', input: 'text', defaultValue: '', placeholder: 'Pullback, Breakout',
     describe: (value) => value ? `Only take: ${value}` : 'Only take selected setups',
     result: (value) => `Allowed setups: ${value}`
+  },
+  min_rr: {
+    label: 'Minimum reward:risk', input: 'number', defaultValue: '2', placeholder: '2',
+    describe: (value) => `Only take trades with at least ${value || 2}:1 reward-to-risk`,
+    result: (value) => `Minimum R:R: 1:${value}`
+  },
+  require_stop: {
+    label: 'Stop-loss on every trade', input: 'none', defaultValue: 'required', placeholder: '',
+    describe: () => 'Set a stop-loss before every entry',
+    result: () => 'Stop-loss required on every trade'
+  },
+  max_daily_loss: {
+    label: 'Daily loss limit', input: 'number', defaultValue: '300', placeholder: '300',
+    describe: (value) => `Stop trading once the day is down $${value || 300}`,
+    result: (value) => `Daily loss limit: $${value}`
   }
 }
 
@@ -55,7 +71,7 @@ function CommitmentModal({ onClose, onSave }) {
     }
   }
 
-  return (
+  return createPortal(
     <div className="th-overlay fixed inset-0 z-[75] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)' }} onClick={onClose}>
       <div className="w-full max-w-xl rounded-2xl p-5" style={{ background: T.surface, border: `1px solid ${T.line}` }} onClick={(event) => event.stopPropagation()}>
         <div className="flex items-start gap-2">
@@ -78,7 +94,9 @@ function CommitmentModal({ onClose, onSave }) {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
           <Field label={meta.label}>
-            <input type={meta.input} min={meta.input === 'number' ? 1 : undefined} style={inputStyle} className="w-full rounded px-2 py-1.5 text-sm" value={ruleValue} onChange={(event) => changeValue(event.target.value)} placeholder={meta.placeholder} />
+            {meta.input === 'none'
+              ? <div className="text-sm rounded px-2 py-1.5" style={{ background: T.surface2, border: `1px solid ${T.line}`, color: T.dim }}>Applies to every trade — no value needed.</div>
+              : <input type={meta.input} min={meta.input === 'number' ? 1 : undefined} style={inputStyle} className="w-full rounded px-2 py-1.5 text-sm" value={ruleValue} onChange={(event) => changeValue(event.target.value)} placeholder={meta.placeholder} />}
           </Field>
           <Field label="Measure over next trades">
             <input type="number" min="1" max="100" style={inputStyle} className="w-full rounded px-2 py-1.5 text-sm" value={targetCount} onChange={(event) => setTargetCount(event.target.value)} />
@@ -98,7 +116,8 @@ function CommitmentModal({ onClose, onSave }) {
           <button type="button" onClick={save} disabled={!title.trim() || !ruleValue.trim() || busy} className="flex-1 rounded-lg py-2 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306', opacity: title.trim() && ruleValue.trim() && !busy ? 1 : 0.5 }}>{busy ? 'Starting…' : 'Start commitment'}</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
