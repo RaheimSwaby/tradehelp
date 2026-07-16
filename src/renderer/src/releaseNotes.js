@@ -2,6 +2,7 @@
 // Add an entry here with every release so users always see real notes.
 export const RELEASE_NOTES = {
   '0.34.1': `• Commitment and pre-trade-plan pop-ups now open centered on screen
+• Achievement unlocks now pop in from the side with an animated medal
 • New commitment achievements — Kept My Word, Habit Builder and Ironclad Discipline
 • More commitment rules — minimum R:R, stop-loss required, and a daily loss limit`,
   '0.34.0': `• Pre-trade plans — lock in your setup, levels and risk before entry, then link the real trade to compare plan vs. execution

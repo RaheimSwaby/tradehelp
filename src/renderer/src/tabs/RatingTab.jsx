@@ -188,14 +188,24 @@ export function AchievementToast({ a, onClose }) {
   const Icon = a.Icon
   const tier = ACH_TIERS[a.tier] || ACH_TIERS.bronze
   const c = tier.color
+  const high = a.tier === 'gold' || a.tier === 'diamond'
   return (
-    <div className="fixed bottom-4 right-4 z-[80] rounded-xl p-3 flex items-center gap-3" style={{ background: T.surface, border: `1px solid ${c}`, minWidth: 240, boxShadow: `0 10px 30px rgba(0,0,0,0.45)${a.tier === 'gold' || a.tier === 'diamond' ? `, 0 0 16px ${c}55` : ''}` }}>
-      <div className="rounded-lg p-2" style={{ background: `${c}22` }}><Icon size={20} style={{ color: c }} /></div>
-      <div className="flex-1">
-        <div className="text-xs" style={{ color: c }}>Achievement unlocked · {tier.label}</div>
-        <div className="text-sm font-semibold">{a.name}</div>
+    <div className="ach-toast fixed top-4 right-4 z-[90] rounded-xl p-3.5 flex items-center gap-3.5"
+      style={{ background: T.surface, border: `1px solid ${c}`, minWidth: 272, maxWidth: 344, boxShadow: `0 14px 36px rgba(0,0,0,0.5)${high ? `, 0 0 22px ${c}55` : ''}` }}>
+      <div className="relative" style={{ width: 54, height: 54, flexShrink: 0 }}>
+        <div className="ach-burst absolute rounded-full" style={{ inset: 0, border: `2px solid ${c}` }} />
+        <div className={`ach-medal relative rounded-full flex items-center justify-center overflow-hidden ${high ? 'ach-glow' : ''}`}
+          style={{ width: 54, height: 54, background: `radial-gradient(circle at 35% 28%, ${c}, ${c}66)`, border: `2px solid ${c}`, '--ach-c': `${c}99` }}>
+          <Icon size={24} style={{ color: '#1A1306' }} />
+          <div className="ach-shine absolute" style={{ top: -4, bottom: -4, width: '45%', background: 'linear-gradient(90deg, transparent, rgba(255,255,255,.8), transparent)' }} />
+        </div>
       </div>
-      <button type="button" onClick={onClose} style={{ color: T.faint }}><X size={16} /></button>
+      <div className="flex-1 min-w-0">
+        <div className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: c }}>Achievement unlocked · {tier.label}</div>
+        <div className="text-sm font-semibold mt-0.5">{a.name}</div>
+        {a.desc && <div className="text-[11px] mt-0.5 leading-snug" style={{ color: T.dim }}>{a.desc}</div>}
+      </div>
+      <button type="button" onClick={onClose} className="self-start" style={{ color: T.faint }}><X size={16} /></button>
     </div>
   )
 }

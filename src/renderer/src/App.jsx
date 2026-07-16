@@ -67,7 +67,9 @@ export default function App() {
   const [events, setEvents] = useState([])
   const [now, setNow] = useState(Date.now())
   const firedRef = useRef(new Set())
-  const [toast, setToast] = useState(null)
+  const [toastQueue, setToastQueue] = useState([])
+  const toast = toastQueue[0] || null
+  const announcedRef = useRef(new Set())
   const [whatsNew, setWhatsNew] = useState(null)
   const wnRef = useRef(false)
   const [updateReady, setUpdateReady] = useState(null)
@@ -345,14 +347,17 @@ export default function App() {
   const unlockedAt = useMemo(() => { try { return JSON.parse(settings?.achievements || '{}') } catch { return {} } }, [settings])
   useEffect(() => {
     if (!hasApi || !settings) return
-    const newly = achievements.filter((a) => a.unlocked && !unlockedAt[a.id])
+    // announcedRef guards against re-announcing during the async settings write below.
+    const newly = achievements.filter((a) => a.unlocked && !unlockedAt[a.id] && !announcedRef.current.has(a.id))
     if (!newly.length) return
+    for (const a of newly) announcedRef.current.add(a.id)
     const merged = { ...unlockedAt }
     for (const a of newly) merged[a.id] = new Date().toISOString()
     window.api.setSettings({ achievements: JSON.stringify(merged) }).then(setSettings)
-    setToast(newly[newly.length - 1])
+    setToastQueue((q) => [...q, ...newly])
   }, [achievements, unlockedAt, hasApi])
-  useEffect(() => { if (!toast) return; const id = setTimeout(() => setToast(null), 5000); return () => clearTimeout(id) }, [toast])
+  // Each unlock gets ~4.8s in the spotlight, then the next queued medal slides in.
+  useEffect(() => { if (!toast) return; const id = setTimeout(() => setToastQueue((q) => q.slice(1)), 4800); return () => clearTimeout(id) }, [toast])
 
   // Re-theme the entire app when live. Runs every render; App is the only writer of T.
   applyTheme(tradeMode, settings?.accentColor, settings?.themeMode, settings)
@@ -489,7 +494,7 @@ export default function App() {
         <Lockout net={todayNet} maxLoss={maxLoss} onEnd={endSession} onDismiss={() => setLockoutDismissed(true)} />
       )}
       {tradeMode && eventsEnabled && <FloatingEvents events={events} now={now} leadMin={parseInt(settings?.eventsLeadMin) || 15} />}
-      {toast && <AchievementToast a={toast} onClose={() => setToast(null)} />}
+      {toast && <AchievementToast key={toast.id} a={toast} onClose={() => setToastQueue((q) => q.slice(1))} />}
       {workflowMsg && (
         <div className="fixed left-1/2 z-[95]" style={{ bottom: 24, transform: 'translateX(-50%)' }}>
           <div className="flex items-start gap-2 rounded-lg px-3.5 py-2.5 text-sm th-fade" style={{ background: T.surface, border: `1px solid ${T.down}`, color: T.text, maxWidth: 440, boxShadow: '0 10px 30px rgba(0,0,0,0.35)' }}>
