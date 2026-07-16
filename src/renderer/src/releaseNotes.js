@@ -1,12 +1,11 @@
 // Bundled patch notes — shown in the "What's new" modal after an update.
 // Add an entry here with every release so users always see real notes.
 export const RELEASE_NOTES = {
-  '0.34.0': `• Pre-trade plans — capture the setup, levels, risk, thesis, invalidation, confidence, and an optional chart before entry; lock the plan, then link the actual trade for a side-by-side comparison
-• Clickable calendar and session replay — open any day to step through plans, entries, exits, no-trade logs, running P&L, screenshots, and process checks in chronological order
-• Coach commitments — choose one measurable focus for your next trades and get automatic, explainable adherence tracking on the Dashboard, in Trade Mode, and during pre-flight
-• Natural-language journal search — try searches like “losing NQ trades last week after 11am”; every local filter is shown as a removable explanation chip
-• Screenshot editing — add and mark up more chart screenshots when editing an existing trade
-• Safer history — plan links, completed commitment evidence, and workflow backup/restore now stay consistent when trades are edited or deleted`,
+  '0.34.0': `• Pre-trade plans — lock in your setup, levels and risk before entry, then link the real trade to compare plan vs. execution
+• Session replay — click any day on the calendar to step through the whole session in order
+• Coach commitments — pick one habit to measure, with automatic pass/miss tracking
+• Natural-language journal search — e.g. “losing NQ trades last week after 11am”, shown as removable filter chips
+• Add screenshots when editing an existing trade`,
   '0.33.0': `- Last session review - a floating daily report now recaps your most recent trading day on app launch\n- Basic review works without AI: net P&L, W/L record, trade list, emotions, and one improvement tip\n- Optional AI review - ask your configured model for a short day-specific coaching note\n- Reopen anytime - close the card and bring it back from the top-bar Review button`,
   '0.32.1': `- Accounts tab - Prop Firm is now Accounts, with separate Live and Prop views\n- Live account tracking - set starting capital, track balance, withdrawals, net P&L, win rate, and max drawdown for personal trades\n- AI coach account context - the coach now reads real live-account stats instead of guessing from market prices\n- Tab polish - active tab icons now get a longer, smoother glow pulse`,
   '0.32.0': `- Accounts tab - Prop Firm is now Accounts, with separate Live and Prop views\n- Live account tracking - set starting capital, track balance, withdrawals, net P&L, win rate, and max drawdown for personal trades\n- AI coach account context - the coach now reads real live-account stats instead of guessing from market prices\n- Tab polish - active tab icons now get a longer, smoother glow pulse`,

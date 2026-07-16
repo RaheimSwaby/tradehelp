@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react'
 import {
   LayoutDashboard, Brain, Target, Settings as SettingsIcon, Gauge, Play,
-  Feather, Landmark, ScrollText, Radar, CalendarClock
+  Feather, Landmark, ScrollText, Radar, CalendarClock, AlertTriangle, X
 } from 'lucide-react'
 import { Whistle, PlayDiagram, CrosshairCandle } from './components/Icons.jsx'
 import { applyTheme, T, mono } from './theme.js'
@@ -84,6 +84,7 @@ export default function App() {
   const [payouts, setPayouts] = useState([])
   const [tradePlans, setTradePlans] = useState([])
   const [commitments, setCommitments] = useState([])
+  const [workflowMsg, setWorkflowMsg] = useState(null)
   const [customBg, setCustomBg] = useState('')
 
   const hasApi = typeof window !== 'undefined' && window.api
@@ -239,13 +240,27 @@ export default function App() {
   async function addDayLog(e) { if (hasApi && window.api.addDayLog) setDayLogs(await window.api.addDayLog(e)) }
   async function deleteDayLog(id) { if (hasApi && window.api.deleteDayLog) setDayLogs(await window.api.deleteDayLog(id)) }
 
-  async function addTradePlan(plan) { if (hasApi && window.api.addTradePlan) setTradePlans(await window.api.addTradePlan(plan)) }
-  async function updateTradePlan(plan) { if (hasApi && window.api.updateTradePlan) setTradePlans(await window.api.updateTradePlan(plan)) }
-  async function deleteTradePlan(id) { if (hasApi && window.api.deleteTradePlan) setTradePlans(await window.api.deleteTradePlan(id)) }
+  // Plan/commitment mutations can be rejected by the main process (an invalid state
+  // transition, a linked trade that no longer exists, …). Surface the reason instead of
+  // failing silently, and leave local state untouched when the write is rejected.
+  async function runWorkflow(op, apply) {
+    try { const next = await op(); if (next) apply(next) }
+    catch (e) { setWorkflowMsg(e?.message || 'That action could not be completed.') }
+  }
+  async function addTradePlan(plan) { if (hasApi && window.api.addTradePlan) await runWorkflow(() => window.api.addTradePlan(plan), setTradePlans) }
+  async function updateTradePlan(plan) { if (hasApi && window.api.updateTradePlan) await runWorkflow(() => window.api.updateTradePlan(plan), setTradePlans) }
+  async function deleteTradePlan(id) { if (hasApi && window.api.deleteTradePlan) await runWorkflow(() => window.api.deleteTradePlan(id), setTradePlans) }
 
-  async function addCommitment(commitment) { if (hasApi && window.api.addCommitment) setCommitments(await window.api.addCommitment(commitment)) }
-  async function updateCommitment(commitment) { if (hasApi && window.api.updateCommitment) setCommitments(await window.api.updateCommitment(commitment)) }
-  async function deleteCommitment(id) { if (hasApi && window.api.deleteCommitment) setCommitments(await window.api.deleteCommitment(id)) }
+  async function addCommitment(commitment) { if (hasApi && window.api.addCommitment) await runWorkflow(() => window.api.addCommitment(commitment), setCommitments) }
+  async function updateCommitment(commitment) { if (hasApi && window.api.updateCommitment) await runWorkflow(() => window.api.updateCommitment(commitment), setCommitments) }
+  async function deleteCommitment(id) { if (hasApi && window.api.deleteCommitment) await runWorkflow(() => window.api.deleteCommitment(id), setCommitments) }
+
+  // Auto-dismiss the workflow error toast so it never lingers.
+  useEffect(() => {
+    if (!workflowMsg) return undefined
+    const t = setTimeout(() => setWorkflowMsg(null), 6000)
+    return () => clearTimeout(t)
+  }, [workflowMsg])
 
   async function addPayout(e) { if (hasApi && window.api.addPayout) setPayouts(await window.api.addPayout(e)) }
   async function deletePayout(id) { if (hasApi && window.api.deletePayout) setPayouts(await window.api.deletePayout(id)) }
@@ -475,6 +490,15 @@ export default function App() {
       )}
       {tradeMode && eventsEnabled && <FloatingEvents events={events} now={now} leadMin={parseInt(settings?.eventsLeadMin) || 15} />}
       {toast && <AchievementToast a={toast} onClose={() => setToast(null)} />}
+      {workflowMsg && (
+        <div className="fixed left-1/2 z-[95]" style={{ bottom: 24, transform: 'translateX(-50%)' }}>
+          <div className="flex items-start gap-2 rounded-lg px-3.5 py-2.5 text-sm th-fade" style={{ background: T.surface, border: `1px solid ${T.down}`, color: T.text, maxWidth: 440, boxShadow: '0 10px 30px rgba(0,0,0,0.35)' }}>
+            <AlertTriangle size={16} style={{ color: T.down, flexShrink: 0, marginTop: 1 }} />
+            <span className="flex-1">{workflowMsg}</span>
+            <button type="button" onClick={() => setWorkflowMsg(null)} style={{ color: T.faint }} aria-label="Dismiss"><X size={15} /></button>
+          </div>
+        </div>
+      )}
       {updateReady && <UpdateBanner info={updateReady} onInstall={() => window.api.installUpdate()} />}
       {whatsNew && <WhatsNew info={whatsNew} onClose={() => setWhatsNew(null)} />}
       {nudge && !dailyReport && !onboard && !tradeMode && (!GATE_CONFIGURED || license?.state !== 'expired') && (

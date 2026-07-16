@@ -22,9 +22,12 @@ function escapeRegExp(value) {
 }
 
 function tradeTimestamp(trade) {
-  const raw = trade.entryTime || trade.timestamp || ''
+  const raw = String(trade.entryTime || trade.timestamp || '')
   if (!raw) return NaN
-  const parsed = new Date(String(raw).replace(' ', 'T')).getTime()
+  // A bare date ("2026-07-15") parses as UTC midnight, which can fall in the wrong
+  // local day; anchor it to local midnight so date filters match the calendar.
+  const iso = raw.includes('T') || raw.includes(' ') ? raw.replace(' ', 'T') : `${raw}T00:00`
+  const parsed = new Date(iso).getTime()
   return Number.isFinite(parsed) ? parsed : NaN
 }
 
