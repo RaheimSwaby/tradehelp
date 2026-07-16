@@ -117,6 +117,17 @@ function registerIpc() {
   ipcMain.handle('images:add', (_e, tradeId, img) => db.addImage(tradeId, img))
   ipcMain.handle('images:delete', (_e, id) => db.deleteImage(id))
 
+  ipcMain.handle('plans:list', () => db.listTradePlans())
+  ipcMain.handle('plans:add', (_e, plan) => db.addTradePlan(plan))
+  ipcMain.handle('plans:update', (_e, plan) => db.updateTradePlan(plan))
+  ipcMain.handle('plans:delete', (_e, id) => db.deleteTradePlan(id))
+  ipcMain.handle('plans:screenshot', (_e, id) => db.getTradePlanScreenshot(id))
+
+  ipcMain.handle('commitments:list', () => db.listCoachCommitments())
+  ipcMain.handle('commitments:add', (_e, commitment) => db.addCoachCommitment(commitment))
+  ipcMain.handle('commitments:update', (_e, commitment) => db.updateCoachCommitment(commitment))
+  ipcMain.handle('commitments:delete', (_e, id) => db.deleteCoachCommitment(id))
+
   ipcMain.handle('goals:get', () => db.getGoals())
   ipcMain.handle('goals:set', (_e, g) => db.setGoals(g))
 

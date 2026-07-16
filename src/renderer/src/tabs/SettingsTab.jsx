@@ -100,7 +100,7 @@ export function DataPanel({ onReload }) {
         <button type="button" onClick={() => window.api.openDataFolder()} className="rounded-md px-3 py-2 text-sm" style={{ background: T.surface2, color: T.text, border: `1px solid ${T.line}` }}>Open data folder</button>
       </div>
       {msg && <div className="mt-3 text-xs" style={{ color: T.dim }}>{msg}</div>}
-      <p className="text-xs mt-2" style={{ color: T.faint }}>A daily auto-backup is kept in the data folder. Exports exclude your API keys.</p>
+      <p className="text-xs mt-2" style={{ color: T.faint }}>JSON exports include journal records and day logs but exclude screenshot files and API keys. For a complete backup with charts, copy the entire data folder. A daily SQLite backup is also kept there.</p>
     </Panel>
   )
 }

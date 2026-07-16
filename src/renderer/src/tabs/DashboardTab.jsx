@@ -7,7 +7,9 @@ import { computeStats, computeLeaks } from '../stats.js'
 import { Stat, Panel, EmptyChart } from '../components/Shared.jsx'
 import { PnlCalendar } from './JournalTab.jsx'
 import { CoachBriefCard } from '../components/CoachBriefCard.jsx'
+import { CoachCommitmentCard } from '../components/CoachCommitmentCard.jsx'
 import { ShareReportModal } from '../components/ShareReportModal.jsx'
+import { DayReplayModal } from '../components/DayReplayModal.jsx'
 
 const HMAP_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
@@ -185,9 +187,10 @@ function HeatMap({ stats }) {
 }
 
 /* ───────── dashboard ───────── */
-export function Dashboard({ stats, trades, accounts = [], settings, journalData, onSaveSettings, onOpenCoach, payouts = [] }) {
+export function Dashboard({ stats, trades, accounts = [], settings, journalData, onSaveSettings, onOpenCoach, payouts = [], plans = [], commitments = [], onAddCommitment, onUpdateCommitment, onDeleteCommitment, onOpenTrade }) {
   const [view, setView] = useState('all') // all | live | prop
   const [shareOpen, setShareOpen] = useState(false)
+  const [selectedDay, setSelectedDay] = useState(null)
   const hasProp = accounts.length > 0
   const propIds = useMemo(() => new Set(accounts.map((a) => a.id)), [accounts])
   const viewTrades = useMemo(() => {
@@ -195,6 +198,24 @@ export function Dashboard({ stats, trades, accounts = [], settings, journalData,
     if (view === 'prop') return trades.filter((t) => propIds.has(t.account))
     return trades.filter((t) => !propIds.has(t.account)) // live
   }, [trades, view, propIds, hasProp])
+  const viewPlans = useMemo(() => {
+    if (view === 'all' || !hasProp) return plans
+    if (view === 'prop') return plans.filter((plan) => propIds.has(plan.account))
+    return plans.filter((plan) => !propIds.has(plan.account))
+  }, [plans, view, propIds, hasProp])
+  const viewCommitments = useMemo(() => {
+    if (view === 'all' || !hasProp) return commitments
+    const visibleTradeIds = new Set(viewTrades.map((trade) => String(trade.id)))
+    return commitments.map((commitment) => {
+      const results = (commitment.results || []).filter((result) => visibleTradeIds.has(String(result.tradeId)))
+      const adheredCount = results.filter((result) => result.adhered).length
+      return {
+        ...commitment, results, globalEvaluatedCount: commitment.evaluatedCount,
+        evaluatedCount: results.length, adheredCount,
+        adherenceRate: results.length ? (adheredCount / results.length) * 100 : 0
+      }
+    })
+  }, [commitments, viewTrades, view, hasProp])
   // Reuse the precomputed combined stats for "all"; only recompute for a filtered view.
   const vStats = useMemo(() => (view === 'all' || !hasProp ? stats : computeStats(viewTrades)), [view, hasProp, stats, viewTrades])
   const empty = vStats.n === 0
@@ -202,6 +223,7 @@ export function Dashboard({ stats, trades, accounts = [], settings, journalData,
   return (
     <div className="space-y-4">
       <CoachBriefCard trades={viewTrades} stats={vStats} settings={settings} journalData={journalData} onSaveSettings={onSaveSettings} onOpenCoach={onOpenCoach} />
+      <CoachCommitmentCard commitments={viewCommitments} trades={viewTrades} scopeLabel={view === 'prop' ? 'Prop view' : view === 'live' ? 'Live view' : ''} onAdd={onAddCommitment} onUpdate={onUpdateCommitment} onDelete={onDeleteCommitment} onOpenCoach={onOpenCoach} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         {hasProp ? <div className="flex items-center gap-1.5">
           {[['all', 'All'], ['live', 'Live'], ['prop', 'Prop']].map(([k, label]) => (
@@ -232,7 +254,7 @@ export function Dashboard({ stats, trades, accounts = [], settings, journalData,
 
       <LeakFinder trades={viewTrades} />
 
-      <PnlCalendar trades={viewTrades} />
+      <PnlCalendar trades={viewTrades} plans={viewPlans} dayLogs={journalData?.dayLogs || []} onSelectDay={setSelectedDay} />
 
       <Panel title="Equity curve">
         {empty ? <EmptyChart /> : (
@@ -269,6 +291,17 @@ export function Dashboard({ stats, trades, accounts = [], settings, journalData,
       </Panel>
 
       <HeatMap stats={vStats} />
+      {selectedDay && (
+        <DayReplayModal
+          date={selectedDay}
+          trades={viewTrades}
+          plans={viewPlans}
+          dayLogs={journalData?.dayLogs || []}
+          commitments={commitments}
+          onOpenTrade={(trade) => { setSelectedDay(null); onOpenTrade?.(trade) }}
+          onClose={() => setSelectedDay(null)}
+        />
+      )}
       {shareOpen && (
         <ShareReportModal
           trades={viewTrades}

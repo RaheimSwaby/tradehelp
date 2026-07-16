@@ -82,6 +82,8 @@ export default function App() {
   const [playbook, setPlaybook] = useState([])
   const [dayLogs, setDayLogs] = useState([])
   const [payouts, setPayouts] = useState([])
+  const [tradePlans, setTradePlans] = useState([])
+  const [commitments, setCommitments] = useState([])
   const [customBg, setCustomBg] = useState('')
 
   const hasApi = typeof window !== 'undefined' && window.api
@@ -101,6 +103,8 @@ export default function App() {
       if (window.api.listPlaybook) setPlaybook(await window.api.listPlaybook())
       if (window.api.listDayLogs) setDayLogs(await window.api.listDayLogs())
       if (window.api.listPayouts) setPayouts(await window.api.listPayouts())
+      if (window.api.listTradePlans) setTradePlans(await window.api.listTradePlans())
+      if (window.api.listCommitments) setCommitments(await window.api.listCommitments())
       setReady(true)
     })()
   }, [hasApi])
@@ -184,19 +188,38 @@ export default function App() {
   const stats = useMemo(() => computeStats(trades), [trades])
   const easterNudges = useMemo(() => buildEasterEggNudges(trades, stats), [trades, stats])
 
+  async function refreshWorkflow() {
+    if (!hasApi) return
+    const [nextTrades, nextPlans, nextCommitments] = await Promise.all([
+      window.api.listTrades(),
+      window.api.listTradePlans ? window.api.listTradePlans() : Promise.resolve(tradePlans),
+      window.api.listCommitments ? window.api.listCommitments() : Promise.resolve(commitments)
+    ])
+    setTrades(nextTrades); setTradePlans(nextPlans); setCommitments(nextCommitments)
+  }
   async function addTrade(t, images = []) {
     if (!hasApi) return
     await window.api.addTrade(t)
     for (const im of images) { try { await window.api.addImage(t.id, im) } catch { /* skip a bad image, keep the trade */ } }
-    setTrades(await window.api.listTrades())
+    await refreshWorkflow()
   }
-  async function updateTrade(t) { if (hasApi) setTrades(await window.api.updateTrade(t)) }
-  async function removeTrade(id) { if (hasApi) setTrades(await window.api.deleteTrade(id)) }
-  async function importTrades(rows) { if (hasApi) setTrades(await window.api.importTrades(rows)) }
+  async function updateTrade(t, images = []) {
+    if (!hasApi) return
+    await window.api.updateTrade(t)
+    for (const im of images) { try { await window.api.addImage(t.id, im) } catch { /* skip a bad image, keep the trade update */ } }
+    await refreshWorkflow()
+  }
+  async function removeTrade(id) { if (hasApi) { await window.api.deleteTrade(id); await refreshWorkflow() } }
+  async function importTrades(rows) { if (hasApi) { await window.api.importTrades(rows); await refreshWorkflow() } }
   async function reloadAll() {
     if (!hasApi) return
-    setTrades(await window.api.listTrades()); setGoals(await window.api.getGoals())
-    setReviews(await window.api.getReviews()); setSettings(await window.api.getSettings())
+    const [nextTrades, nextGoals, nextReviews, nextSettings, nextPlans, nextCommitments] = await Promise.all([
+      window.api.listTrades(), window.api.getGoals(), window.api.getReviews(), window.api.getSettings(),
+      window.api.listTradePlans ? window.api.listTradePlans() : [],
+      window.api.listCommitments ? window.api.listCommitments() : []
+    ])
+    setTrades(nextTrades); setGoals(nextGoals); setReviews(nextReviews); setSettings(nextSettings)
+    setTradePlans(nextPlans); setCommitments(nextCommitments)
   }
   async function saveGoals(g) { if (hasApi) setGoals(await window.api.setGoals(g)) }
   async function saveReview(period, text) { if (hasApi) setReviews(await window.api.setReview(period, text)) }
@@ -215,6 +238,14 @@ export default function App() {
 
   async function addDayLog(e) { if (hasApi && window.api.addDayLog) setDayLogs(await window.api.addDayLog(e)) }
   async function deleteDayLog(id) { if (hasApi && window.api.deleteDayLog) setDayLogs(await window.api.deleteDayLog(id)) }
+
+  async function addTradePlan(plan) { if (hasApi && window.api.addTradePlan) setTradePlans(await window.api.addTradePlan(plan)) }
+  async function updateTradePlan(plan) { if (hasApi && window.api.updateTradePlan) setTradePlans(await window.api.updateTradePlan(plan)) }
+  async function deleteTradePlan(id) { if (hasApi && window.api.deleteTradePlan) setTradePlans(await window.api.deleteTradePlan(id)) }
+
+  async function addCommitment(commitment) { if (hasApi && window.api.addCommitment) setCommitments(await window.api.addCommitment(commitment)) }
+  async function updateCommitment(commitment) { if (hasApi && window.api.updateCommitment) setCommitments(await window.api.updateCommitment(commitment)) }
+  async function deleteCommitment(id) { if (hasApi && window.api.deleteCommitment) setCommitments(await window.api.deleteCommitment(id)) }
 
   async function addPayout(e) { if (hasApi && window.api.addPayout) setPayouts(await window.api.addPayout(e)) }
   async function deletePayout(id) { if (hasApi && window.api.deletePayout) setPayouts(await window.api.deletePayout(id)) }
@@ -245,6 +276,7 @@ export default function App() {
 
   // ── Trade Mode derived state ──
   const rules = useMemo(() => parseRules(settings), [settings])
+  const activeCommitment = useMemo(() => commitments.find((commitment) => commitment.status === 'active') || null, [commitments])
   const today = new Date().toISOString().slice(0, 10)
   const todayTrades = useMemo(() => trades.filter((t) => (t.timestamp || '').slice(0, 10) === today), [trades, today])
   const todayNet = todayTrades.reduce((a, t) => a + (Number(t.pnl) || 0), 0)
@@ -416,9 +448,9 @@ export default function App() {
         ) : (
           <div key={tab} className="th-fade">
             {tab === 'journal' && <Journal trades={trades} onAdd={addTrade} onUpdate={updateTrade} onRemove={removeTrade} onNotes={setNotesView} onImport={importTrades} accounts={propFirmAccounts} settings={settings} onSaveSettings={saveSettings} dayLogs={dayLogs} onAddDayLog={addDayLog} onDeleteDayLog={deleteDayLog} />}
-            {tab === 'trade' && <TradeModeTab settings={settings} onSave={saveSettings} rules={rules} live={tradeMode} todayNet={todayNet} todayCount={todayTrades.length} weekNet={weekNet} goal={dailyGoal} maxLoss={maxLoss} onStart={startDay} onEnd={endSession} />}
+            {tab === 'trade' && <TradeModeTab settings={settings} onSave={saveSettings} rules={rules} live={tradeMode} todayNet={todayNet} todayCount={todayTrades.length} weekNet={weekNet} goal={dailyGoal} maxLoss={maxLoss} onStart={startDay} onEnd={endSession} plans={tradePlans} trades={trades} accounts={propFirmAccounts} playbook={playbook} commitment={activeCommitment} onAddPlan={addTradePlan} onUpdatePlan={updateTradePlan} onDeletePlan={deleteTradePlan} />}
             {tab === 'propfirm' && <PropFirm trades={trades} accounts={propFirmAccounts} onSave={savePropFirmAccounts} settings={settings} onSaveSettings={saveSettings} payouts={payouts} onAddPayout={addPayout} onDeletePayout={deletePayout} />}
-            {tab === 'dashboard' && <Dashboard stats={stats} trades={trades} accounts={propFirmAccounts} settings={settings} journalData={{ reviews, playbook, dayLogs, goals }} payouts={payouts} onSaveSettings={saveSettings} onOpenCoach={() => setTab('coach')} />}
+            {tab === 'dashboard' && <Dashboard stats={stats} trades={trades} accounts={propFirmAccounts} settings={settings} journalData={{ reviews, playbook, dayLogs, goals }} payouts={payouts} plans={tradePlans} commitments={commitments} onAddCommitment={addCommitment} onUpdateCommitment={updateCommitment} onDeleteCommitment={deleteCommitment} onSaveSettings={saveSettings} onOpenCoach={() => setTab('coach')} onOpenTrade={setNotesView} />}
             {tab === 'psych' && <Psychology stats={stats} />}
             {tab === 'rating' && <Rating trades={trades} stats={stats} achievements={achievements} unlockedAt={unlockedAt} settings={settings} onSave={saveSettings} payouts={payouts} />}
             {tab === 'goals' && <Goals goals={goals} onSave={saveGoals} trades={trades} />}
@@ -435,7 +467,7 @@ export default function App() {
       {preflight && (
         <Preflight rules={rules} checks={checks} setChecks={setChecks}
           snapshot={{ todayNet, todayCount: todayTrades.length, weekNet }}
-          goal={dailyGoal} maxLoss={maxLoss} imminent={imminentEvent} now={now}
+          goal={dailyGoal} maxLoss={maxLoss} imminent={imminentEvent} now={now} commitment={activeCommitment}
           onCancel={() => setPreflight(false)} onGoLive={goLive} />
       )}
       {tradeMode && lossHit && !lockoutDismissed && (

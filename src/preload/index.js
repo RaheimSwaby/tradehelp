@@ -17,6 +17,17 @@ const api = {
   addImage: (tradeId, img) => ipcRenderer.invoke('images:add', tradeId, img),
   deleteImage: (id) => ipcRenderer.invoke('images:delete', id),
 
+  listTradePlans: () => ipcRenderer.invoke('plans:list'),
+  addTradePlan: (plan) => ipcRenderer.invoke('plans:add', plan),
+  updateTradePlan: (plan) => ipcRenderer.invoke('plans:update', plan),
+  deleteTradePlan: (id) => ipcRenderer.invoke('plans:delete', id),
+  getTradePlanScreenshot: (id) => ipcRenderer.invoke('plans:screenshot', id),
+
+  listCommitments: () => ipcRenderer.invoke('commitments:list'),
+  addCommitment: (commitment) => ipcRenderer.invoke('commitments:add', commitment),
+  updateCommitment: (commitment) => ipcRenderer.invoke('commitments:update', commitment),
+  deleteCommitment: (id) => ipcRenderer.invoke('commitments:delete', id),
+
   getGoals: () => ipcRenderer.invoke('goals:get'),
   setGoals: (g) => ipcRenderer.invoke('goals:set', g),
 

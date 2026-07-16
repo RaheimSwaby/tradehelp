@@ -5,6 +5,7 @@ import { fmt$, fmtN, nowLocalInput, parseLocal, holdMs, fmtDuration, EMOTIONS, S
 import { Field, Panel, GradeChip } from '../components/Shared.jsx'
 import { ImportModal } from '../widgets/ImportModal.jsx'
 import { AnnotateModal } from '../components/AnnotateModal.jsx'
+import { matchesJournalFilters, parseJournalQuery } from '../journalSearch.js'
 
 const NO_TRADE_REASONS = [
   'Followed my rules — no clean setup',
@@ -26,8 +27,12 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
   const [importOpen, setImportOpen] = useState(false)
   const [editing, setEditing] = useState(null)
   const [query, setQuery] = useState('')
+  const [dismissedSearchFilters, setDismissedSearchFilters] = useState([])
   const [outcome, setOutcome] = useState('all') // all | win | loss
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
   const fileRef = useRef(null)
+  const submittingRef = useRef(false)
 
   // Simple journal mode + custom lists are persisted in settings.
   const simple = settings?.simpleJournal === 'true'
@@ -84,17 +89,33 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
     setNewSetup(''); setAddingSetup(false)
   }
 
+  const parsedSearch = useMemo(() => parseJournalQuery(query, { trades, accounts }), [query, trades, accounts])
+  const activeSearchFilters = useMemo(() => {
+    const dismissed = new Set(dismissedSearchFilters)
+    return parsedSearch.filters.filter((filter) => !dismissed.has(filter.id))
+  }, [parsedSearch, dismissedSearchFilters])
+
+  function changeSearch(value) {
+    setQuery(value)
+    setDismissedSearchFilters([])
+  }
+  function dismissSearchFilter(id) {
+    setDismissedSearchFilters((current) => current.includes(id) ? current : [...current, id])
+  }
+  function clearSearch() {
+    setQuery('')
+    setDismissedSearchFilters([])
+  }
+
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
     return trades.filter((t) => {
       if (pendingDelete && t.id === pendingDelete.id) return false
       const pnl = Number(t.pnl) || 0
-      if (outcome === 'win' && pnl < 0) return false
+      if (outcome === 'win' && pnl <= 0) return false
       if (outcome === 'loss' && pnl >= 0) return false
-      if (!q) return true
-      return [t.symbol, t.setup, t.emotion, t.reason, t.notes, t.direction].some((v) => String(v || '').toLowerCase().includes(q))
+      return matchesJournalFilters(t, activeSearchFilters)
     })
-  }, [trades, query, outcome, pendingDelete])
+  }, [trades, activeSearchFilters, outcome, pendingDelete])
 
   const [page, setPage] = useState(0)
   const [pageSize, setPageSize] = useState(20)
@@ -102,7 +123,7 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
   const pageCount = Math.max(1, Math.ceil(ordered.length / pageSize))
   const safePage = Math.min(page, pageCount - 1)
   const pageRows = ordered.slice(safePage * pageSize, safePage * pageSize + pageSize)
-  useEffect(() => { setPage(0) }, [query, outcome, pageSize])
+  useEffect(() => { setPage(0) }, [query, outcome, pageSize, dismissedSearchFilters])
 
   function startEdit(t) {
     setEditing(t)
@@ -118,7 +139,7 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
     })
     if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
   }
-  function cancelEdit() { setEditing(null); setF(blank) }
+  function cancelEdit() { setEditing(null); setF(blank); setImages([]) }
   const set = (k) => (e) => setF((p) => ({ ...p, [k]: e.target.value }))
 
   // Setup options = presets + saved custom setups + any already used on a trade.
@@ -173,31 +194,41 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
   const setTag = (tmpId, v) => setImages((p) => p.map((im) => (im.tmpId === tmpId ? { ...im, tag: v } : im)))
   const removeImage = (tmpId) => setImages((p) => p.filter((im) => im.tmpId !== tmpId))
 
-  function submit() {
-    if (!f.symbol.trim()) return
-    const grossPnl = f.pnl !== '' ? parseFloat(f.pnl) : (derivedPnl ?? 0)
-    const fees = parseFloat(f.fees) || 0
-    const pnl = (isNaN(grossPnl) ? 0 : grossPnl) - fees // store P&L net of fees
-    const rr = derivedRR ?? (f.riskAmount && f.pnl ? Math.abs(parseFloat(f.pnl)) / Math.abs(parseFloat(f.riskAmount)) : 0)
-    const base = {
-      symbol: f.symbol.trim().toUpperCase(), direction: f.direction,
-      entry: parseFloat(f.entry) || 0, exit: parseFloat(f.exit) || 0,
-      stop: parseFloat(f.stop) || 0, target: parseFloat(f.target) || 0,
-      size: parseFloat(f.size) || 0, riskAmount: parseFloat(f.riskAmount) || 0,
-      pnl: isNaN(pnl) ? 0 : pnl, fees, rr: rr || 0,
-      emotion: f.emotion, setup: f.setup.trim(), notes: f.notes.trim(),
-      entryTime: f.entryTime ? f.entryTime.replace('T', ' ') : '',
-      // In simple mode there's no separate exit time — mirror the entry time so the calendar/heatmap still place it.
-      exitTime: (compact ? f.entryTime : f.exitTime) ? (compact ? f.entryTime : f.exitTime).replace('T', ' ') : '',
-      reason: f.reason, account: f.account, selfSetup: f.selfSetup, selfExec: f.selfExec
-    }
-    if (editing) {
-      onUpdate({ ...base, id: editing.id, timestamp: editing.timestamp, source: editing.source || 'manual' })
-      setEditing(null); setF(blank)
-    } else {
-      onAdd({ ...base, id: Date.now() + Math.random().toString(16).slice(2), timestamp: new Date().toISOString().slice(0, 16).replace('T', ' ') },
-        images.map((im) => ({ dataUrl: im.dataUrl, tag: im.tag.trim(), caption: (im.labels || []).join(', ') })))
-      setF(blank); setImages([])
+  async function submit() {
+    if (!f.symbol.trim() || submittingRef.current) return
+    submittingRef.current = true
+    setSubmitting(true)
+    setSubmitError('')
+    try {
+      const grossPnl = f.pnl !== '' ? parseFloat(f.pnl) : (derivedPnl ?? 0)
+      const fees = parseFloat(f.fees) || 0
+      const pnl = (isNaN(grossPnl) ? 0 : grossPnl) - fees // store P&L net of fees
+      const rr = derivedRR ?? (f.riskAmount && f.pnl ? Math.abs(parseFloat(f.pnl)) / Math.abs(parseFloat(f.riskAmount)) : 0)
+      const base = {
+        symbol: f.symbol.trim().toUpperCase(), direction: f.direction,
+        entry: parseFloat(f.entry) || 0, exit: parseFloat(f.exit) || 0,
+        stop: parseFloat(f.stop) || 0, target: parseFloat(f.target) || 0,
+        size: parseFloat(f.size) || 0, riskAmount: parseFloat(f.riskAmount) || 0,
+        pnl: isNaN(pnl) ? 0 : pnl, fees, rr: rr || 0,
+        emotion: f.emotion, setup: f.setup.trim(), notes: f.notes.trim(),
+        entryTime: f.entryTime ? f.entryTime.replace('T', ' ') : '',
+        // In simple mode there's no separate exit time — mirror the entry time so the calendar/heatmap still place it.
+        exitTime: (compact ? f.entryTime : f.exitTime) ? (compact ? f.entryTime : f.exitTime).replace('T', ' ') : '',
+        reason: f.reason, account: f.account, selfSetup: f.selfSetup, selfExec: f.selfExec
+      }
+      const screenshots = images.map((im) => ({ dataUrl: im.dataUrl, tag: im.tag.trim(), caption: (im.labels || []).join(', ') }))
+      if (editing) {
+        await onUpdate({ ...base, id: editing.id, timestamp: editing.timestamp, source: editing.source || 'manual' }, screenshots)
+        setEditing(null); setF(blank); setImages([])
+      } else {
+        await onAdd({ ...base, id: Date.now() + Math.random().toString(16).slice(2), timestamp: new Date().toISOString().slice(0, 16).replace('T', ' ') }, screenshots)
+        setF(blank); setImages([])
+      }
+    } catch (error) {
+      setSubmitError(error?.message || 'Trade could not be saved. Please try again.')
+    } finally {
+      submittingRef.current = false
+      setSubmitting(false)
     }
   }
 
@@ -322,9 +353,8 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
         <div className="mt-3">
           <Field label="Notes"><textarea style={inputStyle} className={inp} rows={3} value={f.notes} onChange={set('notes')} placeholder="What did you see? What did you feel?" /></Field>
         </div>
-        {!editing && (
         <div className="mt-3">
-          <Field label="Screenshots — before / after">
+          <Field label={editing ? 'Add screenshots' : 'Screenshots — before / after'}>
             <div
               onClick={() => fileRef.current?.click()}
               onDrop={(e) => { e.preventDefault(); addImageFiles([...(e.dataTransfer?.files || [])]) }}
@@ -352,16 +382,16 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
             </div>
           )}
         </div>
-        )}
         <div className="flex items-center justify-between mt-3 text-xs" style={{ color: T.dim }}>
           {!compact && <span>R:R {derivedRR != null ? `1:${fmtN(derivedRR, 1)}` : '—'}</span>}
           {!compact && <span>Held {derivedHold != null ? fmtDuration(derivedHold) || '0m' : '—'}</span>}
           <span>Net {effNet != null ? fmt$(effNet) : '—'}</span>
         </div>
         <div className="flex gap-2 mt-3">
-          <button type="button" onClick={submit} className="flex-1 rounded-md py-2 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306' }}>{editing ? 'Update trade' : 'Save trade'}</button>
-          {editing && <button type="button" onClick={cancelEdit} className="rounded-md px-3 py-2 text-sm" style={{ background: T.surface2, color: T.text, border: `1px solid ${T.line}` }}>Cancel</button>}
+          <button type="button" onClick={submit} disabled={submitting || !f.symbol.trim()} className="flex-1 rounded-md py-2 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306', opacity: submitting || !f.symbol.trim() ? 0.5 : 1 }}>{submitting ? 'Saving…' : editing ? 'Update trade' : 'Save trade'}</button>
+          {editing && <button type="button" onClick={cancelEdit} disabled={submitting} className="rounded-md px-3 py-2 text-sm" style={{ background: T.surface2, color: T.text, border: `1px solid ${T.line}`, opacity: submitting ? 0.5 : 1 }}>Cancel</button>}
         </div>
+        {submitError && <div className="text-xs mt-2" style={{ color: T.down }}>{submitError}</div>}
 
         {!editing && (
           <>
@@ -396,14 +426,36 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
             <button type="button" onClick={() => setImportOpen(true)} className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-md" style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}` }}><Upload size={13} /> Import CSV</button>
           </div>
           {trades.length > 0 && (
-            <div className="flex items-center gap-2 mt-2">
-              <div className="relative flex-1">
+            <div className="flex flex-wrap items-center gap-2 mt-2">
+              <div className="relative flex-1 min-w-[260px]">
                 <Search size={13} style={{ color: T.faint, position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)' }} />
-                <input style={inputStyle} className="w-full rounded pl-7 pr-2 py-1.5 text-xs" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search symbol, setup, emotion, notes…" />
+                <input style={inputStyle} className="w-full rounded pl-7 pr-2 py-1.5 text-xs" value={query} onChange={(e) => changeSearch(e.target.value)} placeholder="Try: losing NQ trades last week after 11am" />
               </div>
               {[['all', 'All'], ['win', 'Wins'], ['loss', 'Losses']].map(([k, label]) => (
                 <button key={k} type="button" onClick={() => setOutcome(k)} className="text-xs px-2 py-1 rounded-md" style={{ background: outcome === k ? T.surface2 : 'transparent', color: outcome === k ? T.accent : T.dim, border: `1px solid ${outcome === k ? T.line : 'transparent'}` }}>{label}</button>
               ))}
+              <div className="basis-full mt-1">
+                {query.trim() ? (
+                  <>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-[10px] uppercase tracking-wider mr-0.5" style={{ color: T.faint }}>Interpreted as</span>
+                      {activeSearchFilters.map((filter) => (
+                        <button key={filter.id} type="button" onClick={() => dismissSearchFilter(filter.id)} title={`${filter.detail} Click to remove this condition.`}
+                          className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px]"
+                          style={{ background: T.accentSoft, color: T.accent, border: `1px solid ${T.accent}` }}>
+                          {filter.label}<X size={11} />
+                        </button>
+                      ))}
+                      {activeSearchFilters.length === 0 && <span className="text-xs" style={{ color: T.dim }}>No conditions active.</span>}
+                      {dismissedSearchFilters.length > 0 && <button type="button" onClick={() => setDismissedSearchFilters([])} className="text-[11px] ml-1" style={{ color: T.accent }}>Restore removed</button>}
+                      <button type="button" onClick={clearSearch} className="text-[11px] ml-auto" style={{ color: T.faint }}>Clear search</button>
+                    </div>
+                    <div className="text-[10px] mt-1" style={{ color: T.faint }}>Local, deterministic filters only. Quoted phrases are matched literally; every chip explains what will be applied.</div>
+                  </>
+                ) : (
+                  <div className="text-[10px]" style={{ color: T.faint }}>Natural search examples: “wins this month”, “long pullbacks over $200”, or “anxious trades with screenshots”.</div>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -520,26 +572,38 @@ function NoTradeModal({ emotions = [], onClose, onSave }) {
 }
 
 /* ───────── dashboard ───────── */
-export function PnlCalendar({ trades }) {
+export function PnlCalendar({ trades, plans = [], dayLogs = [], onSelectDay }) {
   const [ym, setYm] = useState(() => new Date().toISOString().slice(0, 7))
   const dayMap = useMemo(() => {
     const m = {}
+    const ensure = (date) => {
+      if (!date || date.slice(0, 7) !== ym) return null
+      if (!m[date]) m[date] = { pnl: 0, n: 0, plans: 0, noTrade: false }
+      return m[date]
+    }
     for (const t of trades || []) {
-      const d = (t.entryTime || t.timestamp || '').slice(0, 10)
-      if (d.slice(0, 7) !== ym) continue
-      if (!m[d]) m[d] = { pnl: 0, n: 0 }
-      m[d].pnl += Number(t.pnl) || 0; m[d].n += 1
+      const bucket = ensure((t.entryTime || t.timestamp || '').slice(0, 10))
+      if (!bucket) continue
+      bucket.pnl += Number(t.pnl) || 0; bucket.n += 1
+    }
+    for (const plan of plans || []) {
+      const bucket = ensure((plan.plannedAt || plan.lockedAt || plan.createdAt || '').slice(0, 10))
+      if (bucket) bucket.plans += 1
+    }
+    for (const entry of dayLogs || []) {
+      const bucket = ensure(String(entry.date || '').slice(0, 10))
+      if (bucket) bucket.noTrade = true
     }
     return m
-  }, [trades, ym])
+  }, [trades, plans, dayLogs, ym])
   const [y, mo] = ym.split('-').map(Number)
   const startDow = new Date(y, mo - 1, 1).getDay()
   const days = new Date(y, mo, 0).getDate()
   const vals = Object.values(dayMap)
   const maxAbs = Math.max(1, ...vals.map((v) => Math.abs(v.pnl)))
   const monthPnl = vals.reduce((a, v) => a + v.pnl, 0)
-  const greenDays = vals.filter((v) => v.pnl > 0).length
-  const redDays = vals.filter((v) => v.pnl < 0).length
+  const greenDays = vals.filter((v) => v.n > 0 && v.pnl > 0).length
+  const redDays = vals.filter((v) => v.n > 0 && v.pnl < 0).length
   const shift = (delta) => { const d = new Date(y, mo - 1 + delta, 1); setYm(`${d.getFullYear()}-${pad2(d.getMonth() + 1)}`) }
   const cellBg = (pnl) => {
     if (pnl == null) return T.surface2
@@ -548,7 +612,10 @@ export function PnlCalendar({ trades }) {
   }
   const cells = []
   for (let i = 0; i < startDow; i++) cells.push(null)
-  for (let d = 1; d <= days; d++) cells.push({ d, v: dayMap[`${ym}-${pad2(d)}`] })
+  for (let d = 1; d <= days; d++) {
+    const date = `${ym}-${pad2(d)}`
+    cells.push({ d, date, v: dayMap[date] })
+  }
   return (
     <Panel title="Calendar" right={
       <div className="flex items-center gap-3 text-sm">
@@ -560,13 +627,22 @@ export function PnlCalendar({ trades }) {
     }>
       <div className="grid grid-cols-7 gap-1">
         {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => <div key={d} className="text-center text-xs py-1" style={{ color: T.faint }}>{d}</div>)}
-        {cells.map((c, i) => c == null ? <div key={i} /> : (
-          <div key={i} className="rounded p-1.5 min-h-[54px]" style={{ background: c.v ? cellBg(c.v.pnl) : T.surface2, border: `1px solid ${T.line}` }}>
-            <div className="text-xs" style={{ color: c.v ? '#0E1117' : T.faint }}>{c.d}</div>
-            {c.v && <div className="text-xs font-semibold leading-tight" style={{ ...mono, color: '#0E1117' }}>{fmt$(c.v.pnl)}</div>}
-          </div>
-        ))}
+        {cells.map((c, i) => c == null ? <div key={i} /> : (() => {
+          const active = Boolean(c.v?.n || c.v?.plans || c.v?.noTrade)
+          const darkText = c.v?.n > 0
+          return (
+            <button key={c.date} type="button" onClick={() => onSelectDay?.(c.date)} title={active ? 'Open day details and session replay' : 'Open this day'}
+              className="rounded p-1.5 min-h-[62px] text-left transition-transform hover:-translate-y-0.5"
+              style={{ background: c.v?.n ? cellBg(c.v.pnl) : T.surface2, border: `1px solid ${active ? T.accent : T.line}` }}>
+              <div className="text-xs" style={{ color: darkText ? '#0E1117' : T.faint }}>{c.d}</div>
+              {c.v?.n > 0 && <div className="text-xs font-semibold leading-tight" style={{ ...mono, color: '#0E1117' }}>{fmt$(c.v.pnl)}</div>}
+              {c.v?.plans > 0 && <div className="text-[9px] mt-0.5" style={{ color: darkText ? '#0E1117' : T.accent }}>{c.v.plans} plan{c.v.plans === 1 ? '' : 's'}</div>}
+              {c.v?.noTrade && <div className="text-[9px] mt-0.5" style={{ color: darkText ? '#0E1117' : T.dim }}>No-trade log</div>}
+            </button>
+          )
+        })())}
       </div>
+      <div className="text-xs mt-2" style={{ color: T.faint }}>Select any date to open its details and replay the session.</div>
     </Panel>
   )
 }
