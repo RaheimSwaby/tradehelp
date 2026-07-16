@@ -1,13 +1,13 @@
 // Bundled patch notes — shown in the "What's new" modal after an update.
 // Add an entry here with every release so users always see real notes.
 export const RELEASE_NOTES = {
-  '0.35.0': `• Position sizing — size a plan from your risk budget using local instrument specs (futures, stocks, crypto)
+  '0.35.0': `• Position sizing — size a plan from your risk budget (futures, stocks, crypto)
 • Multi-fill trades — log scale-ins and partial exits with average-cost P&L
-• Plan scoring — prefill a plan from your playbook, then see how closely you actually executed it
-• Turn a review into a commitment — end a periodic review with one measurable focus
-• Saved searches — keep your favourite journal searches one click away
+• Plan scoring — prefill from your playbook, then score how you executed
+• Reviews → commitments — end a review with one measurable focus
+• Saved searches — keep your go-to journal searches one click away
 • Session comparison — put two trading days side by side
-• Similar charts — find look-alike setups across your screenshots, all on your machine
+• Similar charts — find look-alike setups, all on your machine
 • Screen recordings — attach a recording to a trade and play it back`,
   '0.34.1': `• Commitment and pre-trade-plan pop-ups now open centered on screen
 • Achievement unlocks now pop in from the side with an animated medal
