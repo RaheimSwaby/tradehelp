@@ -144,7 +144,7 @@ function InstrumentProfilesPanel({ profiles = [], onAdd, onUpdate, onDelete }) {
     }>
       <p className="text-xs mb-3" style={{ color: T.faint }}>Tick economics drive plan sizing and multi-fill P&amp;L. Futures contracts match their root profile; a generic stock fallback is used only when explicitly selected.</p>
       {error && <div className="rounded-md px-3 py-2 mb-3 text-xs" style={{ color: T.down, border: `1px solid ${T.down}`, background: T.surface2 }}>{error}</div>}
-      <div className="space-y-1.5 max-h-72 overflow-y-auto">
+      <div className="space-y-1.5">
         {profiles.map((profile) => (
           <div key={profile.id} className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 items-center rounded-lg px-3 py-2 text-xs" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
             <div className="min-w-0"><strong>{profile.symbol}</strong> · <span style={{ color: T.dim }}>{profile.name || profile.assetClass || 'Custom'}</span><div style={{ ...mono, color: T.faint }}>tick {profile.tickSize} = {fmtProfileMoney(profile.tickValue)} · step {profile.quantityStep}</div></div>

@@ -270,11 +270,26 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
   }, [f.entryTime, f.exitTime])
   const exactFillProfile = useMemo(() => selectInstrumentProfile(profiles, f.symbol), [profiles, f.symbol])
   const genericStockProfile = useMemo(() => profiles.find((profile) => String(profile.symbol).toUpperCase() === 'STOCK') || null, [profiles])
-  const fillProfileOptions = useMemo(() => exactFillProfile ? [exactFillProfile] : (genericStockProfile ? [genericStockProfile] : []), [exactFillProfile, genericStockProfile])
+  // Offer every configured profile — the symbol's own match first, generic stock last.
+  // A mismatched pick is allowed but warned about below: the wrong tick economics
+  // silently rescale fill P&L (ES on an MNQ trade reads 25x off).
+  const fillProfileOptions = useMemo(() => {
+    const rank = (profile) => {
+      if (exactFillProfile && String(profile.id) === String(exactFillProfile.id)) return 0
+      return String(profile.symbol || '').toUpperCase() === 'STOCK' ? 2 : 1
+    }
+    return [...(Array.isArray(profiles) ? profiles : [])]
+      .sort((a, b) => rank(a) - rank(b) || String(a.symbol || '').localeCompare(String(b.symbol || '')))
+  }, [profiles, exactFillProfile])
   const fillProfile = useMemo(() => selectInstrumentProfile(profiles, f.symbol, fillProfileId), [profiles, f.symbol, fillProfileId])
+  const fillProfileMismatch = useMemo(() => {
+    if (!fillProfile || !String(f.symbol || '').trim()) return false
+    if (exactFillProfile && String(fillProfile.id) === String(exactFillProfile.id)) return false
+    return String(fillProfile.symbol || '').toUpperCase() !== 'STOCK'
+  }, [fillProfile, exactFillProfile, f.symbol])
   const fillPreview = useMemo(() => {
     if (!fillsEnabled) return null
-    if (!fillProfile) return { valid: false, error: `No instrument profile is selected for ${f.symbol || 'this symbol'}. Add an exact profile in Settings, or explicitly select Generic stock for a non-futures symbol.` }
+    if (!fillProfile) return { valid: false, error: `Choose an instrument profile above for ${f.symbol || 'this symbol'} — its tick size and value drive fill P&L. Add a new one in Settings if it isn't listed.` }
     return averageCostFillPreview(f, fills, fillProfile)
   }, [fillsEnabled, fillProfile, f, fills])
 
@@ -495,9 +510,18 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
                   <label className="block text-xs mb-1" style={{ color: T.dim }}>Instrument profile for fill P&amp;L</label>
                   <select style={inputStyle} className="w-full rounded px-2 py-1.5 text-xs" value={fillProfileId} onChange={(event) => setFillProfileId(event.target.value)}>
                     <option value="">Choose a profile…</option>
-                    {fillProfileOptions.map((profile) => <option key={profile.id} value={profile.id}>{profile.symbol} · {profile.name || profile.assetClass}{profile.symbol === 'STOCK' && !exactFillProfile ? ' (explicit fallback)' : ''}</option>)}
+                    {fillProfileOptions.map((profile) => {
+                      const isExact = exactFillProfile && String(profile.id) === String(exactFillProfile.id)
+                      const isStock = String(profile.symbol || '').toUpperCase() === 'STOCK'
+                      const suffix = isExact ? ' — matches this symbol' : isStock ? ' — generic 1× fallback' : ''
+                      return <option key={profile.id} value={profile.id}>{`${profile.symbol} · ${profile.name || profile.assetClass}${suffix}`}</option>
+                    })}
                   </select>
-                  {!exactFillProfile && genericStockProfile && <div className="text-[10px] mt-1" style={{ color: T.faint }}>Generic stock is an explicit 1× fallback for non-futures symbols. Futures require an exact profile.</div>}
+                  {fillProfileMismatch ? (
+                    <div className="text-[10px] mt-1" style={{ color: T.down }}>{fillProfile.symbol} tick economics don’t match {f.symbol}. Fill P&amp;L will use {fillProfile.symbol}’s tick value — pick this symbol’s profile unless you mean this.</div>
+                  ) : !exactFillProfile && genericStockProfile ? (
+                    <div className="text-[10px] mt-1" style={{ color: T.faint }}>No profile matches {f.symbol || 'this symbol'}. Generic stock is an explicit 1× fallback; futures need their own profile for correct P&amp;L.</div>
+                  ) : null}
                 </div>
                 {fills.map((fill, index) => (
                   <div key={fill.id || index} className="rounded-lg p-2" style={{ background: T.surface, border: `1px solid ${T.line}` }}>

@@ -1,14 +1,21 @@
 // Bundled patch notes — shown in the "What's new" modal after an update.
 // Add an entry here with every release so users always see real notes.
-export const RELEASE_NOTES = {
-  '0.35.0': `• Position sizing — size a plan from your risk budget (futures, stocks, crypto)
+
+// 0.35.1 is a fix-up on 0.35.0, so it deliberately shows the same 0.35 notes
+// rather than announcing itself. Anyone arriving from 0.34.x still gets the
+// full 0.35 feature list either way.
+const V035_NOTES = `• Position sizing — size a plan from your risk budget (futures, stocks, crypto)
 • Multi-fill trades — log scale-ins and partial exits with average-cost P&L
 • Plan scoring — prefill from your playbook, then score how you executed
 • Reviews → commitments — end a review with one measurable focus
 • Saved searches — keep your go-to journal searches one click away
 • Session comparison — put two trading days side by side
 • Similar charts — find look-alike setups, all on your machine
-• Screen recordings — attach a recording to a trade and play it back`,
+• Screen recordings — attach a recording to a trade and play it back`
+
+export const RELEASE_NOTES = {
+  '0.35.1': V035_NOTES,
+  '0.35.0': V035_NOTES,
   '0.34.1': `• Commitment and pre-trade-plan pop-ups now open centered on screen
 • Achievement unlocks now pop in from the side with an animated medal
 • New commitment achievements — Kept My Word, Habit Builder and Ironclad Discipline
