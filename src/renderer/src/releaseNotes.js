@@ -1,7 +1,7 @@
 // Bundled patch notes — shown in the "What's new" modal after an update.
 // Add an entry here with every release so users always see real notes.
 
-// 0.35.1–0.35.3 are fix-ups on 0.35.0, so they deliberately show the same 0.35
+// 0.35.1–0.35.4 are fix-ups on 0.35.0, so they deliberately show the same 0.35
 // notes rather than announcing themselves. Anyone arriving from 0.34.x still gets
 // the full 0.35 feature list either way.
 const V035_NOTES = `• Position sizing — size a plan from your risk budget (futures, stocks, crypto)
@@ -14,6 +14,7 @@ const V035_NOTES = `• Position sizing — size a plan from your risk budget (f
 • Screen recordings — attach a recording to a trade and play it back`
 
 export const RELEASE_NOTES = {
+  '0.35.4': V035_NOTES,
   '0.35.3': V035_NOTES,
   '0.35.2': V035_NOTES,
   '0.35.1': V035_NOTES,
