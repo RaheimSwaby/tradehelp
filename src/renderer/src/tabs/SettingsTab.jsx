@@ -492,7 +492,7 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
         <Field label="Provider">
           <select style={inputStyle} className={inp} value={s.provider || 'ollama'} onChange={set('provider')}>
             <option value="ollama">Ollama (local, offline, free)</option>
-            <option value="cloud">Cloud (OpenAI-compatible, your key)</option>
+            <option value="cloud">OpenAI-compatible — LM Studio, LocalAI, or a cloud key</option>
           </select>
         </Field>
         {(s.provider || 'ollama') === 'ollama' ? (
@@ -508,7 +508,10 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
           <div className="space-y-3 mt-3">
             <Field label="Base URL"><input style={inputStyle} className={inp} value={s.cloudUrl || ''} onChange={set('cloudUrl')} /></Field>
             <Field label="Model"><input style={inputStyle} className={inp} value={s.cloudModel || ''} onChange={set('cloudModel')} /></Field>
-            <Field label="API key (stored locally)"><input type="password" style={inputStyle} className={inp} value={s.cloudKey || ''} onChange={set('cloudKey')} /></Field>
+            <Field label="API key (optional — leave blank for a local server)"><input type="password" style={inputStyle} className={inp} value={s.cloudKey || ''} onChange={set('cloudKey')} /></Field>
+            <p className="text-xs" style={{ color: T.faint }}>
+              Works with any OpenAI-compatible server, local or hosted. Point Base URL at a local runtime and leave the key blank to stay fully offline — e.g. <span style={mono} className="text-xs">http://localhost:1234/v1</span> (LM Studio) or <span style={mono} className="text-xs">http://localhost:8080/v1</span> (LocalAI). A key is only needed for hosted providers like OpenAI.
+            </p>
             <TestKey type="cloud" value={s.cloudKey} url={s.cloudUrl} />
             <label className="flex items-start gap-2 text-sm cursor-pointer" style={{ color: T.text }}>
               <input type="checkbox" className="mt-0.5" checked={(s.cloudJournalAccess ?? 'true') !== 'false'} onChange={(e) => setS((p) => ({ ...p, cloudJournalAccess: String(e.target.checked) }))} />
