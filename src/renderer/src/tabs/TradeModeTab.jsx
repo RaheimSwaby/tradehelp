@@ -79,7 +79,7 @@ export function TradeModeTab({ settings, onSave, rules, live, todayNet, todayCou
             <Field label="Daily goal $"><input style={inputStyle} className={inp} value={g} onChange={(e) => setG(e.target.value)} inputMode="decimal" /></Field>
             <Field label="Max daily loss $"><input style={inputStyle} className={inp} value={ml} onChange={(e) => setMl(e.target.value)} inputMode="decimal" /></Field>
           </div>
-          <p className="text-xs mt-2" style={{ color: T.faint }}>Hit your max loss and Trade Mode stops you and tells you to walk away.</p>
+          <p className="text-xs mt-2" style={{ color: T.faint }}>Cross your max loss and Trade Mode throws a full-screen alarm telling you to walk away. It can't close positions — the call is still yours.</p>
         </Panel>
 
         <div className="flex items-center gap-3">

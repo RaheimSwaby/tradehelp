@@ -48,7 +48,7 @@ export function Onboarding({ settings, accounts = [], onSaveSettings, onImport, 
               {[
                 [Lock, 'Private by design', 'Trades, notes and screenshots live in a local database. Nothing leaves this computer.'],
                 [Gauge, 'Grades your process, not your luck', 'A trader rating built from discipline, risk and patience — plus achievements that reward not tilting.'],
-                [Zap, 'Trade Mode has your back', 'A pre-trade checklist, daily goal, and a max-loss lockout that steps in when it should.']
+                [Zap, 'Trade Mode has your back', 'A pre-trade checklist, daily goal, and a full-screen max-loss alarm when you cross your limit.']
               ].map(([Icon, title, desc]) => (
                 <div key={title} className="flex gap-3 items-start">
                   <Icon size={18} className="mt-0.5 shrink-0" style={{ color: T.accent }} />
@@ -65,7 +65,7 @@ export function Onboarding({ settings, accounts = [], onSaveSettings, onImport, 
           {step === 1 && (
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-sm font-semibold"><ShieldCheck size={16} style={{ color: T.accent }} /> Set your guardrails</div>
-              <div className="text-xs" style={{ color: T.dim }}>These power Trade Mode — the pre-flight checklist you confirm before going live, and the lockout that fires if the day goes wrong. You can change them anytime in Trade Mode.</div>
+              <div className="text-xs" style={{ color: T.dim }}>These power Trade Mode — the pre-flight checklist you confirm before going live, and the max-loss alarm that fires if the day goes wrong. You can change them anytime in Trade Mode.</div>
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Daily profit goal ($)">
                   <input type="number" style={inputStyle} className={inp} value={goal} onChange={(e) => setGoal(e.target.value)} />
