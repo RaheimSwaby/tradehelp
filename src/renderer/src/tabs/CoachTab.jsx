@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { Bot, Sparkles, Send, Search } from 'lucide-react'
 import { T, mono, inputStyle } from '../theme.js'
 import { fmt$, fmtN, streamChat } from '../utils.js'
-import { fullJournalContext } from '../stats.js'
+import { fullJournalContext, computeLeaks } from '../stats.js'
+import { buildCoachPrompts, lastTradingDay, buildDailyReport } from '../coachInsights.js'
 import { Panel } from '../components/Shared.jsx'
 import { EventsPanel } from '../widgets/EventBanner.jsx'
 
@@ -58,11 +59,14 @@ export function Coach({ trades, stats, settings, reviews = {}, playbook = [], da
     setPrice((p) => ({ ...p, loading: false, out: res }))
   }
 
-  const quick = [
-    ['Review my recent trades', 'Review my recent trades. What stands out, good and bad?'],
-    ['Spot my bad habits', 'Based on my data, what behavioural leaks (revenge, FOMO, early exits, overtrading) do you see?'],
-    ['When do I trade best?', 'Looking at my P&L by hour and by setup, when and how do I perform best and worst?']
-  ]
+  // The quick prompts adapt to the journal's current state — a red last session,
+  // the costliest leak, a clean streak, untagged trades — and fall back to evergreen.
+  const leaks = useMemo(() => computeLeaks(trades), [trades])
+  const quick = useMemo(() => {
+    const lastDay = lastTradingDay(trades)
+    const dailyReport = lastDay ? buildDailyReport(trades, lastDay) : null
+    return buildCoachPrompts({ trades, stats, leaks, dailyReport, dayLogs, payouts })
+  }, [trades, stats, leaks, dayLogs, payouts])
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-4">

@@ -1,5 +1,5 @@
 import { executionGrade, letterFor } from './stats.js'
-import { TILT } from './utils.js'
+import { TILT, fmt$ } from './utils.js'
 
 const pct = (n) => `${Math.round(Number(n) || 0)}%`
 
@@ -108,6 +108,69 @@ export function buildDailyReport(trades = [], date) {
   else tip = 'Review each trade against your written plan and grade the execution.'
 
   return { date, rows, net, wins, losses, winRate, tiltEmotions, tip }
+}
+
+// Evergreen anchors — always valid, used to backfill so there are always a few prompts.
+const EVERGREEN_PROMPTS = [
+  ['Review my recent trades', 'Review my recent trades. What stands out, good and bad?'],
+  ['Spot my bad habits', 'Based on my data, what behavioural leaks (revenge, FOMO, early exits, overtrading) do you see?'],
+  ['When do I trade best?', 'Looking at my P&L by hour and by setup, when and how do I perform best and worst?']
+]
+
+// Adaptive coach quick-prompts: surface the questions that fit the trader's CURRENT
+// journal state (a red last session, a costly leak, a clean streak, untagged trades…),
+// then backfill with the evergreen anchors so the menu is never empty.
+export function buildCoachPrompts({ trades = [], stats = {}, leaks = null, dailyReport = null, dayLogs = [], payouts = [] } = {}, max = 4) {
+  const list = Array.isArray(trades) ? trades : []
+  const n = stats.n || list.length || 0
+  const prompts = []
+  const seen = new Set()
+  const add = (label, question) => { if (label && question && !seen.has(label)) { seen.add(label); prompts.push([label, question]) } }
+
+  // Nothing logged yet — point at getting started, not analysis they can't get.
+  if (n === 0) {
+    add('How should I journal?', "I'm just starting out. What should I record on each trade so you can coach me well?")
+    add('What can you help with?', 'What can you help me with as a trading coach, and what data do you need from me?')
+    return prompts.slice(0, max)
+  }
+
+  // Recent red session → bounce-back (most timely).
+  if (dailyReport && Number(dailyReport.net) < 0) {
+    const emo = dailyReport.tiltEmotions?.length ? ` I tagged ${dailyReport.tiltEmotions.join(' / ')}.` : ''
+    add('Bounce back from my last session', `My last session (${dailyReport.date}) closed down ${fmt$(dailyReport.net)}.${emo} What went wrong and how do I come back clean?`)
+  }
+
+  // Costliest behavioural leak, with its real dollar figure. Labels vary in grammar
+  // ("Oversizing", "Revenge trades", "Moving your stop"), so frame it as "my worst leak
+  // is X" rather than appending "trades" — which doubled up on labels already ending in it.
+  if (leaks?.worst && Number(leaks.worst.pnl) < 0 && Number(leaks.worst.n) >= 2) {
+    const leak = String(leaks.worst.label).toLowerCase()
+    add(`How do I fix ${leak}?`, `My worst leak right now is ${leak} — it's cost me ${fmt$(leaks.worst.pnl)} across ${leaks.worst.n} trades. Why do I keep doing it, and how do I stop?`)
+  }
+
+  // On a clean streak → protect it.
+  if (Number(stats.nonTiltStreak) >= 6) {
+    add('What am I doing right?', `I'm on a ${stats.nonTiltStreak}-trade streak with no FOMO, greed or revenge. What's working, and how do I protect it?`)
+  }
+
+  // Lots of untagged trades → get more out of the journal.
+  const untagged = list.filter((t) => !String(t.emotion || '').trim() && !String(t.setup || '').trim()).length
+  if (n >= 6 && untagged / n >= 0.4) {
+    add('Get more from my journal', `About ${Math.round((untagged / n) * 100)}% of my trades have no emotion or setup tagged. What should I start recording so you can read my patterns?`)
+  }
+
+  // Prop payouts logged → protect consistency.
+  if ((payouts?.length || 0) >= 1) {
+    add('Keep my prop accounts consistent', "I've taken prop payouts. Based on my trades, what threatens my consistency and what should I protect?")
+  }
+
+  // No-trade discipline logged → reinforce it.
+  if ((dayLogs?.length || 0) >= 3) {
+    add('Am I sitting out the right days?', "I've logged no-trade days. Looking at when I sit out versus when I trade, is my discipline helping or am I missing good days?")
+  }
+
+  for (const [label, q] of EVERGREEN_PROMPTS) { if (prompts.length >= max) break; add(label, q) }
+  return prompts.slice(0, max)
 }
 
 export function dailyReportAiPayload(report) {
