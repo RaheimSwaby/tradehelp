@@ -35,18 +35,21 @@ export function AnimatedValue({ value, className = '', style }) {
   const parts = useMemo(() => numberDisplayParts(value), [value])
   const target = parts?.value ?? null
   const [current, setCurrent] = useState(target ?? 0)
+  const [animating, setAnimating] = useState(false)
   const previous = useRef(null)
 
   useEffect(() => {
     if (target == null || prefersReducedMotion()) {
       previous.current = target
+      setAnimating(false)
       if (target != null) setCurrent(target)
       return
     }
     const start = previous.current == null ? 0 : previous.current
     const delta = target - start
     previous.current = target
-    if (Math.abs(delta) < 0.001) { setCurrent(target); return }
+    if (Math.abs(delta) < 0.001) { setAnimating(false); setCurrent(target); return }
+    setAnimating(true)
     let frame = 0
     const startAt = performance.now()
     const step = (now) => {
@@ -54,14 +57,15 @@ export function AnimatedValue({ value, className = '', style }) {
       const eased = 1 - Math.pow(1 - p, 3)
       setCurrent(start + delta * eased)
       if (p < 1) frame = requestAnimationFrame(step)
-      else setCurrent(target)
+      else { setCurrent(target); setAnimating(false) }
     }
     frame = requestAnimationFrame(step)
     return () => cancelAnimationFrame(frame)
   }, [target])
 
   if (!parts) return <span key={String(value)} className={`th-val ${className}`.trim()} style={style}>{value}</span>
-  return <span className={`th-count ${className}`.trim()} style={style}>{formatAnimatedNumber(current, parts)}</span>
+  const display = formatAnimatedNumber(current, parts)
+  return <span className={`th-count${animating ? ' th-counting' : ''} ${className}`.trim()} data-value={display} style={style}>{display}</span>
 }
 
 // Tiny inline sparkline for stat cards — normalizes the series into a 100×28 box.

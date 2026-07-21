@@ -16,7 +16,7 @@ export function Check({ on, label, onClick }) {
   )
 }
 
-export function TradeModeTab({ settings, onSave, rules, live, todayNet, todayCount, weekNet, goal, maxLoss, onStart, onEnd, plans = [], trades = [], accounts = [], playbook = [], profiles = [], planPrefill, onConsumePlanPrefill, commitment, onAddPlan, onUpdatePlan, onDeletePlan }) {
+export function TradeModeTab({ settings, onSave, rules, live, arming = false, todayNet, todayCount, weekNet, goal, maxLoss, onStart, onEnd, plans = [], trades = [], accounts = [], playbook = [], profiles = [], planPrefill, onConsumePlanPrefill, commitment, onAddPlan, onUpdatePlan, onDeletePlan }) {
   const [list, setList] = useState(rules)
   const [g, setG] = useState(String(goal || ''))
   const [ml, setMl] = useState(String(maxLoss || ''))
@@ -110,7 +110,7 @@ export function TradeModeTab({ settings, onSave, rules, live, todayNet, todayCou
                 <Stat label="Today" value={fmt$(todayNet)} tone={todayNet >= 0 ? 'up' : 'down'} sub={`${todayCount} trades`} />
                 <Stat label="This week" value={fmt$(weekNet)} tone={weekNet >= 0 ? 'up' : 'down'} />
               </div>
-              <button type="button" onClick={onStart} className="w-full rounded-md py-2.5 text-sm font-semibold flex items-center justify-center gap-2" style={{ background: T.accent, color: '#1A1306' }}>
+              <button type="button" onClick={onStart} disabled={arming} aria-busy={arming} className={`th-go-trigger w-full rounded-md py-2.5 text-sm font-semibold flex items-center justify-center gap-2${arming ? ' th-go-trigger-on' : ''}`} style={{ background: T.accent, color: '#1A1306' }}>
                 <Play size={16} /> Start trading day
               </button>
               <p className="text-xs" style={{ color: T.faint }}>Runs your pre-flight checklist, then flips the app into a focused "go time" mode.</p>
@@ -122,7 +122,7 @@ export function TradeModeTab({ settings, onSave, rules, live, todayNet, todayCou
   )
 }
 
-export function Preflight({ rules, checks, setChecks, snapshot, goal, maxLoss, imminent, now, commitment, onCancel, onGoLive }) {
+export function Preflight({ rules, checks, setChecks, snapshot, goal, maxLoss, imminent, now, commitment, launching = false, onCancel, onGoLive }) {
   const toggle = (i) => setChecks((c) => ({ ...c, [i]: !c[i] }))
   const unchecked = rules.reduce((n, _, i) => n + (checks[i] ? 0 : 1), 0)
   const dateLabel = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })
@@ -171,9 +171,9 @@ export function Preflight({ rules, checks, setChecks, snapshot, goal, maxLoss, i
           </div>
         </div>
         <div className="px-5 py-4 flex items-center justify-end gap-2" style={{ borderTop: `1px solid ${T.line}` }}>
-          <button type="button" onClick={onCancel} className="rounded-md px-3 py-2 text-sm" style={{ background: T.surface2, color: T.text, border: `1px solid ${T.line}` }}>Cancel</button>
-          <button type="button" onClick={onGoLive} className="rounded-md px-4 py-2 text-sm font-semibold flex items-center gap-1.5" style={{ background: T.accent, color: '#1A1306' }}>
-            <Zap size={15} /> Go live{unchecked > 0 ? ` (${unchecked} unchecked)` : ''}
+          <button type="button" onClick={onCancel} disabled={launching} className="rounded-md px-3 py-2 text-sm" style={{ background: T.surface2, color: T.text, border: `1px solid ${T.line}` }}>Cancel</button>
+          <button type="button" onClick={onGoLive} disabled={launching} aria-busy={launching} className={`th-go-trigger rounded-md px-4 py-2 text-sm font-semibold flex items-center gap-1.5${launching ? ' th-go-trigger-on' : ''}`} style={{ background: T.accent, color: '#1A1306' }}>
+            <Zap size={15} /> {launching ? 'Locking in…' : `Go live${unchecked > 0 ? ` (${unchecked} unchecked)` : ''}`}
           </button>
         </div>
       </div>

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react'
-import { Share2, GitCompareArrows, Quote } from 'lucide-react'
+import { Share2, GitCompareArrows, Quote, Flame, CalendarDays, Snowflake, TrendingDown } from 'lucide-react'
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, ReferenceLine, Tooltip, Cell } from 'recharts'
 import { T, mono, withAlpha } from '../theme.js'
 import { fmt$, fmtN } from '../utils.js'
@@ -75,112 +75,121 @@ function HeatMap({ stats }) {
   const [hovered, setHovered] = useState(null)
   const { byHourDay = {}, bestHour, worstHour, bestDay, worstDay } = stats
 
-  const allHours = Object.keys(byHourDay).map((k) => parseInt(k.split('-')[1], 10))
+  const allHours = Object.keys(byHourDay).map((key) => parseInt(key.split('-')[1], 10))
   const minH = allHours.length ? Math.min(...allHours) : 9
   const maxH = allHours.length ? Math.max(...allHours) : 16
-  const hours = Array.from({ length: maxH - minH + 1 }, (_, i) => String(minH + i).padStart(2, '0'))
-  const activeDays = HMAP_DAYS.filter((d) => hours.some((h) => byHourDay[`${d}-${h}`]))
+  const hours = Array.from({ length: maxH - minH + 1 }, (_, index) => String(minH + index).padStart(2, '0'))
+  const activeDays = HMAP_DAYS.filter((day) => hours.some((hour) => byHourDay[`${day}-${hour}`]))
   const days = activeDays.length ? activeDays : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
-
-  const fmt12 = (h) => { const n = parseInt(h, 10); return n === 0 ? '12am' : n < 12 ? `${n}am` : n === 12 ? '12pm' : `${n - 12}pm` }
-
+  const fmt12 = (hour) => { const n = parseInt(hour, 10); return n === 0 ? '12am' : n < 12 ? `${n}am` : n === 12 ? '12pm' : `${n - 12}pm` }
   const hasData = Object.keys(byHourDay).length > 0
+  const summaries = [
+    bestHour && { key: 'best-hour', Icon: Flame, label: 'Best hour', value: `${fmt12(bestHour.k)}-${fmt12(String(parseInt(bestHour.k, 10) + 1).padStart(2, '0'))}`, stat: `${fmtN(bestHour.wr, 0)}% / ${bestHour.total} trades`, color: '#ff6a33', bg: 'rgba(255,69,0,0.12)', border: 'rgba(255,69,0,0.3)' },
+    bestDay && { key: 'best-day', Icon: CalendarDays, label: 'Best day', value: bestDay.k, stat: `${fmtN(bestDay.wr, 0)}% / ${bestDay.total} trades`, color: '#fb923c', bg: 'rgba(255,69,0,0.08)', border: 'rgba(255,69,0,0.25)' },
+    worstHour && { key: 'worst-hour', Icon: Snowflake, label: 'Weakest hour', value: fmt12(worstHour.k), stat: `${fmtN(worstHour.wr, 0)}% / ${worstHour.total} trades`, color: '#93c5fd', bg: 'rgba(30,58,95,0.3)', border: 'rgba(96,165,250,0.2)' },
+    worstDay && { key: 'worst-day', Icon: TrendingDown, label: 'Weakest day', value: worstDay.k, stat: `${fmtN(worstDay.wr, 0)}% / ${worstDay.total} trades`, color: T.down, bg: withAlpha(T.down, 0.08), border: withAlpha(T.down, 0.24) }
+  ].filter(Boolean)
 
   return (
-    <Panel title="Performance heat map">
-      {/* Advisory */}
-      {(bestHour || bestDay) && (
-        <div className="flex flex-wrap gap-2 mb-4 text-xs">
-          {bestHour && (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg" style={{ background: 'rgba(255,69,0,0.12)', border: '1px solid rgba(255,69,0,0.3)', color: '#ff6a33' }}>
-              🔥 Best hour: {fmt12(bestHour.k)}–{fmt12(String(parseInt(bestHour.k, 10) + 1).padStart(2, '0'))} · {fmtN(bestHour.wr, 0)}% WR
+    <Panel title="Performance heat map" right={<span className="text-[10px]" style={{ color: T.faint }}>WIN RATE / SAMPLE</span>}>
+      {summaries.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2 mb-4">
+          {summaries.map(({ key, Icon, label, value, stat, color, bg, border }) => (
+            <div key={key} className="flex items-center gap-2 rounded-lg px-3 py-2 min-w-0" style={{ background: bg, border: `1px solid ${border}` }}>
+              <Icon size={15} style={{ color, flexShrink: 0 }} />
+              <div className="min-w-0">
+                <div className="text-[10px] uppercase" style={{ color: T.faint }}>{label}</div>
+                <div className="text-xs font-semibold truncate" style={{ color }}>{value} <span style={{ color: T.dim, fontWeight: 400 }}>· {stat}</span></div>
+              </div>
             </div>
-          )}
-          {bestDay && (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg" style={{ background: 'rgba(255,69,0,0.08)', border: '1px solid rgba(255,69,0,0.25)', color: '#fb923c' }}>
-              📅 Best day: {bestDay.k} · {fmtN(bestDay.wr, 0)}% WR
-            </div>
-          )}
-          {worstHour && (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg" style={{ background: 'rgba(30,58,95,0.3)', border: '1px solid rgba(96,165,250,0.2)', color: '#93c5fd' }}>
-              ❄️ Worst hour: {fmt12(worstHour.k)} · {fmtN(worstHour.wr, 0)}% WR
-            </div>
-          )}
+          ))}
         </div>
       )}
 
       {!hasData ? (
         <div className="py-8 text-center text-xs" style={{ color: T.faint }}>Log trades with entry times to see your heat map.</div>
       ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ borderCollapse: 'separate', borderSpacing: 4, minWidth: 'max-content' }}>
-            <thead>
-              <tr>
-                <th style={{ width: 36 }} />
-                {hours.map((h) => (
-                  <th key={h} style={{ fontSize: 10, color: T.faint, fontWeight: 400, textAlign: 'center', paddingBottom: 4, minWidth: 40 }}>{fmt12(h)}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {days.map((day) => (
-                <tr key={day}>
-                  <td style={{ fontSize: 11, color: T.dim, paddingRight: 6, textAlign: 'right', whiteSpace: 'nowrap' }}>{day}</td>
-                  {hours.map((h) => {
-                    const cell = byHourDay[`${day}-${h}`]
-                    const total = cell?.total || 0
-                    const wr = total ? (cell.wins / total) * 100 : 0
-                    const c = heatColor(wr, total)
-                    const key = `${day}-${h}`
-                    const isHov = hovered === key
-                    return (
-                      <td key={h} style={{ padding: 0 }}>
-                        <div
-                          onMouseEnter={() => setHovered(key)}
-                          onMouseLeave={() => setHovered(null)}
-                          style={{
-                            width: 40, height: 32, borderRadius: 5,
-                            background: c.bg,
-                            border: `1px solid ${isHov ? T.accent : c.border}`,
-                            boxShadow: isHov ? `0 0 0 1px ${T.accent}` : c.glow,
-                            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                            cursor: total >= 2 ? 'default' : 'default',
-                            transition: 'box-shadow .15s',
-                            position: 'relative'
-                          }}
-                        >
-                          {total >= 2 && (
-                            <span style={{ fontSize: 10, fontWeight: 600, color: c.text, lineHeight: 1 }}>{Math.round(wr)}%</span>
-                          )}
-                          {isHov && total > 0 && (
-                            <div style={{
-                              position: 'absolute', bottom: 'calc(100% + 6px)', left: '50%', transform: 'translateX(-50%)',
-                              background: T.surface2, border: `1px solid ${T.line}`, borderRadius: 6,
-                              padding: '5px 8px', zIndex: 10, whiteSpace: 'nowrap', fontSize: 11, color: T.text,
-                              pointerEvents: 'none'
-                            }}>
-                              <div style={{ color: c.bg === 'transparent' ? T.dim : c.bg, fontWeight: 600 }}>{Math.round(wr)}% win rate</div>
-                              <div style={{ color: T.dim }}>{total} trade{total !== 1 ? 's' : ''} · {fmt$(cell.pnl)}</div>
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                    )
-                  })}
+        <div>
+          <div style={{ overflowX: 'auto', paddingBottom: 4 }}>
+            <table style={{ borderCollapse: 'separate', borderSpacing: 5, minWidth: 'max-content' }}>
+              <thead>
+                <tr>
+                  <th style={{ width: 42 }} />
+                  {hours.map((hour) => (
+                    <th key={hour} scope="col" style={{ fontSize: 11, color: T.dim, fontWeight: 600, textAlign: 'center', paddingBottom: 5, minWidth: 50 }}>{fmt12(hour)}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          {/* Legend */}
-          <div className="flex items-center gap-3 mt-3 text-xs" style={{ color: T.faint }}>
-            <span>Cold</span>
-            {[['#0f1f38', '<40%'], ['#1e3a5f', '40%'], ['#b45309', '50%'], ['#c2410c', '60%'], ['#dc2626', '70%'], ['#ff4500', '80%+']].map(([bg, label]) => (
+              </thead>
+              <tbody>
+                {days.map((day) => (
+                  <tr key={day}>
+                    <th scope="row" style={{ fontSize: 11, color: T.text, fontWeight: 600, paddingRight: 7, textAlign: 'right', whiteSpace: 'nowrap' }}>{day}</th>
+                    {hours.map((hour) => {
+                      const cell = byHourDay[`${day}-${hour}`]
+                      const total = cell?.total || 0
+                      const winRate = total ? (cell.wins / total) * 100 : 0
+                      const colors = heatColor(winRate, total)
+                      const key = `${day}-${hour}`
+                      const isActive = hovered === key
+                      return (
+                        <td key={hour} style={{ padding: 0 }}>
+                          <div
+                            tabIndex={total ? 0 : undefined}
+                            aria-label={total ? `${day} at ${fmt12(hour)}: ${Math.round(winRate)} percent win rate across ${total} trades, ${fmt$(cell.pnl)}` : `${day} at ${fmt12(hour)}: no trades`}
+                            onMouseEnter={() => setHovered(key)}
+                            onMouseLeave={() => setHovered(null)}
+                            onFocus={() => setHovered(key)}
+                            onBlur={() => setHovered(null)}
+                            style={{
+                              width: 50, height: 42, borderRadius: 6,
+                              background: total >= 2 ? colors.bg : T.surface2,
+                              border: `1px solid ${isActive ? T.accent : colors.border}`,
+                              boxShadow: isActive ? `0 0 0 1px ${T.accent}` : colors.glow,
+                              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                              transition: 'box-shadow .15s, border-color .15s',
+                              position: 'relative'
+                            }}
+                          >
+                            {total >= 2 ? (
+                              <>
+                                <span style={{ fontSize: 11, fontWeight: 700, color: colors.text, lineHeight: 1 }}>{Math.round(winRate)}%</span>
+                                <span style={{ fontSize: 9, color: colors.text, opacity: 0.78, lineHeight: 1.3 }}>{total} trades</span>
+                              </>
+                            ) : total === 1 ? (
+                              <><span style={{ fontSize: 10, color: T.dim, lineHeight: 1 }}>1 trade</span><span style={{ fontSize: 8, color: T.faint, lineHeight: 1.4 }}>LOW SAMPLE</span></>
+                            ) : <span style={{ color: T.faint, fontSize: 11 }}>-</span>}
+                            {isActive && total > 0 && (
+                              <div role="tooltip" style={{
+                                position: 'absolute', bottom: 'calc(100% + 7px)', left: '50%', transform: 'translateX(-50%)',
+                                background: T.surface2, border: `1px solid ${T.line}`, borderRadius: 6,
+                                padding: '6px 9px', zIndex: 10, whiteSpace: 'nowrap', fontSize: 11, color: T.text,
+                                boxShadow: '0 8px 20px rgba(0,0,0,.28)', pointerEvents: 'none'
+                              }}>
+                                <div style={{ color: T.text, fontWeight: 600 }}>{Math.round(winRate)}% win rate</div>
+                                <div style={{ color: T.dim }}>{total} trade{total !== 1 ? 's' : ''} · {fmt$(cell.pnl)}</div>
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mt-3 text-[10px]" style={{ color: T.faint }}>
+            <span>Win rate:</span>
+            {[
+              ['#0f1f38', 'Under 38%'], ['#1e3a5f', '38-49%'], ['#b45309', '50-59%'],
+              ['#c2410c', '60-69%'], ['#dc2626', '70-79%'], ['#ff4500', '80%+']
+            ].map(([background, label]) => (
               <span key={label} className="flex items-center gap-1">
-                <span style={{ display: 'inline-block', width: 12, height: 12, borderRadius: 3, background: bg }} />
+                <span style={{ display: 'inline-block', width: 11, height: 11, borderRadius: 3, background }} />
                 {label}
               </span>
             ))}
-            <span>Hot 🔥</span>
+            <span style={{ color: T.dim }}>Percentages require at least 2 trades.</span>
           </div>
         </div>
       )}

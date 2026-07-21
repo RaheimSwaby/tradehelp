@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react'
 import {
   LayoutDashboard, Brain, Target, Settings as SettingsIcon, Gauge, Play,
-  Feather, Landmark, ScrollText, Radar, CalendarClock, AlertTriangle, X
+  Feather, Landmark, ScrollText, Radar, CalendarClock, AlertTriangle, X, Clock3
 } from 'lucide-react'
 import { Whistle, PlayDiagram, CrosshairCandle } from './components/Icons.jsx'
 import { applyTheme, T, mono } from './theme.js'
@@ -35,19 +35,57 @@ import { FeedbackPrompt } from './components/FeedbackPrompt.jsx'
 import { EasterEggNudge } from './components/EasterEggNudge.jsx'
 import { buildEasterEggNudges, lastTradingDay } from './coachInsights.js'
 import { dHashDataUrl, IMAGE_FINGERPRINT_VERSION } from './workflow.js'
+import { personalTradingClock } from './sessionClock.js'
 
 /* ───────── logo mark: three ascending candles, tracks the live theme ───────── */
-function LogoMark({ size = 22 }) {
+function LogoMark({ size = 22, ignite = false, live = false }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" className={`${ignite ? 'th-logo-ignite' : ''}${live ? ' th-logo-live' : ''}`}>
       <rect x="1" y="1" width="22" height="22" rx="6" fill={T.accentSoft} stroke={T.accent} strokeOpacity="0.35" />
-      <line x1="6" y1="10" x2="6" y2="20" stroke={T.down} strokeWidth="1.2" />
-      <rect x="4.6" y="12" width="2.8" height="5" rx="0.8" fill={T.down} />
-      <line x1="12" y1="6" x2="12" y2="17" stroke={T.accent} strokeWidth="1.2" />
-      <rect x="10.6" y="8" width="2.8" height="6" rx="0.8" fill={T.accent} />
-      <line x1="18" y1="3" x2="18" y2="13" stroke={T.up} strokeWidth="1.2" />
-      <rect x="16.6" y="4.5" width="2.8" height="6" rx="0.8" fill={T.up} />
+      <g className="th-logo-candle th-logo-candle-1">
+        <line x1="6" y1="10" x2="6" y2="20" stroke={T.down} strokeWidth="1.2" />
+        <rect x="4.6" y="12" width="2.8" height="5" rx="0.8" fill={T.down} />
+      </g>
+      <g className="th-logo-candle th-logo-candle-2">
+        <line x1="12" y1="6" x2="12" y2="17" stroke={T.accent} strokeWidth="1.2" />
+        <rect x="10.6" y="8" width="2.8" height="6" rx="0.8" fill={T.accent} />
+      </g>
+      <g className="th-logo-candle th-logo-candle-3">
+        <line x1="18" y1="3" x2="18" y2="13" stroke={T.up} strokeWidth="1.2" />
+        <rect x="16.6" y="4.5" width="2.8" height="6" rx="0.8" fill={T.up} />
+      </g>
     </svg>
+  )
+}
+
+function PersonalClockReadout({ clock }) {
+  if (!clock) return null
+  return (
+    <div className="flex items-center gap-1.5" title={`Your usual session: ${clock.windowLabel}, inferred from ${clock.sampleDays} trading days`}>
+      <Clock3 size={13} style={{ color: clock.phase === 'off' ? T.faint : T.accent }} />
+      <span style={{ color: T.faint }}>CLOCK</span>
+      <span style={{ color: T.text }}>{clock.timeLabel}</span>
+      <span style={{ color: clock.phase === 'off' ? T.faint : T.accent }}>{clock.phaseShort}</span>
+    </div>
+  )
+}
+
+function SessionAmbience({ clock }) {
+  if (!clock || clock.phase === 'off') return null
+  return <div className={`th-session-ambience th-session-${clock.phase}`} aria-hidden="true" />
+}
+
+function GoTimeTransition() {
+  return (
+    <div className="th-go-mode-transition fixed inset-0 z-[70] pointer-events-none" aria-hidden="true">
+      <div className="th-go-curtain" />
+      <div className="th-go-lock">
+        <span className="th-go-lock-icon"><LogoMark size={58} ignite /></span>
+        <strong>TRADE MODE</strong>
+        <span>FOCUS LOCKED</span>
+      </div>
+      <div className="th-go-scan" />
+    </div>
   )
 }
 
@@ -63,6 +101,7 @@ export default function App() {
   const [notesView, setNotesView] = useState(null)
   const [tradeMode, setTradeMode] = useState(false)
   const [preflight, setPreflight] = useState(false)
+  const [goTransition, setGoTransition] = useState(null)
   const [checks, setChecks] = useState({})
   const [lockoutDismissed, setLockoutDismissed] = useState(false)
   const [events, setEvents] = useState([])
@@ -92,6 +131,9 @@ export default function App() {
   const [planPrefill, setPlanPrefill] = useState(null)
   const [workflowMsg, setWorkflowMsg] = useState(null)
   const [customBg, setCustomBg] = useState('')
+  const goTimerRef = useRef(null)
+
+  useEffect(() => () => clearTimeout(goTimerRef.current), [])
 
   const hasApi = typeof window !== 'undefined' && window.api
   const reportDay = useMemo(() => {
@@ -351,10 +393,30 @@ export default function App() {
   const dailyGoal = parseFloat(settings?.dailyGoal) || 0
   const maxLoss = parseFloat(settings?.maxDailyLoss) || 0
   const lossHit = maxLoss > 0 && todayNet <= -maxLoss
+  const sessionClock = useMemo(() => personalTradingClock(trades, new Date(now)), [trades, now])
 
-  function startDay() { setChecks({}); setLockoutDismissed(false); setPreflight(true) }
-  function goLive() { setPreflight(false); setTradeMode(true) }
-  function endSession() { setTradeMode(false); setPreflight(false); setChecks({}); setLockoutDismissed(false) }
+  function clearGoTimer() { clearTimeout(goTimerRef.current); goTimerRef.current = null }
+  function startDay() {
+    if (goTransition) return
+    clearGoTimer()
+    setChecks({})
+    setLockoutDismissed(false)
+    setGoTransition('arming')
+    goTimerRef.current = setTimeout(() => { setGoTransition(null); setPreflight(true) }, 280)
+  }
+  function cancelPreflight() { clearGoTimer(); setGoTransition(null); setPreflight(false) }
+  function goLive() {
+    if (goTransition === 'launching') return
+    clearGoTimer()
+    setGoTransition('launching')
+    goTimerRef.current = setTimeout(() => {
+      setPreflight(false)
+      setTradeMode(true)
+      setGoTransition('live')
+      goTimerRef.current = setTimeout(() => setGoTransition(null), 620)
+    }, 150)
+  }
+  function endSession() { clearGoTimer(); setGoTransition(null); setTradeMode(false); setPreflight(false); setChecks({}); setLockoutDismissed(false) }
 
   // ── economic-calendar alerts ──
   const eventsEnabled = (settings?.eventsEnabled ?? 'true') !== 'false'
@@ -415,6 +477,7 @@ export default function App() {
   useEffect(() => {
     document.documentElement.style.setProperty('--th-accent', T.accent)
     document.documentElement.style.setProperty('--th-line', T.line)
+    document.documentElement.dataset.themePreset = settings?.themePreset || 'classic'
     document.body.style.background = T.bg
   }, [
     tradeMode,
@@ -460,6 +523,7 @@ export default function App() {
       {/* bg lives on <body> (synced above) so the z:-1 particle canvas shows through */}
       <CustomBackground dataUrl={customBg} settings={settings} />
       <Backdrop variant={!settings?.backdrop || settings.backdrop === 'on' ? 'constellation' : settings.backdrop} />
+      <SessionAmbience clock={sessionClock} />
       <Ticker settings={settings} />
       {updateAvail && <UpdateAvailableBanner info={updateAvail} onClose={() => setUpdateAvail(null)} />}
       {GATE_CONFIGURED && license?.state === 'trial' && <TrialBanner days={license.daysLeft} />}
@@ -468,7 +532,7 @@ export default function App() {
       <div className="max-w-6xl mx-auto px-4 py-5">
         <header className="flex flex-wrap items-center justify-between gap-3 pb-4 mb-4" style={{ borderBottom: `1px solid ${T.line}` }}>
           <div className="flex items-center gap-2">
-            <LogoMark />
+            <LogoMark live={tradeMode} />
             <span className="text-lg font-semibold tracking-tight" style={{ color: T.text }}>
               Trade<span style={{ color: T.accent }}>Help</span>
             </span>
@@ -480,8 +544,9 @@ export default function App() {
             <Readout label="PF" value={stats.profitFactor === Infinity ? '∞' : fmtN(stats.profitFactor, 2)} />
             <Readout label="STREAK" value={String(stats.currentStreak)} tone={String(stats.currentStreak).endsWith('W') ? 'up' : String(stats.currentStreak).endsWith('L') ? 'down' : 'none'} />
             {stats.n > 0 && <Readout label="CALM" value={String(stats.nonTiltStreak)} tone="up" />}
+            <PersonalClockReadout clock={sessionClock} />
             {!tradeMode && (
-              <button type="button" onClick={startDay} className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-semibold" style={{ background: T.accent, color: '#1A1306' }}>
+              <button type="button" onClick={startDay} disabled={goTransition === 'arming'} aria-busy={goTransition === 'arming'} className={`th-go-trigger flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-semibold${goTransition === 'arming' ? ' th-go-trigger-on' : ''}`} style={{ background: T.accent, color: '#1A1306' }}>
                 <Play size={14} /> Start day
               </button>
             )}
@@ -515,9 +580,9 @@ export default function App() {
         ) : GATE_CONFIGURED && license?.state === 'expired' ? (
           <Paywall onActivated={refreshLicense} />
         ) : (
-          <div key={tab} className="th-fade">
+          <div key={tab} className="th-cinematic">
             {tab === 'journal' && <Journal trades={trades} onAdd={addTrade} onUpdate={updateTrade} onRemove={removeTrade} onNotes={setNotesView} onImport={importTrades} accounts={propFirmAccounts} profiles={instrumentProfiles} savedSearches={savedSearches} onAddSavedSearch={addSavedSearch} onUpdateSavedSearch={updateSavedSearch} onDeleteSavedSearch={deleteSavedSearch} onRefreshSavedSearches={refreshSavedSearches} settings={settings} onSaveSettings={saveSettings} dayLogs={dayLogs} onAddDayLog={addDayLog} onDeleteDayLog={deleteDayLog} />}
-            {tab === 'trade' && <TradeModeTab settings={settings} onSave={saveSettings} rules={rules} live={tradeMode} todayNet={todayNet} todayCount={todayTrades.length} weekNet={weekNet} goal={dailyGoal} maxLoss={maxLoss} onStart={startDay} onEnd={endSession} plans={tradePlans} trades={trades} accounts={propFirmAccounts} playbook={playbook} profiles={instrumentProfiles} planPrefill={planPrefill} onConsumePlanPrefill={() => setPlanPrefill(null)} commitment={activeCommitment} onAddPlan={addTradePlan} onUpdatePlan={updateTradePlan} onDeletePlan={deleteTradePlan} />}
+            {tab === 'trade' && <TradeModeTab settings={settings} onSave={saveSettings} rules={rules} live={tradeMode} arming={goTransition === 'arming'} todayNet={todayNet} todayCount={todayTrades.length} weekNet={weekNet} goal={dailyGoal} maxLoss={maxLoss} onStart={startDay} onEnd={endSession} plans={tradePlans} trades={trades} accounts={propFirmAccounts} playbook={playbook} profiles={instrumentProfiles} planPrefill={planPrefill} onConsumePlanPrefill={() => setPlanPrefill(null)} commitment={activeCommitment} onAddPlan={addTradePlan} onUpdatePlan={updateTradePlan} onDeletePlan={deleteTradePlan} />}
             {tab === 'propfirm' && <PropFirm trades={trades} accounts={propFirmAccounts} onSave={savePropFirmAccounts} settings={settings} onSaveSettings={saveSettings} payouts={payouts} onAddPayout={addPayout} onDeletePayout={deletePayout} />}
             {tab === 'dashboard' && <Dashboard stats={stats} trades={trades} accounts={propFirmAccounts} settings={settings} journalData={{ reviews, playbook, dayLogs, goals }} payouts={payouts} plans={tradePlans} commitments={commitments} onAddCommitment={addCommitment} onUpdateCommitment={updateCommitment} onDeleteCommitment={deleteCommitment} onSaveSettings={saveSettings} onOpenCoach={() => setTab('coach')} onOpenTrade={setNotesView} />}
             {tab === 'psych' && <Psychology stats={stats} />}
@@ -537,8 +602,9 @@ export default function App() {
         <Preflight rules={rules} checks={checks} setChecks={setChecks}
           snapshot={{ todayNet, todayCount: todayTrades.length, weekNet }}
           goal={dailyGoal} maxLoss={maxLoss} imminent={imminentEvent} now={now} commitment={activeCommitment}
-          onCancel={() => setPreflight(false)} onGoLive={goLive} />
+          launching={goTransition === 'launching'} onCancel={cancelPreflight} onGoLive={goLive} />
       )}
+      {goTransition === 'live' && <GoTimeTransition />}
       {tradeMode && lossHit && !lockoutDismissed && (
         <Lockout net={todayNet} maxLoss={maxLoss} onEnd={endSession} onDismiss={() => setLockoutDismissed(true)} />
       )}
