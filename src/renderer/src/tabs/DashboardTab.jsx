@@ -1,11 +1,12 @@
 import React, { useState, useMemo } from 'react'
-import { Share2, GitCompareArrows } from 'lucide-react'
+import { Share2, GitCompareArrows, Quote } from 'lucide-react'
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, ReferenceLine, Tooltip, Cell } from 'recharts'
 import { T, mono, withAlpha } from '../theme.js'
 import { fmt$, fmtN } from '../utils.js'
 import { computeStats, computeLeaks } from '../stats.js'
 import { Stat, Panel, EmptyChart } from '../components/Shared.jsx'
 import { PnlCalendar } from './JournalTab.jsx'
+import { quoteOfTheDay } from '../quotes.js'
 import { CoachBriefCard } from '../components/CoachBriefCard.jsx'
 import { CoachCommitmentCard } from '../components/CoachCommitmentCard.jsx'
 import { ShareReportModal } from '../components/ShareReportModal.jsx'
@@ -221,9 +222,17 @@ export function Dashboard({ stats, trades, accounts = [], settings, journalData,
   // Reuse the precomputed combined stats for "all"; only recompute for a filtered view.
   const vStats = useMemo(() => (view === 'all' || !hasProp ? stats : computeStats(viewTrades)), [view, hasProp, stats, viewTrades])
   const empty = vStats.n === 0
+  const dailyQuote = quoteOfTheDay()
 
   return (
     <div className="space-y-4">
+      <div className="rounded-xl px-4 py-2.5 flex items-start gap-2.5" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
+        <Quote size={14} style={{ color: T.accent, flexShrink: 0, marginTop: 3 }} />
+        <div className="min-w-0 leading-snug">
+          <span className="text-sm" style={{ color: T.dim }}>{dailyQuote.text}</span>
+          <span className="text-xs ml-1.5 whitespace-nowrap" style={{ color: T.faint }}>— {dailyQuote.author}</span>
+        </div>
+      </div>
       <CoachBriefCard trades={viewTrades} stats={vStats} settings={settings} journalData={journalData} onSaveSettings={onSaveSettings} onOpenCoach={onOpenCoach} />
       <CoachCommitmentCard commitments={viewCommitments} trades={viewTrades} scopeLabel={view === 'prop' ? 'Prop view' : view === 'live' ? 'Live view' : ''} onAdd={onAddCommitment} onUpdate={onUpdateCommitment} onDelete={onDeleteCommitment} onOpenCoach={onOpenCoach} />
       <div className="flex flex-wrap items-center justify-between gap-3">
