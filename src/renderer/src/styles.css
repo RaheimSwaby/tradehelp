@@ -144,6 +144,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 
 /* stat values: subtle slide-up when the number changes (span is keyed by value) */
 .th-val { display: inline-block; animation: th-val .3s ease both; }
+.th-count { display: inline-block; min-width: 1ch; font-variant-numeric: tabular-nums; }
 @keyframes th-val {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: none; }
