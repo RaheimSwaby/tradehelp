@@ -22,6 +22,7 @@ const V036_NOTES = `- Cosmetic Refresh - each theme preset now has its own restr
 - Dashboard quotes rotate daily and AI Coach quick prompts adapt to your journal`
 
 export const RELEASE_NOTES = {
+  '0.37.1': `- Screenshot selection now opens once and can attach before + after charts together`,
   '0.37.0': `- Local Import Inbox watches broker export folders while TradeHelp is open
 - New CSV files can be reviewed from Journal or auto-imported from trusted folders
 - Saved broker, account, and timezone mappings keep repeat imports consistent

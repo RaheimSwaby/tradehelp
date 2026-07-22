@@ -588,16 +588,16 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
         </div>
         <div className="mt-3">
           <Field label={editing ? 'Add screenshots' : 'Screenshots — before / after'}>
-            <div
+            <button type="button"
               onClick={() => fileRef.current?.click()}
               onDrop={(e) => { e.preventDefault(); addImageFiles([...(e.dataTransfer?.files || [])]) }}
               onDragOver={(e) => e.preventDefault()}
-              className="rounded px-3 py-3 text-center cursor-pointer"
+              className="w-full rounded px-3 py-3 text-center cursor-pointer"
               style={{ background: T.surface2, border: `1px dashed ${T.line}` }}>
               <ImagePlus size={18} style={{ color: T.accent, display: 'inline', verticalAlign: 'middle' }} />
-              <span className="text-xs ml-2" style={{ color: T.dim }}>Paste a chart (Ctrl+V), drop an image, or click to choose</span>
-              <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { addImageFiles([...e.target.files]); e.target.value = '' }} />
-            </div>
+              <span className="text-xs ml-2" style={{ color: T.dim }}>Choose before + after together, paste (Ctrl+V), or drop images</span>
+            </button>
+            <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { addImageFiles([...(e.target.files || [])]); e.target.value = '' }} />
           </Field>
           {images.length > 0 && (
             <div className="grid grid-cols-2 gap-2 mt-2">
