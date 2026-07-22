@@ -22,6 +22,13 @@ const V036_NOTES = `- Cosmetic Refresh - each theme preset now has its own restr
 - Dashboard quotes rotate daily and AI Coach quick prompts adapt to your journal`
 
 export const RELEASE_NOTES = {
+  '0.39.0': `- Adaptive timing intelligence now focuses on recent trading history and detects schedule shifts
+- Personal trading clock can be inferred automatically or set to custom split and overnight windows
+- CSV imports can convert broker timestamps from a selected source timezone
+- Dashboard timing charts now support drilldowns, confidence context, and realized R comparisons
+- Reviews capture structured goal and process outcomes with commitment evidence
+- AI Coach adds supportive, balanced, and tough-love delivery while preserving journal privacy controls
+- Floating notices are prioritized so risk and update messages are not covered`,
   '0.38.0': `- Timing analytics now use actual entry times instead of journal timestamps
 - Personal trading clock supports recurring split sessions and overnight trading windows
 - Dashboard timing charts show sample-adjusted hourly win rate and weekday P&L

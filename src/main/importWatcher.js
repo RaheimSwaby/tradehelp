@@ -20,7 +20,8 @@ export function createImportWatcher(db, onChange = () => {}) {
     try {
       const text = readInboxFile(db, item.id).text
       const prepared = prepareCsvImport(text, {
-        existing: db.listTrades(), brokerKey: source.brokerKey, account: source.account
+        existing: db.listTrades(), brokerKey: source.brokerKey, account: source.account,
+        timezone: source.timezone
       })
       if (!prepared.detected || (source.brokerKey && prepared.detected.key !== source.brokerKey)) return false
       const rows = prepared.built.filter((trade) => !trade.dupe).map(({ dupe, ...trade }) => trade)

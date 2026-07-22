@@ -5,6 +5,40 @@ import { Panel, Field } from '../components/Shared.jsx'
 import { BACKDROP_OPTIONS } from '../components/Backdrop.jsx'
 import { Instagram, MessagesSquare, Plus, Pencil, Trash2, X } from 'lucide-react'
 
+const COACH_VOICE_VALUES = new Set(['supportive', 'balanced', 'tough-love'])
+const PERSONAL_CLOCK_SOURCES = new Set(['auto', 'manual'])
+const CLOCK_TIME = /^(?:[01]\d|2[0-3]):[0-5]\d$/
+
+export function parsePersonalClockWindows(value) {
+  let parsed
+  try { parsed = Array.isArray(value) ? value : JSON.parse(String(value ?? '[]')) } catch { parsed = [] }
+  if (!Array.isArray(parsed)) return []
+  return parsed.flatMap((window) => {
+    if (!window || typeof window !== 'object') return []
+    const start = String(window.start ?? '').trim()
+    const end = String(window.end ?? '').trim()
+    return CLOCK_TIME.test(start) && CLOCK_TIME.test(end) && start !== end ? [{ start, end }] : []
+  })
+}
+
+export function serializePersonalClockWindows(windows) {
+  return JSON.stringify(parsePersonalClockWindows(windows))
+}
+
+export function normalizeSettingsForDisplay(settings = {}) {
+  const coachVoice = String(settings.coachVoice ?? '')
+  const personalClockSource = String(settings.personalClockSource ?? '')
+  const flag = (value) => value === 'false' || value === false ? 'false' : 'true'
+  return {
+    ...settings,
+    coachVoice: COACH_VOICE_VALUES.has(coachVoice) ? coachVoice : 'balanced',
+    personalClockSource: PERSONAL_CLOCK_SOURCES.has(personalClockSource) ? personalClockSource : 'auto',
+    personalClockAlerts: flag(settings.personalClockAlerts),
+    personalClockAmbience: flag(settings.personalClockAmbience),
+    personalClockManualWindows: serializePersonalClockWindows(settings.personalClockManualWindows)
+  }
+}
+
 /* ───────── license & trial ───────── */
 export function TrialBanner({ days }) {
   return (
@@ -284,14 +318,52 @@ function ThemePreview({ preset, active, onClick }) {
 }
 
 export function SettingsTab({ settings, onSave, license, onLicenseChange, onReload, profiles = [], onAddProfile, onUpdateProfile, onDeleteProfile }) {
-  const [s, setS] = useState(settings || {})
+  const [s, setS] = useState(() => normalizeSettingsForDisplay(settings))
+  const [manualWindows, setManualWindows] = useState(() => parsePersonalClockWindows(settings?.personalClockManualWindows))
   const [test, setTest] = useState(null)
-  useEffect(() => { setS(settings || {}) }, [settings])
+  useEffect(() => {
+    const normalized = normalizeSettingsForDisplay(settings)
+    setS(normalized)
+    setManualWindows(parsePersonalClockWindows(normalized.personalClockManualWindows))
+  }, [settings])
   const set = (k) => (e) => setS((p) => ({ ...p, [k]: e.target.value }))
   const inp = 'w-full rounded px-2 py-1.5 text-sm'
+  const validManualWindows = parsePersonalClockWindows(manualWindows)
+  const manualWindowsComplete = s.personalClockSource !== 'manual' || (manualWindows.length > 0 && validManualWindows.length === manualWindows.length)
+  const alertsEnabled = s.personalClockAlerts !== 'false'
+  const ambienceEnabled = s.personalClockAmbience !== 'false'
+  const clockCueStatus = alertsEnabled && ambienceEnabled
+    ? 'Alerts and ambience are enabled.'
+    : alertsEnabled
+      ? 'Alerts are enabled; ambience is off.'
+      : ambienceEnabled
+        ? 'Ambience is enabled; alerts are off.'
+        : 'Personal clock cues are disabled — alerts and ambience are both off.'
 
   function saveNext(next) {
     setS(next)
+    onSave(next)
+  }
+
+  function selectClockSource(source) {
+    setS((current) => ({ ...current, personalClockSource: source }))
+    if (source === 'manual' && manualWindows.length === 0) {
+      setManualWindows([{ start: '09:30', end: '12:00' }])
+    }
+  }
+
+  function updateManualWindow(index, key, value) {
+    setManualWindows((current) => current.map((window, itemIndex) => itemIndex === index ? { ...window, [key]: value } : window))
+  }
+
+  function saveCoachAndClock() {
+    if (!manualWindowsComplete) return
+    const next = normalizeSettingsForDisplay({
+      ...s,
+      personalClockManualWindows: serializePersonalClockWindows(manualWindows)
+    })
+    setS(next)
+    setManualWindows(parsePersonalClockWindows(next.personalClockManualWindows))
     onSave(next)
   }
 
@@ -488,6 +560,72 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
         <p className="text-xs mt-3" style={{ color: T.faint }}>Recolors buttons, highlights and the active tab across the app. Trade Mode keeps its own "go time" color.</p>
       </Panel>
       )}
+      <Panel title="Coach &amp; personal clock">
+        <Field label="Coach voice">
+          <select style={inputStyle} className={inp} value={s.coachVoice} onChange={set('coachVoice')}>
+            <option value="supportive">Supportive — encouraging and gentle</option>
+            <option value="balanced">Balanced — direct and constructive</option>
+            <option value="tough-love">Tough love — firm, never shaming</option>
+          </select>
+        </Field>
+        <p className="text-xs mt-1.5" style={{ color: T.faint }}>Changes how the coach delivers the same evidence-based feedback.</p>
+
+        <div className="mt-4">
+          <Field label="Personal trading windows">
+            <div className="flex flex-wrap gap-1.5 mt-1">
+              <PillButton active={s.personalClockSource === 'auto'} onClick={() => selectClockSource('auto')} title="Infer your usual session from trade history">
+                Automatically inferred
+              </PillButton>
+              <PillButton active={s.personalClockSource === 'manual'} onClick={() => selectClockSource('manual')} title="Use only the windows you enter">
+                Manually set
+              </PillButton>
+            </div>
+          </Field>
+          <p className="text-xs mt-2" style={{ color: T.faint }}>
+            {s.personalClockSource === 'auto'
+              ? 'TradeHelp infers your usual windows from recent trading history.'
+              : 'Set one or more daily windows. Only complete HH:MM start and end pairs are saved.'}
+          </p>
+        </div>
+
+        {s.personalClockSource === 'manual' && (
+          <div className="space-y-2 mt-3">
+            {manualWindows.map((clockWindow, index) => (
+              <div key={index} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-2 items-end rounded-lg p-2.5" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
+                <label className="text-xs" style={{ color: T.dim }}>
+                  Start (HH:MM)
+                  <input type="time" aria-label={`Window ${index + 1} start`} style={inputStyle} className="w-full rounded px-2 py-1.5 text-sm mt-1" value={clockWindow.start} onChange={(event) => updateManualWindow(index, 'start', event.target.value)} />
+                </label>
+                <label className="text-xs" style={{ color: T.dim }}>
+                  End (HH:MM)
+                  <input type="time" aria-label={`Window ${index + 1} end`} style={inputStyle} className="w-full rounded px-2 py-1.5 text-sm mt-1" value={clockWindow.end} onChange={(event) => updateManualWindow(index, 'end', event.target.value)} />
+                </label>
+                <button type="button" aria-label={`Remove window ${index + 1}`} title="Remove window" onClick={() => setManualWindows((current) => current.filter((_, itemIndex) => itemIndex !== index))} className="rounded-md p-2" style={{ color: T.down, border: `1px solid ${T.line}` }}>
+                  <Trash2 size={15} />
+                </button>
+              </div>
+            ))}
+            <button type="button" onClick={() => setManualWindows((current) => [...current, { start: '', end: '' }])} className="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-semibold" style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}` }}>
+              <Plus size={13} /> Add window
+            </button>
+            {!manualWindowsComplete && <div className="text-xs" style={{ color: T.down }}>Manual mode needs at least one complete window with different start and end times.</div>}
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-4">
+          <label className="flex items-start gap-2 rounded-lg p-3 text-sm cursor-pointer" style={{ background: T.surface2, border: `1px solid ${T.line}`, color: T.text }}>
+            <input type="checkbox" className="mt-0.5" checked={alertsEnabled} onChange={(event) => setS((current) => ({ ...current, personalClockAlerts: String(event.target.checked) }))} />
+            <span>Session alerts<span className="block text-xs mt-0.5" style={{ color: T.faint }}>Flag historically strong or weak hours while you are in-session.</span></span>
+          </label>
+          <label className="flex items-start gap-2 rounded-lg p-3 text-sm cursor-pointer" style={{ background: T.surface2, border: `1px solid ${T.line}`, color: T.text }}>
+            <input type="checkbox" className="mt-0.5" checked={ambienceEnabled} onChange={(event) => setS((current) => ({ ...current, personalClockAmbience: String(event.target.checked) }))} />
+            <span>Session ambience<span className="block text-xs mt-0.5" style={{ color: T.faint }}>Use subtle visual cues during your window.</span></span>
+          </label>
+        </div>
+        <div className="text-xs mt-2" style={{ color: !alertsEnabled && !ambienceEnabled ? T.dim : T.faint }}>{clockCueStatus}</div>
+        <button type="button" disabled={!manualWindowsComplete} onClick={saveCoachAndClock} className="mt-4 rounded-md px-3 py-2 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306', opacity: manualWindowsComplete ? 1 : 0.5 }}>Save coach &amp; clock</button>
+      </Panel>
+
       <Panel title="Model provider">
         <Field label="Provider">
           <select style={inputStyle} className={inp} value={s.provider || 'ollama'} onChange={set('provider')}>

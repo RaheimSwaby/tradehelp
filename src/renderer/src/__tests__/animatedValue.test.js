@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { formatAnimatedNumber, numberDisplayParts } from '../components/Shared.jsx'
+import {
+  formatAnimatedNumber,
+  interpolateAnimatedValue,
+  numberDisplayParts,
+  resolveAnimatedStart
+} from '../components/Shared.jsx'
 
 describe('animated stat values', () => {
   it('parses positive currency displays', () => {
@@ -27,5 +32,21 @@ describe('animated stat values', () => {
     const percent = numberDisplayParts('48.6%')
     expect(formatAnimatedNumber(-123.4, money)).toBe('-$123.40')
     expect(formatAnimatedNumber(12.345, percent)).toBe('12.3%')
+  })
+
+  it('continues rapid consecutive P&L updates from the live displayed value', () => {
+    const firstStart = resolveAnimatedStart(0, 0, false, true)
+    const interruptedValue = interpolateAnimatedValue(firstStart, 100, 0.4)
+    const secondStart = resolveAnimatedStart(interruptedValue, 100, false, true)
+
+    expect(interruptedValue).toBeGreaterThan(0)
+    expect(interruptedValue).toBeLessThan(100)
+    expect(secondStart).toBe(interruptedValue)
+    expect(interpolateAnimatedValue(secondStart, 160, 1)).toBe(160)
+  })
+
+  it('uses an explicit previous total only when the value first mounts', () => {
+    expect(resolveAnimatedStart(160, 100, true, true)).toBe(100)
+    expect(resolveAnimatedStart(160, 100, false, true)).toBe(160)
   })
 })

@@ -27,6 +27,49 @@ describe('CSV import preparation', () => {
     expect(result.built[0].symbol).toBe('NQ')
     expect(result.warnings[0]).toMatch(/not recognized/i)
   })
+
+  it('normalizes preset timestamps before checking duplicates', () => {
+    const csv = `Id,ContractName,EnteredAt,ExitedAt,EntryPrice,ExitPrice,Fees,PnL,Size,Type
+1,MES,2026-07-21 09:30,2026-07-21 09:40,6700,6702,2,10,1,Long`
+    const existing = [{ symbol: 'MES', entryTime: '2026-07-21 13:30', pnl: 8 }]
+    const result = prepareCsvImport(csv, {
+      existing,
+      timezone: 'America/New_York',
+      localTimezone: 'UTC'
+    })
+    expect(result.timezone).toBe('America/New_York')
+    expect(result.built[0]).toMatchObject({
+      entryTime: '2026-07-21 13:30',
+      exitTime: '2026-07-21 13:40',
+      timestamp: '2026-07-21 13:30',
+      dupe: true
+    })
+    expect(result.duplicateCount).toBe(1)
+  })
+
+  it('normalizes timestamps produced by a custom preset row builder', () => {
+    const csv = `orderId,Account,Order ID,B/S,Contract,Product,avgPrice,filledQty,Fill Time,Status,Text,Type
+1,sim,1,Buy,MESH6,MES,6712.75,1,03/12/2026 10:00:24,Filled,multibracket,Market
+2,sim,2,Sell,MESH6,MES,6714.75,1,03/12/2026 10:18:37,Filled,Exit,Market`
+    const result = prepareCsvImport(csv, {
+      timezone: 'America/New_York',
+      localTimezone: 'UTC'
+    })
+    expect(result.preset?.key).toBe('ninjatrader-orders')
+    expect(result.built[0]).toMatchObject({
+      entryTime: '2026-03-12 14:00',
+      exitTime: '2026-03-12 14:18',
+      timestamp: '2026-03-12 14:00'
+    })
+  })
+
+  it('defaults invalid source zones to local without changing parsed timestamps', () => {
+    const csv = `Id,ContractName,EnteredAt,ExitedAt,EntryPrice,ExitPrice,Fees,PnL,Size,Type
+1,MES,2026-07-21 09:30,2026-07-21 09:40,6700,6702,2,10,1,Long`
+    const result = prepareCsvImport(csv, { timezone: 'Not/A_Zone', localTimezone: 'UTC' })
+    expect(result.timezone).toBe('local')
+    expect(result.built[0]).toMatchObject({ entryTime: '2026-07-21 09:30', exitTime: '2026-07-21 09:40' })
+  })
 })
 
 describe('broker preset detection', () => {

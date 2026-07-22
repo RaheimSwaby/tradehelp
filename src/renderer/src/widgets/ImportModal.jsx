@@ -5,11 +5,13 @@ import { T, mono, inputStyle } from '../theme.js'
 import { fmt$, parseCSV, IMPORT_FIELDS, BROKER_PRESETS, detectBrokerPreset, applyPresetMap } from '../utils.js'
 import { Field } from '../components/Shared.jsx'
 import { buildImportRows, guessImportMap } from '../importEngine.js'
+import { LOCAL_TIMEZONE, importTimeZoneOptions, normalizeImportTimeZone } from '../importTimezone.js'
 
 export function ImportModal({ onClose, onImport, existing = [], accounts = [], initialImport = null }) {
   const [data, setData] = useState(null)
   const [map, setMap] = useState({})
   const [preset, setPreset] = useState(null)
+  const [timezone, setTimezone] = useState(LOCAL_TIMEZONE)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState(null)
   const [account, setAccount] = useState('')
@@ -17,6 +19,7 @@ export function ImportModal({ onClose, onImport, existing = [], accounts = [], i
   const [fileName, setFileName] = useState('Manual CSV import')
   const [inboxContext, setInboxContext] = useState(null)
   const fileRef = useRef(null)
+  const timezoneOptions = useMemo(() => importTimeZoneOptions(), [])
   const inp = 'w-full rounded px-2 py-1.5 text-sm'
 
   function loadText(text, name, context = null) {
@@ -32,6 +35,7 @@ export function ImportModal({ onClose, onImport, existing = [], accounts = [], i
     setMap(nextPreset ? applyPresetMap(nextPreset, headers) : guessImportMap(headers, rows))
     setFileName(name || 'Manual CSV import')
     setInboxContext(context)
+    setTimezone(normalizeImportTimeZone(context?.timezone))
     if (context?.account) setAccount(context.account)
   }
 
@@ -50,8 +54,8 @@ export function ImportModal({ onClose, onImport, existing = [], accounts = [], i
 
   const built = useMemo(() => {
     if (!data) return []
-    return buildImportRows({ headers: data.headers, rows: data.rows, map, preset, existing, account })
-  }, [data, map, preset, existing, account])
+    return buildImportRows({ headers: data.headers, rows: data.rows, map, preset, existing, account, timezone })
+  }, [data, map, preset, existing, account, timezone])
   const dupeCount = built.filter((trade) => trade.dupe).length
   const toImport = includeDupes ? built : built.filter((trade) => !trade.dupe)
 
@@ -71,7 +75,7 @@ export function ImportModal({ onClose, onImport, existing = [], accounts = [], i
       await onImport(toImport.map(({ dupe, ...trade }) => ({ ...trade, account })), {
         fileName, sourceId: inboxContext?.sourceId || '', inboxId: inboxContext?.inboxId || '',
         brokerKey: preset?.key || '', brokerLabel: preset?.label || 'Generic CSV', account,
-        timezone: inboxContext?.timezone || '', rowCount: data?.rows?.length || 0,
+        timezone, rowCount: data?.rows?.length || 0,
         duplicateCount: includeDupes ? 0 : dupeCount, skippedCount, warningCount: warnings.length, warnings
       })
       onClose()
@@ -82,7 +86,7 @@ export function ImportModal({ onClose, onImport, existing = [], accounts = [], i
   }
 
   function resetFile() {
-    setData(null); setMap({}); setPreset(null); setErr(null); setFileName('Manual CSV import'); setInboxContext(null)
+    setData(null); setMap({}); setPreset(null); setTimezone(LOCAL_TIMEZONE); setErr(null); setFileName('Manual CSV import'); setInboxContext(null)
   }
 
   return createPortal(
@@ -131,6 +135,12 @@ export function ImportModal({ onClose, onImport, existing = [], accounts = [], i
                   {accounts.map((item) => <option key={item.id} value={item.id}>{item.label || 'Account'}</option>)}
                 </select>
               </Field>}
+              <Field label="Source timezone">
+                <select style={inputStyle} className={inp} value={timezone} onChange={(event) => setTimezone(event.target.value)} aria-label="Source timezone">
+                  {[...new Set([timezone, ...timezoneOptions])].map((zone) => <option key={zone} value={zone}>{zone === LOCAL_TIMEZONE ? 'Local time (no conversion)' : zone}</option>)}
+                </select>
+                <div className="text-xs mt-1" style={{ color: T.faint }}>Choose the timezone used by the CSV timestamps. Preview times are converted to your local timezone.</div>
+              </Field>
               {dupeCount > 0 && <div className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
                 <span style={{ color: T.dim }}><span style={{ color: T.accent }}>{dupeCount} duplicate{dupeCount === 1 ? '' : 's'}</span> will be skipped.</span>
                 <label className="flex items-center gap-1.5 cursor-pointer" style={{ color: T.dim }}><input type="checkbox" checked={includeDupes} onChange={(event) => setIncludeDupes(event.target.checked)} /> import anyway</label>

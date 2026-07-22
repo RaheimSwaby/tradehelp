@@ -193,3 +193,26 @@ describe('integration — a full natural-language query', () => {
     expect(matchesJournalFilters(TRADES[0], filters)).toBe(false)
   })
 })
+
+
+describe('timing chart drilldowns', () => {
+  it('matches an exact weekday/hour and preserves account scope', async () => {
+    const { matchesJournalDrilldown, describeJournalDrilldown } = await import('../journalSearch.js')
+    const intent = { weekday: 'Mon', hour: '13', accountIds: ['prop1'], scopeLabel: 'Prop accounts' }
+    expect(matchesJournalDrilldown(TRADES[1], intent)).toBe(true)
+    expect(matchesJournalDrilldown(TRADES[0], intent)).toBe(false)
+    expect(describeJournalDrilldown(intent)).toContain('Mon · 1:00 PM–2:00 PM · Prop accounts')
+  })
+
+  it('can narrow a timing selection by symbol and setup', async () => {
+    const { matchesJournalDrilldown } = await import('../journalSearch.js')
+    const intent = { weekday: 'Wed', hour: 10, symbol: 'NQ', setup: 'Pullback' }
+    expect(matchesJournalDrilldown(TRADES[0], intent)).toBe(true)
+    expect(matchesJournalDrilldown({ ...TRADES[0], setup: 'Breakout' }, intent)).toBe(false)
+  })
+
+  it('requires an explicit entry time just like timing analytics', async () => {
+    const { matchesJournalDrilldown } = await import('../journalSearch.js')
+    expect(matchesJournalDrilldown({ timestamp: '2026-07-15 10:00' }, { hour: 10 })).toBe(false)
+  })
+})

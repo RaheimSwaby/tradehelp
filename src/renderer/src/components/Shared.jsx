@@ -27,6 +27,20 @@ export function formatAnimatedNumber(value, parts) {
   return `${Number(value) < 0 ? '-' : ''}${text}${parts.suffix}`
 }
 
+export function resolveAnimatedStart(current, explicitFrom, firstRender, hasExplicitStart) {
+  const liveValue = Number(current)
+  if (!firstRender && Number.isFinite(liveValue)) return liveValue
+  const requestedStart = Number(explicitFrom)
+  if (hasExplicitStart && Number.isFinite(requestedStart)) return requestedStart
+  return Number.isFinite(liveValue) ? liveValue : 0
+}
+
+export function interpolateAnimatedValue(start, target, progress) {
+  const boundedProgress = Math.max(0, Math.min(1, Number(progress) || 0))
+  const eased = 1 - Math.pow(1 - boundedProgress, 3)
+  return start + (target - start) * eased
+}
+
 function prefersReducedMotion() {
   return typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 }
@@ -58,7 +72,7 @@ export function AnimatedValue({ value, className = '', style, from, animationKey
       return
     }
 
-    const start = hasExplicitStart ? explicitFrom : currentRef.current
+    const start = resolveAnimatedStart(currentRef.current, explicitFrom, firstRender, hasExplicitStart)
     const delta = target - start
     if (Math.abs(delta) < 0.001) { setAnimating(false); currentRef.current = target; setCurrent(target); return }
     currentRef.current = start
@@ -68,8 +82,7 @@ export function AnimatedValue({ value, className = '', style, from, animationKey
     const startAt = performance.now()
     const step = (now) => {
       const progress = Math.min(1, (now - startAt) / ANIM_MS)
-      const eased = 1 - Math.pow(1 - progress, 3)
-      const next = start + delta * eased
+      const next = interpolateAnimatedValue(start, target, progress)
       currentRef.current = next
       setCurrent(next)
       if (progress < 1) frame = requestAnimationFrame(step)
@@ -102,7 +115,7 @@ export function Stat({ label, value, sub, tone, spark, feedback }) {
   const pulseColor = Number(feedback?.delta) >= 0 ? T.up : T.down
   const feedbackClass = feedback ? ` th-pnl-feedback th-pnl-feedback-${Number(feedback.delta) >= 0 ? 'win' : 'loss'}` : ''
   return (
-    <div key={feedback?.id || 'steady'} className={`rounded-lg p-3 th-card${feedbackClass}`} style={{ background: T.surface, border: `1px solid ${T.line}`, '--pnl-pulse': pulseColor, '--pnl-settle': color }}>
+    <div className={`rounded-lg p-3 th-card${feedbackClass}`} style={{ background: T.surface, border: `1px solid ${T.line}`, '--pnl-pulse': pulseColor, '--pnl-settle': color }}>
       <div className="text-xs uppercase tracking-wider" style={{ color: T.faint }}>{label}</div>
       <div className="mt-1 text-xl font-semibold th-pnl-number" style={{ ...mono, color }}>
         <AnimatedValue value={value} from={feedback?.from} animationKey={feedback?.id} />
@@ -139,7 +152,7 @@ export function Readout({ label, value, tone, feedback }) {
   const pulseColor = Number(feedback?.delta) >= 0 ? T.up : T.down
   const feedbackClass = feedback ? ` th-pnl-feedback th-pnl-feedback-${Number(feedback.delta) >= 0 ? 'win' : 'loss'}` : ''
   return (
-    <div key={feedback?.id || 'steady'} className={`flex items-baseline gap-1.5${feedbackClass}`} style={{ '--pnl-pulse': pulseColor, '--pnl-settle': color }}>
+    <div className={`flex items-baseline gap-1.5${feedbackClass}`} style={{ '--pnl-pulse': pulseColor, '--pnl-settle': color }}>
       <span className="text-xs" style={{ color: T.faint }}>{label}</span>
       <span className="th-pnl-number" style={{ color }}>
         <AnimatedValue value={value} from={feedback?.from} animationKey={feedback?.id} />

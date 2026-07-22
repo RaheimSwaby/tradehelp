@@ -35,7 +35,9 @@ import { FeedbackPrompt } from './components/FeedbackPrompt.jsx'
 import { EasterEggNudge } from './components/EasterEggNudge.jsx'
 import { buildEasterEggNudges, lastTradingDay } from './coachInsights.js'
 import { dHashDataUrl, IMAGE_FINGERPRINT_VERSION } from './workflow.js'
-import { localDateKey, personalTradingClock, sessionEdgeCue } from './sessionClock.js'
+import { formatClockMinute, localDateKey, inferTradingSchedule, manualTradingSchedule, personalTradingClock, sessionEdgeCue } from './sessionClock.js'
+import { selectFloatingNotice } from './notificationQueue.js'
+import { tradeDateKey } from './periodRetrospective.js'
 
 /* ───────── logo mark: three ascending candles, tracks the live theme ───────── */
 function LogoMark({ size = 22, ignite = false, live = false }) {
@@ -58,10 +60,24 @@ function LogoMark({ size = 22, ignite = false, live = false }) {
   )
 }
 
-function PersonalClockReadout({ clock }) {
-  if (!clock) return null
+function PersonalClockReadout({ clock, schedule, enabled = true }) {
+  if (!enabled) return null
+  const confidence = schedule?.metadata?.confidence
+  if (!clock) {
+    if (!confidence) return null
+    return (
+      <div className="flex items-center gap-1.5" title={confidence.message || 'Learning your recurring trading windows'}>
+        <Clock3 size={13} style={{ color: T.faint }} />
+        <span style={{ color: T.faint }}>CLOCK</span>
+        <span style={{ color: T.faint }}>{confidence.state === 'building' ? `LEARNING ${confidence.observedDays}/${confidence.requiredDays || 3}` : 'NO WINDOW'}</span>
+      </div>
+    )
+  }
+  const allWindows = (schedule?.windows || clock.windows || []).map((window) => `${formatClockMinute(window.start)}–${formatClockMinute(window.end)}`).join(', ')
+  const sessionCount = schedule?.metadata?.historySessionCount || schedule?.metadata?.sessionCount || clock.sampleSessions || 0
+  const title = `${schedule?.source === 'manual' ? 'Manual' : 'Recent inferred'} windows: ${allWindows || clock.windowLabel}. Based on ${sessionCount} session${sessionCount === 1 ? '' : 's'}.${schedule?.scheduleShift?.message ? ` ${schedule.scheduleShift.message}` : ''}`
   return (
-    <div className="flex items-center gap-1.5" title={`Your usual session: ${clock.windowLabel}, inferred from ${clock.sampleDays} trading days`}>
+    <div className="flex items-center gap-1.5" title={title}>
       <Clock3 size={13} style={{ color: clock.phase === 'off' ? T.faint : T.accent }} />
       <span style={{ color: T.faint }}>CLOCK</span>
       <span style={{ color: T.text }}>{clock.timeLabel}</span>
@@ -83,7 +99,7 @@ function SessionEdgeBubble({ cue, onClose }) {
   const c = strong ? T.up : T.down
   const Icon = strong ? TrendingUp : AlertTriangle
   return (
-    <div className="fixed bottom-4 left-4 z-[74] w-[340px] max-w-[calc(100vw-2rem)] rounded-xl th-fade" style={{ background: T.surface, border: `1px solid ${c}`, boxShadow: '0 12px 30px rgba(0,0,0,0.42)' }}>
+    <div role="status" aria-live="polite" className="fixed bottom-4 left-4 z-[74] w-[340px] max-w-[calc(100vw-2rem)] rounded-xl th-fade" style={{ background: T.surface, border: `1px solid ${c}`, boxShadow: '0 12px 30px rgba(0,0,0,0.42)' }}>
       <div className="p-3.5 flex items-start gap-2.5">
         <Icon size={16} style={{ color: c, flexShrink: 0, marginTop: 1 }} />
         <div className="flex-1 min-w-0">
@@ -154,6 +170,7 @@ export default function App() {
   const [workflowMsg, setWorkflowMsg] = useState(null)
   const [customBg, setCustomBg] = useState('')
   const [pnlFeedback, setPnlFeedback] = useState(null)
+  const [journalDrilldown, setJournalDrilldown] = useState(null)
   const goTimerRef = useRef(null)
   const pnlFeedbackTimerRef = useRef(null)
 
@@ -164,9 +181,9 @@ export default function App() {
 
   const hasApi = typeof window !== 'undefined' && window.api
   const reportDay = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10)
+    const today = localDateKey(new Date(now))
     return lastTradingDay(trades, today)
-  }, [trades])
+  }, [trades, now])
 
   useEffect(() => {
     (async () => {
@@ -391,6 +408,10 @@ export default function App() {
   async function deleteSavedSearch(id) { const next = await window.api.deleteSavedSearch(id); setSavedSearches(next); return next }
   async function refreshSavedSearches() { const next = await window.api.listSavedSearches(); setSavedSearches(next); return next }
   function planFromPlaybook(entry) { setPlanPrefill(entry); setTab('trade') }
+  function openTimingJournal(intent) {
+    setJournalDrilldown({ ...intent, id: `timing-${Date.now()}-${Math.random().toString(16).slice(2)}` })
+    setTab('journal')
+  }
 
   // Auto-dismiss the workflow error toast so it never lingers.
   useEffect(() => {
@@ -429,29 +450,43 @@ export default function App() {
   // ── Trade Mode derived state ──
   const rules = useMemo(() => parseRules(settings), [settings])
   const activeCommitment = useMemo(() => commitments.find((commitment) => commitment.status === 'active') || null, [commitments])
-  const today = new Date().toISOString().slice(0, 10)
-  const todayTrades = useMemo(() => trades.filter((t) => (t.timestamp || '').slice(0, 10) === today), [trades, today])
+  const today = localDateKey(new Date(now))
+  const todayTrades = useMemo(() => trades.filter((t) => tradeDateKey(t) === today), [trades, today])
   const todayNet = todayTrades.reduce((a, t) => a + (Number(t.pnl) || 0), 0)
-  const weekAgoTs = new Date(Date.now() - 7 * 864e5)
-  const weekNet = trades.filter((t) => new Date((t.timestamp || '').replace(' ', 'T')) >= weekAgoTs).reduce((a, t) => a + (Number(t.pnl) || 0), 0)
+  const weekAgoTs = new Date(now - 7 * 864e5)
+  const weekNet = trades.filter((t) => {
+    const raw = t.entryTime || t.timestamp
+    const tradeTime = raw instanceof Date ? raw : new Date(String(raw || '').replace(' ', 'T'))
+    return !Number.isNaN(tradeTime.getTime()) && tradeTime >= weekAgoTs
+  }).reduce((a, t) => a + (Number(t.pnl) || 0), 0)
   const dailyGoal = parseFloat(settings?.dailyGoal) || 0
   const maxLoss = parseFloat(settings?.maxDailyLoss) || 0
   const lossHit = maxLoss > 0 && todayNet <= -maxLoss
-  const sessionClock = useMemo(() => personalTradingClock(trades, new Date(now)), [trades, now])
+  const personalClockAlerts = settings?.personalClockAlerts !== 'false'
+  const personalClockAmbience = settings?.personalClockAmbience !== 'false'
+  const personalClockEnabled = personalClockAlerts || personalClockAmbience
+  // Window inference is cached on trade/settings changes. The 30-second timer only
+  // advances the phase through the already-computed schedule.
+  const personalSchedule = useMemo(() => {
+    if (settings?.personalClockSource === 'manual') return manualTradingSchedule(settings?.personalClockManualWindows)
+    return inferTradingSchedule(trades)
+  }, [trades, settings?.personalClockSource, settings?.personalClockManualWindows])
+  const sessionClock = useMemo(
+    () => personalClockEnabled ? personalTradingClock([], new Date(now), personalSchedule) : null,
+    [personalClockEnabled, personalSchedule, now]
+  )
   const [sessionCue, setSessionCue] = useState(null)
   const sessionCueSeen = useRef('')
   // Surface a strong/weak-hour nudge at most once per relevant hour per day, while in-session.
   useEffect(() => {
-    if (!sessionClock || sessionClock.phase === 'off') { setSessionCue(null); return }
+    if (!personalClockAlerts || !sessionClock || sessionClock.phase === 'off') { setSessionCue(null); return }
     const cue = sessionEdgeCue(stats, new Date(now))
     if (!cue) return
     const key = `${localDateKey(new Date(now))}:${cue.hour}`
     if (sessionCueSeen.current === key) return
     sessionCueSeen.current = key
     setSessionCue(cue)
-  }, [now, sessionClock, stats])
-  // Time-sensitive, so it clears itself rather than lingering stale.
-  useEffect(() => { if (!sessionCue) return; const t = setTimeout(() => setSessionCue(null), 90000); return () => clearTimeout(t) }, [sessionCue])
+  }, [now, sessionClock, stats, personalClockAlerts])
 
   function clearGoTimer() { clearTimeout(goTimerRef.current); goTimerRef.current = null }
   function startDay() {
@@ -525,8 +560,31 @@ export default function App() {
     window.api.setSettings({ achievements: JSON.stringify(merged) }).then(setSettings)
     setToastQueue((q) => [...q, ...newly])
   }, [achievements, unlockedAt, hasApi])
-  // Each unlock gets ~4.8s in the spotlight, then the next queued medal slides in.
-  useEffect(() => { if (!toast) return; const id = setTimeout(() => setToastQueue((q) => q.slice(1)), 4800); return () => clearTimeout(id) }, [toast])
+  const floatingBlocked = Boolean(
+    onboard || tradeMode || notesView || preflight || whatsNew || goTransition ||
+    (GATE_CONFIGURED && license?.state === 'expired')
+  )
+  const activeFloatingNotice = selectFloatingNotice({
+    risk: Boolean(workflowMsg || imminentEvent || (tradeMode && lossHit && !lockoutDismissed)),
+    update: Boolean(updateReady),
+    dailyReview: Boolean(dailyReport),
+    timing: Boolean(sessionCue && personalClockAlerts),
+    achievement: Boolean(toast),
+    nudge: Boolean(nudge),
+    feedback: Boolean(feedbackPrompt),
+    blocked: floatingBlocked
+  })
+  // Timed notices age only while visible; queued notices wait behind higher priority.
+  useEffect(() => {
+    if (activeFloatingNotice !== 'achievement' || !toast) return undefined
+    const id = setTimeout(() => setToastQueue((q) => q.slice(1)), 4800)
+    return () => clearTimeout(id)
+  }, [activeFloatingNotice, toast])
+  useEffect(() => {
+    if (activeFloatingNotice !== 'timing' || !sessionCue) return undefined
+    const id = setTimeout(() => setSessionCue(null), 90000)
+    return () => clearTimeout(id)
+  }, [activeFloatingNotice, sessionCue])
 
   // Re-theme the entire app when live. Runs every render; App is the only writer of T.
   applyTheme(tradeMode, settings?.accentColor, settings?.themeMode, settings)
@@ -581,7 +639,7 @@ export default function App() {
       {/* bg lives on <body> (synced above) so the z:-1 particle canvas shows through */}
       <CustomBackground dataUrl={customBg} settings={settings} />
       <Backdrop variant={!settings?.backdrop || settings.backdrop === 'on' ? 'constellation' : settings.backdrop} />
-      <SessionAmbience clock={sessionClock} />
+      {personalClockAmbience && <SessionAmbience clock={sessionClock} />}
       <Ticker settings={settings} />
       {updateAvail && <UpdateAvailableBanner info={updateAvail} onClose={() => setUpdateAvail(null)} />}
       {GATE_CONFIGURED && license?.state === 'trial' && <TrialBanner days={license.daysLeft} />}
@@ -602,7 +660,7 @@ export default function App() {
             <Readout label="PF" value={stats.profitFactor === Infinity ? '∞' : fmtN(stats.profitFactor, 2)} />
             <Readout label="STREAK" value={String(stats.currentStreak)} tone={String(stats.currentStreak).endsWith('W') ? 'up' : String(stats.currentStreak).endsWith('L') ? 'down' : 'none'} />
             {stats.n > 0 && <Readout label="CALM" value={String(stats.nonTiltStreak)} tone="up" />}
-            <PersonalClockReadout clock={sessionClock} />
+            <PersonalClockReadout clock={sessionClock} schedule={personalSchedule} enabled={personalClockEnabled} />
             {!tradeMode && (
               <button type="button" onClick={startDay} disabled={goTransition === 'arming'} aria-busy={goTransition === 'arming'} className={`th-go-trigger flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-semibold${goTransition === 'arming' ? ' th-go-trigger-on' : ''}`} style={{ background: T.accent, color: '#1A1306' }}>
                 <Play size={14} /> Start day
@@ -639,14 +697,14 @@ export default function App() {
           <Paywall onActivated={refreshLicense} />
         ) : (
           <div key={tab} className="th-cinematic">
-            {tab === 'journal' && <Journal trades={trades} onAdd={addTrade} onUpdate={updateTrade} onRemove={removeTrade} onNotes={setNotesView} onImport={importTrades} onRollbackImport={rollbackImport} accounts={propFirmAccounts} profiles={instrumentProfiles} savedSearches={savedSearches} onAddSavedSearch={addSavedSearch} onUpdateSavedSearch={updateSavedSearch} onDeleteSavedSearch={deleteSavedSearch} onRefreshSavedSearches={refreshSavedSearches} settings={settings} onSaveSettings={saveSettings} dayLogs={dayLogs} onAddDayLog={addDayLog} onDeleteDayLog={deleteDayLog} />}
+            {tab === 'journal' && <Journal trades={trades} onAdd={addTrade} onUpdate={updateTrade} onRemove={removeTrade} onNotes={setNotesView} onImport={importTrades} onRollbackImport={rollbackImport} accounts={propFirmAccounts} profiles={instrumentProfiles} savedSearches={savedSearches} onAddSavedSearch={addSavedSearch} onUpdateSavedSearch={updateSavedSearch} onDeleteSavedSearch={deleteSavedSearch} onRefreshSavedSearches={refreshSavedSearches} settings={settings} onSaveSettings={saveSettings} dayLogs={dayLogs} onAddDayLog={addDayLog} onDeleteDayLog={deleteDayLog} drilldown={journalDrilldown} onConsumeDrilldown={() => setJournalDrilldown(null)} />}
             {tab === 'trade' && <TradeModeTab settings={settings} onSave={saveSettings} rules={rules} live={tradeMode} arming={goTransition === 'arming'} todayNet={todayNet} todayCount={todayTrades.length} weekNet={weekNet} goal={dailyGoal} maxLoss={maxLoss} onStart={startDay} onEnd={endSession} plans={tradePlans} trades={trades} accounts={propFirmAccounts} playbook={playbook} profiles={instrumentProfiles} planPrefill={planPrefill} onConsumePlanPrefill={() => setPlanPrefill(null)} commitment={activeCommitment} onAddPlan={addTradePlan} onUpdatePlan={updateTradePlan} onDeletePlan={deleteTradePlan} />}
             {tab === 'propfirm' && <PropFirm trades={trades} accounts={propFirmAccounts} onSave={savePropFirmAccounts} settings={settings} onSaveSettings={saveSettings} payouts={payouts} onAddPayout={addPayout} onDeletePayout={deletePayout} />}
-            {tab === 'dashboard' && <Dashboard stats={stats} trades={trades} accounts={propFirmAccounts} settings={settings} journalData={{ reviews, playbook, dayLogs, goals }} payouts={payouts} plans={tradePlans} commitments={commitments} pnlFeedback={pnlFeedback} onAddCommitment={addCommitment} onUpdateCommitment={updateCommitment} onDeleteCommitment={deleteCommitment} onSaveSettings={saveSettings} onOpenCoach={() => setTab('coach')} onOpenTrade={setNotesView} />}
+            {tab === 'dashboard' && <Dashboard stats={stats} trades={trades} accounts={propFirmAccounts} settings={settings} journalData={{ reviews, playbook, dayLogs, goals, payouts }} payouts={payouts} plans={tradePlans} commitments={commitments} pnlFeedback={pnlFeedback} onAddCommitment={addCommitment} onUpdateCommitment={updateCommitment} onDeleteCommitment={deleteCommitment} onSaveSettings={saveSettings} onOpenCoach={() => setTab('coach')} onOpenTrade={setNotesView} onTimingDrilldown={openTimingJournal} personalClock={sessionClock} personalSchedule={personalSchedule} now={now} />}
             {tab === 'psych' && <Psychology stats={stats} />}
             {tab === 'rating' && <Rating trades={trades} stats={stats} achievements={achievements} unlockedAt={unlockedAt} settings={settings} onSave={saveSettings} payouts={payouts} />}
-            {tab === 'goals' && <Goals goals={goals} onSave={saveGoals} trades={trades} />}
-            {tab === 'reviews' && <Reviews trades={trades} reviews={reviews} settings={settings} onSave={saveReview} activeCommitment={activeCommitment} onAddCommitment={addCommitment} />}
+            {tab === 'goals' && <Goals goals={goals} onSave={saveGoals} trades={trades} now={now} />}
+            {tab === 'reviews' && <Reviews trades={trades} reviews={reviews} goals={goals} commitments={commitments} settings={settings} onSave={saveReview} activeCommitment={activeCommitment} onAddCommitment={addCommitment} now={now} />}
             {tab === 'coach' && <Coach trades={trades} stats={stats} settings={settings} reviews={reviews} playbook={playbook} dayLogs={dayLogs} goals={goals} payouts={payouts} events={events} now={now} />}
             {tab === 'patterns' && <Patterns trades={trades} onOpenTrade={setNotesView} />}
             {tab === 'playbook' && <PlaybookTab entries={playbook} trades={trades} onAdd={addPlaybookEntry} onUpdate={updatePlaybookEntry} onDelete={deletePlaybookEntry} onPlan={planFromPlaybook} />}
@@ -667,7 +725,7 @@ export default function App() {
         <Lockout net={todayNet} maxLoss={maxLoss} onEnd={endSession} onDismiss={() => setLockoutDismissed(true)} />
       )}
       {tradeMode && eventsEnabled && <FloatingEvents events={events} now={now} leadMin={parseInt(settings?.eventsLeadMin) || 15} />}
-      {toast && <AchievementToast key={toast.id} a={toast} onClose={() => setToastQueue((q) => q.slice(1))} />}
+      {activeFloatingNotice === 'achievement' && toast && <AchievementToast key={toast.id} a={toast} onClose={() => setToastQueue((q) => q.slice(1))} />}
       {workflowMsg && (
         <div className="fixed left-1/2 z-[95]" style={{ bottom: 24, transform: 'translateX(-50%)' }}>
           <div className="flex items-start gap-2 rounded-lg px-3.5 py-2.5 text-sm th-fade" style={{ background: T.surface, border: `1px solid ${T.down}`, color: T.text, maxWidth: 440, boxShadow: '0 10px 30px rgba(0,0,0,0.35)' }}>
@@ -677,23 +735,23 @@ export default function App() {
           </div>
         </div>
       )}
-      {updateReady && <UpdateBanner info={updateReady} onInstall={() => window.api.installUpdate()} />}
+      {activeFloatingNotice === 'update' && updateReady && <UpdateBanner info={updateReady} onInstall={() => window.api.installUpdate()} />}
       {whatsNew && <WhatsNew info={whatsNew} onClose={() => setWhatsNew(null)} />}
-      {nudge && !dailyReport && !onboard && !tradeMode && (!GATE_CONFIGURED || license?.state !== 'expired') && (
+      {activeFloatingNotice === 'nudge' && nudge && (
         <EasterEggNudge nudge={nudge} onClose={() => dismissNudge(true)} onBreak={takeNudgeBreak} />
       )}
       {onboard && ready && hasApi && (!GATE_CONFIGURED || license?.state !== 'expired') && (
         <Onboarding settings={settings} accounts={propFirmAccounts} onSaveSettings={saveSettings} onImport={importTrades}
           onDone={(goTab) => { setOnboard(false); saveSettings({ onboarded: 'true' }); if (goTab) setTab(goTab) }} />
       )}
-      {dailyReport && !onboard && !tradeMode && (!GATE_CONFIGURED || license?.state !== 'expired') && (
+      {activeFloatingNotice === 'daily-review' && dailyReport && (
         <DailyReport trades={trades} date={dailyReport} settings={settings}
           onClose={closeDailyReport} onOpenCoach={() => { closeDailyReport(); setTab('coach') }} />
       )}
-      {feedbackPrompt && !dailyReport && !onboard && !nudge && !tradeMode && (!GATE_CONFIGURED || license?.state !== 'expired') && (
+      {activeFloatingNotice === 'feedback' && feedbackPrompt && (
         <FeedbackPrompt onShare={shareFeedback} onDismiss={endFeedbackPrompt} />
       )}
-      {sessionCue && !onboard && !feedbackPrompt && !updateReady && (!GATE_CONFIGURED || license?.state !== 'expired') && (
+      {activeFloatingNotice === 'timing' && sessionCue && (
         <SessionEdgeBubble cue={sessionCue} onClose={() => setSessionCue(null)} />
       )}
     </div>

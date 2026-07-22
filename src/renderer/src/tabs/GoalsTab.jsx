@@ -1,19 +1,19 @@
 import React, { useState, useEffect } from 'react'
 import { T, mono, inputStyle } from '../theme.js'
-import { fmt$ } from '../utils.js'
+import { fmt$, periodLabel } from '../utils.js'
+import { currentPeriodKey, periodPerformance } from '../periodRetrospective.js'
 import { Panel, Field } from '../components/Shared.jsx'
 
 /* ───────── goals ───────── */
-export function Goals({ goals, onSave, trades }) {
-  const now = new Date()
-  const weekAgo = new Date(now.getTime() - 7 * 864e5)
-  const ym = now.toISOString().slice(0, 7)
-  const weekPnl = trades.filter((t) => new Date((t.timestamp || '').replace(' ', 'T')) >= weekAgo).reduce((a, t) => a + (Number(t.pnl) || 0), 0)
-  const monthPnl = trades.filter((t) => (t.timestamp || '').slice(0, 7) === ym).reduce((a, t) => a + (Number(t.pnl) || 0), 0)
+export function Goals({ goals = {}, onSave, trades = [], now = new Date() }) {
+  const weekKey = currentPeriodKey('week', now)
+  const monthKey = currentPeriodKey('month', now)
+  const week = periodPerformance(trades, weekKey, 'week')
+  const month = periodPerformance(trades, monthKey, 'month')
 
-  const [w, setW] = useState(String(goals.weekly))
-  const [m, setM] = useState(String(goals.monthly))
-  useEffect(() => { setW(String(goals.weekly)); setM(String(goals.monthly)) }, [goals])
+  const [w, setW] = useState(String(goals.weekly ?? 0))
+  const [m, setM] = useState(String(goals.monthly ?? 0))
+  useEffect(() => { setW(String(goals.weekly ?? 0)); setM(String(goals.monthly ?? 0)) }, [goals])
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -25,16 +25,16 @@ export function Goals({ goals, onSave, trades }) {
         <button type="button" onClick={() => onSave({ weekly: parseFloat(w) || 0, monthly: parseFloat(m) || 0 })} className="mt-3 rounded-md px-3 py-2 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306' }}>Save targets</button>
       </Panel>
       <Panel title="Progress">
-        <ProgressBar label="This week" cur={weekPnl} target={goals.weekly} />
+        <ProgressBar label={`This week · ${periodLabel(weekKey, 'week')}`} cur={week.actualPnl} target={goals.weekly} tradeCount={week.tradeCount} />
         <div className="h-4" />
-        <ProgressBar label="This month" cur={monthPnl} target={goals.monthly} />
+        <ProgressBar label={`This month · ${periodLabel(monthKey, 'month')}`} cur={month.actualPnl} target={goals.monthly} tradeCount={month.tradeCount} />
       </Panel>
     </div>
   )
 }
-export function ProgressBar({ label, cur, target }) {
+export function ProgressBar({ label, cur, target, tradeCount }) {
   const pct = target > 0 ? Math.min(Math.max((cur / target) * 100, 0), 100) : 0
-  const hit = target > 0 && cur >= target
+  const hit = target > 0 && tradeCount > 0 && cur >= target
   return (
     <div>
       <div className="flex justify-between text-sm mb-1">
@@ -44,6 +44,7 @@ export function ProgressBar({ label, cur, target }) {
       <div className="h-2.5 rounded-full overflow-hidden" style={{ background: T.surface2 }}>
         <div className="h-full rounded-full" style={{ width: `${pct}%`, background: hit ? T.up : T.accent, transition: 'width .4s' }} />
       </div>
+      <div className="text-xs mt-1" style={{ color: T.faint }}>{tradeCount || 0} {tradeCount === 1 ? 'trade' : 'trades'} in this calendar period</div>
     </div>
   )
 }

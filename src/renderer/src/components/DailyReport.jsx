@@ -4,6 +4,10 @@ import { T, mono } from '../theme.js'
 import { fmt$, fmtN, streamChat, TILT } from '../utils.js'
 import { buildDailyReport, dailyReportAiPayload } from '../coachInsights.js'
 
+export function buildDailyReportAiPayload(report, settings = {}) {
+  return dailyReportAiPayload(report, settings.coachVoice)
+}
+
 const dayLabel = (date) => {
   const d = new Date(date + 'T00:00:00')
   return isNaN(d) ? date : d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })
@@ -30,7 +34,7 @@ export function DailyReport({ trades, date, settings, onClose, onOpenCoach }) {
     if (busy) return
     setBusy(true); setErr(''); setAi('')
     try {
-      const { system, messages } = dailyReportAiPayload(report)
+      const { system, messages } = buildDailyReportAiPayload(report, settings)
       await streamChat({ system, messages }, (d) => setAi((s) => s + d), cancelRef)
     } catch (e) { setErr(String(e?.message || e) || 'AI unavailable') }
     setBusy(false)

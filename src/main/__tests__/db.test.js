@@ -178,16 +178,74 @@ describe('goals', () => {
 // ── settings ──────────────────────────────────────────────────────────────────
 
 describe('settings', () => {
-  it('has ollama as the default provider', () => {
-    const s = getSettings()
-    expect(s.provider).toBe('ollama')
+  it('returns persistent defaults for coach voice and the personal clock', () => {
+    expect(getSettings()).toMatchObject({
+      provider: 'ollama',
+      coachVoice: 'balanced',
+      personalClockSource: 'auto',
+      personalClockAlerts: 'true',
+      personalClockAmbience: 'true',
+      personalClockManualWindows: '[]'
+    })
   })
 
-  it('persists a custom setting without overwriting others', () => {
-    setSettings({ cloudModel: 'gpt-4o' })
-    const s = getSettings()
-    expect(s.cloudModel).toBe('gpt-4o')
-    expect(s.provider).toBe('ollama') // unchanged
+  it('persists only allowlisted settings and serializes valid manual windows', () => {
+    const windows = [
+      { start: '09:30', end: '12:00', label: 'ignored' },
+      { start: '13:00', end: '15:15' },
+      { start: 'later', end: '16:00' }
+    ]
+    const settings = setSettings({
+      coachVoice: 'supportive',
+      personalClockSource: 'manual',
+      personalClockAlerts: false,
+      personalClockAmbience: 'true',
+      personalClockManualWindows: JSON.stringify(windows),
+      unknownSetting: 'not persisted'
+    })
+
+    expect(settings).toMatchObject({
+      coachVoice: 'supportive',
+      personalClockSource: 'manual',
+      personalClockAlerts: 'false',
+      personalClockAmbience: 'true'
+    })
+    expect(JSON.parse(settings.personalClockManualWindows)).toEqual([
+      { start: '09:30', end: '12:00' },
+      { start: '13:00', end: '15:15' }
+    ])
+    expect(settings).not.toHaveProperty('unknownSetting')
+  })
+
+  it('sanitizes invalid enumerations, flags, and manual-window JSON', () => {
+    const settings = setSettings({
+      coachVoice: 'hostile',
+      personalClockSource: 'calendar',
+      personalClockAlerts: 'sometimes',
+      personalClockAmbience: '',
+      personalClockManualWindows: '{bad json'
+    })
+
+    expect(settings).toMatchObject({
+      coachVoice: 'balanced',
+      personalClockSource: 'auto',
+      personalClockAlerts: 'true',
+      personalClockAmbience: 'true',
+      personalClockManualWindows: '[]'
+    })
+  })
+
+  it('merges a partial update without overwriting other settings', () => {
+    setSettings({ cloudModel: 'gpt-4o', personalClockSource: 'manual', personalClockAlerts: 'false' })
+    const settings = setSettings({ coachVoice: 'tough-love' })
+
+    expect(settings).toMatchObject({
+      provider: 'ollama',
+      cloudModel: 'gpt-4o',
+      coachVoice: 'tough-love',
+      personalClockSource: 'manual',
+      personalClockAlerts: 'false'
+    })
   })
 })
 

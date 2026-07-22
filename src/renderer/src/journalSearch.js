@@ -382,6 +382,33 @@ export function parseJournalQuery(rawQuery, { trades = [], accounts = [], now = 
   return { filters }
 }
 
+const DRILLDOWN_WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+export function matchesJournalDrilldown(trade, drilldown) {
+  if (!drilldown) return true
+  const raw = String(trade?.entryTime || '')
+  const time = raw.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{1,2}):(\d{2})/)
+  if (!time) return false
+  const hour = String(Number(time[4])).padStart(2, '0')
+  const date = new Date(Number(time[1]), Number(time[2]) - 1, Number(time[3]), 12)
+  if (drilldown.hour != null && hour !== String(drilldown.hour).padStart(2, '0')) return false
+  if (drilldown.weekday && DRILLDOWN_WEEKDAYS[date.getDay()] !== drilldown.weekday) return false
+  if (drilldown.symbol && String(trade.symbol || '').toLowerCase() !== String(drilldown.symbol).toLowerCase()) return false
+  if (drilldown.setup && String(trade.setup || '').toLowerCase() !== String(drilldown.setup).toLowerCase()) return false
+  if (Array.isArray(drilldown.accountIds) && !drilldown.accountIds.map(String).includes(String(trade.account || ''))) return false
+  return true
+}
+
+export function describeJournalDrilldown(drilldown = {}) {
+  const parts = []
+  if (drilldown.weekday) parts.push(drilldown.weekday)
+  if (drilldown.hour != null) parts.push(`${clockLabel(Number(drilldown.hour) * 60)}–${clockLabel((Number(drilldown.hour) + 1) % 24 * 60)}`)
+  if (drilldown.symbol) parts.push(String(drilldown.symbol).toUpperCase())
+  if (drilldown.setup) parts.push(String(drilldown.setup))
+  if (drilldown.scopeLabel) parts.push(String(drilldown.scopeLabel))
+  return parts.join(' · ') || 'Timing selection'
+}
+
 export function matchesJournalFilters(trade, filters = []) {
   const haystack = normalizedHaystack(trade)
   return filters.every((filter) => {

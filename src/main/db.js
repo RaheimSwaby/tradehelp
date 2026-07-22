@@ -282,68 +282,8 @@ export function initDb() {
     seedProfiles()
   }
 
-  const defaults = {
-    provider: 'ollama',
-    ollamaUrl: 'http://localhost:11434',
-    ollamaModel: 'llama3.2',
-    ollamaVisionModel: 'llama3.2-vision',
-    cloudUrl: 'https://api.openai.com/v1',
-    cloudModel: 'gpt-4o-mini',
-    cloudKey: '',
-    // Trade Mode: per-day circuit breaker + the trader's own pre-flight checklist.
-    dailyGoal: '300',
-    maxDailyLoss: '300',
-    tradeRules: JSON.stringify([
-      'Setup matches my written plan — not forcing it',
-      'Risk is within my max per trade',
-      'Stop-loss is set before I enter',
-      'No high-impact news about to drop',
-      'Not revenge trading or chasing'
-    ]),
-    // Ticker tape: keyless by default (Stooq/Binance). Add a Finnhub key for real-time stocks.
-    tickerEnabled: 'true',
-    tickerSymbols: 'SPY,QQQ,BTC,ETH',
-    finnhubKey: '',
-    // Economic calendar: keyless by default (ForexFactory). Add an FMP key for a fuller feed.
-    eventsEnabled: 'true',
-    fmpKey: '',
-    eventsMinImpact: 'High',
-    eventsLeadMin: '15',
-    themePreset: 'classic',
-    accentColor: 'amber',
-    goTimeAccent: 'orange',
-    pnlStyle: 'classic',
-    fontStyle: 'default',
-    themeMode: 'dark',
-    backdrop: 'constellation',
-    customBackgroundFile: '',
-    customBackgroundOpacity: '22',
-    customBackgroundBlur: '0',
-    customBackgroundDim: '42',
-    customBackgroundFit: 'cover',
-    onboarded: '',
-    liveCapital: '0',
-    dailyReportEnabled: 'true',
-    dailyReportSeen: '',
-    feedbackPromptSeen: '',
-    easterEggEnabled: 'true',
-    easterEggSeen: '[]',
-    lastSeenVersion: '',
-    breakWeeks: '[]',
-    onBreak: 'false',
-    breakSince: '',
-    // Journal preferences
-    simpleJournal: 'false',
-    customEmotions: '[]',
-    customSetups: '[]',
-    proactiveCoachEnabled: 'true',
-    coachBriefSnapshot: '',
-    coachBriefAttempt: '',
-    coachBriefText: '',
-    cloudJournalAccess: 'true'
-  }
   const ins = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)')
-  for (const [k, v] of Object.entries(defaults)) ins.run(k, String(v))
+  for (const [k, v] of Object.entries(SETTINGS_DEFAULTS)) ins.run(k, String(v))
 }
 
 const num = (v) => {
@@ -821,39 +761,121 @@ export function setGoals(g) {
   return getGoals()
 }
 
-export function getSettings() {
-  const rows = db.prepare('SELECT key, value FROM settings').all()
-  const o = {}
-  for (const { key, value } of rows) o[key] = value
-  return o
-}
+const SETTINGS_DEFAULTS = Object.freeze({
+  provider: 'ollama',
+  ollamaUrl: 'http://localhost:11434',
+  ollamaModel: 'llama3.2',
+  ollamaVisionModel: 'llama3.2-vision',
+  cloudUrl: 'https://api.openai.com/v1',
+  cloudModel: 'gpt-4o-mini',
+  cloudKey: '',
+  // Trade Mode: per-day circuit breaker + the trader's own pre-flight checklist.
+  dailyGoal: '300',
+  maxDailyLoss: '300',
+  tradeRules: JSON.stringify([
+    'Setup matches my written plan — not forcing it',
+    'Risk is within my max per trade',
+    'Stop-loss is set before I enter',
+    'No high-impact news about to drop',
+    'Not revenge trading or chasing'
+  ]),
+  // Ticker tape: keyless by default (Stooq/Binance). Add a Finnhub key for real-time stocks.
+  tickerEnabled: 'true',
+  tickerSymbols: 'SPY,QQQ,BTC,ETH',
+  finnhubKey: '',
+  // Economic calendar: keyless by default (ForexFactory). Add an FMP key for a fuller feed.
+  eventsEnabled: 'true',
+  fmpKey: '',
+  eventsMinImpact: 'High',
+  eventsLeadMin: '15',
+  themePreset: 'classic',
+  accentColor: 'amber',
+  goTimeAccent: 'orange',
+  pnlStyle: 'classic',
+  fontStyle: 'default',
+  themeMode: 'dark',
+  backdrop: 'constellation',
+  customBackgroundFile: '',
+  customBackgroundOpacity: '22',
+  customBackgroundBlur: '0',
+  customBackgroundDim: '42',
+  customBackgroundFit: 'cover',
+  onboarded: '',
+  liveCapital: '0',
+  dailyReportEnabled: 'true',
+  dailyReportSeen: '',
+  feedbackPromptSeen: '',
+  easterEggEnabled: 'true',
+  easterEggSeen: '[]',
+  lastSeenVersion: '',
+  breakWeeks: '[]',
+  onBreak: 'false',
+  breakSince: '',
+  // Journal and coach preferences.
+  simpleJournal: 'false',
+  customEmotions: '[]',
+  customSetups: '[]',
+  proactiveCoachEnabled: 'true',
+  coachBriefSnapshot: '',
+  coachBriefAttempt: '',
+  coachBriefText: '',
+  cloudJournalAccess: 'true',
+  coachVoice: 'balanced',
+  personalClockSource: 'auto',
+  personalClockAlerts: 'true',
+  personalClockAmbience: 'true',
+  personalClockManualWindows: '[]'
+})
 
 const SETTINGS_KEYS = new Set([
-  'provider', 'ollamaUrl', 'ollamaModel', 'ollamaVisionModel',
-  'cloudUrl', 'cloudModel', 'cloudKey',
-  'dailyGoal', 'maxDailyLoss', 'tradeRules',
-  'tickerEnabled', 'tickerSymbols', 'finnhubKey',
-  'eventsEnabled', 'fmpKey', 'eventsMinImpact', 'eventsLeadMin',
-  'themePreset', 'accentColor', 'goTimeAccent', 'pnlStyle', 'fontStyle',
-  'themeMode', 'backdrop', 'customBackgroundFile', 'customBackgroundOpacity',
-  'customBackgroundBlur', 'customBackgroundDim', 'customBackgroundFit',
-  'onboarded', 'lastSeenVersion',
-  'breakWeeks', 'onBreak', 'breakSince',
+  ...Object.keys(SETTINGS_DEFAULTS),
   'trialStart', 'licenseKey', 'licenseInstanceId', 'licenseStatus',
-  'achievements', 'propFirmAccounts', 'propFirm', 'liveCapital',
-  'dailyReportEnabled', 'dailyReportSeen', 'feedbackPromptSeen', 'easterEggEnabled', 'easterEggSeen',
-  'simpleJournal', 'customEmotions', 'customSetups',
-  'proactiveCoachEnabled', 'coachBriefSnapshot', 'coachBriefAttempt', 'coachBriefText',
-  'cloudJournalAccess',
+  'achievements', 'propFirmAccounts', 'propFirm',
 ])
+
+const COACH_VOICES = new Set(['supportive', 'balanced', 'tough-love'])
+const PERSONAL_CLOCK_SOURCES = new Set(['auto', 'manual'])
+const PERSONAL_CLOCK_BOOLEAN_KEYS = new Set(['personalClockAlerts', 'personalClockAmbience'])
+const CLOCK_TIME = /^(?:[01]\d|2[0-3]):[0-5]\d$/
+
+function normalizeManualClockWindows(value) {
+  let parsed
+  try { parsed = Array.isArray(value) ? value : JSON.parse(String(value)) } catch { parsed = [] }
+  if (!Array.isArray(parsed)) return '[]'
+  const windows = parsed.flatMap((item) => {
+    if (!item || typeof item !== 'object') return []
+    const start = String(item.start ?? '').trim()
+    const end = String(item.end ?? '').trim()
+    return CLOCK_TIME.test(start) && CLOCK_TIME.test(end) && start !== end ? [{ start, end }] : []
+  })
+  return JSON.stringify(windows)
+}
+
+function normalizeSettingValue(key, value) {
+  const stringValue = String(value)
+  if (key === 'coachVoice') return COACH_VOICES.has(stringValue) ? stringValue : SETTINGS_DEFAULTS.coachVoice
+  if (key === 'personalClockSource') return PERSONAL_CLOCK_SOURCES.has(stringValue) ? stringValue : SETTINGS_DEFAULTS.personalClockSource
+  if (PERSONAL_CLOCK_BOOLEAN_KEYS.has(key)) return stringValue === 'true' || stringValue === 'false' ? stringValue : SETTINGS_DEFAULTS[key]
+  if (key === 'personalClockManualWindows') return normalizeManualClockWindows(value)
+  return stringValue
+}
+
+export function getSettings() {
+  const rows = db.prepare('SELECT key, value FROM settings').all()
+  const settings = { ...SETTINGS_DEFAULTS }
+  for (const { key, value } of rows) {
+    if (SETTINGS_KEYS.has(key)) settings[key] = normalizeSettingValue(key, value)
+  }
+  return settings
+}
 
 export function setSettings(s) {
   const up = db.prepare(
     'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
   )
   const tx = db.transaction((obj) => {
-    for (const [k, v] of Object.entries(obj)) {
-      if (SETTINGS_KEYS.has(k)) up.run(k, String(v))
+    for (const [key, value] of Object.entries(obj)) {
+      if (SETTINGS_KEYS.has(key)) up.run(key, normalizeSettingValue(key, value))
     }
   })
   tx(s)

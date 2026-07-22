@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { CheckCircle2, Clock3, FolderPlus, History, Inbox, RefreshCw, RotateCcw, Trash2, X } from 'lucide-react'
 import { T, inputStyle, mono } from '../theme.js'
 import { BROKER_PRESETS } from '../utils.js'
+import { LOCAL_TIMEZONE, importTimeZoneOptions, normalizeImportTimeZone } from '../importTimezone.js'
 
 const TABS = [
   ['inbox', Inbox, 'Inbox'],
@@ -10,7 +11,6 @@ const TABS = [
   ['folders', FolderPlus, 'Watched folders']
 ]
 
-const commonZones = ['Local time', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'UTC']
 const shortPath = (path) => String(path || '').split(/[\\/]/).filter(Boolean).pop() || 'Broker exports'
 const when = (value) => value ? new Date(value).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '-'
 
@@ -40,7 +40,7 @@ export function ImportCenterModal({ onClose, onReview, onRollback, accounts = []
     if (!picked?.ok) return
     setDraft({
       name: shortPath(picked.folderPath), folderPath: picked.folderPath, brokerKey: '', account: '',
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local time', trusted: false, enabled: true
+      timezone: LOCAL_TIMEZONE, trusted: false, enabled: true
     })
   }
 
@@ -169,6 +169,9 @@ function AccountSelect({ value, accounts, onChange, className }) {
 }
 
 function ZoneSelect({ value, onChange, className }) {
-  const zones = [...new Set([value, ...commonZones].filter(Boolean))]
-  return <select style={inputStyle} className={className} value={value || 'Local time'} onChange={(event) => onChange(event.target.value)} aria-label="Broker timezone">{zones.map((zone) => <option key={zone} value={zone}>{zone}</option>)}</select>
+  const selected = normalizeImportTimeZone(value)
+  const options = [...new Set([selected, ...importTimeZoneOptions()])]
+  return <select style={inputStyle} className={className} value={selected} onChange={(event) => onChange(event.target.value)} aria-label="Broker timezone">
+    {options.map((zone) => <option key={zone} value={zone}>{zone === LOCAL_TIMEZONE ? 'Local time (no conversion)' : zone}</option>)}
+  </select>
 }

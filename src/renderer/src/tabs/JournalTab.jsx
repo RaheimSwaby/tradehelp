@@ -7,7 +7,7 @@ import { Field, Panel, GradeChip } from '../components/Shared.jsx'
 import { ImportModal } from '../widgets/ImportModal.jsx'
 import { ImportCenterModal } from '../widgets/ImportCenterModal.jsx'
 import { AnnotateModal } from '../components/AnnotateModal.jsx'
-import { matchesJournalFilters, parseJournalQuery } from '../journalSearch.js'
+import { describeJournalDrilldown, matchesJournalDrilldown, matchesJournalFilters, parseJournalQuery } from '../journalSearch.js'
 import { averageCostFillPreview, selectInstrumentProfile, synthesizeTradeFills } from '../workflow.js'
 
 const NO_TRADE_REASONS = [
@@ -35,7 +35,7 @@ function attachmentTitle(trade) {
 }
 
 /* ───────── journal ───────── */
-export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, onRollbackImport, accounts = [], profiles = [], savedSearches = [], onAddSavedSearch, onUpdateSavedSearch, onDeleteSavedSearch, onRefreshSavedSearches, settings, onSaveSettings, dayLogs = [], onAddDayLog, onDeleteDayLog }) {
+export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, onRollbackImport, accounts = [], profiles = [], savedSearches = [], onAddSavedSearch, onUpdateSavedSearch, onDeleteSavedSearch, onRefreshSavedSearches, settings, onSaveSettings, dayLogs = [], onAddDayLog, onDeleteDayLog, drilldown = null, onConsumeDrilldown }) {
   const blank = { symbol: '', direction: 'Long', entry: '', exit: '', stop: '', target: '', size: '', riskAmount: '', pnl: '', fees: '', emotion: 'Neutral', setup: 'Pullback', notes: '', entryTime: nowLocalInput(), exitTime: nowLocalInput(), reason: '', account: '', selfSetup: '', selfExec: '' }
   const [f, setF] = useState(blank)
   const [images, setImages] = useState([])
@@ -47,6 +47,8 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
   const [importInboxCount, setImportInboxCount] = useState(0)
   const [editing, setEditing] = useState(null)
   const [query, setQuery] = useState('')
+  const [timingDrilldown, setTimingDrilldown] = useState(null)
+  const consumedDrilldownRef = useRef(null)
   const [dismissedSearchFilters, setDismissedSearchFilters] = useState([])
   const [outcome, setOutcome] = useState('all') // all | win | loss
   const [selectedSearchId, setSelectedSearchId] = useState('')
@@ -149,6 +151,7 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
     setDismissedSearchFilters([])
     setOutcome('all')
     setSelectedSearchId('')
+    setTimingDrilldown(null)
   }
   function applySavedSearch(id) {
     const saved = savedSearches.find((search) => String(search.id) === String(id))
@@ -185,15 +188,23 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
   const filtered = useMemo(() => {
     return trades.filter((t) => {
       if (pendingDelete && t.id === pendingDelete.id) return false
+      if (!matchesJournalDrilldown(t, timingDrilldown)) return false
       const pnl = Number(t.pnl) || 0
       if (outcome === 'win' && pnl <= 0) return false
       if (outcome === 'loss' && pnl >= 0) return false
       return matchesJournalFilters(t, activeSearchFilters)
     })
-  }, [trades, activeSearchFilters, outcome, pendingDelete])
+  }, [trades, activeSearchFilters, outcome, pendingDelete, timingDrilldown])
 
   const [page, setPage] = useState(0)
   const [pageSize, setPageSize] = useState(20)
+  useEffect(() => {
+    if (!drilldown?.id || consumedDrilldownRef.current === drilldown.id) return
+    consumedDrilldownRef.current = drilldown.id
+    setTimingDrilldown(drilldown)
+    setPage(0)
+    onConsumeDrilldown?.(drilldown.id)
+  }, [drilldown, onConsumeDrilldown])
   const ordered = useMemo(() => [...filtered].reverse(), [filtered]) // newest first
   const pageCount = Math.max(1, Math.ceil(ordered.length / pageSize))
   const safePage = Math.min(page, pageCount - 1)
@@ -685,6 +696,14 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
               <button type="button" onClick={() => { setPendingImport(null); setImportOpen(true) }} className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-md" style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}` }}><Upload size={13} /> Import CSV</button>
             </div>
           </div>
+          {timingDrilldown && (
+            <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs" role="status" style={{ background: T.accentSoft, border: `1px solid ${T.accent}`, color: T.text }}>
+              <span style={{ color: T.accent }}>Timing drilldown</span>
+              <strong>{describeJournalDrilldown(timingDrilldown)}</strong>
+              <span style={{ color: T.dim }}>{filtered.length} matching trade{filtered.length === 1 ? '' : 's'}; add symbol, setup, account, or outcome filters below.</span>
+              <button type="button" onClick={() => setTimingDrilldown(null)} className="ml-auto inline-flex items-center gap-1" style={{ color: T.faint }}>Clear <X size={12} /></button>
+            </div>
+          )}
           {trades.length > 0 && (
             <div className="flex flex-wrap items-center gap-2 mt-2">
               <div className="relative flex-1 min-w-[260px]">

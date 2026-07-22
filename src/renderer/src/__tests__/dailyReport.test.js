@@ -18,6 +18,10 @@ describe('lastTradingDay', () => {
   it('returns null for no trades', () => {
     expect(lastTradingDay([], '2026-07-09')).toBeNull()
   })
+  it('uses the actual entry date before a later journal timestamp', () => {
+    const rows = [{ entryTime: '2026-07-08 23:55', timestamp: '2026-07-09 00:05' }]
+    expect(lastTradingDay(rows, '2026-07-09')).toBe('2026-07-08')
+  })
 })
 
 describe('buildDailyReport', () => {
@@ -36,6 +40,12 @@ describe('buildDailyReport', () => {
     expect(r.rows[0].symbol).toBe('MES')
     expect(r.tiltEmotions).toEqual(['Revenge'])
     expect(r.tip).toMatch(/Revenge/)
+  })
+
+  it('groups a trade by its entry date rather than its journal timestamp', () => {
+    const lateJournal = [{ symbol: 'NQ', pnl: 25, entryTime: '2026-07-08 23:55', timestamp: '2026-07-09 00:05' }]
+    expect(buildDailyReport(lateJournal, '2026-07-08').rows).toHaveLength(1)
+    expect(buildDailyReport(lateJournal, '2026-07-09').rows).toHaveLength(0)
   })
 
   it('nudges to tag emotions when none are present', () => {

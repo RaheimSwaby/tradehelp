@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Bot, RefreshCw, Sparkles } from 'lucide-react'
 import { T } from '../theme.js'
-import { buildCoachBrief, coachSnapshotKey, proactiveCoachPayload } from '../coachInsights.js'
+import { buildCoachBrief, coachSnapshotKey, proactiveCoachPayload, shouldIncludeWrittenJournal } from '../coachInsights.js'
 import { fullJournalContext } from '../stats.js'
 
 function aiConfigured(settings) {
@@ -12,9 +12,13 @@ function aiConfigured(settings) {
   return Boolean(settings?.ollamaUrl && settings?.ollamaModel)
 }
 
+export function buildCoachBriefAiPayload(context, brief, settings = {}) {
+  return proactiveCoachPayload(context, brief, settings.coachVoice)
+}
+
 export function CoachBriefCard({ trades, stats, settings, journalData = {}, onSaveSettings, onOpenCoach }) {
   const brief = useMemo(() => buildCoachBrief(trades, stats), [trades, stats])
-  const includeWritten = settings?.provider !== 'cloud' || (settings?.cloudJournalAccess ?? 'true') !== 'false'
+  const includeWritten = shouldIncludeWrittenJournal(settings)
   const context = useMemo(() => fullJournalContext({ trades, stats, settings, ...journalData }, { includeWritten }), [trades, stats, settings, journalData, includeWritten])
   const snapshot = useMemo(() => coachSnapshotKey(trades, context), [trades, context])
   const cached = settings?.coachBriefSnapshot === snapshot ? settings?.coachBriefText : ''
@@ -30,7 +34,7 @@ export function CoachBriefCard({ trades, stats, settings, journalData = {}, onSa
     setLoading(true)
     if (!manual) await onSaveSettings?.({ coachBriefAttempt: snapshot })
     try {
-      const res = await window.api.aiChat(proactiveCoachPayload(context, brief))
+      const res = await window.api.aiChat(buildCoachBriefAiPayload(context, brief, settings))
       if (res?.ok && res.text) {
         if (mounted.current) setAiText(res.text)
         await onSaveSettings?.({ coachBriefSnapshot: snapshot, coachBriefText: res.text, coachBriefAttempt: snapshot })

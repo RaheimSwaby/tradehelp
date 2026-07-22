@@ -6,7 +6,8 @@ import { fmt$, fmtN } from '../utils.js'
 import { computeStats, computeLeaks } from '../stats.js'
 import { Stat, Panel, EmptyChart } from '../components/Shared.jsx'
 import { PnlCalendar } from './JournalTab.jsx'
-import { quoteOfTheDay } from '../quotes.js'
+import { buildDataAwareGreeting, quoteOfTheDay } from '../quotes.js'
+import { formatClockMinute } from '../sessionClock.js'
 import { CoachBriefCard } from '../components/CoachBriefCard.jsx'
 import { CoachCommitmentCard } from '../components/CoachCommitmentCard.jsx'
 import { ShareReportModal } from '../components/ShareReportModal.jsx'
@@ -82,6 +83,7 @@ function TimingTooltip({ active, payload, kind }) {
           <div style={{ color: T.dim }}>{fmtN(row.wr, 0)}% win rate</div>
         </>
       )}
+      {row.rCount > 0 && <div style={{ color: T.accent }}>Average realized R {row.avgR >= 0 ? '+' : ''}{fmtN(row.avgR, 2)}R · {row.rCount} risk-tagged</div>}
       <div className="mt-0.5" style={{ color: row.total >= 8 ? T.accent : T.faint }}>
         {row.total} trade{row.total === 1 ? '' : 's'} · {row.total >= 8 ? 'confirmed sample' : 'building sample'}
       </div>
@@ -89,18 +91,24 @@ function TimingTooltip({ active, payload, kind }) {
   )
 }
 
-function TimingPerformance({ stats }) {
+export function TimingPerformance({ stats, onDrilldown }) {
   const {
     byHour = [], byWeekday = [], bestHour, worstHour, bestDay, worstDay,
-    timingSample = 0, timingDays = 0, timingCoverage = 0, timingWinRate = 0, n = 0
+    timingSample = 0, timingRecordedSample = 0, timingDays = 0, timingCoverage = 0, timingWinRate = 0,
+    timingHistoryStart, timingHistoryEnd, timingMinSample = 8, timingRMinSample = 4, n = 0
   } = stats
+  const metric = (row, fallback) => row?.rCount >= timingRMinSample
+    ? `${row.avgR >= 0 ? '+' : ''}${fmtN(row.avgR, 2)}R avg · ${row.rCount} risk-tagged`
+    : fallback
   const summaries = [
-    bestHour && { key: 'best-hour', Icon: Flame, label: 'Best confirmed hour', value: `${fmtHour(bestHour.k)}–${fmtHour(Number(bestHour.k) + 1)}`, stat: `${fmtN(bestHour.wr, 0)}% WR · ${fmt$(bestHour.expectancy)}/trade`, color: T.up, bg: withAlpha(T.up, 0.09), border: withAlpha(T.up, 0.28) },
-    bestDay && { key: 'best-day', Icon: CalendarDays, label: 'Best confirmed day', value: bestDay.k, stat: `${fmt$(bestDay.pnl)} net · ${bestDay.total} trades`, color: T.up, bg: withAlpha(T.up, 0.07), border: withAlpha(T.up, 0.24) },
-    worstHour && { key: 'worst-hour', Icon: Snowflake, label: 'Weakest confirmed hour', value: `${fmtHour(worstHour.k)}–${fmtHour(Number(worstHour.k) + 1)}`, stat: `${fmtN(worstHour.wr, 0)}% WR · ${fmt$(worstHour.expectancy)}/trade`, color: T.down, bg: withAlpha(T.down, 0.08), border: withAlpha(T.down, 0.26) },
-    worstDay && { key: 'worst-day', Icon: TrendingDown, label: 'Weakest confirmed day', value: worstDay.k, stat: `${fmt$(worstDay.pnl)} net · ${worstDay.total} trades`, color: T.down, bg: withAlpha(T.down, 0.08), border: withAlpha(T.down, 0.24) }
+    bestHour && { key: 'best-hour', Icon: Flame, label: 'Best confirmed hour', value: `${fmtHour(bestHour.k)}–${fmtHour(Number(bestHour.k) + 1)}`, stat: metric(bestHour, `${fmtN(bestHour.wr, 0)}% WR · ${fmt$(bestHour.expectancy)}/trade`), color: T.up, bg: withAlpha(T.up, 0.09), border: withAlpha(T.up, 0.28) },
+    bestDay && { key: 'best-day', Icon: CalendarDays, label: 'Best confirmed day', value: bestDay.k, stat: metric(bestDay, `${fmt$(bestDay.pnl)} net · ${bestDay.total} trades`), color: T.up, bg: withAlpha(T.up, 0.07), border: withAlpha(T.up, 0.24) },
+    worstHour && { key: 'worst-hour', Icon: Snowflake, label: 'Weakest confirmed hour', value: `${fmtHour(worstHour.k)}–${fmtHour(Number(worstHour.k) + 1)}`, stat: metric(worstHour, `${fmtN(worstHour.wr, 0)}% WR · ${fmt$(worstHour.expectancy)}/trade`), color: T.down, bg: withAlpha(T.down, 0.08), border: withAlpha(T.down, 0.26) },
+    worstDay && { key: 'worst-day', Icon: TrendingDown, label: 'Weakest confirmed day', value: worstDay.k, stat: metric(worstDay, `${fmt$(worstDay.pnl)} net · ${worstDay.total} trades`), color: T.down, bg: withAlpha(T.down, 0.08), border: withAlpha(T.down, 0.24) }
   ].filter(Boolean)
-  const coverage = n ? `${timingSample} of ${n} trades timed (${fmtN(timingCoverage, 0)}%) · ${timingDays} days` : 'No trades yet'
+  const recentRange = timingHistoryStart && timingHistoryEnd ? `${timingHistoryStart}–${timingHistoryEnd}` : 'recent history'
+  const coverage = n ? `${timingSample} recent timed · ${timingRecordedSample} of ${n} recorded (${fmtN(timingCoverage, 0)}%) · ${timingDays} days` : 'No trades yet'
+  const summaryLine = (row, kind) => `${kind === 'hour' ? `${fmtHour(row.k)}–${fmtHour(Number(row.k) + 1)}` : row.day}: ${row.total} trades, ${fmtN(row.wr, 0)}% wins, ${fmt$(row.expectancy)}/trade${row.rCount ? `, ${row.avgR >= 0 ? '+' : ''}${fmtN(row.avgR, 2)}R average` : ''}`
 
   return (
     <Panel title="Timing performance" right={<span className="text-[10px]" style={{ color: T.faint }}>{coverage}</span>}>
@@ -119,6 +127,12 @@ function TimingPerformance({ stats }) {
         </div>
       )}
 
+      {timingSample > 0 && summaries.length === 0 && (
+        <div className="mb-4 rounded-lg px-3 py-2 text-xs" role="status" style={{ background: T.surface2, border: `1px solid ${T.line}`, color: T.dim }}>
+          <strong style={{ color: T.accent }}>Confidence building.</strong> Confirmed best/worst guidance appears after {timingMinSample} trades in a bucket. When at least {timingRMinSample} have recorded risk, signed realized R leads the ranking so one oversized winner cannot create a false edge.
+        </div>
+      )}
+
       {!timingSample ? (
         <div className="py-8 text-center text-xs" style={{ color: T.faint }}>Add actual entry times to unlock trustworthy timing insights.</div>
       ) : (
@@ -134,10 +148,17 @@ function TimingPerformance({ stats }) {
                     <YAxis domain={[0, 100]} tick={{ fill: T.faint, fontSize: 10 }} stroke={T.line} tickFormatter={(value) => `${value}%`} />
                     <Tooltip content={<TimingTooltip kind="hour" />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
                     <Bar dataKey="wrAdjusted" radius={[4, 4, 0, 0]} maxBarSize={30}>
-                      {byHour.map((row) => <Cell key={row.k} fill={row.expectancy >= 0 ? T.up : T.down} fillOpacity={Math.max(0.24, row.confidence)} />)}
+                      {byHour.map((row) => <Cell key={row.k} fill={row.expectancy >= 0 ? T.up : T.down} fillOpacity={Math.max(0.24, row.confidence)} cursor="pointer" onClick={() => onDrilldown?.({ hour: row.k, count: row.total })} />)}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
+              </div>
+              <div className="mt-2 max-h-24 overflow-y-auto text-[10px]" aria-label="Accessible hourly timing summary" style={{ color: T.faint }}>
+                {byHour.map((row) => (
+                  <button key={row.k} type="button" onClick={() => onDrilldown?.({ hour: row.k, count: row.total })} className="block w-full text-left rounded px-1.5 py-1 hover:opacity-80" title="Open these trades in Journal">
+                    {summaryLine(row, 'hour')}
+                  </button>
+                ))}
               </div>
             </div>
             <div className="rounded-lg p-3" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
@@ -150,15 +171,22 @@ function TimingPerformance({ stats }) {
                     <YAxis tick={{ fill: T.faint, fontSize: 10 }} stroke={T.line} tickFormatter={(value) => `$${value}`} />
                     <Tooltip content={<TimingTooltip kind="weekday" />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
                     <Bar dataKey="pnl" radius={[4, 4, 0, 0]} maxBarSize={38}>
-                      {byWeekday.map((row) => <Cell key={row.day} fill={row.pnl >= 0 ? T.up : T.down} fillOpacity={Math.max(0.24, row.confidence)} />)}
+                      {byWeekday.map((row) => <Cell key={row.day} fill={row.pnl >= 0 ? T.up : T.down} fillOpacity={Math.max(0.24, row.confidence)} cursor="pointer" onClick={() => onDrilldown?.({ weekday: row.day, count: row.total })} />)}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
+              <div className="mt-2 text-[10px]" aria-label="Accessible weekday timing summary" style={{ color: T.faint }}>
+                {byWeekday.map((row) => (
+                  <button key={row.day} type="button" onClick={() => onDrilldown?.({ weekday: row.day, count: row.total })} className="block w-full text-left rounded px-1.5 py-1 hover:opacity-80" title="Open these trades in Journal">
+                    {summaryLine(row, 'weekday')}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
           <div className="mt-3 text-[10px]" style={{ color: T.faint }}>
-            Bar opacity reflects confidence; full strength begins at 8 trades. Hour height uses a sample-adjusted win rate, while color shows whether that hour actually makes or loses money.
+            Recent window: {recentRange}. Select any bar or text summary to inspect its trades. Opacity reflects confidence; full strength begins at {timingMinSample} trades. R-backed buckets are ranked by signed realized R; other buckets fall back to sample-adjusted win rate and dollar expectancy.
           </div>
         </>
       )}
@@ -167,7 +195,7 @@ function TimingPerformance({ stats }) {
 }
 
 /* ───────── dashboard ───────── */
-export function Dashboard({ stats, trades, accounts = [], settings, journalData, onSaveSettings, onOpenCoach, payouts = [], plans = [], commitments = [], pnlFeedback = null, onAddCommitment, onUpdateCommitment, onDeleteCommitment, onOpenTrade }) {
+export function Dashboard({ stats, trades, accounts = [], settings, journalData, onSaveSettings, onOpenCoach, payouts = [], plans = [], commitments = [], pnlFeedback = null, onAddCommitment, onUpdateCommitment, onDeleteCommitment, onOpenTrade, onTimingDrilldown, personalClock = null, personalSchedule = null, now = Date.now() }) {
   const [view, setView] = useState('all') // all | live | prop
   const [shareOpen, setShareOpen] = useState(false)
   const [selectedDay, setSelectedDay] = useState(null)
@@ -200,15 +228,40 @@ export function Dashboard({ stats, trades, accounts = [], settings, journalData,
   // Reuse the precomputed combined stats for "all"; only recompute for a filtered view.
   const vStats = useMemo(() => (view === 'all' || !hasProp ? stats : computeStats(viewTrades)), [view, hasProp, stats, viewTrades])
   const empty = vStats.n === 0
-  const dailyQuote = quoteOfTheDay()
+  const currentDate = new Date(now)
+  const dailyQuote = quoteOfTheDay(currentDate)
+  const greeting = buildDataAwareGreeting({ now: currentDate, personalClock, cleanStreak: vStats.nonTiltStreak })
+  const inferredWindows = personalSchedule?.windows || []
+  const windowSummary = inferredWindows.map((window) => `${formatClockMinute(window.start)}–${formatClockMinute(window.end)}`).join(' · ')
+  const scheduleSessions = personalSchedule?.metadata?.historySessionCount || personalSchedule?.metadata?.sessionCount || 0
+  const scheduleSource = personalSchedule?.source === 'manual' ? 'manually set' : `based on ${scheduleSessions} recent session${scheduleSessions === 1 ? '' : 's'}`
+  function openTimingDrilldown(intent) {
+    const accountIds = view === 'prop' ? [...propIds] : view === 'live' ? [''] : undefined
+    const scopeLabel = view === 'prop' ? 'Prop accounts' : view === 'live' ? 'Live account' : ''
+    onTimingDrilldown?.({ ...intent, accountIds, scopeLabel })
+  }
 
   return (
     <div className="space-y-4">
+      <div className="rounded-xl px-4 py-3" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
+        <div className="text-sm font-semibold" style={{ color: T.text }}>{greeting}</div>
+        {windowSummary && (
+          <div className="text-xs mt-1" style={{ color: T.dim }}>
+            Personal windows: <span style={{ ...mono, color: T.accent }}>{windowSummary}</span> · {scheduleSource}
+          </div>
+        )}
+        {personalSchedule?.metadata?.confidence?.state === 'building' && (
+          <div className="text-xs mt-1" role="status" style={{ color: T.faint }}>{personalSchedule.metadata.confidence.message}</div>
+        )}
+        {personalSchedule?.scheduleShift?.message && (
+          <div className="text-xs mt-1" role="status" style={{ color: T.accent }}>{personalSchedule.scheduleShift.message}</div>
+        )}
+      </div>
       <div className="rounded-xl px-4 py-2.5 flex items-start gap-2.5" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
         <Quote size={14} style={{ color: T.accent, flexShrink: 0, marginTop: 3 }} />
         <div className="min-w-0 leading-snug">
-          <span className="text-sm" style={{ color: T.dim }}>{dailyQuote.text}</span>
-          <span className="text-xs ml-1.5 whitespace-nowrap" style={{ color: T.faint }}>— {dailyQuote.author}</span>
+          <div><span className="text-sm" style={{ color: T.dim }}>{dailyQuote.text}</span><span className="text-xs ml-1.5" style={{ color: T.faint }}>— {dailyQuote.author}</span></div>
+          <div className="text-[10px] mt-1" style={{ color: T.faint }}>{dailyQuote.source} · attribution: {dailyQuote.attribution}</div>
         </div>
       </div>
       <CoachBriefCard trades={viewTrades} stats={vStats} settings={settings} journalData={journalData} onSaveSettings={onSaveSettings} onOpenCoach={onOpenCoach} />
@@ -289,7 +342,7 @@ export function Dashboard({ stats, trades, accounts = [], settings, journalData,
         )}
       </Panel>
 
-      <TimingPerformance stats={vStats} />
+      <TimingPerformance stats={vStats} onDrilldown={openTimingDrilldown} />
       {compareOpen && (
         <SessionCompareModal
           trades={viewTrades}
@@ -304,7 +357,7 @@ export function Dashboard({ stats, trades, accounts = [], settings, journalData,
           trades={viewTrades}
           plans={viewPlans}
           dayLogs={journalData?.dayLogs || []}
-          commitments={commitments}
+          commitments={viewCommitments}
           onOpenTrade={(trade) => { setSelectedDay(null); onOpenTrade?.(trade) }}
           onClose={() => setSelectedDay(null)}
         />

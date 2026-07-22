@@ -3,7 +3,7 @@ import { Bot, Sparkles, Send, Search } from 'lucide-react'
 import { T, mono, inputStyle } from '../theme.js'
 import { fmt$, fmtN, streamChat } from '../utils.js'
 import { fullJournalContext, computeLeaks } from '../stats.js'
-import { buildCoachPrompts, lastTradingDay, buildDailyReport } from '../coachInsights.js'
+import { buildCoachPrompts, lastTradingDay, buildDailyReport, coachVoiceInstruction, localDayKey, shouldIncludeWrittenJournal } from '../coachInsights.js'
 import { Panel } from '../components/Shared.jsx'
 import { EventsPanel } from '../widgets/EventBanner.jsx'
 
@@ -15,11 +15,12 @@ CRITICAL: Use ONLY the data provided below. Never invent or assume trades, symbo
 Each trade shows the account it was on (the "account" field); "Live" means their personal, non-prop account. When the trader asks about a specific account (their Live account, or a prop account by name), use ONLY the trades whose account matches — refer to accounts by that name, never by an internal id — and if no trades match, say so plainly instead of inventing them.
 Many trades are logged without an emotion, setup, or reason — these show as "(none)". Treat "(none)" strictly as untagged: never infer, guess, or attribute an emotion/setup/reason to a trade that shows "(none)". Only count and cite tags that are literally present in the data, and count only the trades actually listed — do not estimate totals.
 For account-level totals (net P&L, win rate, trade count), use the numbers in the PER-ACCOUNT SUMMARY directly — they are already computed. Do not re-derive them from the trade list.
-Do NOT give buy/sell signals, price predictions, or personalized investment advice. Keep it tight (under ~180 words), direct, and supportive. If data is thin, say so honestly.`
+Do NOT give buy/sell signals, price predictions, or personalized investment advice. Keep it tight (under ~180 words) and direct. If data is thin, say so honestly.`
 
 export function Coach({ trades, stats, settings, reviews = {}, playbook = [], dayLogs = [], goals = {}, payouts = [], events, now }) {
   // Local Ollama always gets the full written record; cloud users can gate free-form text.
-  const includeWritten = settings?.provider !== 'cloud' || (settings?.cloudJournalAccess ?? 'true') !== 'false'
+  const includeWritten = shouldIncludeWrittenJournal(settings)
+  const coachSystem = `${COACH_SYSTEM}\n${coachVoiceInstruction(settings?.coachVoice)}`
   const [msgs, setMsgs] = useState([])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
@@ -40,11 +41,13 @@ export function Coach({ trades, stats, settings, reviews = {}, playbook = [], da
     setMsgs(next); setInput(''); setBusy(true); setStreamText('')
     const apiMsgs = [
       { role: 'user', content: `Here is my current journal data:\n\n${fullJournalContext({ trades, stats, settings, reviews, playbook, dayLogs, goals, payouts }, { includeWritten })}` },
-      { role: 'assistant', content: 'Got it — I have your full journal in front of me: trades, notes, reviews, playbook, goals and rules.' },
+      { role: 'assistant', content: includeWritten
+        ? 'Got it — I have your full journal in front of me: trades, notes, reviews, playbook, goals and rules.'
+        : 'Got it — I have your structured journal data. Written notes and reviews are excluded by your cloud privacy setting.' },
       ...next
     ]
     try {
-      const full = await streamChat({ system: COACH_SYSTEM, messages: apiMsgs }, (d) => setStreamText((s) => (s || '') + d), cancelStreamRef)
+      const full = await streamChat({ system: coachSystem, messages: apiMsgs }, (d) => setStreamText((s) => (s || '') + d), cancelStreamRef)
       setMsgs((m) => [...m, { role: 'assistant', content: full }])
     } catch (e) {
       setMsgs((m) => [...m, { role: 'assistant', content: `⚠︎ ${e?.message || 'Could not reach the model. Check Settings.'}` }])
@@ -63,10 +66,11 @@ export function Coach({ trades, stats, settings, reviews = {}, playbook = [], da
   // the costliest leak, a clean streak, untagged trades — and fall back to evergreen.
   const leaks = useMemo(() => computeLeaks(trades), [trades])
   const quick = useMemo(() => {
-    const lastDay = lastTradingDay(trades)
+    const promptNow = now == null ? new Date() : new Date(now)
+    const lastDay = lastTradingDay(trades, localDayKey(promptNow))
     const dailyReport = lastDay ? buildDailyReport(trades, lastDay) : null
-    return buildCoachPrompts({ trades, stats, leaks, dailyReport, dayLogs, payouts })
-  }, [trades, stats, leaks, dayLogs, payouts])
+    return buildCoachPrompts({ trades, stats, leaks, dailyReport, dayLogs, payouts, now: promptNow })
+  }, [trades, stats, leaks, dayLogs, payouts, now])
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-4">
@@ -102,8 +106,12 @@ export function Coach({ trades, stats, settings, reviews = {}, playbook = [], da
         </div>
         <div className="px-4 pt-2" style={{ borderTop: `1px solid ${T.line}` }}>
           <div className="flex flex-wrap gap-1.5 py-2">
-            {quick.map(([label, q]) => (
-              <button key={label} type="button" disabled={busy} onClick={() => ask(q)} className="text-xs px-2 py-1 rounded-md" style={{ background: T.surface2, color: T.dim, border: `1px solid ${T.line}` }}>{label}</button>
+            {quick.map(([label, q, reason]) => (
+              <button key={label} type="button" disabled={busy} onClick={() => ask(q)} title={reason}
+                className="text-left px-2 py-1.5 rounded-md max-w-[220px]" style={{ background: T.surface2, color: T.dim, border: `1px solid ${T.line}` }}>
+                <span className="block text-xs font-semibold">{label}</span>
+                {reason && <span className="block text-[10px] leading-tight mt-0.5" style={{ color: T.faint }}>{reason}</span>}
+              </button>
             ))}
           </div>
           <div className="flex gap-2 pb-3">

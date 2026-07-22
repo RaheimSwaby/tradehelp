@@ -2,6 +2,7 @@ import {
   IMPORT_FIELDS, BROKER_PRESETS, applyPresetMap, csvDate, csvNum,
   detectBrokerPreset, normDir, parseCSV
 } from './utils.js'
+import { LOCAL_TIMEZONE, normalizeImportTimeZone, normalizeImportWallTime } from './importTimezone.js'
 
 export const importTradeKey = (trade) => (trade?.entryTime
   ? `${String(trade.symbol || '').toUpperCase()}|${trade.entryTime}|${(Number(trade.pnl) || 0).toFixed(2)}`
@@ -29,14 +30,46 @@ export function guessImportMap(headers, rows) {
 
 const generatedId = () => `${Date.now().toString(36)}${Math.random().toString(16).slice(2)}`
 
-export function buildImportRows({ headers, rows, map, preset, existing = [], account = '' }) {
+function finalizeImportTrade(trade, { account, sourceRow, existingKeys, timezone, localTimezone }) {
+  const originalEntryTime = trade.entryTime
+  const originalExitTime = trade.exitTime
+  const entryTime = normalizeImportWallTime(originalEntryTime, timezone, localTimezone)
+  const exitTime = normalizeImportWallTime(originalExitTime, timezone, localTimezone)
+  let timestamp = trade.timestamp
+  if (originalEntryTime && timestamp === originalEntryTime) timestamp = entryTime
+  else if (originalExitTime && timestamp === originalExitTime) timestamp = exitTime
+
+  const finalized = {
+    ...trade,
+    symbol: String(trade.symbol || '').toUpperCase(),
+    account: account || trade.account || '',
+    sourceRow,
+    entryTime,
+    exitTime,
+    timestamp: timestamp || entryTime || exitTime
+  }
+  finalized.dupe = existingKeys.has(importTradeKey(finalized))
+  return finalized
+}
+
+export function buildImportRows({
+  headers, rows, map, preset, existing = [], account = '',
+  timezone = LOCAL_TIMEZONE, localTimezone
+}) {
   const existingKeys = new Set(existing.map(importTradeKey).filter(Boolean))
+  const normalizedTimezone = normalizeImportTimeZone(timezone)
+  const finalize = (trade, index) => finalizeImportTrade(trade, {
+    account,
+    sourceRow: index + 2,
+    existingKeys,
+    timezone: normalizedTimezone,
+    localTimezone
+  })
+
   if (preset?.buildRows) {
-    return preset.buildRows(rows, headers, existingKeys).map((trade, index) => ({
-      ...trade,
-      account: account || trade.account || '',
-      sourceRow: index + 2
-    }))
+    // Preset builders see an empty key set because duplicate keys must be checked
+    // only after source wall times have been normalized to the user's local zone.
+    return preset.buildRows(rows, headers, new Set()).map(finalize)
   }
   const indexOf = (field) => (map[field] ? headers.indexOf(map[field]) : -1)
   const cell = (row, field) => { const index = indexOf(field); return index >= 0 ? row[index] : '' }
@@ -65,14 +98,15 @@ export function buildImportRows({ headers, rows, map, preset, existing = [], acc
         return index >= 0 ? row[index] : ''
       }
       preset.post(trade, get)
-      trade.symbol = String(trade.symbol || '').toUpperCase()
     }
-    trade.dupe = existingKeys.has(importTradeKey(trade))
-    return trade
+    return finalize(trade, rowIndex)
   }).filter(Boolean)
 }
 
-export function prepareCsvImport(text, { existing = [], brokerKey = '', map: providedMap, account = '' } = {}) {
+export function prepareCsvImport(text, {
+  existing = [], brokerKey = '', map: providedMap, account = '',
+  timezone = LOCAL_TIMEZONE, localTimezone
+} = {}) {
   const all = parseCSV(text)
   if (all.length < 2) throw new Error('That file has a header but no data rows.')
   const headers = all[0].map((header) => String(header).trim())
@@ -81,7 +115,11 @@ export function prepareCsvImport(text, { existing = [], brokerKey = '', map: pro
   const requested = BROKER_PRESETS.find((item) => item.key === brokerKey) || null
   const preset = requested || detected
   const map = providedMap || (preset ? applyPresetMap(preset, headers) : guessImportMap(headers, rows))
-  const built = buildImportRows({ headers, rows, map, preset, existing, account })
+  const normalizedTimezone = normalizeImportTimeZone(timezone)
+  const built = buildImportRows({
+    headers, rows, map, preset, existing, account,
+    timezone: normalizedTimezone, localTimezone
+  })
   const duplicates = built.filter((trade) => trade.dupe).length
   const missingSymbols = Math.max(0, rows.length - built.length)
   const missingDates = built.filter((trade) => !trade.entryTime && !trade.exitTime).length
@@ -90,7 +128,7 @@ export function prepareCsvImport(text, { existing = [], brokerKey = '', map: pro
   if (missingSymbols) warnings.push(`${missingSymbols} row${missingSymbols === 1 ? '' : 's'} had no symbol and will be skipped.`)
   if (missingDates) warnings.push(`${missingDates} trade${missingDates === 1 ? '' : 's'} had no usable trade date.`)
   return {
-    headers, rows, map, preset, detected, built, warnings,
+    headers, rows, map, preset, detected, built, warnings, timezone: normalizedTimezone,
     rowCount: rows.length, duplicateCount: duplicates,
     skippedCount: missingSymbols, warningCount: warnings.length
   }

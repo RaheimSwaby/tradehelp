@@ -1,9 +1,63 @@
 import { Trophy, Brain, Snowflake, Shield, Target, BookOpen, Camera, TrendingUp, Calendar, Flame, Wallet, Banknote, CalendarCheck, Coffee, Sunrise, Crosshair, Handshake, Repeat, ShieldCheck } from 'lucide-react'
 import { TILT, REASONS, clamp, fmtN, holdMs, periodKey, pad2 } from './utils.js'
+import { TRADING_WINDOW_HISTORY_LIMITS } from './sessionClock.js'
+import { parsePeriodRetrospective } from './periodRetrospective.js'
+
+const PERIOD_RETROSPECTIVE_MARKER = '<!-- tradehelp-period-retrospective:'
+
+function journalReviewContext(reviews, includeWritten) {
+  const structured = []
+  const written = []
+  const entries = Object.entries(reviews || {}).sort(([a], [b]) => b.localeCompare(a))
+
+  for (const [reviewKey, storedReview] of entries) {
+    const parsed = parsePeriodRetrospective(storedReview)
+    if (parsed.structured) {
+      const retrospective = parsed.retrospective
+      const target = retrospective.targetSnapshot?.amount
+      const evidence = retrospective.process?.evidence
+      const fields = [
+        `period=${promptText(retrospective.periodKey || reviewKey, 40) || '-'}`,
+        `granularity=${promptText(retrospective.granularity, 20) || '-'}`,
+        `target=${target == null ? '(not set)' : promptNum(target)}`,
+        `targetSource=${promptText(retrospective.targetSnapshot?.source, 60) || '-'}`,
+        `actualPnL=${promptNum(retrospective.actualPnl)}`,
+        `tradeCount=${promptNum(retrospective.tradeCount)}`,
+        `goalOutcome=${promptText(retrospective.goalOutcome, 30) || '-'}`,
+        `processOutcome=${promptText(retrospective.process?.status, 30) || '-'}`
+      ]
+      if (evidence) {
+        fields.push(
+          `evidenceId=${promptText(evidence.id, 100) || '-'}`,
+          `evidenceTitle=${promptText(evidence.title, 200) || '-'}`,
+          `evidenceStatus=${promptText(evidence.status, 30) || '-'}`,
+          `evidenceRuleType=${promptText(evidence.ruleType, 60) || '-'}`,
+          `evidenceRuleValue=${promptText(evidence.ruleValue, 120) || '-'}`,
+          `evidenceAdhered=${promptNum(evidence.adheredCount)}/${promptNum(evidence.evaluatedCount)}`,
+          `evidenceAdherenceRate=${promptNum(evidence.adherenceRate)}%`
+        )
+      } else {
+        fields.push('evidence=none')
+      }
+      structured.push(fields.join(' | '))
+      if (includeWritten && parsed.reflection) written.push(`${reviewKey}: ${promptText(parsed.reflection, 2400)}`)
+      continue
+    }
+
+    if (!includeWritten) continue
+    const raw = String(storedReview ?? '')
+    const markerAt = raw.indexOf(PERIOD_RETROSPECTIVE_MARKER)
+    const legacyReflection = markerAt >= 0 ? raw.slice(0, markerAt).trimEnd() : raw
+    if (legacyReflection) written.push(`${reviewKey}: ${promptText(legacyReflection, 2400)}`)
+  }
+
+  return { structured, written }
+}
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const CHART_WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 export const TIMING_CONFIDENT_SAMPLE = 8
+export const TIMING_R_CONFIDENT_SAMPLE = 4
 const TIMING_PRIOR_WEIGHT = 8
 
 function entryMoment(value) {
@@ -14,20 +68,43 @@ function entryMoment(value) {
   const hour = Number(hourText), minute = Number(minuteText)
   const date = new Date(year, month - 1, dayOfMonth, 12)
   if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== dayOfMonth || hour > 23 || minute > 59) return null
-  return { date: `${yearText}-${monthText}-${dayText}`, day: WEEKDAYS[date.getDay()], hour: String(hour).padStart(2, '0') }
+  return {
+    date: `${yearText}-${monthText}-${dayText}`,
+    day: WEEKDAYS[date.getDay()],
+    dayIndex: Math.floor(Date.UTC(year, month - 1, dayOfMonth) / 86400000),
+    hour: String(hour).padStart(2, '0')
+  }
+}
+
+function recentTimingRows(rows) {
+  if (!rows.length) return []
+  const latestDay = Math.max(...rows.map((row) => row.moment.dayIndex))
+  const earliestDay = latestDay - TRADING_WINDOW_HISTORY_LIMITS.calendarDays + 1
+  const withinCalendarWindow = rows.filter((row) => row.moment.dayIndex >= earliestDay)
+  const retainedDays = [...new Set(withinCalendarWindow.map((row) => row.moment.dayIndex))]
+    .sort((a, b) => b - a)
+    .slice(0, TRADING_WINDOW_HISTORY_LIMITS.tradingDays)
+  const retained = new Set(retainedDays)
+  return withinCalendarWindow.filter((row) => retained.has(row.moment.dayIndex))
+}
+
+function realizedR(trade) {
+  const risk = Math.abs(Number(trade?.riskAmount))
+  const pnl = Number(trade?.pnl)
+  return risk > 0 && Number.isFinite(pnl) ? pnl / risk : null
 }
 
 function timingBucket() {
-  return { wins: 0, total: 0, pnl: 0, rrTotal: 0, rrCount: 0 }
+  return { wins: 0, total: 0, pnl: 0, rTotal: 0, rCount: 0 }
 }
 
 function addTimingTrade(bucket, trade) {
   const pnl = Number(trade.pnl) || 0
-  const rr = Number(trade.rr)
+  const r = realizedR(trade)
   bucket.total += 1
   bucket.pnl += pnl
   if (pnl > 0) bucket.wins += 1
-  if (rr > 0) { bucket.rrTotal += rr; bucket.rrCount += 1 }
+  if (r != null) { bucket.rTotal += r; bucket.rCount += 1 }
 }
 
 function timingSummary(k, bucket, baselineRate) {
@@ -41,16 +118,29 @@ function timingSummary(k, bucket, baselineRate) {
     wr,
     wrAdjusted,
     expectancy: bucket.total ? bucket.pnl / bucket.total : 0,
-    avgR: bucket.rrCount ? bucket.rrTotal / bucket.rrCount : 0,
+    avgR: bucket.rCount ? bucket.rTotal / bucket.rCount : null,
+    rCount: bucket.rCount,
+    rCoverage: bucket.total ? (bucket.rCount / bucket.total) * 100 : 0,
     confidence: Math.min(1, bucket.total / TIMING_CONFIDENT_SAMPLE)
   }
 }
 
 function rankTiming(summaries, direction) {
-  const sign = direction === 'best' ? 1 : -1
+  const best = direction === 'best'
+  const sign = best ? 1 : -1
   return summaries
-    .filter((item) => item.total >= TIMING_CONFIDENT_SAMPLE && (direction === 'best' ? item.expectancy > 0 : item.expectancy < 0))
-    .sort((a, b) => sign * (b.wrAdjusted - a.wrAdjusted) || sign * (b.expectancy - a.expectancy))[0] || null
+    .filter((item) => {
+      if (item.total < TIMING_CONFIDENT_SAMPLE) return false
+      if (item.rCount >= TIMING_R_CONFIDENT_SAMPLE) return best ? item.avgR > 0 : item.avgR < 0
+      return best ? item.expectancy > 0 : item.expectancy < 0
+    })
+    .sort((a, b) => {
+      const aHasR = a.rCount >= TIMING_R_CONFIDENT_SAMPLE
+      const bHasR = b.rCount >= TIMING_R_CONFIDENT_SAMPLE
+      if (aHasR !== bHasR) return bHasR - aHasR
+      if (aHasR) return sign * (b.avgR - a.avgR) || sign * (b.wrAdjusted - a.wrAdjusted)
+      return sign * (b.wrAdjusted - a.wrAdjusted) || sign * (b.expectancy - a.expectancy)
+    })[0] || null
 }
 
 /* ───────── stats ───────── */
@@ -112,15 +202,21 @@ export function computeStats(trades) {
     return Object.values(m).map((g) => ({ ...g, wr: g.n ? (g.w / g.n) * 100 : 0 })).sort((a, b) => b.pnl - a.pnl)
   }
 
-  // Timing insights only use an explicit entry time. Falling back to the journal's
-  // creation timestamp would turn "when I trade best" into "when I log trades."
-  const timedTrades = sorted.map((trade) => ({ trade, moment: entryMoment(trade.entryTime) })).filter((row) => row.moment)
+  // Timing insights use only explicit entry times and the most recent 90 calendar
+  // days / 50 trading days. Older behavior remains in portfolio stats, but cannot
+  // outweigh a changed schedule in current timing advice.
+  const allTimedTrades = sorted.map((trade) => ({ trade, moment: entryMoment(trade.entryTime) })).filter((row) => row.moment)
+  const timedTrades = recentTimingRows(allTimedTrades)
+  const timingRecordedSample = allTimedTrades.length
   const timingSample = timedTrades.length
   const timingDays = new Set(timedTrades.map((row) => row.moment.date)).size
-  const timingCoverage = n ? (timingSample / n) * 100 : 0
+  const timingCoverage = n ? (timingRecordedSample / n) * 100 : 0
   const timingWins = timedTrades.filter(({ trade }) => (Number(trade.pnl) || 0) > 0).length
   const timingWinRate = timingSample ? (timingWins / timingSample) * 100 : 0
   const timingBaseline = timingSample ? timingWins / timingSample : 0
+  const timingHistoryDates = timedTrades.map((row) => row.moment.date).sort()
+  const timingHistoryStart = timingHistoryDates[0] || null
+  const timingHistoryEnd = timingHistoryDates[timingHistoryDates.length - 1] || null
   const hourTotals = {}
   const weekdayTotals = {}
   const byHourDay = {}
@@ -169,7 +265,10 @@ export function computeStats(trades) {
     reasonsWin: toReasonArr(reasonsWin), reasonsLoss: toReasonArr(reasonsLoss),
     byEmotion: groupPnl('emotion'), bySetup: groupPnl('setup'), byHour, byWeekday,
     byHourDay, bestHour, worstHour, bestDay, worstDay,
-    timingSample, timingDays, timingCoverage, timingWinRate, timingMinSample: TIMING_CONFIDENT_SAMPLE
+    timingSample, timingRecordedSample, timingDays, timingCoverage, timingWinRate,
+    timingHistoryStart, timingHistoryEnd, timingMinSample: TIMING_CONFIDENT_SAMPLE,
+    timingRMinSample: TIMING_R_CONFIDENT_SAMPLE,
+    timingHistoryLimits: { ...TRADING_WINDOW_HISTORY_LIMITS }
   }
 }
 
@@ -535,11 +634,14 @@ export function fullJournalContext({ trades = [], stats, reviews = {}, playbook 
     `weeklyGoal=${promptNum(goals.weekly)} monthlyGoal=${promptNum(goals.monthly)} dailyGoal=${promptNum(settings.dailyGoal)} maxDailyLoss=${promptNum(settings.maxDailyLoss)}`
   ])
 
+  const reviewContext = journalReviewContext(reviews, includeWritten)
+  append('PERIOD RETROSPECTIVES (structured facts; reflections are listed separately)', reviewContext.structured)
+
   if (includeWritten) {
     let rules = []
     try { const parsed = JSON.parse(settings.tradeRules || '[]'); if (Array.isArray(parsed)) rules = parsed } catch {}
     append('TRADING RULES', rules.map((r, i) => `${i + 1}. ${promptText(r, 500)}`))
-    append('SAVED REVIEWS', Object.entries(reviews || {}).sort(([a], [b]) => b.localeCompare(a)).map(([period, text]) => `${period}: ${promptText(text, 2400)}`))
+    append('SAVED REVIEWS (written reflections)', reviewContext.written)
     append('PLAYBOOK', (playbook || []).map((p) => [
       `Setup=${promptText(p.name, 100)}`,
       `description=${promptText(p.description, 700) || '-'}`,

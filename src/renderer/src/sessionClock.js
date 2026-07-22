@@ -4,6 +4,14 @@ const MAX_WINDOW_MINUTES = 10 * 60
 const OCCURRENCE_GAP_MINUTES = 3 * 60
 const START_CLUSTER_MINUTES = 3 * 60
 const PRIOR_WEIGHT = 8
+const SHIFT_SEGMENT_DAYS = 5
+const SHIFT_MIN_SEGMENT_DAYS = 4
+const MEANINGFUL_SHIFT_MINUTES = 60
+
+export const TRADING_WINDOW_HISTORY_LIMITS = Object.freeze({
+  calendarDays: 90,
+  tradingDays: 50
+})
 
 function normalizeMinute(value) {
   return ((Math.round(value) % DAY_MINUTES) + DAY_MINUTES) % DAY_MINUTES
@@ -20,6 +28,7 @@ function parsedDateTime(value) {
   const dayIndex = Math.floor(check.getTime() / 86400000)
   return {
     date: `${yearText}-${monthText}-${dayText}`,
+    dayIndex,
     minute: hour * 60 + minute,
     absolute: dayIndex * DAY_MINUTES + hour * 60 + minute
   }
@@ -76,11 +85,35 @@ function tradeSpan(trade) {
   const exit = parsedDateTime(trade?.exitTime)
   const exitDuration = exit ? exit.absolute - entry.absolute : -1
   const end = exitDuration >= 0 && exitDuration <= MAX_TRADE_MINUTES ? exit.absolute : entry.absolute
-  return { day: entry.date, start: entry.absolute, end }
+  return { day: entry.date, dayIndex: entry.dayIndex, start: entry.absolute, end }
 }
 
-function buildOccurrences(trades) {
-  const spans = (trades || []).map(tradeSpan).filter(Boolean).sort((a, b) => a.start - b.start)
+function selectRecentSpans(trades) {
+  const allSpans = (trades || [])
+    .map(tradeSpan)
+    .filter(Boolean)
+    .sort((a, b) => a.start - b.start || a.end - b.end)
+  if (!allSpans.length) return { spans: [], days: [] }
+
+  const latestDayIndex = allSpans[allSpans.length - 1].dayIndex
+  const earliestAllowedDay = latestDayIndex - TRADING_WINDOW_HISTORY_LIMITS.calendarDays + 1
+  const withinCalendarLimit = allSpans.filter((span) => span.dayIndex >= earliestAllowedDay)
+
+  // Retention is deterministic: first keep the inclusive 90-calendar-day span
+  // ending on the newest entry date, then keep its newest 50 distinct entry dates.
+  const retainedDayIndexes = [...new Set(withinCalendarLimit.map((span) => span.dayIndex))]
+    .sort((a, b) => b - a)
+    .slice(0, TRADING_WINDOW_HISTORY_LIMITS.tradingDays)
+  const retainedSet = new Set(retainedDayIndexes)
+  const spans = withinCalendarLimit.filter((span) => retainedSet.has(span.dayIndex))
+  const dateByDayIndex = new Map(spans.map((span) => [span.dayIndex, span.day]))
+  const days = retainedDayIndexes
+    .sort((a, b) => a - b)
+    .map((dayIndex) => ({ dayIndex, date: dateByDayIndex.get(dayIndex) }))
+  return { spans, days }
+}
+
+function buildOccurrences(spans) {
   const occurrences = []
   for (const span of spans) {
     const current = occurrences[occurrences.length - 1]
@@ -96,8 +129,8 @@ function buildOccurrences(trades) {
 
 // Infer every recurring personal window instead of forcing morning and evening trades
 // into one oversized session. Circular clustering keeps 11:30 PM and 12:30 AM close.
-export function inferTradingWindows(trades, minimumDays = 3) {
-  const occurrences = buildOccurrences(trades)
+function windowCandidates(spans) {
+  const occurrences = buildOccurrences(spans)
   const clusters = []
   for (const occurrence of occurrences) {
     const startMinute = normalizeMinute(occurrence.start)
@@ -118,34 +151,195 @@ export function inferTradingWindows(trades, minimumDays = 3) {
     closest.center = circularMean(closest.items.map((item) => item.startMinute))
   }
 
-  return clusters
-    .map((cluster) => {
-      const sampleDays = new Set(cluster.items.map((item) => item.day)).size
-      if (sampleDays < minimumDays) return null
-      const alignedStarts = cluster.items.map((item) => unwrapNear(item.startMinute, cluster.center))
-      const alignedEnds = cluster.items.map((item, index) => alignedStarts[index] + Math.max(0, item.end - item.start))
-      const start = normalizeMinute(median(alignedStarts))
-      const medianEnd = median(alignedEnds)
-      const duration = Math.min(MAX_WINDOW_MINUTES, Math.max(90, medianEnd - median(alignedStarts)))
-      const end = start + duration
-      return {
-        id: `${start}-${end}`,
-        start,
-        end,
-        duration,
-        overnight: end >= DAY_MINUTES,
-        sampleDays,
-        sampleSessions: cluster.items.length
+  return clusters.map((cluster) => {
+    const sampleDays = new Set(cluster.items.map((item) => item.dayIndex)).size
+    const alignedStarts = cluster.items.map((item) => unwrapNear(item.startMinute, cluster.center))
+    const alignedEnds = cluster.items.map((item, index) => alignedStarts[index] + Math.max(0, item.end - item.start))
+    const medianStart = median(alignedStarts)
+    const start = normalizeMinute(medianStart)
+    const medianEnd = median(alignedEnds)
+    const duration = Math.min(MAX_WINDOW_MINUTES, Math.max(90, medianEnd - medianStart))
+    const end = start + duration
+    return {
+      id: `${start}-${end}`,
+      start,
+      end,
+      duration,
+      overnight: end >= DAY_MINUTES,
+      sampleDays,
+      sampleSessions: cluster.items.length
+    }
+  }).sort((a, b) => a.start - b.start)
+}
+
+function primaryWindow(windows) {
+  return [...windows]
+    .sort((a, b) => b.sampleDays - a.sampleDays || b.sampleSessions - a.sampleSessions || a.start - b.start)[0] || null
+}
+
+function signedCircularDelta(from, to) {
+  let delta = normalizeMinute(to) - normalizeMinute(from)
+  if (delta > DAY_MINUTES / 2) delta -= DAY_MINUTES
+  if (delta < -DAY_MINUTES / 2) delta += DAY_MINUTES
+  return delta
+}
+
+function detectScheduleShift(spans, days) {
+  const segmentDays = Math.min(SHIFT_SEGMENT_DAYS, Math.floor(days.length / 2))
+  if (segmentDays < SHIFT_MIN_SEGMENT_DAYS) return null
+
+  const recentDays = days.slice(-segmentDays)
+  const precedingDays = days.slice(-segmentDays * 2, -segmentDays)
+  const recentSet = new Set(recentDays.map((day) => day.dayIndex))
+  const precedingSet = new Set(precedingDays.map((day) => day.dayIndex))
+  const recentSpans = spans.filter((span) => recentSet.has(span.dayIndex))
+  const precedingSpans = spans.filter((span) => precedingSet.has(span.dayIndex))
+  const oldWindow = primaryWindow(windowCandidates(precedingSpans).filter((window) => window.sampleDays >= SHIFT_MIN_SEGMENT_DAYS))
+  const newWindow = primaryWindow(windowCandidates(recentSpans).filter((window) => window.sampleDays >= SHIFT_MIN_SEGMENT_DAYS))
+  if (!oldWindow || !newWindow) return null
+
+  const shiftMinutes = signedCircularDelta(oldWindow.start, newWindow.start)
+  if (Math.abs(shiftMinutes) < MEANINGFUL_SHIFT_MINUTES) return null
+
+  const oldUsualStartLabel = formatClockMinute(oldWindow.start)
+  const newUsualStartLabel = formatClockMinute(newWindow.start)
+  return {
+    recentSpans,
+    data: {
+      type: 'usual-start',
+      oldUsualStart: oldWindow.start,
+      newUsualStart: newWindow.start,
+      oldUsualStartLabel,
+      newUsualStartLabel,
+      shiftMinutes,
+      direction: shiftMinutes > 0 ? 'later' : 'earlier',
+      thresholdMinutes: MEANINGFUL_SHIFT_MINUTES,
+      precedingDayCount: precedingDays.length,
+      recentDayCount: recentDays.length,
+      message: `Your usual start shifted from ${oldUsualStartLabel} to ${newUsualStartLabel} in recent sessions.`
+    }
+  }
+}
+
+function dayRecordsFor(spans) {
+  const dateByDayIndex = new Map(spans.map((span) => [span.dayIndex, span.day]))
+  return [...dateByDayIndex]
+    .sort(([a], [b]) => a - b)
+    .map(([dayIndex, date]) => ({ dayIndex, date }))
+}
+
+export function inferTradingSchedule(trades, minimumDays = 3) {
+  const retained = selectRecentSpans(trades)
+  const shift = detectScheduleShift(retained.spans, retained.days)
+  // Once a real shift is established, infer today's schedule from the recent segment.
+  // This keeps an old start time from masquerading as a recurring split session.
+  const inferenceSpans = shift?.recentSpans || retained.spans
+  const inferenceDays = dayRecordsFor(inferenceSpans)
+  const candidates = windowCandidates(inferenceSpans)
+  const windows = candidates
+    .filter((window) => window.sampleDays >= minimumDays)
+    .map((window) => ({
+      ...window,
+      confidence: {
+        state: 'ready',
+        observedDays: window.sampleDays,
+        requiredDays: minimumDays,
+        remainingDays: 0
       }
-    })
-    .filter(Boolean)
-    .sort((a, b) => a.start - b.start)
+    }))
+  const observedRecurringDays = candidates.reduce((largest, window) => Math.max(largest, window.sampleDays), 0)
+  const confidenceReady = windows.length > 0
+  const confidence = {
+    state: confidenceReady ? 'ready' : 'building',
+    observedDays: observedRecurringDays,
+    requiredDays: minimumDays,
+    remainingDays: Math.max(0, minimumDays - observedRecurringDays),
+    message: confidenceReady
+      ? `${observedRecurringDays} recurring trading days support your inferred schedule.`
+      : `Learning your timing — ${observedRecurringDays} of ${minimumDays} recurring trading days observed.`
+  }
+  const occurrences = buildOccurrences(inferenceSpans)
+  const historicalOccurrences = inferenceSpans === retained.spans ? occurrences : buildOccurrences(retained.spans)
+
+  return {
+    windows,
+    metadata: {
+      dayCount: inferenceDays.length,
+      sessionCount: occurrences.length,
+      historyDayCount: retained.days.length,
+      historySessionCount: historicalOccurrences.length,
+      historyStart: retained.days[0]?.date || null,
+      historyEnd: retained.days[retained.days.length - 1]?.date || null,
+      inferenceStart: inferenceDays[0]?.date || null,
+      inferenceEnd: inferenceDays[inferenceDays.length - 1]?.date || null,
+      limits: { ...TRADING_WINDOW_HISTORY_LIMITS },
+      confidence
+    },
+    scheduleShift: confidenceReady ? shift?.data || null : null
+  }
+}
+
+function manualClockMinute(value) {
+  const match = String(value || '').match(/^(\d{2}):(\d{2})$/)
+  if (!match) return null
+  const hour = Number(match[1]), minute = Number(match[2])
+  return hour <= 23 && minute <= 59 ? hour * 60 + minute : null
+}
+
+// Convert persisted manual HH:MM pairs into the same precomputed schedule contract
+// as inferred windows, including overnight ranges. Invalid/equal pairs are ignored.
+export function manualTradingSchedule(value) {
+  let parsed
+  try { parsed = Array.isArray(value) ? value : JSON.parse(String(value || '[]')) } catch { parsed = [] }
+  const windows = (Array.isArray(parsed) ? parsed : []).flatMap((item, index) => {
+    const start = manualClockMinute(item?.start)
+    const rawEnd = manualClockMinute(item?.end)
+    if (start == null || rawEnd == null || start === rawEnd) return []
+    const end = rawEnd <= start ? rawEnd + DAY_MINUTES : rawEnd
+    return [{
+      id: `manual-${index}-${start}-${end}`,
+      start,
+      end,
+      duration: end - start,
+      overnight: end >= DAY_MINUTES,
+      sampleDays: 0,
+      sampleSessions: 0,
+      source: 'manual',
+      confidence: { state: 'ready', observedDays: 0, requiredDays: 0, remainingDays: 0 }
+    }]
+  }).sort((a, b) => a.start - b.start)
+  return {
+    windows,
+    metadata: {
+      dayCount: 0,
+      sessionCount: 0,
+      historyDayCount: 0,
+      historySessionCount: 0,
+      historyStart: null,
+      historyEnd: null,
+      inferenceStart: null,
+      inferenceEnd: null,
+      limits: { ...TRADING_WINDOW_HISTORY_LIMITS },
+      confidence: {
+        state: windows.length ? 'ready' : 'building',
+        observedDays: 0,
+        requiredDays: 0,
+        remainingDays: 0,
+        message: windows.length ? `${windows.length} manual trading window${windows.length === 1 ? '' : 's'} configured.` : 'Add a manual trading window in Settings.'
+      }
+    },
+    scheduleShift: null,
+    source: 'manual'
+  }
+}
+
+export function inferTradingWindows(trades, minimumDays = 3) {
+  return inferTradingSchedule(trades, minimumDays).windows
 }
 
 // Backward-compatible primary window for consumers that only need one schedule.
 export function inferTradingWindow(trades, minimumDays = 3) {
-  return [...inferTradingWindows(trades, minimumDays)]
-    .sort((a, b) => b.sampleDays - a.sampleDays || b.sampleSessions - a.sampleSessions || a.start - b.start)[0] || null
+  return primaryWindow(inferTradingWindows(trades, minimumDays))
 }
 
 function hourLabel(hour) {
@@ -241,8 +435,44 @@ function phaseFor(window, minute) {
   return 'off'
 }
 
-export function personalTradingClock(trades, now = new Date()) {
-  const windows = inferTradingWindows(trades)
+function metadataForPrecomputedWindows(windows) {
+  const observedDays = windows.reduce((largest, window) => Math.max(largest, Number(window.sampleDays) || 0), 0)
+  return {
+    dayCount: observedDays,
+    sessionCount: windows.reduce((total, window) => total + (Number(window.sampleSessions) || 0), 0),
+    historyDayCount: observedDays,
+    historySessionCount: windows.reduce((total, window) => total + (Number(window.sampleSessions) || 0), 0),
+    historyStart: null,
+    historyEnd: null,
+    inferenceStart: null,
+    inferenceEnd: null,
+    limits: { ...TRADING_WINDOW_HISTORY_LIMITS },
+    confidence: {
+      state: windows.length ? 'ready' : 'building',
+      observedDays,
+      requiredDays: 3,
+      remainingDays: windows.length ? 0 : 3
+    }
+  }
+}
+
+function resolveSchedule(trades, precomputedSchedule) {
+  if (Array.isArray(precomputedSchedule)) {
+    return {
+      windows: precomputedSchedule,
+      metadata: metadataForPrecomputedWindows(precomputedSchedule),
+      scheduleShift: null
+    }
+  }
+  if (precomputedSchedule && Array.isArray(precomputedSchedule.windows)) return precomputedSchedule
+  return inferTradingSchedule(trades)
+}
+
+// Pass inferTradingSchedule(trades), or its windows array, as the third argument to
+// cache inference on trade changes while recalculating only the clock phase on timers.
+export function personalTradingClock(trades, now = new Date(), precomputedSchedule) {
+  const schedule = resolveSchedule(trades, precomputedSchedule)
+  const windows = schedule.windows
   if (!windows.length) return null
 
   const clockMinute = now.getHours() * 60 + now.getMinutes()
@@ -267,6 +497,8 @@ export function personalTradingClock(trades, now = new Date()) {
     ...selected,
     windows,
     windowCount: windows.length,
+    inferenceMetadata: schedule.metadata,
+    scheduleShift: schedule.scheduleShift || null,
     minute: alignedMinute,
     phase,
     phaseShort: labels[phase].short,
