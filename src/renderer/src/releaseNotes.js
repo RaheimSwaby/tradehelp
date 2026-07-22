@@ -13,7 +13,16 @@ const V035_NOTES = `• Position sizing — size a plan from your risk budget (f
 • Similar charts — find look-alike setups, all on your machine
 • Screen recordings — attach a recording to a trade and play it back`
 
+const V036_NOTES = `- Cosmetic Refresh - each theme preset now has its own restrained motion style
+- Trade Mode now uses one polished, full-window activation sequence across every preset
+- Live stats count smoothly when P&L changes, with preset-specific number effects
+- Personal trading clock and session ambiance adapt to your usual trading window
+- Performance heat map is easier to read, with clearer samples and best/weakest summaries
+- Animated backdrops and page transitions are lighter and smoother on slower hardware
+- Dashboard quotes rotate daily and AI Coach quick prompts adapt to your journal`
+
 export const RELEASE_NOTES = {
+  '0.36.0': V036_NOTES,
   '0.35.5': V035_NOTES,
   '0.35.4': V035_NOTES,
   '0.35.3': V035_NOTES,
