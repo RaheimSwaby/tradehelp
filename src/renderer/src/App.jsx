@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react'
 import {
   LayoutDashboard, Brain, Target, Settings as SettingsIcon, Gauge, Play,
-  Feather, Landmark, ScrollText, Radar, CalendarClock, AlertTriangle, X, Clock3
+  Feather, Landmark, ScrollText, Radar, CalendarClock, AlertTriangle, X, Clock3, TrendingUp
 } from 'lucide-react'
 import { Whistle, PlayDiagram, CrosshairCandle } from './components/Icons.jsx'
 import { applyTheme, T, mono } from './theme.js'
@@ -35,7 +35,7 @@ import { FeedbackPrompt } from './components/FeedbackPrompt.jsx'
 import { EasterEggNudge } from './components/EasterEggNudge.jsx'
 import { buildEasterEggNudges, lastTradingDay } from './coachInsights.js'
 import { dHashDataUrl, IMAGE_FINGERPRINT_VERSION } from './workflow.js'
-import { personalTradingClock } from './sessionClock.js'
+import { personalTradingClock, sessionEdgeCue } from './sessionClock.js'
 
 /* ───────── logo mark: three ascending candles, tracks the live theme ───────── */
 function LogoMark({ size = 22, ignite = false, live = false }) {
@@ -73,6 +73,28 @@ function PersonalClockReadout({ clock }) {
 function SessionAmbience({ clock }) {
   if (!clock || clock.phase === 'off') return null
   return <div className={`th-session-ambience th-session-${clock.phase}`} aria-hidden="true" />
+}
+
+// Floating nudge when the trader is entering (or in) one of their historically strong or
+// weak hours — the payoff of the session clock crossed with their heat-map hour data.
+function SessionEdgeBubble({ cue, onClose }) {
+  if (!cue) return null
+  const strong = cue.tone === 'strong'
+  const c = strong ? T.up : T.down
+  const Icon = strong ? TrendingUp : AlertTriangle
+  return (
+    <div className="fixed bottom-4 left-4 z-[74] w-[340px] max-w-[calc(100vw-2rem)] rounded-xl th-fade" style={{ background: T.surface, border: `1px solid ${c}`, boxShadow: '0 12px 30px rgba(0,0,0,0.42)' }}>
+      <div className="p-3.5 flex items-start gap-2.5">
+        <Icon size={16} style={{ color: c, flexShrink: 0, marginTop: 1 }} />
+        <div className="flex-1 min-w-0">
+          <div className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: c }}>Session clock · {cue.range}</div>
+          <div className="text-sm font-semibold mt-0.5">{cue.headline}</div>
+          <div className="text-xs mt-1" style={{ color: T.dim }}>{cue.detail}</div>
+        </div>
+        <button type="button" onClick={onClose} style={{ color: T.faint }} aria-label="Dismiss"><X size={15} /></button>
+      </div>
+    </div>
+  )
 }
 
 function GoTimeTransition() {
@@ -394,6 +416,20 @@ export default function App() {
   const maxLoss = parseFloat(settings?.maxDailyLoss) || 0
   const lossHit = maxLoss > 0 && todayNet <= -maxLoss
   const sessionClock = useMemo(() => personalTradingClock(trades, new Date(now)), [trades, now])
+  const [sessionCue, setSessionCue] = useState(null)
+  const sessionCueSeen = useRef('')
+  // Surface a strong/weak-hour nudge at most once per relevant hour per day, while in-session.
+  useEffect(() => {
+    if (!sessionClock || sessionClock.phase === 'off') return
+    const cue = sessionEdgeCue(stats, new Date(now))
+    if (!cue) return
+    const key = `${new Date(now).toISOString().slice(0, 10)}:${cue.hour}`
+    if (sessionCueSeen.current === key) return
+    sessionCueSeen.current = key
+    setSessionCue(cue)
+  }, [now, sessionClock, stats])
+  // Time-sensitive, so it clears itself rather than lingering stale.
+  useEffect(() => { if (!sessionCue) return; const t = setTimeout(() => setSessionCue(null), 90000); return () => clearTimeout(t) }, [sessionCue])
 
   function clearGoTimer() { clearTimeout(goTimerRef.current); goTimerRef.current = null }
   function startDay() {
@@ -634,6 +670,9 @@ export default function App() {
       )}
       {feedbackPrompt && !dailyReport && !onboard && !nudge && !tradeMode && (!GATE_CONFIGURED || license?.state !== 'expired') && (
         <FeedbackPrompt onShare={shareFeedback} onDismiss={endFeedbackPrompt} />
+      )}
+      {sessionCue && !onboard && !feedbackPrompt && !updateReady && (!GATE_CONFIGURED || license?.state !== 'expired') && (
+        <SessionEdgeBubble cue={sessionCue} onClose={() => setSessionCue(null)} />
       )}
     </div>
   )

@@ -21,6 +21,8 @@ export function initUpdater(getWindow) {
   const check = () => autoUpdater.checkForUpdates().catch(() => {})
 
   check()
-  setInterval(check, 10 * 1000)
+  // Poll every 30 minutes (plus on window focus). A short testing interval had been
+  // left in, which made every install hammer the update feed and swamped the metrics.
+  setInterval(check, 30 * 60 * 1000)
   app.on('browser-window-focus', () => check())
 }

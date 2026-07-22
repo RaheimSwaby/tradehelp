@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatClockMinute, inferTradingWindow, personalTradingClock } from '../sessionClock.js'
+import { formatClockMinute, inferTradingWindow, personalTradingClock, sessionEdgeCue } from '../sessionClock.js'
 
 const trade = (day, entry, exit = '') => ({
   entryTime: `${day}T${entry}`,
@@ -42,5 +42,44 @@ describe('personal trading clock', () => {
   it('formats clock minutes without leaking 24-hour notation', () => {
     expect(formatClockMinute(570)).toBe('9:30 AM')
     expect(formatClockMinute(720)).toBe('12:00 PM')
+  })
+})
+
+describe('session edge cue', () => {
+  const stats = {
+    winRate: 50,
+    byHourDay: {
+      'Mon-10': { wins: 4, total: 5 },
+      'Tue-10': { wins: 4, total: 5 }, // hour 10 → 8/10 = 80%, well above baseline
+      'Mon-14': { wins: 1, total: 6 }, // hour 14 → 1/6 ≈ 17%, well below
+      'Mon-11': { wins: 5, total: 10 }, // hour 11 → 50%, on baseline
+      'Mon-15': { wins: 1, total: 2 } // hour 15 → sample too small
+    }
+  }
+  const at = (h, m) => sessionEdgeCue(stats, new Date(2026, 6, 21, h, m))
+
+  it('flags a strong hour the trader is currently in', () => {
+    const cue = at(10, 15)
+    expect(cue).toMatchObject({ tone: 'strong', hour: '10', entering: false, wr: 80 })
+    expect(cue.detail).toContain('above your 50% average')
+  })
+
+  it('warns just before entering a weak hour', () => {
+    const cue = at(13, 50)
+    expect(cue).toMatchObject({ tone: 'weak', hour: '14', entering: true })
+    expect(cue.headline).toMatch(/weakest hour is next/i)
+  })
+
+  it('stays quiet on an average hour and on tiny samples', () => {
+    expect(at(11, 15)).toBeNull()
+    expect(at(15, 15)).toBeNull()
+  })
+
+  it('says nothing for hours the trader never trades', () => {
+    expect(at(3, 15)).toBeNull()
+  })
+
+  it('needs a baseline win rate to compare against', () => {
+    expect(sessionEdgeCue({ byHourDay: stats.byHourDay }, new Date(2026, 6, 21, 10, 15))).toBeNull()
   })
 })

@@ -51,6 +51,51 @@ export function inferTradingWindow(trades, minimumDays = 3) {
   return { start, end, duration: end - start, sampleDays: days.length }
 }
 
+function hourLabel(hour) {
+  const h = ((Math.round(hour) % 24) + 24) % 24
+  return `${h % 12 || 12} ${h >= 12 ? 'PM' : 'AM'}`
+}
+
+// Cross the personal clock with per-hour win rate: nudge as the trader is about to enter
+// (or has just entered) an hour that historically runs well above or below their baseline.
+// Self-gates on sample size, so it only speaks about hours the trader actually trades.
+export function sessionEdgeCue(stats = {}, now = new Date(), { minSample = 4, edge = 12, lookaheadMin = 12 } = {}) {
+  const byHour = {}
+  for (const [key, cell] of Object.entries(stats.byHourDay || {})) {
+    const h = String(key).split('-')[1]
+    if (!h) continue
+    if (!byHour[h]) byHour[h] = { wins: 0, total: 0 }
+    byHour[h].wins += cell?.wins || 0
+    byHour[h].total += cell?.total || 0
+  }
+  const baseline = Number(stats.winRate)
+  if (!Number.isFinite(baseline)) return null
+
+  const entering = now.getMinutes() >= 60 - lookaheadMin
+  const hourNum = entering ? (now.getHours() + 1) % 24 : now.getHours()
+  const hh = String(hourNum).padStart(2, '0')
+  const cell = byHour[hh]
+  if (!cell || cell.total < minSample) return null
+
+  const wr = (cell.wins / cell.total) * 100
+  const margin = wr - baseline
+  if (Math.abs(margin) < edge) return null
+
+  const tone = margin > 0 ? 'strong' : 'weak'
+  const range = `${hourLabel(hourNum)}–${hourLabel(hourNum + 1)}`
+  const wrR = Math.round(wr)
+  const baseR = Math.round(baseline)
+  return {
+    tone, hour: hh, wr: wrR, baseline: baseR, sample: cell.total, entering, range,
+    headline: tone === 'strong'
+      ? (entering ? 'Your strongest window is next' : "You're in one of your strongest hours")
+      : (entering ? 'Heads up — your weakest hour is next' : "You're in one of your weakest hours"),
+    detail: tone === 'strong'
+      ? `${range} runs ${wrR}% wins across ${cell.total} trades — well above your ${baseR}% average. Press your edge, don't force it.`
+      : `${range} runs just ${wrR}% wins across ${cell.total} trades — below your ${baseR}% average. Size down or sit it out.`
+  }
+}
+
 export function personalTradingClock(trades, now = new Date()) {
   const window = inferTradingWindow(trades)
   if (!window) return null
