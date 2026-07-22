@@ -306,12 +306,39 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   .ach-toast, .ach-medal, .ach-burst, .ach-shine, .ach-glow { animation: none; }
   .th-cinematic, .th-cinematic::after { animation: none; }
   .th-go-trigger-on, .th-session-ambience, .th-logo-live { animation: none; }
+  .th-pnl-feedback, .th-pnl-feedback .th-pnl-number { animation: none !important; }
   .th-go-mode-transition { display: none; }
 }
 
-/* stat values: subtle slide-up when the number changes (span is keyed by value) */
+/* stat values animate only when their target changes; trade P&L gets one restrained outcome pulse. */
 .th-val { display: inline-block; animation: th-val .3s ease both; }
 .th-count { display: inline-block; min-width: 1ch; position: relative; font-variant-numeric: tabular-nums; }
+.th-pnl-feedback .th-pnl-number {
+  display: inline-block;
+  transform-origin: center;
+  animation: th-pnl-number-win 1.25s cubic-bezier(.16, 1, .3, 1) both;
+}
+.th-pnl-feedback-loss .th-pnl-number { animation-name: th-pnl-number-loss; }
+.th-card.th-pnl-feedback-win { animation: th-pnl-card-win 1.1s ease-out both; }
+.th-card.th-pnl-feedback-loss { animation: th-pnl-card-loss 1.1s ease-out both; }
+@keyframes th-pnl-number-win {
+  0%, 100% { color: var(--pnl-settle); transform: scale(1); text-shadow: none; }
+  24% { color: var(--pnl-pulse); transform: scale(1.055); text-shadow: 0 0 11px var(--pnl-pulse); }
+  52% { color: var(--pnl-pulse); transform: scale(1.015); text-shadow: 0 0 4px var(--pnl-pulse); }
+}
+@keyframes th-pnl-number-loss {
+  0%, 100% { color: var(--pnl-settle); transform: scale(1); text-shadow: none; }
+  25% { color: var(--pnl-pulse); transform: scale(1.025); text-shadow: 0 0 6px var(--pnl-pulse); }
+  48% { color: var(--pnl-pulse); transform: scale(1.008); text-shadow: 0 0 2px var(--pnl-pulse); }
+}
+@keyframes th-pnl-card-win {
+  0%, 100% { box-shadow: none; }
+  28% { box-shadow: 0 0 0 1px var(--pnl-pulse), 0 8px 24px color-mix(in srgb, var(--pnl-pulse) 18%, transparent); }
+}
+@keyframes th-pnl-card-loss {
+  0%, 100% { box-shadow: none; }
+  28% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--pnl-pulse) 60%, transparent), 0 6px 18px color-mix(in srgb, var(--pnl-pulse) 10%, transparent); }
+}
 @keyframes th-val {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: none; }

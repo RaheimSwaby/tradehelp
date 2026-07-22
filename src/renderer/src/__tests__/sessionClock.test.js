@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatClockMinute, inferTradingWindow, personalTradingClock, sessionEdgeCue } from '../sessionClock.js'
+import { formatClockMinute, inferTradingWindow, inferTradingWindows, personalTradingClock, sessionEdgeCue } from '../sessionClock.js'
 
 const trade = (day, entry, exit = '') => ({
   entryTime: `${day}T${entry}`,
@@ -39,6 +39,28 @@ describe('personal trading clock', () => {
     expect(inferred.end - inferred.start).toBe(90)
   })
 
+  it('keeps recurring morning and afternoon sessions as separate windows', () => {
+    const days = ['2026-07-13', '2026-07-14', '2026-07-15']
+    const split = days.flatMap((day) => [trade(day, '09:00', '10:00'), trade(day, '15:00', '16:00')])
+    expect(inferTradingWindows(split)).toMatchObject([
+      { start: 540, end: 630, sampleDays: 3 },
+      { start: 900, end: 990, sampleDays: 3 }
+    ])
+  })
+
+  it('keeps an overnight session active after midnight', () => {
+    const overnight = [13, 14, 15].map((day) => ({
+      entryTime: `2026-07-${day}T23:30`,
+      exitTime: `2026-07-${day + 1}T01:00`
+    }))
+    expect(inferTradingWindow(overnight)).toMatchObject({ start: 1410, end: 1500, overnight: true })
+    expect(personalTradingClock(overnight, new Date(2026, 6, 16, 0, 30))).toMatchObject({ phase: 'focus', windowLabel: '11:30 PM–1:00 AM' })
+  })
+
+  it('does not infer trading hours from journal timestamps', () => {
+    expect(inferTradingWindows(history.map(({ timestamp }) => ({ timestamp })))).toEqual([])
+  })
+
   it('formats clock minutes without leaking 24-hour notation', () => {
     expect(formatClockMinute(570)).toBe('9:30 AM')
     expect(formatClockMinute(720)).toBe('12:00 PM')
@@ -51,7 +73,7 @@ describe('session edge cue', () => {
     byHourDay: {
       'Mon-10': { wins: 4, total: 5 },
       'Tue-10': { wins: 4, total: 5 }, // hour 10 → 8/10 = 80%, well above baseline
-      'Mon-14': { wins: 1, total: 6 }, // hour 14 → 1/6 ≈ 17%, well below
+      'Mon-14': { wins: 1, total: 8 }, // hour 14 → 1/8 = 12.5%, well below with a confirmed sample
       'Mon-11': { wins: 5, total: 10 }, // hour 11 → 50%, on baseline
       'Mon-15': { wins: 1, total: 2 } // hour 15 → sample too small
     }

@@ -31,37 +31,53 @@ function prefersReducedMotion() {
   return typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 }
 
-export function AnimatedValue({ value, className = '', style }) {
+export function AnimatedValue({ value, className = '', style, from, animationKey }) {
   const parts = useMemo(() => numberDisplayParts(value), [value])
   const target = parts?.value ?? null
+  const explicitFrom = Number.isFinite(Number(from)) ? Number(from) : null
   const [current, setCurrent] = useState(target ?? 0)
   const [animating, setAnimating] = useState(false)
-  const previous = useRef(null)
+  const currentRef = useRef(target ?? 0)
+  const mounted = useRef(false)
+  const lastAnimationKey = useRef(null)
 
   useEffect(() => {
+    const firstRender = !mounted.current
+    mounted.current = true
+    const hasExplicitStart = explicitFrom != null && animationKey != null && animationKey !== lastAnimationKey.current
+    lastAnimationKey.current = animationKey
+
     if (target == null || prefersReducedMotion()) {
-      previous.current = target
       setAnimating(false)
-      if (target != null) setCurrent(target)
+      if (target != null) { currentRef.current = target; setCurrent(target) }
       return
     }
-    const start = previous.current == null ? 0 : previous.current
+    if (firstRender && !hasExplicitStart) {
+      currentRef.current = target
+      setCurrent(target)
+      return
+    }
+
+    const start = hasExplicitStart ? explicitFrom : currentRef.current
     const delta = target - start
-    previous.current = target
-    if (Math.abs(delta) < 0.001) { setAnimating(false); setCurrent(target); return }
+    if (Math.abs(delta) < 0.001) { setAnimating(false); currentRef.current = target; setCurrent(target); return }
+    currentRef.current = start
+    setCurrent(start)
     setAnimating(true)
     let frame = 0
     const startAt = performance.now()
     const step = (now) => {
-      const p = Math.min(1, (now - startAt) / ANIM_MS)
-      const eased = 1 - Math.pow(1 - p, 3)
-      setCurrent(start + delta * eased)
-      if (p < 1) frame = requestAnimationFrame(step)
-      else { setCurrent(target); setAnimating(false) }
+      const progress = Math.min(1, (now - startAt) / ANIM_MS)
+      const eased = 1 - Math.pow(1 - progress, 3)
+      const next = start + delta * eased
+      currentRef.current = next
+      setCurrent(next)
+      if (progress < 1) frame = requestAnimationFrame(step)
+      else { currentRef.current = target; setCurrent(target); setAnimating(false) }
     }
     frame = requestAnimationFrame(step)
     return () => cancelAnimationFrame(frame)
-  }, [target])
+  }, [target, explicitFrom, animationKey])
 
   if (!parts) return <span key={String(value)} className={`th-val ${className}`.trim()} style={style}>{value}</span>
   const display = formatAnimatedNumber(current, parts)
@@ -81,12 +97,16 @@ function Spark({ points, color }) {
   )
 }
 
-export function Stat({ label, value, sub, tone, spark }) {
+export function Stat({ label, value, sub, tone, spark, feedback }) {
   const color = tone === 'up' ? T.up : tone === 'down' ? T.down : tone === 'accent' ? T.accent : T.text
+  const pulseColor = Number(feedback?.delta) >= 0 ? T.up : T.down
+  const feedbackClass = feedback ? ` th-pnl-feedback th-pnl-feedback-${Number(feedback.delta) >= 0 ? 'win' : 'loss'}` : ''
   return (
-    <div className="rounded-lg p-3 th-card" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
+    <div key={feedback?.id || 'steady'} className={`rounded-lg p-3 th-card${feedbackClass}`} style={{ background: T.surface, border: `1px solid ${T.line}`, '--pnl-pulse': pulseColor, '--pnl-settle': color }}>
       <div className="text-xs uppercase tracking-wider" style={{ color: T.faint }}>{label}</div>
-      <div className="mt-1 text-xl font-semibold" style={{ ...mono, color }}><AnimatedValue value={value} /></div>
+      <div className="mt-1 text-xl font-semibold th-pnl-number" style={{ ...mono, color }}>
+        <AnimatedValue value={value} from={feedback?.from} animationKey={feedback?.id} />
+      </div>
       {sub && <div className="text-xs mt-0.5" style={{ color: T.dim }}>{sub}</div>}
       <Spark points={spark} color={tone === 'down' ? T.down : T.accent} />
     </div>
@@ -114,12 +134,16 @@ export function Panel({ title, right, children }) {
 export function EmptyChart() {
   return <div className="h-[200px] flex items-center justify-center text-sm" style={{ color: T.dim }}>Log trades to populate this chart.</div>
 }
-export function Readout({ label, value, tone }) {
+export function Readout({ label, value, tone, feedback }) {
   const color = tone === 'up' ? T.up : tone === 'down' ? T.down : T.text
+  const pulseColor = Number(feedback?.delta) >= 0 ? T.up : T.down
+  const feedbackClass = feedback ? ` th-pnl-feedback th-pnl-feedback-${Number(feedback.delta) >= 0 ? 'win' : 'loss'}` : ''
   return (
-    <div className="flex items-baseline gap-1.5">
+    <div key={feedback?.id || 'steady'} className={`flex items-baseline gap-1.5${feedbackClass}`} style={{ '--pnl-pulse': pulseColor, '--pnl-settle': color }}>
       <span className="text-xs" style={{ color: T.faint }}>{label}</span>
-      <AnimatedValue value={value} style={{ color }} />
+      <span className="th-pnl-number" style={{ color }}>
+        <AnimatedValue value={value} from={feedback?.from} animationKey={feedback?.id} />
+      </span>
     </div>
   )
 }

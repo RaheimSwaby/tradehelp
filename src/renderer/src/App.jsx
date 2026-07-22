@@ -35,7 +35,7 @@ import { FeedbackPrompt } from './components/FeedbackPrompt.jsx'
 import { EasterEggNudge } from './components/EasterEggNudge.jsx'
 import { buildEasterEggNudges, lastTradingDay } from './coachInsights.js'
 import { dHashDataUrl, IMAGE_FINGERPRINT_VERSION } from './workflow.js'
-import { personalTradingClock, sessionEdgeCue } from './sessionClock.js'
+import { localDateKey, personalTradingClock, sessionEdgeCue } from './sessionClock.js'
 
 /* ───────── logo mark: three ascending candles, tracks the live theme ───────── */
 function LogoMark({ size = 22, ignite = false, live = false }) {
@@ -153,9 +153,14 @@ export default function App() {
   const [planPrefill, setPlanPrefill] = useState(null)
   const [workflowMsg, setWorkflowMsg] = useState(null)
   const [customBg, setCustomBg] = useState('')
+  const [pnlFeedback, setPnlFeedback] = useState(null)
   const goTimerRef = useRef(null)
+  const pnlFeedbackTimerRef = useRef(null)
 
-  useEffect(() => () => clearTimeout(goTimerRef.current), [])
+  useEffect(() => () => {
+    clearTimeout(goTimerRef.current)
+    clearTimeout(pnlFeedbackTimerRef.current)
+  }, [])
 
   const hasApi = typeof window !== 'undefined' && window.api
   const reportDay = useMemo(() => {
@@ -269,13 +274,14 @@ export default function App() {
   const easterNudges = useMemo(() => buildEasterEggNudges(trades, stats), [trades, stats])
 
   async function refreshWorkflow() {
-    if (!hasApi) return
+    if (!hasApi) return []
     const [nextTrades, nextPlans, nextCommitments] = await Promise.all([
       window.api.listTrades(),
       window.api.listTradePlans ? window.api.listTradePlans() : Promise.resolve(tradePlans),
       window.api.listCommitments ? window.api.listCommitments() : Promise.resolve(commitments)
     ])
     setTrades(nextTrades); setTradePlans(nextPlans); setCommitments(nextCommitments)
+    return nextTrades
   }
   async function withImageFingerprint(image) {
     if (!image?.dataUrl || (image.fingerprint && Number(image.fingerprintVersion) === IMAGE_FINGERPRINT_VERSION)) return image
@@ -287,6 +293,7 @@ export default function App() {
   }
   async function addTrade(t, images = [], videoTokens = []) {
     if (!hasApi) return
+    const previousTotal = stats.totalPnl
     await window.api.addTrade(t)
     for (const im of images) {
       try { await window.api.addImage(t.id, await withImageFingerprint(im)) } catch { /* skip a bad image, keep the trade */ }
@@ -300,7 +307,14 @@ export default function App() {
         videoErrors = ['Screen recordings could not be attached.']
       }
     }
-    await refreshWorkflow()
+    const nextTrades = await refreshWorkflow()
+    const nextTotal = nextTrades.reduce((sum, trade) => sum + (Number(trade.pnl) || 0), 0)
+    const delta = Number(t.pnl) || 0
+    if (delta !== 0 && nextTotal !== previousTotal) {
+      clearTimeout(pnlFeedbackTimerRef.current)
+      setPnlFeedback({ id: `${t.id || 'trade'}-${Date.now()}`, from: previousTotal, to: nextTotal, delta })
+      pnlFeedbackTimerRef.current = setTimeout(() => setPnlFeedback(null), 2200)
+    }
     return { videoErrors }
   }
   async function updateTrade(t, images = [], videoTokens = []) {
@@ -428,10 +442,10 @@ export default function App() {
   const sessionCueSeen = useRef('')
   // Surface a strong/weak-hour nudge at most once per relevant hour per day, while in-session.
   useEffect(() => {
-    if (!sessionClock || sessionClock.phase === 'off') return
+    if (!sessionClock || sessionClock.phase === 'off') { setSessionCue(null); return }
     const cue = sessionEdgeCue(stats, new Date(now))
     if (!cue) return
-    const key = `${new Date(now).toISOString().slice(0, 10)}:${cue.hour}`
+    const key = `${localDateKey(new Date(now))}:${cue.hour}`
     if (sessionCueSeen.current === key) return
     sessionCueSeen.current = key
     setSessionCue(cue)
@@ -583,7 +597,7 @@ export default function App() {
             <span className="text-xs px-1.5 py-0.5 rounded" style={{ color: tradeMode ? T.accent : T.faint, border: `1px solid ${tradeMode ? T.accent : T.line}` }}>{tradeMode ? 'live' : 'offline'}</span>
           </div>
           <div className="flex items-center gap-5 text-sm" style={mono}>
-            <Readout label="NET" value={fmt$(stats.totalPnl)} tone={stats.totalPnl >= 0 ? 'up' : 'down'} />
+            <Readout label="NET" value={fmt$(stats.totalPnl)} tone={stats.totalPnl >= 0 ? 'up' : 'down'} feedback={pnlFeedback} />
             <Readout label="WIN" value={`${fmtN(stats.winRate, 1)}%`} />
             <Readout label="PF" value={stats.profitFactor === Infinity ? '∞' : fmtN(stats.profitFactor, 2)} />
             <Readout label="STREAK" value={String(stats.currentStreak)} tone={String(stats.currentStreak).endsWith('W') ? 'up' : String(stats.currentStreak).endsWith('L') ? 'down' : 'none'} />
@@ -628,7 +642,7 @@ export default function App() {
             {tab === 'journal' && <Journal trades={trades} onAdd={addTrade} onUpdate={updateTrade} onRemove={removeTrade} onNotes={setNotesView} onImport={importTrades} onRollbackImport={rollbackImport} accounts={propFirmAccounts} profiles={instrumentProfiles} savedSearches={savedSearches} onAddSavedSearch={addSavedSearch} onUpdateSavedSearch={updateSavedSearch} onDeleteSavedSearch={deleteSavedSearch} onRefreshSavedSearches={refreshSavedSearches} settings={settings} onSaveSettings={saveSettings} dayLogs={dayLogs} onAddDayLog={addDayLog} onDeleteDayLog={deleteDayLog} />}
             {tab === 'trade' && <TradeModeTab settings={settings} onSave={saveSettings} rules={rules} live={tradeMode} arming={goTransition === 'arming'} todayNet={todayNet} todayCount={todayTrades.length} weekNet={weekNet} goal={dailyGoal} maxLoss={maxLoss} onStart={startDay} onEnd={endSession} plans={tradePlans} trades={trades} accounts={propFirmAccounts} playbook={playbook} profiles={instrumentProfiles} planPrefill={planPrefill} onConsumePlanPrefill={() => setPlanPrefill(null)} commitment={activeCommitment} onAddPlan={addTradePlan} onUpdatePlan={updateTradePlan} onDeletePlan={deleteTradePlan} />}
             {tab === 'propfirm' && <PropFirm trades={trades} accounts={propFirmAccounts} onSave={savePropFirmAccounts} settings={settings} onSaveSettings={saveSettings} payouts={payouts} onAddPayout={addPayout} onDeletePayout={deletePayout} />}
-            {tab === 'dashboard' && <Dashboard stats={stats} trades={trades} accounts={propFirmAccounts} settings={settings} journalData={{ reviews, playbook, dayLogs, goals }} payouts={payouts} plans={tradePlans} commitments={commitments} onAddCommitment={addCommitment} onUpdateCommitment={updateCommitment} onDeleteCommitment={deleteCommitment} onSaveSettings={saveSettings} onOpenCoach={() => setTab('coach')} onOpenTrade={setNotesView} />}
+            {tab === 'dashboard' && <Dashboard stats={stats} trades={trades} accounts={propFirmAccounts} settings={settings} journalData={{ reviews, playbook, dayLogs, goals }} payouts={payouts} plans={tradePlans} commitments={commitments} pnlFeedback={pnlFeedback} onAddCommitment={addCommitment} onUpdateCommitment={updateCommitment} onDeleteCommitment={deleteCommitment} onSaveSettings={saveSettings} onOpenCoach={() => setTab('coach')} onOpenTrade={setNotesView} />}
             {tab === 'psych' && <Psychology stats={stats} />}
             {tab === 'rating' && <Rating trades={trades} stats={stats} achievements={achievements} unlockedAt={unlockedAt} settings={settings} onSave={saveSettings} payouts={payouts} />}
             {tab === 'goals' && <Goals goals={goals} onSave={saveGoals} trades={trades} />}

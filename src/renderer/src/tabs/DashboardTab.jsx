@@ -13,8 +13,6 @@ import { ShareReportModal } from '../components/ShareReportModal.jsx'
 import { DayReplayModal } from '../components/DayReplayModal.jsx'
 import { SessionCompareModal } from '../components/SessionCompareModal.jsx'
 
-const HMAP_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-
 // Leak finder — puts a dollar figure on your worst behavioral pattern. The point
 // isn't to shame; it's to make the cost of tilt concrete and, therefore, fixable.
 function LeakFinder({ trades }) {
@@ -61,37 +59,51 @@ function LeakFinder({ trades }) {
   )
 }
 
-function heatColor(wr, total) {
-  if (!total || total < 2) return { bg: 'transparent', border: T.line, glow: 'none', text: T.faint }
-  if (wr >= 80) return { bg: '#ff4500', border: '#ff6a33', glow: '0 0 12px 3px rgba(255,80,0,0.65)', text: '#fff' }
-  if (wr >= 70) return { bg: '#dc2626', border: '#ef4444', glow: '0 0 8px 2px rgba(220,38,38,0.5)', text: '#fff' }
-  if (wr >= 60) return { bg: '#c2410c', border: '#ea580c', glow: '0 0 6px 1px rgba(194,65,12,0.4)', text: '#fff' }
-  if (wr >= 50) return { bg: '#b45309', border: '#d97706', glow: 'none', text: '#fde68a' }
-  if (wr >= 38) return { bg: '#1e3a5f', border: '#2563eb', glow: 'none', text: '#93c5fd' }
-  return { bg: '#0f1f38', border: '#1e3a5f', glow: 'none', text: '#60a5fa' }
+function fmtHour(hour) {
+  const value = Number.parseInt(hour, 10)
+  const normalized = ((value % 24) + 24) % 24
+  return normalized === 0 ? '12am' : normalized < 12 ? `${normalized}am` : normalized === 12 ? '12pm' : `${normalized - 12}pm`
 }
 
-function HeatMap({ stats }) {
-  const [hovered, setHovered] = useState(null)
-  const { byHourDay = {}, bestHour, worstHour, bestDay, worstDay } = stats
+function TimingTooltip({ active, payload, kind }) {
+  const row = active && payload?.[0]?.payload
+  if (!row) return null
+  return (
+    <div className="rounded-lg px-3 py-2 text-xs" style={{ background: T.surface2, border: `1px solid ${T.line}`, color: T.text, boxShadow: '0 8px 20px rgba(0,0,0,.28)' }}>
+      <div className="font-semibold">{kind === 'hour' ? `${fmtHour(row.k)}–${fmtHour(Number(row.k) + 1)}` : row.day}</div>
+      {kind === 'hour' ? (
+        <>
+          <div style={{ color: T.dim }}>{fmtN(row.wr, 0)}% raw win rate · {fmtN(row.wrAdjusted, 0)}% sample-adjusted</div>
+          <div style={{ color: T.dim }}>{fmt$(row.expectancy)}/trade · {fmt$(row.pnl)} net</div>
+        </>
+      ) : (
+        <>
+          <div style={{ color: T.dim }}>{fmt$(row.pnl)} net · {fmt$(row.expectancy)}/trade</div>
+          <div style={{ color: T.dim }}>{fmtN(row.wr, 0)}% win rate</div>
+        </>
+      )}
+      <div className="mt-0.5" style={{ color: row.total >= 8 ? T.accent : T.faint }}>
+        {row.total} trade{row.total === 1 ? '' : 's'} · {row.total >= 8 ? 'confirmed sample' : 'building sample'}
+      </div>
+    </div>
+  )
+}
 
-  const allHours = Object.keys(byHourDay).map((key) => parseInt(key.split('-')[1], 10))
-  const minH = allHours.length ? Math.min(...allHours) : 9
-  const maxH = allHours.length ? Math.max(...allHours) : 16
-  const hours = Array.from({ length: maxH - minH + 1 }, (_, index) => String(minH + index).padStart(2, '0'))
-  const activeDays = HMAP_DAYS.filter((day) => hours.some((hour) => byHourDay[`${day}-${hour}`]))
-  const days = activeDays.length ? activeDays : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
-  const fmt12 = (hour) => { const n = parseInt(hour, 10); return n === 0 ? '12am' : n < 12 ? `${n}am` : n === 12 ? '12pm' : `${n - 12}pm` }
-  const hasData = Object.keys(byHourDay).length > 0
+function TimingPerformance({ stats }) {
+  const {
+    byHour = [], byWeekday = [], bestHour, worstHour, bestDay, worstDay,
+    timingSample = 0, timingDays = 0, timingCoverage = 0, timingWinRate = 0, n = 0
+  } = stats
   const summaries = [
-    bestHour && { key: 'best-hour', Icon: Flame, label: 'Best hour', value: `${fmt12(bestHour.k)}-${fmt12(String(parseInt(bestHour.k, 10) + 1).padStart(2, '0'))}`, stat: `${fmtN(bestHour.wr, 0)}% / ${bestHour.total} trades`, color: '#ff6a33', bg: 'rgba(255,69,0,0.12)', border: 'rgba(255,69,0,0.3)' },
-    bestDay && { key: 'best-day', Icon: CalendarDays, label: 'Best day', value: bestDay.k, stat: `${fmtN(bestDay.wr, 0)}% / ${bestDay.total} trades`, color: '#fb923c', bg: 'rgba(255,69,0,0.08)', border: 'rgba(255,69,0,0.25)' },
-    worstHour && { key: 'worst-hour', Icon: Snowflake, label: 'Weakest hour', value: fmt12(worstHour.k), stat: `${fmtN(worstHour.wr, 0)}% / ${worstHour.total} trades`, color: '#93c5fd', bg: 'rgba(30,58,95,0.3)', border: 'rgba(96,165,250,0.2)' },
-    worstDay && { key: 'worst-day', Icon: TrendingDown, label: 'Weakest day', value: worstDay.k, stat: `${fmtN(worstDay.wr, 0)}% / ${worstDay.total} trades`, color: T.down, bg: withAlpha(T.down, 0.08), border: withAlpha(T.down, 0.24) }
+    bestHour && { key: 'best-hour', Icon: Flame, label: 'Best confirmed hour', value: `${fmtHour(bestHour.k)}–${fmtHour(Number(bestHour.k) + 1)}`, stat: `${fmtN(bestHour.wr, 0)}% WR · ${fmt$(bestHour.expectancy)}/trade`, color: T.up, bg: withAlpha(T.up, 0.09), border: withAlpha(T.up, 0.28) },
+    bestDay && { key: 'best-day', Icon: CalendarDays, label: 'Best confirmed day', value: bestDay.k, stat: `${fmt$(bestDay.pnl)} net · ${bestDay.total} trades`, color: T.up, bg: withAlpha(T.up, 0.07), border: withAlpha(T.up, 0.24) },
+    worstHour && { key: 'worst-hour', Icon: Snowflake, label: 'Weakest confirmed hour', value: `${fmtHour(worstHour.k)}–${fmtHour(Number(worstHour.k) + 1)}`, stat: `${fmtN(worstHour.wr, 0)}% WR · ${fmt$(worstHour.expectancy)}/trade`, color: T.down, bg: withAlpha(T.down, 0.08), border: withAlpha(T.down, 0.26) },
+    worstDay && { key: 'worst-day', Icon: TrendingDown, label: 'Weakest confirmed day', value: worstDay.k, stat: `${fmt$(worstDay.pnl)} net · ${worstDay.total} trades`, color: T.down, bg: withAlpha(T.down, 0.08), border: withAlpha(T.down, 0.24) }
   ].filter(Boolean)
+  const coverage = n ? `${timingSample} of ${n} trades timed (${fmtN(timingCoverage, 0)}%) · ${timingDays} days` : 'No trades yet'
 
   return (
-    <Panel title="Performance heat map" right={<span className="text-[10px]" style={{ color: T.faint }}>WIN RATE / SAMPLE</span>}>
+    <Panel title="Timing performance" right={<span className="text-[10px]" style={{ color: T.faint }}>{coverage}</span>}>
       {summaries.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2 mb-4">
           {summaries.map(({ key, Icon, label, value, stat, color, bg, border }) => (
@@ -99,106 +111,63 @@ function HeatMap({ stats }) {
               <Icon size={15} style={{ color, flexShrink: 0 }} />
               <div className="min-w-0">
                 <div className="text-[10px] uppercase" style={{ color: T.faint }}>{label}</div>
-                <div className="text-xs font-semibold truncate" style={{ color }}>{value} <span style={{ color: T.dim, fontWeight: 400 }}>· {stat}</span></div>
+                <div className="text-xs font-semibold truncate" style={{ color }}>{value}</div>
+                <div className="text-[10px] truncate" style={{ color: T.dim }}>{stat}</div>
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {!hasData ? (
-        <div className="py-8 text-center text-xs" style={{ color: T.faint }}>Log trades with entry times to see your heat map.</div>
+      {!timingSample ? (
+        <div className="py-8 text-center text-xs" style={{ color: T.faint }}>Add actual entry times to unlock trustworthy timing insights.</div>
       ) : (
-        <div>
-          <div style={{ overflowX: 'auto', paddingBottom: 4 }}>
-            <table style={{ borderCollapse: 'separate', borderSpacing: 5, minWidth: 'max-content' }}>
-              <thead>
-                <tr>
-                  <th style={{ width: 42 }} />
-                  {hours.map((hour) => (
-                    <th key={hour} scope="col" style={{ fontSize: 11, color: T.dim, fontWeight: 600, textAlign: 'center', paddingBottom: 5, minWidth: 50 }}>{fmt12(hour)}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {days.map((day) => (
-                  <tr key={day}>
-                    <th scope="row" style={{ fontSize: 11, color: T.text, fontWeight: 600, paddingRight: 7, textAlign: 'right', whiteSpace: 'nowrap' }}>{day}</th>
-                    {hours.map((hour) => {
-                      const cell = byHourDay[`${day}-${hour}`]
-                      const total = cell?.total || 0
-                      const winRate = total ? (cell.wins / total) * 100 : 0
-                      const colors = heatColor(winRate, total)
-                      const key = `${day}-${hour}`
-                      const isActive = hovered === key
-                      return (
-                        <td key={hour} style={{ padding: 0 }}>
-                          <div
-                            tabIndex={total ? 0 : undefined}
-                            aria-label={total ? `${day} at ${fmt12(hour)}: ${Math.round(winRate)} percent win rate across ${total} trades, ${fmt$(cell.pnl)}` : `${day} at ${fmt12(hour)}: no trades`}
-                            onMouseEnter={() => setHovered(key)}
-                            onMouseLeave={() => setHovered(null)}
-                            onFocus={() => setHovered(key)}
-                            onBlur={() => setHovered(null)}
-                            style={{
-                              width: 50, height: 42, borderRadius: 6,
-                              background: total >= 2 ? colors.bg : T.surface2,
-                              border: `1px solid ${isActive ? T.accent : colors.border}`,
-                              boxShadow: isActive ? `0 0 0 1px ${T.accent}` : colors.glow,
-                              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                              transition: 'box-shadow .15s, border-color .15s',
-                              position: 'relative'
-                            }}
-                          >
-                            {total >= 2 ? (
-                              <>
-                                <span style={{ fontSize: 11, fontWeight: 700, color: colors.text, lineHeight: 1 }}>{Math.round(winRate)}%</span>
-                                <span style={{ fontSize: 9, color: colors.text, opacity: 0.78, lineHeight: 1.3 }}>{total} trades</span>
-                              </>
-                            ) : total === 1 ? (
-                              <><span style={{ fontSize: 10, color: T.dim, lineHeight: 1 }}>1 trade</span><span style={{ fontSize: 8, color: T.faint, lineHeight: 1.4 }}>LOW SAMPLE</span></>
-                            ) : <span style={{ color: T.faint, fontSize: 11 }}>-</span>}
-                            {isActive && total > 0 && (
-                              <div role="tooltip" style={{
-                                position: 'absolute', bottom: 'calc(100% + 7px)', left: '50%', transform: 'translateX(-50%)',
-                                background: T.surface2, border: `1px solid ${T.line}`, borderRadius: 6,
-                                padding: '6px 9px', zIndex: 10, whiteSpace: 'nowrap', fontSize: 11, color: T.text,
-                                boxShadow: '0 8px 20px rgba(0,0,0,.28)', pointerEvents: 'none'
-                              }}>
-                                <div style={{ color: T.text, fontWeight: 600 }}>{Math.round(winRate)}% win rate</div>
-                                <div style={{ color: T.dim }}>{total} trade{total !== 1 ? 's' : ''} · {fmt$(cell.pnl)}</div>
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                      )
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="rounded-lg p-3" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
+              <div className="text-xs font-semibold mb-2">Sample-adjusted win rate by hour</div>
+              <div role="img" aria-label="Bar chart of sample-adjusted win rate by trading hour">
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={byHour} margin={{ top: 8, right: 8, left: -14, bottom: 0 }}>
+                    <ReferenceLine y={timingWinRate} stroke={T.faint} strokeDasharray="4 4" />
+                    <XAxis dataKey="k" tick={{ fill: T.faint, fontSize: 10 }} tickFormatter={fmtHour} stroke={T.line} minTickGap={12} />
+                    <YAxis domain={[0, 100]} tick={{ fill: T.faint, fontSize: 10 }} stroke={T.line} tickFormatter={(value) => `${value}%`} />
+                    <Tooltip content={<TimingTooltip kind="hour" />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+                    <Bar dataKey="wrAdjusted" radius={[4, 4, 0, 0]} maxBarSize={30}>
+                      {byHour.map((row) => <Cell key={row.k} fill={row.expectancy >= 0 ? T.up : T.down} fillOpacity={Math.max(0.24, row.confidence)} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+            <div className="rounded-lg p-3" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
+              <div className="text-xs font-semibold mb-2">Net P&amp;L by weekday</div>
+              <div role="img" aria-label="Bar chart of net profit and loss by weekday">
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={byWeekday} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
+                    <ReferenceLine y={0} stroke={T.faint} />
+                    <XAxis dataKey="day" tick={{ fill: T.faint, fontSize: 10 }} stroke={T.line} />
+                    <YAxis tick={{ fill: T.faint, fontSize: 10 }} stroke={T.line} tickFormatter={(value) => `$${value}`} />
+                    <Tooltip content={<TimingTooltip kind="weekday" />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+                    <Bar dataKey="pnl" radius={[4, 4, 0, 0]} maxBarSize={38}>
+                      {byWeekday.map((row) => <Cell key={row.day} fill={row.pnl >= 0 ? T.up : T.down} fillOpacity={Math.max(0.24, row.confidence)} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mt-3 text-[10px]" style={{ color: T.faint }}>
-            <span>Win rate:</span>
-            {[
-              ['#0f1f38', 'Under 38%'], ['#1e3a5f', '38-49%'], ['#b45309', '50-59%'],
-              ['#c2410c', '60-69%'], ['#dc2626', '70-79%'], ['#ff4500', '80%+']
-            ].map(([background, label]) => (
-              <span key={label} className="flex items-center gap-1">
-                <span style={{ display: 'inline-block', width: 11, height: 11, borderRadius: 3, background }} />
-                {label}
-              </span>
-            ))}
-            <span style={{ color: T.dim }}>Percentages require at least 2 trades.</span>
+          <div className="mt-3 text-[10px]" style={{ color: T.faint }}>
+            Bar opacity reflects confidence; full strength begins at 8 trades. Hour height uses a sample-adjusted win rate, while color shows whether that hour actually makes or loses money.
           </div>
-        </div>
+        </>
       )}
     </Panel>
   )
 }
 
 /* ───────── dashboard ───────── */
-export function Dashboard({ stats, trades, accounts = [], settings, journalData, onSaveSettings, onOpenCoach, payouts = [], plans = [], commitments = [], onAddCommitment, onUpdateCommitment, onDeleteCommitment, onOpenTrade }) {
+export function Dashboard({ stats, trades, accounts = [], settings, journalData, onSaveSettings, onOpenCoach, payouts = [], plans = [], commitments = [], pnlFeedback = null, onAddCommitment, onUpdateCommitment, onDeleteCommitment, onOpenTrade }) {
   const [view, setView] = useState('all') // all | live | prop
   const [shareOpen, setShareOpen] = useState(false)
   const [selectedDay, setSelectedDay] = useState(null)
@@ -262,7 +231,7 @@ export function Dashboard({ stats, trades, accounts = [], settings, journalData,
         </button>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Stat label="Net P&L" value={fmt$(vStats.totalPnl)} tone={vStats.totalPnl >= 0 ? 'up' : 'down'} sub={vStats.totalFees > 0 ? `${vStats.n} trades · ${fmt$(vStats.totalFees)} fees paid` : `${vStats.n} trades`} spark={vStats.equity.map((e) => e.equity)} />
+        <Stat label="Net P&L" value={fmt$(vStats.totalPnl)} tone={vStats.totalPnl >= 0 ? 'up' : 'down'} sub={vStats.totalFees > 0 ? `${vStats.n} trades · ${fmt$(vStats.totalFees)} fees paid` : `${vStats.n} trades`} spark={vStats.equity.map((e) => e.equity)} feedback={view === 'all' ? pnlFeedback : null} />
         <Stat label="Win rate" value={`${fmtN(vStats.winRate, 1)}%`} sub={`expectancy ${fmt$(vStats.expectancy)}/trade`} />
         <Stat label="Profit factor" value={vStats.profitFactor === Infinity ? '∞' : fmtN(vStats.profitFactor, 2)} tone="accent" sub="gross win ÷ gross loss" />
         <Stat label="Avg R:R" value={vStats.avgRR ? `1:${fmtN(vStats.avgRR, 1)}` : '—'} />
@@ -320,7 +289,7 @@ export function Dashboard({ stats, trades, accounts = [], settings, journalData,
         )}
       </Panel>
 
-      <HeatMap stats={vStats} />
+      <TimingPerformance stats={vStats} />
       {compareOpen && (
         <SessionCompareModal
           trades={viewTrades}

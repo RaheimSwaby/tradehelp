@@ -1,6 +1,58 @@
 import { Trophy, Brain, Snowflake, Shield, Target, BookOpen, Camera, TrendingUp, Calendar, Flame, Wallet, Banknote, CalendarCheck, Coffee, Sunrise, Crosshair, Handshake, Repeat, ShieldCheck } from 'lucide-react'
 import { TILT, REASONS, clamp, fmtN, holdMs, periodKey, pad2 } from './utils.js'
 
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const CHART_WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+export const TIMING_CONFIDENT_SAMPLE = 8
+const TIMING_PRIOR_WEIGHT = 8
+
+function entryMoment(value) {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{1,2}):(\d{2})/)
+  if (!match) return null
+  const [, yearText, monthText, dayText, hourText, minuteText] = match
+  const year = Number(yearText), month = Number(monthText), dayOfMonth = Number(dayText)
+  const hour = Number(hourText), minute = Number(minuteText)
+  const date = new Date(year, month - 1, dayOfMonth, 12)
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== dayOfMonth || hour > 23 || minute > 59) return null
+  return { date: `${yearText}-${monthText}-${dayText}`, day: WEEKDAYS[date.getDay()], hour: String(hour).padStart(2, '0') }
+}
+
+function timingBucket() {
+  return { wins: 0, total: 0, pnl: 0, rrTotal: 0, rrCount: 0 }
+}
+
+function addTimingTrade(bucket, trade) {
+  const pnl = Number(trade.pnl) || 0
+  const rr = Number(trade.rr)
+  bucket.total += 1
+  bucket.pnl += pnl
+  if (pnl > 0) bucket.wins += 1
+  if (rr > 0) { bucket.rrTotal += rr; bucket.rrCount += 1 }
+}
+
+function timingSummary(k, bucket, baselineRate) {
+  const wr = bucket.total ? (bucket.wins / bucket.total) * 100 : 0
+  const wrAdjusted = ((bucket.wins + baselineRate * TIMING_PRIOR_WEIGHT) / (bucket.total + TIMING_PRIOR_WEIGHT)) * 100
+  return {
+    k,
+    wins: bucket.wins,
+    total: bucket.total,
+    pnl: bucket.pnl,
+    wr,
+    wrAdjusted,
+    expectancy: bucket.total ? bucket.pnl / bucket.total : 0,
+    avgR: bucket.rrCount ? bucket.rrTotal / bucket.rrCount : 0,
+    confidence: Math.min(1, bucket.total / TIMING_CONFIDENT_SAMPLE)
+  }
+}
+
+function rankTiming(summaries, direction) {
+  const sign = direction === 'best' ? 1 : -1
+  return summaries
+    .filter((item) => item.total >= TIMING_CONFIDENT_SAMPLE && (direction === 'best' ? item.expectancy > 0 : item.expectancy < 0))
+    .sort((a, b) => sign * (b.wrAdjusted - a.wrAdjusted) || sign * (b.expectancy - a.expectancy))[0] || null
+}
+
 /* ───────── stats ───────── */
 export function computeStats(trades) {
   const sorted = [...trades].sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''))
@@ -60,51 +112,39 @@ export function computeStats(trades) {
     return Object.values(m).map((g) => ({ ...g, wr: g.n ? (g.w / g.n) * 100 : 0 })).sort((a, b) => b.pnl - a.pnl)
   }
 
-  const hourMap = {}
-  for (const t of sorted) {
-    // Prefer the actual entry time (when the trade was taken) over the log time.
-    const hh = (t.entryTime || t.timestamp || '').slice(11, 13)
-    if (!hh) continue
-    hourMap[hh] = (hourMap[hh] || 0) + (Number(t.pnl) || 0)
-  }
-  const byHour = Object.entries(hourMap).map(([h, v]) => ({ hour: h + ':00', pnl: v })).sort((a, b) => a.hour.localeCompare(b.hour))
-
-  // Hour × weekday win-rate matrix for the heat map
-  const WDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  // Timing insights only use an explicit entry time. Falling back to the journal's
+  // creation timestamp would turn "when I trade best" into "when I log trades."
+  const timedTrades = sorted.map((trade) => ({ trade, moment: entryMoment(trade.entryTime) })).filter((row) => row.moment)
+  const timingSample = timedTrades.length
+  const timingDays = new Set(timedTrades.map((row) => row.moment.date)).size
+  const timingCoverage = n ? (timingSample / n) * 100 : 0
+  const timingWins = timedTrades.filter(({ trade }) => (Number(trade.pnl) || 0) > 0).length
+  const timingWinRate = timingSample ? (timingWins / timingSample) * 100 : 0
+  const timingBaseline = timingSample ? timingWins / timingSample : 0
+  const hourTotals = {}
+  const weekdayTotals = {}
   const byHourDay = {}
-  for (const t of sorted) {
-    const ts = t.entryTime || t.timestamp
-    if (!ts) continue
-    const d = new Date(String(ts).replace(' ', 'T'))
-    if (isNaN(d)) continue
-    const day = WDAYS[d.getDay()]
-    const h = String(d.getHours()).padStart(2, '0')
-    const k = `${day}-${h}`
-    if (!byHourDay[k]) byHourDay[k] = { wins: 0, total: 0, pnl: 0 }
-    byHourDay[k].total++
-    byHourDay[k].pnl += Number(t.pnl) || 0
-    if ((Number(t.pnl) || 0) > 0) byHourDay[k].wins++
+
+  for (const { trade, moment } of timedTrades) {
+    if (!hourTotals[moment.hour]) hourTotals[moment.hour] = timingBucket()
+    if (!weekdayTotals[moment.day]) weekdayTotals[moment.day] = timingBucket()
+    const crossKey = `${moment.day}-${moment.hour}`
+    if (!byHourDay[crossKey]) byHourDay[crossKey] = timingBucket()
+    addTimingTrade(hourTotals[moment.hour], trade)
+    addTimingTrade(weekdayTotals[moment.day], trade)
+    addTimingTrade(byHourDay[crossKey], trade)
   }
-  // Roll up to per-hour and per-day totals for the advisory
-  const _hourTotals = {}
-  const _dayTotals = {}
-  for (const [k, v] of Object.entries(byHourDay)) {
-    const [day, h] = k.split('-')
-    if (!_hourTotals[h]) _hourTotals[h] = { wins: 0, total: 0, pnl: 0 }
-    _hourTotals[h].wins += v.wins; _hourTotals[h].total += v.total; _hourTotals[h].pnl += v.pnl
-    if (!_dayTotals[day]) _dayTotals[day] = { wins: 0, total: 0, pnl: 0 }
-    _dayTotals[day].wins += v.wins; _dayTotals[day].total += v.total; _dayTotals[day].pnl += v.pnl
-  }
-  const _rankBy = (map) => Object.entries(map)
-    .filter(([, v]) => v.total >= 3)
-    .map(([k, v]) => ({ k, wr: (v.wins / v.total) * 100, total: v.total, pnl: v.pnl }))
-    .sort((a, b) => b.wr - a.wr)
-  const _hRanked = _rankBy(_hourTotals)
-  const _dRanked = _rankBy(_dayTotals)
-  const bestHour = _hRanked[0] || null
-  const worstHour = _hRanked.length > 1 ? _hRanked[_hRanked.length - 1] : null
-  const bestDay = _dRanked[0] || null
-  const worstDay = _dRanked.length > 1 ? _dRanked[_dRanked.length - 1] : null
+
+  const byHour = Object.entries(hourTotals)
+    .map(([hour, bucket]) => ({ hour: `${hour}:00`, ...timingSummary(hour, bucket, timingBaseline) }))
+    .sort((a, b) => a.k.localeCompare(b.k))
+  const byWeekday = CHART_WEEKDAYS
+    .filter((day) => weekdayTotals[day])
+    .map((day) => ({ day, ...timingSummary(day, weekdayTotals[day], timingBaseline) }))
+  const bestHour = rankTiming([...byHour], 'best')
+  const worstHour = rankTiming([...byHour], 'worst')
+  const bestDay = rankTiming([...byWeekday], 'best')
+  const worstDay = rankTiming([...byWeekday], 'worst')
 
   // non-tilt streak: consecutive trades with no FOMO/greed/revenge tag (current + best)
   let ntCur = 0, ntBest = 0
@@ -127,8 +167,9 @@ export function computeStats(trades) {
     maxDD, currentStreak, bestWin, worstLoss, equity, daily, activeDays,
     grossProfit, grossLoss, nonTiltStreak: ntCur, bestNonTilt: ntBest,
     reasonsWin: toReasonArr(reasonsWin), reasonsLoss: toReasonArr(reasonsLoss),
-    byEmotion: groupPnl('emotion'), bySetup: groupPnl('setup'), byHour,
-    byHourDay, bestHour, worstHour, bestDay, worstDay
+    byEmotion: groupPnl('emotion'), bySetup: groupPnl('setup'), byHour, byWeekday,
+    byHourDay, bestHour, worstHour, bestDay, worstDay,
+    timingSample, timingDays, timingCoverage, timingWinRate, timingMinSample: TIMING_CONFIDENT_SAMPLE
   }
 }
 

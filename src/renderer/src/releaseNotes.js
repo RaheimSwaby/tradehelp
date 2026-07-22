@@ -22,6 +22,11 @@ const V036_NOTES = `- Cosmetic Refresh - each theme preset now has its own restr
 - Dashboard quotes rotate daily and AI Coach quick prompts adapt to your journal`
 
 export const RELEASE_NOTES = {
+  '0.38.0': `- Timing analytics now use actual entry times instead of journal timestamps
+- Personal trading clock supports recurring split sessions and overnight trading windows
+- Dashboard timing charts show sample-adjusted hourly win rate and weekday P&L
+- Strong and weak hour cues require confirmed samples and profitable or losing expectancy
+- Net P&L gives immediate animated feedback after a newly logged trade`,
   '0.37.1': `- Screenshot selection now opens once and can attach before + after charts together`,
   '0.37.0': `- Local Import Inbox watches broker export folders while TradeHelp is open
 - New CSV files can be reviewed from Journal or auto-imported from trusted folders
