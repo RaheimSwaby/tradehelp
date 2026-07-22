@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { BROKER_PRESETS, detectBrokerPreset, applyPresetMap, parseCSV } from '../utils.js'
+import { prepareCsvImport } from '../importEngine.js'
 
 const presetByKey = (k) => BROKER_PRESETS.find((p) => p.key === k)
 
@@ -7,6 +8,26 @@ const NT_HEADERS = ['Trade number', 'Instrument', 'Account', 'Strategy', 'Market
 const TDV_HEADERS = ['symbol', '_priceFormat', '_priceFormatType', '_tickSize', 'buyFillId', 'sellFillId', 'qty', 'buyPrice', 'sellPrice', 'pnl', 'boughtTimestamp', 'soldTimestamp', 'duration']
 const TSX_HEADERS = ['Id', 'ContractName', 'EnteredAt', 'ExitedAt', 'EntryPrice', 'ExitPrice', 'Fees', 'PnL', 'Size', 'Type']
 const NT_ORDERS_HEADERS = ['orderId', 'Account', 'Order ID', 'B/S', 'Contract', 'Product', 'avgPrice', 'filledQty', 'Fill Time', 'Status', 'Text', 'Type']
+
+describe('CSV import preparation', () => {
+  it('builds a recognized batch and identifies an existing duplicate', () => {
+    const csv = `Id,ContractName,EnteredAt,ExitedAt,EntryPrice,ExitPrice,Fees,PnL,Size,Type
+1,MES,2026-07-21 09:30,2026-07-21 09:40,6700,6702,2,10,1,Long`
+    const first = prepareCsvImport(csv)
+    expect(first.preset?.key).toBe('topstepx')
+    expect(first.built[0]).toMatchObject({ symbol: 'MES', pnl: 8, fees: 2 })
+    const second = prepareCsvImport(csv, { existing: first.built })
+    expect(second.duplicateCount).toBe(1)
+    expect(second.built[0].dupe).toBe(true)
+  })
+
+  it('keeps an unknown file reviewable and reports mapping warnings', () => {
+    const result = prepareCsvImport('Ticker,Date,Profit\nNQ,7/21/2026 10:00 AM,25')
+    expect(result.preset).toBeNull()
+    expect(result.built[0].symbol).toBe('NQ')
+    expect(result.warnings[0]).toMatch(/not recognized/i)
+  })
+})
 
 describe('broker preset detection', () => {
   it('recognizes a NinjaTrader 8 trade performance export', () => {

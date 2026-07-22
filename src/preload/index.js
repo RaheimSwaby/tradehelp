@@ -4,8 +4,23 @@ const api = {
   listTrades: () => ipcRenderer.invoke('trades:list'),
   addTrade: (t) => ipcRenderer.invoke('trades:add', t),
   updateTrade: (t) => ipcRenderer.invoke('trades:update', t),
-  importTrades: (rows) => ipcRenderer.invoke('trades:import', rows),
+  importTrades: (rows, meta) => ipcRenderer.invoke('trades:import', rows, meta),
   deleteTrade: (id) => ipcRenderer.invoke('trades:delete', id),
+  listImportBatches: () => ipcRenderer.invoke('imports:batches'),
+  rollbackImportBatch: (id) => ipcRenderer.invoke('imports:rollback', id),
+  listImportInbox: () => ipcRenderer.invoke('imports:inbox'),
+  readImportInbox: (id) => ipcRenderer.invoke('imports:inbox:read', id),
+  dismissImportInbox: (id) => ipcRenderer.invoke('imports:inbox:dismiss', id),
+  listImportSources: () => ipcRenderer.invoke('imports:sources'),
+  chooseImportFolder: () => ipcRenderer.invoke('imports:source:choose'),
+  saveImportSource: (source) => ipcRenderer.invoke('imports:source:save', source),
+  deleteImportSource: (id) => ipcRenderer.invoke('imports:source:delete', id),
+  scanImportSource: (id) => ipcRenderer.invoke('imports:source:scan', id),
+  onImportsChanged: (callback) => {
+    const listener = (_event, info) => callback(info)
+    ipcRenderer.on('imports:changed', listener)
+    return () => ipcRenderer.removeListener('imports:changed', listener)
+  },
   listTradeFills: (tradeId) => ipcRenderer.invoke('fills:list', tradeId),
   replaceTradeFills: (tradeId, fills) => ipcRenderer.invoke('fills:replace', tradeId, fills),
 

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell, dialog, protocol, net } from 'electron'
+import { app, BrowserWindow, ipcMain, shell, dialog, protocol, net, Notification } from 'electron'
 import { extname, join } from 'path'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'fs'
 import { randomUUID } from 'crypto'
@@ -10,10 +10,12 @@ import { fetchEvents } from './events.js'
 import { initUpdater } from './updater.js'
 import * as license from './license.js'
 import { testKey } from './keytest.js'
+import { createImportWatcher, readInboxFile } from './importWatcher.js'
 
 let win
 let settingsCache = null
 let videoPickCleanupTimer = null
+let importWatcher = null
 const VIDEO_SCHEME = 'tradehelp-media'
 const VIDEO_PICK_TTL_MS = 15 * 60 * 1000
 const MAX_VIDEO_PICKS = 10
@@ -131,6 +133,16 @@ app.whenReady().then(() => {
   db.backupDb()
   registerIpc()
   createWindow()
+  importWatcher = createImportWatcher(db, (event) => {
+    try { win?.webContents?.send('imports:changed', event) } catch {}
+    if (!Notification.isSupported() || event.type === 'error') return
+    const title = event.type === 'auto-imported' ? 'Trades imported' : 'New broker CSV detected'
+    const body = event.type === 'auto-imported'
+      ? `${event.importedCount} new trade${event.importedCount === 1 ? '' : 's'} added from ${event.item.fileName}.`
+      : `${event.item.fileName} is ready in your Import inbox.`
+    try { new Notification({ title, body }).show() } catch {}
+  })
+  importWatcher.start()
   initUpdater(() => win)
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -139,6 +151,7 @@ app.whenReady().then(() => {
 
 app.on('before-quit', () => {
   if (videoPickCleanupTimer) clearInterval(videoPickCleanupTimer)
+  importWatcher?.stop()
   pendingVideoPicks.clear()
 })
 
@@ -150,8 +163,39 @@ function registerIpc() {
   ipcMain.handle('trades:list', () => db.listTrades())
   ipcMain.handle('trades:add', (_e, t) => db.addTrade(t))
   ipcMain.handle('trades:update', (_e, t) => db.updateTrade(t))
-  ipcMain.handle('trades:import', (_e, rows) => db.importTrades(rows))
+  ipcMain.handle('trades:import', (_e, rows, meta = {}) => {
+    const result = db.importTradeBatch(rows, meta)
+    if (meta.inboxId) db.setImportInboxState(meta.inboxId, 'imported')
+    try { win?.webContents?.send('imports:changed', { type: 'imported', batch: result.batch }) } catch {}
+    return result
+  })
   ipcMain.handle('trades:delete', (_e, id) => db.deleteTrade(id))
+  ipcMain.handle('imports:batches', () => db.listImportBatches())
+  ipcMain.handle('imports:rollback', (_e, id) => {
+    const result = db.rollbackImportBatch(id)
+    try { win?.webContents?.send('imports:changed', { type: 'rolled-back', batchId: id }) } catch {}
+    return result
+  })
+  ipcMain.handle('imports:inbox', () => db.listImportInbox('active'))
+  ipcMain.handle('imports:inbox:read', (_e, id) => readInboxFile(db, id))
+  ipcMain.handle('imports:inbox:dismiss', (_e, id) => db.setImportInboxState(id, 'dismissed'))
+  ipcMain.handle('imports:sources', () => db.listImportSources())
+  ipcMain.handle('imports:source:choose', async () => {
+    const result = await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'] })
+    return result.canceled || !result.filePaths?.[0] ? { ok: false, canceled: true } : { ok: true, folderPath: result.filePaths[0] }
+  })
+  ipcMain.handle('imports:source:save', (_e, source = {}) => {
+    const folderPath = String(source.folderPath || db.getImportSource(source.id)?.folderPath || '')
+    if (!folderPath || !existsSync(folderPath) || !statSync(folderPath).isDirectory()) throw new Error('Choose an existing folder')
+    return db.saveImportSource({ ...source, folderPath })
+  })
+  ipcMain.handle('imports:source:delete', (_e, id) => db.deleteImportSource(id))
+  ipcMain.handle('imports:source:scan', async (_e, id) => {
+    const source = db.getImportSource(id)
+    if (!source) throw new Error('Watched folder not found')
+    const result = await importWatcher.scanSource(source, true)
+    return { ...result, inbox: db.listImportInbox('active') }
+  })
   ipcMain.handle('fills:list', (_e, tradeId) => db.listTradeFills(tradeId))
   ipcMain.handle('fills:replace', (_e, tradeId, fills) => db.replaceTradeFills(tradeId, fills))
 

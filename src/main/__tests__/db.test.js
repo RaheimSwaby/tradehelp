@@ -25,7 +25,9 @@ vi.mock('electron', () => ({
 // Import the module under test after the mock is wired up
 import {
   initDb,
-  addTrade, listTrades, updateTrade, deleteTrade, importTrades,
+  addTrade, listTrades, updateTrade, deleteTrade, importTrades, importTradeBatch,
+  listImportBatches, rollbackImportBatch, saveImportSource, listImportSources,
+  deleteImportSource, recordImportInbox, listImportInbox, setImportInboxState,
   getGoals, setGoals,
   getSettings, setSettings,
   addImage, listImages, getImage, deleteImage,
@@ -121,6 +123,40 @@ describe('trades — import', () => {
       expect(found).toBeDefined()
       expect(found.source).toBe('import')
     }
+  })
+
+  it('records batch audit data and safely rolls back only that batch', () => {
+    const manual = makeTrade({ id: 'manual-kept', source: 'manual' })
+    addTrade(manual)
+    const rows = [makeTrade({ id: 'batch-a' }), makeTrade({ id: 'batch-b' })]
+    const result = importTradeBatch(rows, {
+      fileName: 'orders.csv', brokerKey: 'ninjatrader', brokerLabel: 'NinjaTrader 8',
+      rowCount: 4, duplicateCount: 1, skippedCount: 1, warnings: ['One row was skipped.']
+    })
+    expect(result.batch).toMatchObject({ fileName: 'orders.csv', importedCount: 2, duplicateCount: 1, skippedCount: 1 })
+    expect(listImportBatches()[0].warnings).toEqual(['One row was skipped.'])
+
+    const rolledBack = rollbackImportBatch(result.batch.id)
+    expect(rolledBack.trades.some((trade) => trade.id === manual.id)).toBe(true)
+    expect(rolledBack.trades.some((trade) => trade.id === rows[0].id)).toBe(false)
+    expect(rolledBack.batches.find((batch) => batch.id === result.batch.id).status).toBe('rolled_back')
+  })
+
+  it('persists watched sources and inbox state without deleting history', () => {
+    const sources = saveImportSource({ name: 'Ninja exports', folderPath: tmpDir, brokerKey: 'ninjatrader', trusted: true })
+    const source = sources.find((item) => item.name === 'Ninja exports')
+    expect(source).toMatchObject({ brokerKey: 'ninjatrader', trusted: true, enabled: true })
+    const recorded = recordImportInbox({
+      sourceId: source.id, filePath: `${tmpDir}/orders.csv`, fileName: 'orders.csv',
+      fingerprint: 'source-file-1', size: 123, modifiedAt: '2026-07-21T12:00:00.000Z'
+    })
+    expect(recorded.created).toBe(true)
+    expect(recordImportInbox({ ...recorded.item }).created).toBe(false)
+    expect(listImportInbox()).toHaveLength(1)
+    setImportInboxState(recorded.item.id, 'imported')
+    expect(listImportInbox()).toHaveLength(0)
+    deleteImportSource(source.id)
+    expect(listImportSources().some((item) => item.id === source.id)).toBe(false)
   })
 })
 

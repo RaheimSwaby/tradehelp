@@ -189,6 +189,59 @@ export function initDb() {
       createdAt TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_payouts_account ON payouts(accountId);
+    CREATE TABLE IF NOT EXISTS import_batches (
+      id TEXT PRIMARY KEY,
+      sourceId TEXT DEFAULT '',
+      fileName TEXT DEFAULT '',
+      brokerKey TEXT DEFAULT '',
+      brokerLabel TEXT DEFAULT '',
+      account TEXT DEFAULT '',
+      timezone TEXT DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'completed',
+      rowCount INTEGER DEFAULT 0,
+      importedCount INTEGER DEFAULT 0,
+      duplicateCount INTEGER DEFAULT 0,
+      skippedCount INTEGER DEFAULT 0,
+      warningCount INTEGER DEFAULT 0,
+      warnings TEXT DEFAULT '[]',
+      createdAt TEXT NOT NULL,
+      rolledBackAt TEXT DEFAULT ''
+    );
+    CREATE INDEX IF NOT EXISTS idx_import_batches_createdAt ON import_batches(createdAt);
+    CREATE TABLE IF NOT EXISTS import_batch_trades (
+      batchId TEXT NOT NULL,
+      tradeId TEXT NOT NULL,
+      sourceRow INTEGER DEFAULT 0,
+      PRIMARY KEY (batchId, tradeId)
+    );
+    CREATE INDEX IF NOT EXISTS idx_import_batch_trades_tradeId ON import_batch_trades(tradeId);
+    CREATE TABLE IF NOT EXISTS import_sources (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      folderPath TEXT NOT NULL,
+      brokerKey TEXT DEFAULT '',
+      account TEXT DEFAULT '',
+      timezone TEXT DEFAULT '',
+      trusted INTEGER DEFAULT 0,
+      enabled INTEGER DEFAULT 1,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      lastScanAt TEXT DEFAULT ''
+    );
+    CREATE TABLE IF NOT EXISTS import_inbox (
+      id TEXT PRIMARY KEY,
+      sourceId TEXT NOT NULL,
+      filePath TEXT NOT NULL,
+      fileName TEXT NOT NULL,
+      fingerprint TEXT NOT NULL UNIQUE,
+      size INTEGER DEFAULT 0,
+      modifiedAt TEXT DEFAULT '',
+      state TEXT NOT NULL DEFAULT 'pending',
+      error TEXT DEFAULT '',
+      detectedAt TEXT NOT NULL,
+      importedAt TEXT DEFAULT ''
+    );
+    CREATE INDEX IF NOT EXISTS idx_import_inbox_state ON import_inbox(state, detectedAt);
   `)
 
   // Migrate older DBs that predate columns added above.
@@ -547,12 +600,173 @@ export function addTrade(t) {
 }
 
 // Bulk insert from a broker CSV — flagged source='import' so the rating can show "Verified".
-export function importTrades(list) {
-  const stmt = db.prepare(INSERT_TRADE)
-  const tx = db.transaction((rows) => { for (const r of rows) stmt.run(buildRow({ ...r, source: 'import' })) })
-  tx(Array.isArray(list) ? list : [])
+function parsedStringArray(value) {
+  try {
+    const parsed = JSON.parse(String(value || '[]'))
+    return Array.isArray(parsed) ? parsed.map(String).filter(Boolean) : []
+  } catch { return [] }
+}
+
+function publicImportBatch(row) {
+  return row ? { ...row, warnings: parsedStringArray(row.warnings) } : null
+}
+
+export function listImportBatches() {
+  return db.prepare(`SELECT b.*,
+    (SELECT COUNT(*) FROM import_batch_trades bt JOIN trades t ON t.id = bt.tradeId WHERE bt.batchId = b.id) AS remainingCount
+    FROM import_batches b ORDER BY b.createdAt DESC, b.rowid DESC`).all().map(publicImportBatch)
+}
+
+export function importTradeBatch(list, meta = {}) {
+  const rows = Array.isArray(list) ? list : []
+  const now = new Date().toISOString()
+  const batchId = String(meta.batchId || randomUUID())
+  const warnings = Array.isArray(meta.warnings) ? meta.warnings.map(String).filter(Boolean).slice(0, 30) : []
+  const batch = {
+    id: batchId, sourceId: String(meta.sourceId || ''),
+    fileName: String(meta.fileName || 'Manual CSV import').slice(0, 260),
+    brokerKey: String(meta.brokerKey || ''), brokerLabel: String(meta.brokerLabel || ''),
+    account: String(meta.account || ''), timezone: String(meta.timezone || ''), status: 'completed',
+    rowCount: Math.max(0, Number(meta.rowCount) || rows.length), importedCount: rows.length,
+    duplicateCount: Math.max(0, Number(meta.duplicateCount) || 0), skippedCount: Math.max(0, Number(meta.skippedCount) || 0),
+    warningCount: Math.max(warnings.length, Number(meta.warningCount) || 0), warnings: JSON.stringify(warnings),
+    createdAt: now, rolledBackAt: ''
+  }
+  const insertBatch = db.prepare(`INSERT INTO import_batches
+    (id,sourceId,fileName,brokerKey,brokerLabel,account,timezone,status,rowCount,importedCount,duplicateCount,skippedCount,warningCount,warnings,createdAt,rolledBackAt)
+    VALUES (@id,@sourceId,@fileName,@brokerKey,@brokerLabel,@account,@timezone,@status,@rowCount,@importedCount,@duplicateCount,@skippedCount,@warningCount,@warnings,@createdAt,@rolledBackAt)`)
+  const insertTrade = db.prepare(INSERT_TRADE)
+  const linkTrade = db.prepare('INSERT INTO import_batch_trades (batchId,tradeId,sourceRow) VALUES (?,?,?)')
+  db.transaction(() => {
+    insertBatch.run(batch)
+    rows.forEach((trade, index) => {
+      const row = buildRow({ ...trade, source: 'import' })
+      insertTrade.run(row)
+      linkTrade.run(batchId, row.id, Number(trade.sourceRow) || index + 2)
+    })
+  })()
   refreshCommitmentResults()
-  return listTrades()
+  return { trades: listTrades(), batch: publicImportBatch({ ...batch, remainingCount: rows.length }) }
+}
+
+// Backward-compatible bulk import used by older renderer builds and tests.
+export function importTrades(list) {
+  return importTradeBatch(list, { fileName: 'Manual CSV import' }).trades
+}
+
+export function rollbackImportBatch(id) {
+  const key = String(id)
+  const batch = db.prepare('SELECT * FROM import_batches WHERE id = ?').get(key)
+  if (!batch) throw new Error('Import batch not found')
+  if (batch.status === 'rolled_back') return { trades: listTrades(), batches: listImportBatches() }
+  const tradeIds = db.prepare('SELECT tradeId FROM import_batch_trades WHERE batchId = ?').all(key).map((r) => r.tradeId)
+  for (const tradeId of tradeIds) {
+    for (const img of db.prepare('SELECT file FROM trade_images WHERE tradeId = ?').all(tradeId)) {
+      try { unlinkSync(join(imagesDir, img.file)) } catch {}
+    }
+    for (const video of db.prepare('SELECT file FROM trade_videos WHERE tradeId = ?').all(tradeId)) {
+      try { unlinkSync(join(videosDir, video.file)) } catch {}
+    }
+  }
+  const now = new Date().toISOString()
+  db.transaction(() => {
+    const delImages = db.prepare('DELETE FROM trade_images WHERE tradeId = ?')
+    const delVideos = db.prepare('DELETE FROM trade_videos WHERE tradeId = ?')
+    const delFills = db.prepare('DELETE FROM trade_fills WHERE tradeId = ?')
+    const delResults = db.prepare('DELETE FROM commitment_results WHERE tradeId = ?')
+    const detachPlans = db.prepare("UPDATE trade_plans SET status = CASE WHEN status = 'executed' THEN 'locked' ELSE status END, linkedTradeId = '', resolvedAt = '', updatedAt = ? WHERE linkedTradeId = ?")
+    const delTrade = db.prepare('DELETE FROM trades WHERE id = ?')
+    for (const tradeId of new Set(tradeIds)) {
+      delImages.run(tradeId); delVideos.run(tradeId); delFills.run(tradeId); delResults.run(tradeId)
+      detachPlans.run(now, tradeId); delTrade.run(tradeId)
+    }
+    db.prepare("UPDATE import_batches SET status = 'rolled_back', rolledBackAt = ? WHERE id = ?").run(now, key)
+  })()
+  refreshCommitmentResults()
+  return { trades: listTrades(), batches: listImportBatches() }
+}
+
+function publicImportSource(row) {
+  return row ? { ...row, trusted: Boolean(row.trusted), enabled: Boolean(row.enabled) } : null
+}
+
+export function listImportSources() {
+  return db.prepare('SELECT * FROM import_sources ORDER BY createdAt ASC, rowid ASC').all().map(publicImportSource)
+}
+
+export function saveImportSource(source = {}) {
+  const now = new Date().toISOString()
+  const current = source.id ? db.prepare('SELECT * FROM import_sources WHERE id = ?').get(String(source.id)) : null
+  const row = {
+    id: String(source.id || randomUUID()),
+    name: String(source.name || current?.name || 'Broker exports').trim().slice(0, 80) || 'Broker exports',
+    folderPath: String(source.folderPath || current?.folderPath || ''), brokerKey: String(source.brokerKey ?? current?.brokerKey ?? ''),
+    account: String(source.account ?? current?.account ?? ''), timezone: String(source.timezone ?? current?.timezone ?? ''),
+    trusted: source.trusted == null ? Number(current?.trusted || 0) : Number(Boolean(source.trusted)),
+    enabled: source.enabled == null ? Number(current?.enabled ?? 1) : Number(Boolean(source.enabled)),
+    createdAt: String(current?.createdAt || now), updatedAt: now, lastScanAt: String(current?.lastScanAt || now)
+  }
+  if (!row.folderPath) throw new Error('Choose a folder first')
+  db.prepare(`INSERT INTO import_sources
+    (id,name,folderPath,brokerKey,account,timezone,trusted,enabled,createdAt,updatedAt,lastScanAt)
+    VALUES (@id,@name,@folderPath,@brokerKey,@account,@timezone,@trusted,@enabled,@createdAt,@updatedAt,@lastScanAt)
+    ON CONFLICT(id) DO UPDATE SET name=excluded.name,folderPath=excluded.folderPath,brokerKey=excluded.brokerKey,
+    account=excluded.account,timezone=excluded.timezone,trusted=excluded.trusted,enabled=excluded.enabled,updatedAt=excluded.updatedAt`).run(row)
+  return listImportSources()
+}
+
+export function deleteImportSource(id) {
+  const key = String(id)
+  db.transaction(() => {
+    db.prepare("UPDATE import_inbox SET state = 'dismissed' WHERE sourceId = ? AND state = 'pending'").run(key)
+    db.prepare('DELETE FROM import_sources WHERE id = ?').run(key)
+  })()
+  return listImportSources()
+}
+
+export function updateImportSourceScan(id, at = new Date().toISOString()) {
+  db.prepare('UPDATE import_sources SET lastScanAt = ?, updatedAt = ? WHERE id = ?').run(String(at), new Date().toISOString(), String(id))
+}
+
+export function getImportSource(id) {
+  return publicImportSource(db.prepare('SELECT * FROM import_sources WHERE id = ?').get(String(id)))
+}
+
+export function recordImportInbox(entry = {}) {
+  const fingerprint = String(entry.fingerprint || '')
+  if (!fingerprint) throw new Error('Import file fingerprint is required')
+  const existing = db.prepare('SELECT * FROM import_inbox WHERE fingerprint = ?').get(fingerprint)
+  if (existing) return { created: false, item: existing }
+  const row = {
+    id: String(entry.id || randomUUID()), sourceId: String(entry.sourceId || ''), filePath: String(entry.filePath || ''),
+    fileName: String(entry.fileName || ''), fingerprint, size: Math.max(0, Number(entry.size) || 0),
+    modifiedAt: String(entry.modifiedAt || ''), state: 'pending', error: '', detectedAt: new Date().toISOString(), importedAt: ''
+  }
+  db.prepare(`INSERT INTO import_inbox
+    (id,sourceId,filePath,fileName,fingerprint,size,modifiedAt,state,error,detectedAt,importedAt)
+    VALUES (@id,@sourceId,@filePath,@fileName,@fingerprint,@size,@modifiedAt,@state,@error,@detectedAt,@importedAt)`).run(row)
+  return { created: true, item: row }
+}
+
+export function listImportInbox(state = 'pending') {
+  const where = state === 'all' ? '' : state === 'active' ? "WHERE i.state IN ('pending','error')" : 'WHERE i.state = ?'
+  const args = state === 'all' || state === 'active' ? [] : [String(state)]
+  return db.prepare(`SELECT i.*,s.name AS sourceName,s.brokerKey,s.account,s.timezone,s.trusted
+    FROM import_inbox i LEFT JOIN import_sources s ON s.id = i.sourceId ${where}
+    ORDER BY i.detectedAt DESC, i.rowid DESC`).all(...args).map((row) => ({ ...row, trusted: Boolean(row.trusted) }))
+}
+
+export function getImportInbox(id) {
+  return db.prepare(`SELECT i.*,s.folderPath,s.name AS sourceName,s.brokerKey,s.account,s.timezone,s.trusted
+    FROM import_inbox i LEFT JOIN import_sources s ON s.id = i.sourceId WHERE i.id = ?`).get(String(id)) || null
+}
+
+export function setImportInboxState(id, state, error = '') {
+  const allowed = new Set(['pending', 'imported', 'dismissed', 'error'])
+  const next = allowed.has(state) ? state : 'error'
+  db.prepare('UPDATE import_inbox SET state = ?, error = ?, importedAt = ? WHERE id = ?')
+    .run(next, String(error || ''), next === 'imported' ? new Date().toISOString() : '', String(id))
+  return listImportInbox('active')
 }
 
 export function updateTrade(t) {
@@ -1152,7 +1366,7 @@ export function getAllData() {
   const settings = getSettings()
   for (const k of SECRET_KEYS) delete settings[k]
   return {
-    app: 'tradehelp', version: 4, exportedAt: new Date().toISOString(),
+    app: 'tradehelp', version: 5, exportedAt: new Date().toISOString(),
     trades: db.prepare('SELECT * FROM trades').all(),
     tradeFills: db.prepare(`SELECT id,tradeId,kind,side,quantity,price,fee,filledAt,sequence,sourceRef
       FROM trade_fills ORDER BY tradeId,sequence,filledAt,rowid`).all(),
@@ -1167,6 +1381,8 @@ export function getAllData() {
     playbook: listPlaybook(),
     dayLogs: listDayLogs(),
     payouts: listPayouts(),
+    importBatches: listImportBatches(),
+    importBatchTrades: db.prepare('SELECT batchId,tradeId,sourceRow FROM import_batch_trades ORDER BY batchId,sourceRow').all(),
     goals: getGoals(),
     reviews: getReviews(),
     settings
@@ -1175,7 +1391,7 @@ export function getAllData() {
 
 export function restoreData(data) {
   const version = Number(data?.version || 3)
-  if (version !== 3 && version !== 4) throw new Error('Unsupported backup version')
+  if (version !== 3 && version !== 4 && version !== 5) throw new Error('Unsupported backup version')
   const tx = db.transaction((d) => {
     if (Array.isArray(d.trades)) {
       const ins = db.prepare(`INSERT OR REPLACE INTO trades
@@ -1344,6 +1560,32 @@ export function restoreData(data) {
         })
       }
     }
+    if (Array.isArray(d.importBatches)) {
+      const insert = db.prepare(`INSERT OR REPLACE INTO import_batches
+        (id,sourceId,fileName,brokerKey,brokerLabel,account,timezone,status,rowCount,importedCount,duplicateCount,skippedCount,warningCount,warnings,createdAt,rolledBackAt)
+        VALUES (@id,@sourceId,@fileName,@brokerKey,@brokerLabel,@account,@timezone,@status,@rowCount,@importedCount,@duplicateCount,@skippedCount,@warningCount,@warnings,@createdAt,@rolledBackAt)`)
+      for (const batch of d.importBatches) {
+        const warnings = Array.isArray(batch.warnings) ? batch.warnings : parsedStringArray(batch.warnings)
+        insert.run({
+          id: String(batch.id || randomUUID()), sourceId: '', fileName: String(batch.fileName || 'Imported CSV'),
+          brokerKey: String(batch.brokerKey || ''), brokerLabel: String(batch.brokerLabel || ''), account: String(batch.account || ''),
+          timezone: String(batch.timezone || ''), status: batch.status === 'rolled_back' ? 'rolled_back' : 'completed',
+          rowCount: Math.max(0, Number(batch.rowCount) || 0), importedCount: Math.max(0, Number(batch.importedCount) || 0),
+          duplicateCount: Math.max(0, Number(batch.duplicateCount) || 0), skippedCount: Math.max(0, Number(batch.skippedCount) || 0),
+          warningCount: Math.max(warnings.length, Number(batch.warningCount) || 0), warnings: JSON.stringify(warnings.slice(0, 30)),
+          createdAt: String(batch.createdAt || new Date().toISOString()), rolledBackAt: String(batch.rolledBackAt || '')
+        })
+      }
+    }
+    if (Array.isArray(d.importBatchTrades)) {
+      const batchExists = db.prepare('SELECT 1 FROM import_batches WHERE id = ?')
+      const tradeExists = db.prepare('SELECT 1 FROM trades WHERE id = ?')
+      const insert = db.prepare('INSERT OR REPLACE INTO import_batch_trades (batchId,tradeId,sourceRow) VALUES (?,?,?)')
+      for (const link of d.importBatchTrades) {
+        const batchId = String(link.batchId || ''), tradeId = String(link.tradeId || '')
+        if (batchExists.get(batchId) && tradeExists.get(tradeId)) insert.run(batchId, tradeId, Math.max(0, Number(link.sourceRow) || 0))
+      }
+    }
     if (d.goals) setGoals(d.goals)
     if (d.reviews) for (const [p, text] of Object.entries(d.reviews)) setReview(p, text)
     if (d.settings) setSettings(d.settings)
@@ -1361,7 +1603,7 @@ export function restoreData(data) {
     trades: listTrades(), tradeFills: db.prepare('SELECT * FROM trade_fills ORDER BY tradeId,sequence,filledAt,rowid').all(),
     instrumentProfiles: listInstrumentProfiles(), savedSearches: listSavedSearches(), tradePlans: listTradePlans(),
     commitments: listCoachCommitments(), commitmentResults: db.prepare('SELECT * FROM commitment_results').all(),
-    playbook: listPlaybook(), dayLogs: listDayLogs(), payouts: listPayouts(),
+    playbook: listPlaybook(), dayLogs: listDayLogs(), payouts: listPayouts(), importBatches: listImportBatches(),
     goals: getGoals(), reviews: getReviews(), settings: getSettings()
   }
 }

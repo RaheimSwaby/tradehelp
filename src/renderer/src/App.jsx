@@ -182,6 +182,13 @@ export default function App() {
     })()
   }, [hasApi])
 
+  useEffect(() => {
+    if (!hasApi || !window.api.onImportsChanged) return undefined
+    return window.api.onImportsChanged((event) => {
+      if (event?.type === 'auto-imported' || event?.type === 'rolled-back') refreshWorkflow()
+    })
+  }, [hasApi]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // First-run wizard: fresh install only (no trades yet, never onboarded or skipped).
   // Evaluated once when loading finishes so importing trades mid-wizard can't re-trigger it.
   useEffect(() => {
@@ -315,7 +322,8 @@ export default function App() {
     return { videoErrors }
   }
   async function removeTrade(id) { if (hasApi) { await window.api.deleteTrade(id); await refreshWorkflow() } }
-  async function importTrades(rows) { if (hasApi) { await window.api.importTrades(rows); await refreshWorkflow() } }
+  async function importTrades(rows, meta = {}) { if (hasApi) { const result = await window.api.importTrades(rows, meta); await refreshWorkflow(); return result } }
+  async function rollbackImport(id) { if (hasApi) { const result = await window.api.rollbackImportBatch(id); await refreshWorkflow(); return result } }
   async function reloadAll() {
     if (!hasApi) return
     const [nextTrades, nextGoals, nextReviews, nextSettings, nextPlans, nextCommitments, nextProfiles, nextSearches] = await Promise.all([
@@ -617,7 +625,7 @@ export default function App() {
           <Paywall onActivated={refreshLicense} />
         ) : (
           <div key={tab} className="th-cinematic">
-            {tab === 'journal' && <Journal trades={trades} onAdd={addTrade} onUpdate={updateTrade} onRemove={removeTrade} onNotes={setNotesView} onImport={importTrades} accounts={propFirmAccounts} profiles={instrumentProfiles} savedSearches={savedSearches} onAddSavedSearch={addSavedSearch} onUpdateSavedSearch={updateSavedSearch} onDeleteSavedSearch={deleteSavedSearch} onRefreshSavedSearches={refreshSavedSearches} settings={settings} onSaveSettings={saveSettings} dayLogs={dayLogs} onAddDayLog={addDayLog} onDeleteDayLog={deleteDayLog} />}
+            {tab === 'journal' && <Journal trades={trades} onAdd={addTrade} onUpdate={updateTrade} onRemove={removeTrade} onNotes={setNotesView} onImport={importTrades} onRollbackImport={rollbackImport} accounts={propFirmAccounts} profiles={instrumentProfiles} savedSearches={savedSearches} onAddSavedSearch={addSavedSearch} onUpdateSavedSearch={updateSavedSearch} onDeleteSavedSearch={deleteSavedSearch} onRefreshSavedSearches={refreshSavedSearches} settings={settings} onSaveSettings={saveSettings} dayLogs={dayLogs} onAddDayLog={addDayLog} onDeleteDayLog={deleteDayLog} />}
             {tab === 'trade' && <TradeModeTab settings={settings} onSave={saveSettings} rules={rules} live={tradeMode} arming={goTransition === 'arming'} todayNet={todayNet} todayCount={todayTrades.length} weekNet={weekNet} goal={dailyGoal} maxLoss={maxLoss} onStart={startDay} onEnd={endSession} plans={tradePlans} trades={trades} accounts={propFirmAccounts} playbook={playbook} profiles={instrumentProfiles} planPrefill={planPrefill} onConsumePlanPrefill={() => setPlanPrefill(null)} commitment={activeCommitment} onAddPlan={addTradePlan} onUpdatePlan={updateTradePlan} onDeletePlan={deleteTradePlan} />}
             {tab === 'propfirm' && <PropFirm trades={trades} accounts={propFirmAccounts} onSave={savePropFirmAccounts} settings={settings} onSaveSettings={saveSettings} payouts={payouts} onAddPayout={addPayout} onDeletePayout={deletePayout} />}
             {tab === 'dashboard' && <Dashboard stats={stats} trades={trades} accounts={propFirmAccounts} settings={settings} journalData={{ reviews, playbook, dayLogs, goals }} payouts={payouts} plans={tradePlans} commitments={commitments} onAddCommitment={addCommitment} onUpdateCommitment={updateCommitment} onDeleteCommitment={deleteCommitment} onSaveSettings={saveSettings} onOpenCoach={() => setTab('coach')} onOpenTrade={setNotesView} />}

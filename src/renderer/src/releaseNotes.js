@@ -22,6 +22,11 @@ const V036_NOTES = `- Cosmetic Refresh - each theme preset now has its own restr
 - Dashboard quotes rotate daily and AI Coach quick prompts adapt to your journal`
 
 export const RELEASE_NOTES = {
+  '0.37.0': `- Local Import Inbox watches broker export folders while TradeHelp is open
+- New CSV files can be reviewed from Journal or auto-imported from trusted folders
+- Saved broker, account, and timezone mappings keep repeat imports consistent
+- Every import records duplicates, skipped rows, and parsing warnings
+- Import history includes one-click whole-batch rollback`,
   '0.36.1': `• Session clock now flags your strongest and weakest hours as you reach them — learned from your own trade history
 • Lighter, less frequent background update checks`,
   '0.36.0': V036_NOTES,

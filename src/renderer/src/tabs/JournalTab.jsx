@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { Plus, Trash2, Upload, Paperclip, X, Pencil, ImagePlus, Video, ChevronLeft, ChevronRight, Search, CalendarOff, Check, Coffee, Bookmark, ArrowUp, ArrowDown } from 'lucide-react'
+import { Plus, Trash2, Upload, Paperclip, X, Pencil, ImagePlus, Video, ChevronLeft, ChevronRight, Search, CalendarOff, Check, Coffee, Bookmark, ArrowUp, ArrowDown, Inbox } from 'lucide-react'
 import { T, mono, inputStyle } from '../theme.js'
 import { fmt$, fmtN, nowLocalInput, parseLocal, holdMs, fmtDuration, EMOTIONS, SETUPS, WIN_REASONS, LOSS_REASONS, SELF_GRADES, pad2, MONTHS, downscale, fileToDataUrl } from '../utils.js'
 import { Field, Panel, GradeChip } from '../components/Shared.jsx'
 import { ImportModal } from '../widgets/ImportModal.jsx'
+import { ImportCenterModal } from '../widgets/ImportCenterModal.jsx'
 import { AnnotateModal } from '../components/AnnotateModal.jsx'
 import { matchesJournalFilters, parseJournalQuery } from '../journalSearch.js'
 import { averageCostFillPreview, selectInstrumentProfile, synthesizeTradeFills } from '../workflow.js'
@@ -34,13 +35,16 @@ function attachmentTitle(trade) {
 }
 
 /* ───────── journal ───────── */
-export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, accounts = [], profiles = [], savedSearches = [], onAddSavedSearch, onUpdateSavedSearch, onDeleteSavedSearch, onRefreshSavedSearches, settings, onSaveSettings, dayLogs = [], onAddDayLog, onDeleteDayLog }) {
+export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, onRollbackImport, accounts = [], profiles = [], savedSearches = [], onAddSavedSearch, onUpdateSavedSearch, onDeleteSavedSearch, onRefreshSavedSearches, settings, onSaveSettings, dayLogs = [], onAddDayLog, onDeleteDayLog }) {
   const blank = { symbol: '', direction: 'Long', entry: '', exit: '', stop: '', target: '', size: '', riskAmount: '', pnl: '', fees: '', emotion: 'Neutral', setup: 'Pullback', notes: '', entryTime: nowLocalInput(), exitTime: nowLocalInput(), reason: '', account: '', selfSetup: '', selfExec: '' }
   const [f, setF] = useState(blank)
   const [images, setImages] = useState([])
   const [videos, setVideos] = useState([])
   const [annotating, setAnnotating] = useState(null)
   const [importOpen, setImportOpen] = useState(false)
+  const [importCenterOpen, setImportCenterOpen] = useState(false)
+  const [pendingImport, setPendingImport] = useState(null)
+  const [importInboxCount, setImportInboxCount] = useState(0)
   const [editing, setEditing] = useState(null)
   const [query, setQuery] = useState('')
   const [dismissedSearchFilters, setDismissedSearchFilters] = useState([])
@@ -58,6 +62,13 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
   const videosRef = useRef([])
 
   useEffect(() => { videosRef.current = videos }, [videos])
+  useEffect(() => {
+    if (!window.api?.listImportInbox) return undefined
+    const refresh = () => window.api.listImportInbox().then((items) => setImportInboxCount(items.length)).catch(() => {})
+    refresh()
+    const cleanup = window.api.onImportsChanged?.(refresh)
+    return () => cleanup?.()
+  }, [])
   useEffect(() => () => {
     const tokens = videosRef.current.map((video) => video.token).filter(Boolean)
     if (tokens.length) Promise.resolve(window.api?.discardPickedTradeVideos?.(tokens)).catch(() => {})
@@ -669,7 +680,10 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
         <div className="px-4 py-3" style={{ borderBottom: `1px solid ${T.line}` }}>
           <div className="flex items-center justify-between">
             <span className="text-sm font-semibold">Trade history <span style={{ color: T.faint }}>· {filtered.length === trades.length ? trades.length : `${filtered.length} of ${trades.length}`}</span></span>
-            <button type="button" onClick={() => setImportOpen(true)} className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-md" style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}` }}><Upload size={13} /> Import CSV</button>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={() => setImportCenterOpen(true)} className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-md" style={{ background: T.surface2, color: importInboxCount ? T.accent : T.dim, border: `1px solid ${T.line}` }}><Inbox size={13} /> Inbox{importInboxCount ? ` ${importInboxCount}` : ''}</button>
+              <button type="button" onClick={() => { setPendingImport(null); setImportOpen(true) }} className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-md" style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}` }}><Upload size={13} /> Import CSV</button>
+            </div>
           </div>
           {trades.length > 0 && (
             <div className="flex flex-wrap items-center gap-2 mt-2">
@@ -779,7 +793,8 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
         )}
         <div className="px-4 py-2 text-xs" style={{ color: T.faint, borderTop: `1px solid ${T.line}` }}>Double-click a row to open it — edit notes, view screenshots and recordings. Use ✏️ to edit the full trade.</div>
       </div>
-      {importOpen && <ImportModal existing={trades} accounts={accounts} onClose={() => setImportOpen(false)} onImport={async (rows) => { await onImport(rows); setImportOpen(false) }} />}
+      {importOpen && <ImportModal existing={trades} accounts={accounts} initialImport={pendingImport} onClose={() => { setImportOpen(false); setPendingImport(null) }} onImport={onImport} />}
+      {importCenterOpen && <ImportCenterModal accounts={accounts} onClose={() => setImportCenterOpen(false)} onReview={(item) => { setImportCenterOpen(false); setPendingImport(item); setImportOpen(true) }} onRollback={onRollbackImport} />}
       {annotating && <AnnotateModal src={annotating.dataUrl} onClose={() => setAnnotating(null)} onSave={(dataUrl, labels) => { setImages((p) => p.map((im) => (im.tmpId === annotating.tmpId ? { ...im, dataUrl, labels } : im))); setAnnotating(null) }} />}
       {noTradeOpen && <NoTradeModal emotions={allEmotions} onClose={() => setNoTradeOpen(false)} onSave={async (entry) => { await onAddDayLog?.(entry); setNoTradeOpen(false) }} />}
       {pendingDelete && (

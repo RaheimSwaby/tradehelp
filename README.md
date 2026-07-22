@@ -9,7 +9,7 @@ endpoint with your own key.
 
 | Tab        | What it does                                                                 |
 |------------|------------------------------------------------------------------------------|
-| Journal    | Log trades (long/short, entry/exit/stop/target, size, risk). Auto-calcs P&L + R:R. Import a broker CSV (any layout — you map the columns); imported trades count as **Verified** on your rating. |
+| Journal    | Log trades (long/short, entry/exit/stop/target, size, risk). Auto-calcs P&L + R:R. Import broker CSVs manually or watch export folders; every batch has warnings, history, and one-click rollback. Imported trades count as **Verified** on your rating. |
 | Trade Mode | Your own pre-trade checklist, daily goal + max-loss lockout, and a focused "go time" mode that recolors the app when you're live. |
 | Dashboard  | Net P&L, win rate, profit factor, expectancy, max drawdown, streaks, equity curve, daily P&L. |
 | Psychology | P&L by emotion, by setup, by hour, and your win/loss reasons.                 |
