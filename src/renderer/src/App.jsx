@@ -402,7 +402,7 @@ export default function App() {
     setChecks({})
     setLockoutDismissed(false)
     setGoTransition('arming')
-    goTimerRef.current = setTimeout(() => { setGoTransition(null); setPreflight(true) }, 280)
+    goTimerRef.current = setTimeout(() => { setGoTransition(null); setPreflight(true) }, 360)
   }
   function cancelPreflight() { clearGoTimer(); setGoTransition(null); setPreflight(false) }
   function goLive() {
@@ -413,7 +413,7 @@ export default function App() {
       setPreflight(false)
       setTradeMode(true)
       setGoTransition('live')
-      goTimerRef.current = setTimeout(() => setGoTransition(null), 620)
+      goTimerRef.current = setTimeout(() => setGoTransition(null), 760)
     }, 150)
   }
   function endSession() { clearGoTimer(); setGoTransition(null); setTradeMode(false); setPreflight(false); setChecks({}); setLockoutDismissed(false) }

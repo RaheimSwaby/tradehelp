@@ -102,6 +102,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 }
 .th-cinematic::after {
   content: "";
+  display: none;
   position: absolute;
   top: -1px;
   left: 0;
@@ -109,22 +110,16 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   height: 1px;
   pointer-events: none;
   background: linear-gradient(90deg, transparent 0%, var(--th-accent, #F5B642) 48%, transparent 100%);
-  filter: drop-shadow(0 0 7px var(--th-accent, #F5B642));
+  box-shadow: 0 0 7px color-mix(in srgb, var(--th-accent, #F5B642) 70%, transparent);
+  will-change: transform, opacity;
   transform: scaleX(.08) translateY(-3px);
   opacity: 0;
-  animation: th-cinematic-glint .7s cubic-bezier(.16, 1, .3, 1) both;
 }
 @keyframes th-cinematic-in {
-  0% { opacity: 0; transform: perspective(1100px) rotateX(-4deg) translateY(10px) scale(.995); filter: brightness(.82); }
-  58% { opacity: 1; filter: brightness(1.035); }
-  100% { opacity: 1; transform: perspective(1100px) rotateX(0) translateY(0) scale(1); filter: brightness(1); }
+  0% { opacity: 0; transform: perspective(1100px) rotateX(-4deg) translateY(10px) scale(.995); }
+  58% { opacity: 1; }
+  100% { opacity: 1; transform: perspective(1100px) rotateX(0) translateY(0) scale(1); }
 }
-@keyframes th-cinematic-glint {
-  0% { opacity: 0; transform: scaleX(.08) translateY(-3px); }
-  28% { opacity: .72; }
-  100% { opacity: 0; transform: scaleX(1) translateY(1px); }
-}
-
 /* Start Day arms with a compact control flip; Go Live follows with a focus-lock reveal. */
 .th-go-trigger {
   transform-style: preserve-3d;
@@ -132,7 +127,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   will-change: transform, filter;
 }
 .th-go-trigger-on {
-  animation: th-go-trigger-flip .28s cubic-bezier(.34, 1.56, .64, 1) both;
+  animation: th-go-trigger-flip .36s cubic-bezier(.34, 1.56, .64, 1) both;
 }
 @keyframes th-go-trigger-flip {
   0% { transform: perspective(500px) rotateX(0) scale(1); filter: brightness(1); }
@@ -144,7 +139,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   overflow: hidden;
   display: grid;
   place-items: center;
-  animation: th-go-overlay .62s ease both;
+  animation: th-go-overlay .76s ease both;
 }
 .th-go-curtain {
   position: absolute;
@@ -153,7 +148,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     linear-gradient(180deg, color-mix(in srgb, var(--th-accent, #FF6A3D) 24%, #090B10), rgba(9, 11, 16, .94)),
     #090B10;
   transform-origin: center;
-  animation: th-go-curtain-open .62s cubic-bezier(.16, 1, .3, 1) both;
+  animation: th-go-curtain-open .76s cubic-bezier(.16, 1, .3, 1) both;
 }
 .th-go-lock {
   position: relative;
@@ -163,7 +158,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   gap: 5px;
   color: var(--th-accent, #FF6A3D);
   letter-spacing: 0;
-  animation: th-go-lock-in .62s cubic-bezier(.16, 1, .3, 1) both;
+  animation: th-go-lock-in .76s cubic-bezier(.16, 1, .3, 1) both;
 }
 .th-go-lock-icon {
   width: 64px;
@@ -178,10 +173,12 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   z-index: 3;
   top: 0;
   bottom: 0;
+  left: 0;
   width: 1px;
   background: var(--th-accent, #FF6A3D);
   box-shadow: 0 0 18px 5px color-mix(in srgb, var(--th-accent, #FF6A3D) 45%, transparent);
-  animation: th-go-scan .62s cubic-bezier(.16, 1, .3, 1) both;
+  will-change: transform, opacity;
+  animation: th-go-scan .76s cubic-bezier(.16, 1, .3, 1) both;
 }
 @keyframes th-go-overlay {
   0% { opacity: 0; }
@@ -195,20 +192,20 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   100% { transform: perspective(900px) rotateX(-86deg) scaleX(.92); }
 }
 @keyframes th-go-lock-in {
-  0%, 14% { opacity: 0; transform: scale(.72); filter: blur(5px); }
-  34%, 70% { opacity: 1; transform: scale(1); filter: blur(0); }
-  100% { opacity: 0; transform: scale(1.08); filter: blur(2px); }
+  0%, 14% { opacity: 0; transform: scale(.72); }
+  34%, 70% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.08); }
 }
 @keyframes th-go-scan {
-  0%, 12% { left: 8%; opacity: 0; }
+  0%, 12% { transform: translateX(0); opacity: 0; }
   28% { opacity: .9; }
-  72% { left: 92%; opacity: .5; }
-  100% { left: 96%; opacity: 0; }
+  82% { transform: translateX(calc(100vw - 1px)); opacity: .5; }
+  100% { transform: translateX(calc(100vw - 1px)); opacity: 0; }
 }
 
 .th-logo-ignite {
   filter: drop-shadow(0 0 13px color-mix(in srgb, var(--th-accent, #FF6A3D) 62%, transparent));
-  animation: th-logo-ignite .62s cubic-bezier(.16, 1, .3, 1) both;
+  animation: th-logo-ignite .76s cubic-bezier(.16, 1, .3, 1) both;
 }
 .th-logo-ignite .th-logo-candle {
   transform-box: fill-box;
@@ -357,10 +354,169 @@ html[data-theme-preset="terminal"] .th-counting::after {
   0%, 100% { transform: translate(0); }
   50% { transform: translate(-1px, 1px); }
 }
+
+/* Preset motion signatures. Interaction timing stays consistent; only character changes. */
+
+/* Midnight Desk: deep focus, a cool trace, and one fading numeric echo. */
+html[data-theme-preset="midnight"] .th-cinematic {
+  animation: th-midnight-depth .52s cubic-bezier(.16, 1, .3, 1) both;
+}
+html[data-theme-preset="midnight"] .th-cinematic::after {
+  display: none;
+}
+html[data-theme-preset="midnight"] .th-counting {
+  animation: th-midnight-number .72s ease both;
+}
+html[data-theme-preset="midnight"] .th-counting::after {
+  content: attr(data-value);
+  position: absolute;
+  inset: 0;
+  color: #93C5FD;
+  pointer-events: none;
+  animation: th-midnight-number-echo .72s ease-out both;
+}
+@keyframes th-midnight-depth {
+  0% { opacity: 0; transform: perspective(1200px) translateY(8px) translateZ(-34px); }
+  58% { opacity: 1; }
+  100% { opacity: 1; transform: perspective(1200px) translateY(0) translateZ(0); }
+}
+@keyframes th-midnight-number {
+  0% { text-shadow: 0 0 0 transparent; }
+  35% { text-shadow: 0 0 8px rgba(96, 165, 250, .58); }
+  100% { text-shadow: 0 0 0 transparent; }
+}
+@keyframes th-midnight-number-echo {
+  0% { opacity: .5; transform: translate(2px, 1px); filter: blur(1px); }
+  45% { opacity: .22; transform: translate(1px, 0); }
+  100% { opacity: 0; transform: translate(0); filter: blur(0); }
+}
+
+/* Clean Light: quick sheet settle and restrained odometer motion. */
+html[data-theme-preset="clean"] .th-cinematic {
+  animation: th-clean-sheet .32s cubic-bezier(.16, 1, .3, 1) both;
+}
+html[data-theme-preset="clean"] .th-cinematic::after { display: none; }
+html[data-theme-preset="clean"] .th-counting {
+  animation: th-clean-odometer .14s steps(2, end) infinite;
+}
+@keyframes th-clean-sheet {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes th-clean-odometer {
+  0%, 100% { transform: translateY(0); opacity: 1; }
+  50% { transform: translateY(-.8px); opacity: .86; }
+}
+
+/* Terminal Green: stepped digital tab reveal. Trade Mode uses the shared sequence. */
+html[data-theme-preset="terminal"] .th-cinematic {
+  animation: th-terminal-tab-in .44s steps(1, end) both;
+}
+html[data-theme-preset="terminal"] .th-cinematic::after {
+  display: none;
+}
+@keyframes th-terminal-tab-in {
+  0% { opacity: 0; transform: translateX(-3px); }
+  16% { opacity: .78; transform: translateX(2px); }
+  28% { opacity: .45; transform: translateX(-1px); }
+  40% { opacity: 1; transform: translateX(1px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+/* Red Session: a sharper page lock and a two-beat count while values rise. */
+html[data-theme-preset="redSession"] .th-cinematic {
+  animation: th-red-snap .38s cubic-bezier(.2, .9, .2, 1) both;
+}
+html[data-theme-preset="redSession"] .th-cinematic::after {
+  display: none;
+}
+html[data-theme-preset="redSession"] .th-counting {
+  transform-origin: center;
+  animation: th-red-number-heart .72s ease-out both;
+}
+html[data-theme-preset="redSession"] .th-counting::after {
+  content: attr(data-value);
+  position: absolute;
+  inset: 0;
+  color: #B3001B;
+  pointer-events: none;
+  animation: th-red-blood-echo .72s ease-out both;
+}
+@keyframes th-red-snap {
+  0% { opacity: 0; transform: scale(.992) translateY(4px); }
+  42% { opacity: 1; transform: scale(1.002) translateY(0); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes th-red-number-heart {
+  0%, 17%, 37%, 100% { transform: scale(1); text-shadow: 0 0 0 transparent; filter: brightness(1); }
+  9% {
+    transform: scale(1.06);
+    filter: brightness(1.18);
+    text-shadow: 0 0 2px #FFD3D7, 0 0 8px rgba(218, 0, 31, .98), 0 0 19px rgba(116, 0, 16, .9), 0 0 32px rgba(48, 0, 8, .72);
+  }
+  27% {
+    transform: scale(1.038);
+    filter: brightness(1.1);
+    text-shadow: 0 0 2px #FF9DA6, 0 0 7px rgba(179, 0, 27, .9), 0 0 17px rgba(82, 0, 13, .76);
+  }
+}
+@keyframes th-red-blood-echo {
+  0%, 100% { opacity: 0; transform: scale(1); filter: blur(0); }
+  8% { opacity: .78; transform: scale(1.065); filter: blur(1.4px); }
+  17% { opacity: 0; transform: scale(1.09); filter: blur(3px); }
+  26% { opacity: .52; transform: scale(1.045); filter: blur(1px); }
+  39% { opacity: 0; transform: scale(1.07); filter: blur(3px); }
+}
+
+/* Minimal Gray: a quiet opacity fade with no spatial movement. */
+html[data-theme-preset="minimal"] .th-cinematic {
+  animation: th-minimal-fade .46s ease-out both;
+}
+html[data-theme-preset="minimal"] .th-cinematic::after {
+  display: none;
+}
+html[data-theme-preset="minimal"] .th-counting {
+  isolation: isolate;
+  transform-origin: center;
+  animation: th-minimal-teleport .72s cubic-bezier(.16, 1, .3, 1) both;
+}
+html[data-theme-preset="minimal"] .th-counting::before {
+  content: attr(data-value);
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  color: #000;
+  pointer-events: none;
+  animation: th-minimal-black-flash .72s ease-out both;
+}
+@keyframes th-minimal-fade {
+  0% { opacity: 0; }
+  55% { opacity: .72; }
+  100% { opacity: 1; }
+}
+@keyframes th-minimal-teleport {
+  0% { opacity: 1; transform: translateY(0) scale(1); filter: brightness(1) blur(0); }
+  10% { opacity: .72; transform: translateY(-1px) scale(.96); filter: brightness(0) blur(1px); }
+  19% { opacity: 0; transform: translateY(-5px) scaleX(.16); filter: brightness(0) blur(3px); }
+  31% { opacity: 0; transform: translateY(4px) scaleX(.16); filter: brightness(0) blur(3px); }
+  44% { opacity: 1; transform: translateY(0) scale(1.045); filter: brightness(1.9) blur(.5px); }
+  62%, 100% { opacity: 1; transform: translateY(0) scale(1); filter: brightness(1) blur(0); }
+}
+@keyframes th-minimal-black-flash {
+  0%, 4%, 42%, 100% { opacity: 0; transform: translate(0) scale(1); filter: blur(0); }
+  11% { opacity: 1; transform: translate(-2px, 2px) scale(1.04); filter: blur(.5px); text-shadow: 0 0 5px #000, 0 0 18px #000, 0 0 34px rgba(0, 0, 0, .95); }
+  25% { opacity: .72; transform: translate(3px, -2px) scaleX(.7); filter: blur(2px); text-shadow: 0 0 7px #000, 0 0 24px rgba(0, 0, 0, .92); }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  html[data-theme-preset="terminal"] .th-counting { animation: none; }
+  html[data-theme-preset] .th-cinematic,
+  html[data-theme-preset] .th-counting,
+  html[data-theme-preset="terminal"] .th-logo-ignite { animation: none !important; transform: none; filter: none; }
+  html[data-theme-preset] .th-cinematic::after,
+  html[data-theme-preset="midnight"] .th-counting::after,
+  html[data-theme-preset="redSession"] .th-counting::after,
+  html[data-theme-preset="minimal"] .th-counting::before,
   html[data-theme-preset="terminal"] .th-counting::before,
-  html[data-theme-preset="terminal"] .th-counting::after { display: none; }
+  html[data-theme-preset="terminal"] .th-counting::after { display: none !important; }
 }
 
 /* ticker tape marquee: two identical segments scrolled -50% for a seamless loop */

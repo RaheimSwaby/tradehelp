@@ -458,7 +458,9 @@ export function Backdrop({ variant = 'constellation' }) {
     }
 
     function resize() {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2)
+      // Decorative motion does not need full Retina density. The cap cuts the
+      // canvas pixel workload substantially while keeping edges visually crisp.
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.5)
       w = window.innerWidth; h = window.innerHeight
       canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr)
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
@@ -466,10 +468,17 @@ export function Backdrop({ variant = 'constellation' }) {
       if (reduced) draw(0) // keep the static frame in sync with the new size
     }
 
+    const frameMs = 1000 / 30
     let last = performance.now()
     function frame(now) {
-      // normalize to ~60fps units so speed doesn't depend on refresh rate
-      const dt = Math.min((now - last) / 16.7, 3)
+      const elapsed = now - last
+      if (elapsed < frameMs) {
+        raf = requestAnimationFrame(frame)
+        return
+      }
+      // The canvas is ambiance, so 30fps is enough; normalize movement to the
+      // original 60fps units so scene speed does not change.
+      const dt = Math.min(elapsed / 16.7, 3)
       last = now
       draw(dt)
       raf = requestAnimationFrame(frame)
