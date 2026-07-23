@@ -22,6 +22,9 @@ const V036_NOTES = `- Cosmetic Refresh - each theme preset now has its own restr
 - Dashboard quotes rotate daily and AI Coach quick prompts adapt to your journal`
 
 export const RELEASE_NOTES = {
+  '0.40.0': `- macOS builds are now signed and notarised by Apple — no more Terminal command to open the app
+- macOS updates now install themselves in the background, the same as Windows
+- New Help & FAQ panel — press the ? in the header, searchable and works offline`,
   '0.39.0': `- Adaptive timing intelligence now focuses on recent trading history and detects schedule shifts
 - Personal trading clock can be inferred automatically or set to custom split and overnight windows
 - CSV imports can convert broker timestamps from a selected source timezone

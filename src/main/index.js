@@ -425,7 +425,7 @@ function registerIpc() {
     } catch { return { version: v, notes: '' } }
   })
   // Latest published version + platform, for the in-app "update available" nudge
-  // (mainly for macOS, where the unsigned build can't auto-update).
+  // (macOS safety net if the auto-updater ever fails; see App.jsx).
   ipcMain.handle('update:latest', async () => {
     const platform = process.platform
     try {

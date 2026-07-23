@@ -295,9 +295,10 @@ export default function App() {
   // electron-updater signals when a download is ready (Windows/Linux).
   useEffect(() => { window.api?.onUpdateReady?.((info) => setUpdateReady(info || {})) }, [])
 
-  // GitHub API check for macOS only — unsigned mac builds can't auto-update, so they
-  // get a top banner with a direct .dmg link. Windows/Linux use electron-updater
-  // (auto-download + the bottom-left "Restart now" banner) instead.
+  // GitHub API check for macOS only. Signed builds auto-update like Windows/Linux, but
+  // this stays as a safety net: if the mac updater ever fails silently, a direct .dmg
+  // link is the only signal the user would get. Suppressed once a download is ready so
+  // the two update prompts can't stack — see the render guard on updateAvail.
   useEffect(() => {
     if (!hasApi || !window.api.latestVersion) return
     let live = true
@@ -772,7 +773,7 @@ export default function App() {
       <Backdrop variant={!settings?.backdrop || settings.backdrop === 'on' ? 'constellation' : settings.backdrop} />
       {personalClockAmbience && <SessionAmbience clock={sessionClock} />}
       <Ticker settings={settings} />
-      {updateAvail && <UpdateAvailableBanner info={updateAvail} onClose={() => setUpdateAvail(null)} />}
+      {updateAvail && !updateReady && <UpdateAvailableBanner info={updateAvail} onClose={() => setUpdateAvail(null)} />}
       {GATE_CONFIGURED && license?.state === 'trial' && <TrialBanner days={license.daysLeft} />}
       {imminentEvent && <EventBanner event={imminentEvent} now={now} />}
       {tradeMode && <LiveBanner net={todayNet} goal={dailyGoal} maxLoss={maxLoss} lossHit={lossHit} recordingState={recordingState} elapsed={sessionElapsed} onEnd={endSession} />}

@@ -66,12 +66,17 @@ The app auto-updates from **GitHub Releases** via `electron-updater`. To ship on
    is assumed to be named `tradehelp`).
 2. Bump `version` in `package.json`.
 3. Commit, then tag and push: `git tag v0.2.0 && git push --tags`.
-4. The **Release** GitHub Action builds the Windows + Linux installers and publishes
-   them to a GitHub Release. Installed apps pick the update up automatically and show
-   a "Restart to update" prompt.
+4. The **Release** GitHub Action builds the Windows, macOS and Linux installers and
+   publishes them to a GitHub Release. Installed apps pick the update up automatically
+   and show a "Restart to update" prompt.
 
-Until a code-signing certificate is added, Windows SmartScreen will warn on first
-run — testers click **More info → Run anyway**. Auto-update still works unsigned.
+macOS builds are signed with a Developer ID Application certificate and notarised by
+Apple, driven by the `MAC_CERT_*` and `APPLE_*` repository secrets. The mac target
+must keep `zip` alongside `dmg` — Squirrel.Mac can only apply an update from a zip, so
+dropping it silently breaks macOS auto-update while leaving the DMG download working.
+
+Windows is not yet code-signed, so SmartScreen warns on first run — testers click
+**More info → Run anyway**. Auto-update still works unsigned.
 
 ## Project layout
 

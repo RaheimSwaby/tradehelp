@@ -160,7 +160,7 @@ export const HELP_SECTIONS = [
       },
       {
         q: 'How do updates work?',
-        a: 'Windows and Linux download updates in the background and show a "Restart now" banner. macOS currently shows a banner with a download link instead, because the Mac build is not yet code-signed.'
+        a: 'Updates download in the background and show a "Restart now" banner when they are ready — on macOS as well, now that the Mac build is signed and notarised by Apple. TradeHelp checks every 30 minutes and when you focus the window. Your journal is never touched by an update.'
       }
     ]
   }
