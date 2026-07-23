@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react'
 import {
   LayoutDashboard, Brain, Target, Settings as SettingsIcon, Gauge, Play,
-  Feather, Landmark, ScrollText, Radar, CalendarClock, AlertTriangle, X, Clock3, TrendingUp
+  Feather, Landmark, ScrollText, Radar, CalendarClock, AlertTriangle, X, Clock3, TrendingUp, HelpCircle
 } from 'lucide-react'
 import { Whistle, PlayDiagram, CrosshairCandle } from './components/Icons.jsx'
 import { applyTheme, T, mono } from './theme.js'
@@ -33,6 +33,7 @@ import { CustomBackground } from './components/CustomBackground.jsx'
 import { Onboarding } from './components/Onboarding.jsx'
 import { DailyReport } from './components/DailyReport.jsx'
 import { FeedbackPrompt } from './components/FeedbackPrompt.jsx'
+import { HelpModal } from './components/HelpModal.jsx'
 import { EasterEggNudge } from './components/EasterEggNudge.jsx'
 import { buildEasterEggNudges, lastTradingDay } from './coachInsights.js'
 import { dHashDataUrl, IMAGE_FINGERPRINT_VERSION } from './workflow.js'
@@ -519,6 +520,7 @@ export default function App() {
     () => personalClockEnabled ? personalTradingClock([], new Date(now), personalSchedule) : null,
     [personalClockEnabled, personalSchedule, now]
   )
+  const [helpOpen, setHelpOpen] = useState(false)
   const [sessionCue, setSessionCue] = useState(null)
   const sessionCueSeen = useRef('')
   // Surface a strong/weak-hour nudge at most once per relevant hour per day, while in-session.
@@ -810,6 +812,11 @@ export default function App() {
                 <CalendarClock size={14} /> Review
               </button>
             )}
+            {!tradeMode && (
+              <button type="button" onClick={() => setHelpOpen(true)} title="Help & FAQ" aria-label="Help and FAQ" className="flex items-center justify-center px-2 py-1.5 rounded-md" style={{ background: T.surface2, color: T.dim, border: `1px solid ${T.line}` }}>
+                <HelpCircle size={15} />
+              </button>
+            )}
           </div>
         </header>
 
@@ -899,6 +906,8 @@ export default function App() {
       {activeFloatingNotice === 'timing' && sessionCue && (
         <SessionEdgeBubble cue={sessionCue} onClose={() => setSessionCue(null)} />
       )}
+      {/* User-initiated, so it sits outside the floating-notice priority queue. */}
+      {helpOpen && <HelpModal onClose={() => setHelpOpen(false)} />}
     </div>
   )
 }
