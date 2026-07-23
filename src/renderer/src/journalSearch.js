@@ -124,7 +124,8 @@ function compare(actual, operator, expected) {
 function normalizedHaystack(trade) {
   return [
     trade.symbol, trade.setup, trade.emotion, trade.reason, trade.notes, trade.direction,
-    trade.account, trade.selfSetup, trade.selfExec, trade.source
+    trade.account, trade.selfSetup, trade.selfExec, trade.source,
+    trade.analysisTimeframe, trade.entryTimeframe, trade.managementTimeframe
   ].map((value) => String(value || '').toLowerCase()).join(' ')
 }
 

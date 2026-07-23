@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react'
 import { createPortal } from 'react-dom'
-import { X, Pencil, Minus, Square, ArrowUpRight, Undo2, Eraser } from 'lucide-react'
+import { X, Pencil, Minus, Square, ArrowUpRight, Undo2, Eraser, Type } from 'lucide-react'
 import { T } from '../theme.js'
 import { loadImg } from '../utils.js'
 
@@ -20,6 +20,7 @@ export function AnnotateModal({ src, onSave, onClose }) {
   const drawingRef = useRef(false)
   const [tool, setTool] = useState('pen') // pen | line | rect | arrow | Entry | Stop | Target | Note
   const [color, setColor] = useState('#FB7185')
+  const [text, setText] = useState('')
 
   const drawArrow = (ctx, a, b, col) => {
     ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = 3
@@ -41,6 +42,15 @@ export function AnnotateModal({ src, onSave, onClose }) {
   }
   const drawShape = (ctx, s) => {
     if (s.type === 'marker') return drawMarker(ctx, s)
+    if (s.type === 'text') {
+      ctx.font = 'bold 16px ui-sans-serif, system-ui, sans-serif'
+      const width = ctx.measureText(s.text).width
+      ctx.fillStyle = 'rgba(14,17,23,0.88)'
+      ctx.fillRect(s.x - 5, s.y - 18, width + 10, 24)
+      ctx.fillStyle = s.color
+      ctx.fillText(s.text, s.x, s.y)
+      return
+    }
     ctx.strokeStyle = s.color; ctx.lineWidth = 3; ctx.lineJoin = 'round'; ctx.lineCap = 'round'
     if (s.type === 'pen') { ctx.beginPath(); s.points.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y))); ctx.stroke() }
     else if (s.type === 'line') { ctx.beginPath(); ctx.moveTo(s.a.x, s.a.y); ctx.lineTo(s.b.x, s.b.y); ctx.stroke() }
@@ -76,6 +86,11 @@ export function AnnotateModal({ src, onSave, onClose }) {
   }
   const down = (e) => {
     const p = pos(e)
+    if (tool === 'text') {
+      const value = text.trim()
+      if (value) { shapesRef.current.push({ type: 'text', text: value.slice(0, 120), x: p.x, y: p.y, color }); redraw() }
+      return
+    }
     if (isMarker(tool)) { shapesRef.current.push({ type: 'marker', label: tool, x: p.x, y: p.y, color }); redraw(); return }
     drawingRef.current = true
     draftRef.current = tool === 'pen' ? { type: 'pen', color, points: [p] } : { type: tool, color, a: p, b: p }
@@ -97,11 +112,15 @@ export function AnnotateModal({ src, onSave, onClose }) {
   const clearAll = () => { shapesRef.current = []; draftRef.current = null; redraw() }
   const save = () => {
     const c = canvasRef.current; if (!c) return
-    const labels = [...new Set(shapesRef.current.filter((s) => s.type === 'marker').map((s) => s.label))]
+    const labels = [...new Set(shapesRef.current.flatMap((shape) => {
+      if (shape.type === 'marker') return [shape.label]
+      if (shape.type === 'text' && shape.text) return [`Note: ${shape.text}`]
+      return []
+    }))]
     onSave(c.toDataURL('image/webp', 0.85), labels)
   }
 
-  const TOOLS = [['pen', 'Pen', Pencil], ['line', 'Line', Minus], ['rect', 'Box', Square], ['arrow', 'Arrow', ArrowUpRight]]
+  const TOOLS = [['pen', 'Pen', Pencil], ['line', 'Line', Minus], ['rect', 'Box', Square], ['arrow', 'Arrow', ArrowUpRight], ['text', 'Text', Type]]
   const btn = (active) => ({
     display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, padding: '6px 9px', borderRadius: 8, cursor: 'pointer',
     background: active ? T.accentSoft : T.surface2, color: active ? T.accent : T.dim, border: `1px solid ${active ? T.accent : T.line}`
@@ -137,6 +156,15 @@ export function AnnotateModal({ src, onSave, onClose }) {
           <button type="button" onClick={undo} style={btn(false)}><Undo2 size={13} /> Undo</button>
           <button type="button" onClick={clearAll} style={btn(false)}><Eraser size={13} /> Clear</button>
         </div>
+        {tool === 'text' && (
+          <div className="flex items-center gap-2 mb-3">
+            <input value={text} onChange={(event) => setText(event.target.value)} maxLength={120} autoFocus
+              placeholder="Type a note, then click the chart to place it"
+              className="flex-1 rounded-md px-3 py-2 text-sm"
+              style={{ background: T.surface2, color: T.text, border: `1px solid ${T.line}` }} />
+            <span className="text-[11px]" style={{ color: T.faint }}>Click to place</span>
+          </div>
+        )}
 
         <canvas
           ref={canvasRef}

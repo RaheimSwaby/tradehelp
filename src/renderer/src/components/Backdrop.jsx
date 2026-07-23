@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react'
 import { T, withAlpha } from '../theme.js'
+import { localSkyState } from '../skyClock.js'
 
 // Ambient animated backdrops. Variants (picked in Settings → Appearance):
 //   constellation — twinkling stars + drifting dots linked by faint lines,
@@ -17,6 +18,17 @@ import { T, withAlpha } from '../theme.js'
 // prefers-reduced-motion by drawing a single static frame.
 
 const rand = (a, b) => a + Math.random() * (b - a)
+
+const clamp01 = (value) => Math.max(0, Math.min(1, value))
+
+function mixRgb(from, to, amount) {
+  const p = clamp01(amount)
+  return from.map((value, index) => Math.round(value + (to[index] - value) * p))
+}
+
+function rgba(rgb, alpha) {
+  return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${clamp01(alpha)})`
+}
 
 // Teardrop flame tongue: tip at the top (offset by `lick` for the licking sway),
 // belly bulging at the base. Two quadratics make a convincing silhouette.
@@ -150,6 +162,111 @@ const SCENES = {
         }
         ctx.fillStyle = withAlpha(T.accent, light ? 0.5 : 0.45)
         for (const d of dots) { ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2); ctx.fill() }
+      }
+    }
+  },
+
+  skyClock: () => {
+    const stars = []
+    const wisps = []
+    return {
+      frameRate: 12,
+      resize(w, h) {
+        const starCount = Math.min(150, Math.max(50, Math.round((w * h) / 13000)))
+        while (stars.length < starCount) {
+          stars.push({
+            x: Math.random(),
+            y: rand(0.04, 0.7),
+            r: rand(0.35, 1.25),
+            phase: rand(0, Math.PI * 2),
+            speed: rand(0.015, 0.045)
+          })
+        }
+        stars.length = starCount
+
+        const wispCount = Math.min(9, Math.max(5, Math.round(w / 230)))
+        while (wisps.length < wispCount) {
+          wisps.push({
+            x: Math.random(),
+            y: rand(0.12, 0.63),
+            width: rand(90, 220),
+            phase: rand(0, Math.PI * 2),
+            speed: rand(0.0007, 0.0018)
+          })
+        }
+        wisps.length = wispCount
+      },
+      draw(ctx, w, h, dt, t, light) {
+        const sky = localSkyState(new Date())
+        const warm = Math.max(sky.dawnGlow, sky.duskGlow)
+        let top = mixRgb([6, 10, 24], [53, 137, 194], sky.dayBlend)
+        let horizon = mixRgb([20, 28, 52], [126, 185, 211], sky.dayBlend)
+        top = mixRgb(top, [79, 50, 83], warm * 0.3)
+        horizon = mixRgb(horizon, [224, 119, 68], warm * 0.72)
+
+        const skyAlpha = light ? 0.3 : 0.48
+        const gradient = ctx.createLinearGradient(0, 0, 0, h)
+        gradient.addColorStop(0, rgba(top, skyAlpha))
+        gradient.addColorStop(0.68, rgba(horizon, skyAlpha * 0.72))
+        gradient.addColorStop(1, rgba(horizon, skyAlpha * 0.18))
+        ctx.fillStyle = gradient
+        ctx.fillRect(0, 0, w, h)
+
+        const night = 1 - sky.dayBlend
+        for (const star of stars) {
+          const twinkle = 0.58 + Math.sin(t * star.speed + star.phase) * 0.32
+          ctx.fillStyle = rgba([235, 243, 255], night * twinkle * (light ? 0.36 : 0.55))
+          ctx.beginPath()
+          ctx.arc(star.x * w, star.y * h, star.r, 0, Math.PI * 2)
+          ctx.fill()
+        }
+
+        const cloudAlpha = (light ? 0.11 : 0.075) * (0.35 + sky.dayBlend * 0.65)
+        ctx.lineCap = 'round'
+        for (const wisp of wisps) {
+          const span = w + wisp.width * 2
+          const x = ((wisp.x * span + t * wisp.speed * w) % span) - wisp.width
+          const y = wisp.y * h + Math.sin(t * 0.004 + wisp.phase) * 5
+          ctx.strokeStyle = rgba([234, 242, 248], cloudAlpha)
+          ctx.lineWidth = Math.max(7, wisp.width * 0.055)
+          ctx.beginPath()
+          ctx.moveTo(x, y)
+          ctx.bezierCurveTo(x + wisp.width * 0.25, y - 8, x + wisp.width * 0.7, y + 8, x + wisp.width, y)
+          ctx.stroke()
+        }
+        ctx.lineCap = 'butt'
+
+        function drawOrb(body, color, glowColor, radius, isMoon = false) {
+          if (body.alpha <= 0.01) return
+          const x = body.x * w
+          const y = body.y * h
+          const glowRadius = radius * (isMoon ? 4 : 5.5)
+          const glow = ctx.createRadialGradient(x, y, radius * 0.4, x, y, glowRadius)
+          glow.addColorStop(0, rgba(glowColor, body.alpha * (isMoon ? 0.28 : 0.42)))
+          glow.addColorStop(1, rgba(glowColor, 0))
+          ctx.fillStyle = glow
+          ctx.beginPath()
+          ctx.arc(x, y, glowRadius, 0, Math.PI * 2)
+          ctx.fill()
+
+          ctx.fillStyle = rgba(color, body.alpha * (light ? 0.72 : 0.9))
+          ctx.beginPath()
+          ctx.arc(x, y, radius, 0, Math.PI * 2)
+          ctx.fill()
+
+          if (isMoon) {
+            ctx.fillStyle = rgba([136, 151, 174], body.alpha * 0.2)
+            for (const crater of [[-0.28, -0.12, 0.15], [0.2, 0.24, 0.11], [0.25, -0.3, 0.08]]) {
+              ctx.beginPath()
+              ctx.arc(x + crater[0] * radius, y + crater[1] * radius, crater[2] * radius, 0, Math.PI * 2)
+              ctx.fill()
+            }
+          }
+        }
+
+        const orbRadius = Math.max(13, Math.min(24, Math.min(w, h) * 0.024))
+        drawOrb(sky.sun, [255, 211, 93], [255, 163, 58], orbRadius)
+        drawOrb(sky.moon, [223, 232, 244], [145, 177, 224], orbRadius * 0.84, true)
       }
     }
   },
@@ -426,6 +543,7 @@ const SCENES = {
 }
 
 export const BACKDROP_OPTIONS = [
+  ['skyClock', 'Sun / Moon'],
   ['constellation', '🌌 Constellation'],
   ['matrix', '💻 Matrix'],
   ['orbs', '🫧 Orbs'],
@@ -468,7 +586,7 @@ export function Backdrop({ variant = 'constellation' }) {
       if (reduced) draw(0) // keep the static frame in sync with the new size
     }
 
-    const frameMs = 1000 / 30
+    const frameMs = 1000 / (scene.frameRate || 30)
     let last = performance.now()
     function frame(now) {
       const elapsed = now - last

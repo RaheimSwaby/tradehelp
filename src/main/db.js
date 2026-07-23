@@ -8,6 +8,7 @@ import { INSTRUMENT_PROFILE_DEFAULT_LIST, instrumentRootSymbol } from '../render
 let db
 let imagesDir
 let videosDir
+let sessionRecordingsDir
 
 export const TRADE_VIDEO_MAX_BYTES = 2 * 1024 * 1024 * 1024
 const TRADE_VIDEO_MIME = {
@@ -26,6 +27,8 @@ export function initDb() {
   if (!existsSync(imagesDir)) mkdirSync(imagesDir, { recursive: true })
   videosDir = join(app.getPath('userData'), 'videos')
   if (!existsSync(videosDir)) mkdirSync(videosDir, { recursive: true })
+  sessionRecordingsDir = join(app.getPath('userData'), 'session-recordings')
+  if (!existsSync(sessionRecordingsDir)) mkdirSync(sessionRecordingsDir, { recursive: true })
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS trades (
@@ -35,7 +38,9 @@ export function initDb() {
       riskAmount REAL, pnl REAL, fees REAL, rr REAL,
       emotion TEXT, setup TEXT, notes TEXT, timestamp TEXT,
       entryTime TEXT, exitTime TEXT, reason TEXT, source TEXT, account TEXT,
-      selfSetup TEXT, selfExec TEXT
+      selfSetup TEXT, selfExec TEXT,
+      analysisTimeframe TEXT, entryTimeframe TEXT, managementTimeframe TEXT,
+      riskPoints REAL, rewardPoints REAL, riskMode TEXT
     );
     CREATE TABLE IF NOT EXISTS trade_fills (
       id TEXT PRIMARY KEY,
@@ -99,6 +104,30 @@ export function initDb() {
       createdAt TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_trade_videos_tradeId ON trade_videos(tradeId);
+    CREATE TABLE IF NOT EXISTS trading_sessions (
+      id TEXT PRIMARY KEY,
+      startedAt TEXT NOT NULL,
+      endedAt TEXT DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'active',
+      sourceId TEXT DEFAULT '',
+      sourceLabel TEXT DEFAULT '',
+      recordingFile TEXT DEFAULT '',
+      mimeType TEXT DEFAULT '',
+      size INTEGER DEFAULT 0,
+      recordingStatus TEXT NOT NULL DEFAULT 'off',
+      notes TEXT DEFAULT '',
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_trading_sessions_startedAt ON trading_sessions(startedAt);
+    CREATE INDEX IF NOT EXISTS idx_trading_sessions_status ON trading_sessions(status);
+    CREATE TABLE IF NOT EXISTS trading_session_trades (
+      sessionId TEXT NOT NULL,
+      tradeId TEXT NOT NULL,
+      linkedAt TEXT NOT NULL,
+      PRIMARY KEY (sessionId, tradeId)
+    );
+    CREATE INDEX IF NOT EXISTS idx_trading_session_trades_tradeId ON trading_session_trades(tradeId);
     CREATE TABLE IF NOT EXISTS trade_plans (
       id TEXT PRIMARY KEY,
       status TEXT NOT NULL DEFAULT 'draft',
@@ -246,7 +275,12 @@ export function initDb() {
 
   // Migrate older DBs that predate columns added above.
   const tradeCols = new Set(db.prepare('PRAGMA table_info(trades)').all().map((c) => c.name))
-  for (const [name, type] of [['entryTime', 'TEXT'], ['exitTime', 'TEXT'], ['reason', 'TEXT'], ['source', 'TEXT'], ['account', 'TEXT'], ['fees', 'REAL'], ['selfSetup', 'TEXT'], ['selfExec', 'TEXT']]) {
+  for (const [name, type] of [
+    ['entryTime', 'TEXT'], ['exitTime', 'TEXT'], ['reason', 'TEXT'], ['source', 'TEXT'], ['account', 'TEXT'],
+    ['fees', 'REAL'], ['selfSetup', 'TEXT'], ['selfExec', 'TEXT'], ['analysisTimeframe', 'TEXT'],
+    ['entryTimeframe', 'TEXT'], ['managementTimeframe', 'TEXT'], ['riskPoints', 'REAL'],
+    ['rewardPoints', 'REAL'], ['riskMode', 'TEXT']
+  ]) {
     if (!tradeCols.has(name)) db.exec(`ALTER TABLE trades ADD COLUMN ${name} ${type}`)
   }
   const imageCols = new Set(db.prepare('PRAGMA table_info(trade_images)').all().map((c) => c.name))
@@ -264,6 +298,11 @@ export function initDb() {
   }
   const commitmentCols = new Set(db.prepare('PRAGMA table_info(coach_commitments)').all().map((c) => c.name))
   if (!commitmentCols.has('baselineTradeIds')) db.exec("ALTER TABLE coach_commitments ADD COLUMN baselineTradeIds TEXT DEFAULT '[]'")
+  const restartedAt = new Date().toISOString()
+  db.prepare("UPDATE trading_sessions SET status = 'interrupted', endedAt = ?, updatedAt = ? WHERE status = 'active'")
+    .run(restartedAt, restartedAt)
+  db.prepare("UPDATE trading_sessions SET recordingStatus = 'failed', updatedAt = ? WHERE recordingStatus IN ('pending','recording')")
+    .run(restartedAt)
 
   db.prepare('INSERT OR IGNORE INTO goals (id, weekly, monthly) VALUES (1, 500, 2000)').run()
 
@@ -419,15 +458,18 @@ function buildRow(t) {
     timestamp: String(t.timestamp || new Date().toISOString().slice(0, 16).replace('T', ' ')),
     entryTime: String(t.entryTime || ''), exitTime: String(t.exitTime || ''),
     reason: String(t.reason || ''), source: String(t.source || 'manual'), account: String(t.account || ''),
-    selfSetup: String(t.selfSetup || ''), selfExec: String(t.selfExec || '')
+    selfSetup: String(t.selfSetup || ''), selfExec: String(t.selfExec || ''),
+    analysisTimeframe: String(t.analysisTimeframe || ''), entryTimeframe: String(t.entryTimeframe || ''),
+    managementTimeframe: String(t.managementTimeframe || ''), riskPoints: num(t.riskPoints),
+    rewardPoints: num(t.rewardPoints), riskMode: t.riskMode === 'points' ? 'points' : 'price'
   }
 }
 
 const INSERT_TRADE = `
   INSERT INTO trades
-    (id, symbol, direction, entry, exit, stop, target, size, riskAmount, pnl, fees, rr, emotion, setup, notes, timestamp, entryTime, exitTime, reason, source, account, selfSetup, selfExec)
+    (id, symbol, direction, entry, exit, stop, target, size, riskAmount, pnl, fees, rr, emotion, setup, notes, timestamp, entryTime, exitTime, reason, source, account, selfSetup, selfExec, analysisTimeframe, entryTimeframe, managementTimeframe, riskPoints, rewardPoints, riskMode)
   VALUES
-    (@id, @symbol, @direction, @entry, @exit, @stop, @target, @size, @riskAmount, @pnl, @fees, @rr, @emotion, @setup, @notes, @timestamp, @entryTime, @exitTime, @reason, @source, @account, @selfSetup, @selfExec)
+    (@id, @symbol, @direction, @entry, @exit, @stop, @target, @size, @riskAmount, @pnl, @fees, @rr, @emotion, @setup, @notes, @timestamp, @entryTime, @exitTime, @reason, @source, @account, @selfSetup, @selfExec, @analysisTimeframe, @entryTimeframe, @managementTimeframe, @riskPoints, @rewardPoints, @riskMode)
 `
 
 function sanitizeTradeFills(tradeId, fills) {
@@ -530,13 +572,163 @@ export function replaceTradeFills(tradeId, fills) {
   return listTradeFills(tradeId)
 }
 
+function tradeTimestampMs(trade) {
+  const timestamp = String(trade?.timestamp || '').trim()
+  const entryTime = String(trade?.entryTime || '').trim()
+  let value = entryTime
+  if (/^\d{1,2}:\d{2}/.test(entryTime) && /^\d{4}-\d{2}-\d{2}/.test(timestamp)) {
+    value = `${timestamp.slice(0, 10)}T${entryTime}`
+  } else if (!entryTime || !/^\d{4}-\d{2}-\d{2}/.test(entryTime)) {
+    value = timestamp
+  }
+  const parsed = new Date(value.replace(' ', 'T')).getTime()
+  return Number.isFinite(parsed) ? parsed : NaN
+}
+
+function linkTradeToSession(sessionId, tradeId, linkedAt = new Date().toISOString()) {
+  db.prepare(`INSERT OR IGNORE INTO trading_session_trades (sessionId,tradeId,linkedAt)
+    VALUES (?,?,?)`).run(String(sessionId), String(tradeId), String(linkedAt))
+}
+
+function linkTradeToActiveSession(tradeId) {
+  const session = db.prepare("SELECT * FROM trading_sessions WHERE status = 'active' ORDER BY startedAt DESC LIMIT 1").get()
+  if (!session) return
+  const trade = db.prepare('SELECT * FROM trades WHERE id = ?').get(String(tradeId))
+  const tradeMs = tradeTimestampMs(trade)
+  const startMs = new Date(session.startedAt).getTime()
+  if (!Number.isFinite(tradeMs) || !Number.isFinite(startMs) || tradeMs < startMs) return
+  linkTradeToSession(session.id, tradeId)
+}
+
 export function addTrade(t) {
   db.transaction(() => {
-    db.prepare(INSERT_TRADE).run(buildRow(t))
+    const row = buildRow(t)
+    db.prepare(INSERT_TRADE).run(row)
     if (Array.isArray(t?.fills)) replaceTradeFillsInTransaction(t.id, t.fills)
+    linkTradeToActiveSession(row.id)
   })()
   refreshCommitmentResults()
   return listTrades()
+}
+
+function publicTradingSession(row) {
+  if (!row) return null
+  return {
+    ...row,
+    tradeCount: Number(row.tradeCount) || 0,
+    netPnl: Number(row.netPnl) || 0,
+    size: Number(row.size) || 0,
+    recordingUrl: row.recordingStatus === 'ready' && row.recordingFile
+      ? `tradehelp-media://session/${encodeURIComponent(row.id)}`
+      : ''
+  }
+}
+
+const SESSION_SELECT = `SELECT s.*,
+  (SELECT COUNT(*) FROM trading_session_trades st WHERE st.sessionId = s.id) AS tradeCount,
+  COALESCE((SELECT SUM(t.pnl) FROM trading_session_trades st JOIN trades t ON t.id = st.tradeId WHERE st.sessionId = s.id), 0) AS netPnl
+  FROM trading_sessions s`
+
+export function createTradingSession(input = {}) {
+  const now = String(input.startedAt || new Date().toISOString())
+  const id = String(input.id || randomUUID())
+  const wantsRecording = Boolean(input.recordingRequested && input.sourceId)
+  db.transaction(() => {
+    db.prepare("UPDATE trading_sessions SET status = 'interrupted', endedAt = ?, updatedAt = ? WHERE status = 'active'")
+      .run(now, now)
+    db.prepare(`INSERT INTO trading_sessions
+      (id,startedAt,endedAt,status,sourceId,sourceLabel,recordingFile,mimeType,size,recordingStatus,notes,createdAt,updatedAt)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+      id, now, '', 'active', String(input.sourceId || ''), String(input.sourceLabel || ''),
+      '', '', 0, wantsRecording ? 'pending' : 'off', '', now, now
+    )
+  })()
+  return getTradingSession(id)
+}
+
+export function getActiveTradingSession() {
+  return publicTradingSession(db.prepare(`${SESSION_SELECT} WHERE s.status = 'active' ORDER BY s.startedAt DESC LIMIT 1`).get())
+}
+
+export function getTradingSession(id) {
+  return publicTradingSession(db.prepare(`${SESSION_SELECT} WHERE s.id = ?`).get(String(id)))
+}
+
+export function listTradingSessions(limit = 12) {
+  const count = Math.max(1, Math.min(100, Math.trunc(Number(limit) || 12)))
+  return db.prepare(`${SESSION_SELECT} ORDER BY s.startedAt DESC LIMIT ?`).all(count).map(publicTradingSession)
+}
+
+export function beginTradingSessionRecording(id, { file, mimeType }) {
+  const session = db.prepare('SELECT * FROM trading_sessions WHERE id = ?').get(String(id))
+  if (!session || session.status !== 'active') throw new Error('Trading session is no longer active')
+  const now = new Date().toISOString()
+  db.prepare(`UPDATE trading_sessions SET recordingFile = ?, mimeType = ?, size = 0,
+    recordingStatus = 'recording', updatedAt = ? WHERE id = ?`)
+    .run(String(file), String(mimeType || 'video/webm'), now, String(id))
+  return getTradingSession(id)
+}
+
+export function completeTradingSessionRecording(id, size) {
+  const now = new Date().toISOString()
+  db.prepare(`UPDATE trading_sessions SET size = ?, recordingStatus = 'ready', updatedAt = ?
+    WHERE id = ?`).run(Math.max(0, Number(size) || 0), now, String(id))
+  return getTradingSession(id)
+}
+
+export function failTradingSessionRecording(id) {
+  const now = new Date().toISOString()
+  db.prepare(`UPDATE trading_sessions SET recordingStatus = 'failed', updatedAt = ?
+    WHERE id = ? AND recordingStatus <> 'ready'`).run(now, String(id))
+  return getTradingSession(id)
+}
+
+export function discardTradingSessionRecording(id) {
+  const session = db.prepare('SELECT * FROM trading_sessions WHERE id = ?').get(String(id))
+  if (session?.recordingFile) {
+    try { unlinkSync(join(sessionRecordingsDir, session.recordingFile)) } catch {}
+  }
+  const now = new Date().toISOString()
+  db.prepare(`UPDATE trading_sessions SET recordingFile = '', mimeType = '', size = 0,
+    recordingStatus = 'discarded', updatedAt = ? WHERE id = ?`).run(now, String(id))
+  return getTradingSession(id)
+}
+
+export function finishTradingSession(id, input = {}) {
+  const session = db.prepare('SELECT * FROM trading_sessions WHERE id = ?').get(String(id))
+  if (!session) throw new Error('Trading session not found')
+  const endedAt = String(input.endedAt || new Date().toISOString())
+  const startMs = new Date(session.startedAt).getTime()
+  const endMs = new Date(endedAt).getTime()
+  db.transaction(() => {
+    db.prepare(`UPDATE trading_sessions SET endedAt = ?, status = 'completed', notes = ?, updatedAt = ?
+      WHERE id = ?`).run(endedAt, String(input.notes || ''), endedAt, String(id))
+    if (Number.isFinite(startMs) && Number.isFinite(endMs)) {
+      db.prepare('DELETE FROM trading_session_trades WHERE sessionId = ?').run(String(id))
+      for (const trade of db.prepare('SELECT * FROM trades').all()) {
+        const timestamp = tradeTimestampMs(trade)
+        if (Number.isFinite(timestamp) && timestamp >= startMs && timestamp <= endMs) {
+          linkTradeToSession(id, trade.id, endedAt)
+        }
+      }
+    }
+  })()
+  return getTradingSession(id)
+}
+
+export function getTradingSessionRecordingFile(id) {
+  const row = db.prepare(`SELECT recordingFile,mimeType FROM trading_sessions
+    WHERE id = ? AND recordingStatus = 'ready'`).get(String(id))
+  if (!row?.recordingFile) return null
+  const path = join(sessionRecordingsDir, row.recordingFile)
+  if (!existsSync(path)) return null
+  return { path, mimeType: row.mimeType || 'video/webm' }
+}
+
+export function tradingSessionRecordingPath(file) {
+  const name = basename(String(file || ''))
+  if (!/^[0-9a-f-]+\.webm$/i.test(name)) throw new Error('Invalid session recording file')
+  return join(sessionRecordingsDir, name)
 }
 
 // Bulk insert from a broker CSV — flagged source='import' so the rating can show "Verified".
@@ -614,10 +806,11 @@ export function rollbackImportBatch(id) {
     const delVideos = db.prepare('DELETE FROM trade_videos WHERE tradeId = ?')
     const delFills = db.prepare('DELETE FROM trade_fills WHERE tradeId = ?')
     const delResults = db.prepare('DELETE FROM commitment_results WHERE tradeId = ?')
+    const delSessionLinks = db.prepare('DELETE FROM trading_session_trades WHERE tradeId = ?')
     const detachPlans = db.prepare("UPDATE trade_plans SET status = CASE WHEN status = 'executed' THEN 'locked' ELSE status END, linkedTradeId = '', resolvedAt = '', updatedAt = ? WHERE linkedTradeId = ?")
     const delTrade = db.prepare('DELETE FROM trades WHERE id = ?')
     for (const tradeId of new Set(tradeIds)) {
-      delImages.run(tradeId); delVideos.run(tradeId); delFills.run(tradeId); delResults.run(tradeId)
+      delImages.run(tradeId); delVideos.run(tradeId); delFills.run(tradeId); delResults.run(tradeId); delSessionLinks.run(tradeId)
       detachPlans.run(now, tradeId); delTrade.run(tradeId)
     }
     db.prepare("UPDATE import_batches SET status = 'rolled_back', rolledBackAt = ? WHERE id = ?").run(now, key)
@@ -717,7 +910,9 @@ export function updateTrade(t) {
       symbol=@symbol, direction=@direction, entry=@entry, exit=@exit, stop=@stop, target=@target,
       size=@size, riskAmount=@riskAmount, pnl=@pnl, fees=@fees, rr=@rr, emotion=@emotion, setup=@setup,
       notes=@notes, timestamp=@timestamp, entryTime=@entryTime, exitTime=@exitTime,
-      reason=@reason, source=@source, account=@account, selfSetup=@selfSetup, selfExec=@selfExec WHERE id=@id`).run(row)
+      reason=@reason, source=@source, account=@account, selfSetup=@selfSetup, selfExec=@selfExec,
+      analysisTimeframe=@analysisTimeframe, entryTimeframe=@entryTimeframe, managementTimeframe=@managementTimeframe,
+      riskPoints=@riskPoints, rewardPoints=@rewardPoints, riskMode=@riskMode WHERE id=@id`).run(row)
     if (Array.isArray(t?.fills)) replaceTradeFillsInTransaction(row.id, t.fills)
     const detach = db.prepare("UPDATE trade_plans SET status = 'locked', linkedTradeId = '', resolvedAt = '', updatedAt = ? WHERE id = ?")
     for (const plan of db.prepare('SELECT * FROM trade_plans WHERE linkedTradeId = ?').all(row.id)) {
@@ -742,6 +937,7 @@ export function deleteTrade(id) {
     db.prepare('DELETE FROM trade_images WHERE tradeId = ?').run(key)
     db.prepare('DELETE FROM trade_videos WHERE tradeId = ?').run(key)
     db.prepare('DELETE FROM trade_fills WHERE tradeId = ?').run(key)
+    db.prepare('DELETE FROM trading_session_trades WHERE tradeId = ?').run(key)
     db.prepare(`DELETE FROM commitment_results WHERE tradeId = ? AND commitmentId IN
       (SELECT id FROM coach_commitments WHERE status = 'active')`).run(key)
     db.prepare("UPDATE trade_plans SET status = CASE WHEN status = 'executed' THEN 'locked' ELSE status END, linkedTradeId = '', resolvedAt = '', updatedAt = ? WHERE linkedTradeId = ?").run(now, key)
@@ -1388,7 +1584,7 @@ export function getAllData() {
   const settings = getSettings()
   for (const k of SECRET_KEYS) delete settings[k]
   return {
-    app: 'tradehelp', version: 5, exportedAt: new Date().toISOString(),
+    app: 'tradehelp', version: 6, exportedAt: new Date().toISOString(),
     trades: db.prepare('SELECT * FROM trades').all(),
     tradeFills: db.prepare(`SELECT id,tradeId,kind,side,quantity,price,fee,filledAt,sequence,sourceRef
       FROM trade_fills ORDER BY tradeId,sequence,filledAt,rowid`).all(),
@@ -1405,6 +1601,10 @@ export function getAllData() {
     payouts: listPayouts(),
     importBatches: listImportBatches(),
     importBatchTrades: db.prepare('SELECT batchId,tradeId,sourceRow FROM import_batch_trades ORDER BY batchId,sourceRow').all(),
+    tradingSessions: db.prepare(`SELECT id,startedAt,endedAt,status,sourceLabel,
+      CASE WHEN recordingStatus = 'ready' THEN 1 ELSE 0 END AS hadRecording,
+      notes,createdAt,updatedAt FROM trading_sessions ORDER BY startedAt`).all(),
+    tradingSessionTrades: db.prepare('SELECT sessionId,tradeId,linkedAt FROM trading_session_trades ORDER BY sessionId,linkedAt').all(),
     goals: getGoals(),
     reviews: getReviews(),
     settings
@@ -1413,12 +1613,12 @@ export function getAllData() {
 
 export function restoreData(data) {
   const version = Number(data?.version || 3)
-  if (version !== 3 && version !== 4 && version !== 5) throw new Error('Unsupported backup version')
+  if (![3, 4, 5, 6].includes(version)) throw new Error('Unsupported backup version')
   const tx = db.transaction((d) => {
     if (Array.isArray(d.trades)) {
       const ins = db.prepare(`INSERT OR REPLACE INTO trades
-        (id, symbol, direction, entry, exit, stop, target, size, riskAmount, pnl, fees, rr, emotion, setup, notes, timestamp, entryTime, exitTime, reason, source, account, selfSetup, selfExec)
-        VALUES (@id,@symbol,@direction,@entry,@exit,@stop,@target,@size,@riskAmount,@pnl,@fees,@rr,@emotion,@setup,@notes,@timestamp,@entryTime,@exitTime,@reason,@source,@account,@selfSetup,@selfExec)`)
+        (id, symbol, direction, entry, exit, stop, target, size, riskAmount, pnl, fees, rr, emotion, setup, notes, timestamp, entryTime, exitTime, reason, source, account, selfSetup, selfExec, analysisTimeframe, entryTimeframe, managementTimeframe, riskPoints, rewardPoints, riskMode)
+        VALUES (@id,@symbol,@direction,@entry,@exit,@stop,@target,@size,@riskAmount,@pnl,@fees,@rr,@emotion,@setup,@notes,@timestamp,@entryTime,@exitTime,@reason,@source,@account,@selfSetup,@selfExec,@analysisTimeframe,@entryTimeframe,@managementTimeframe,@riskPoints,@rewardPoints,@riskMode)`)
       for (const t of d.trades) ins.run(buildRow(t))
     }
     if (Array.isArray(d.instrumentProfiles)) {
@@ -1608,6 +1808,34 @@ export function restoreData(data) {
         if (batchExists.get(batchId) && tradeExists.get(tradeId)) insert.run(batchId, tradeId, Math.max(0, Number(link.sourceRow) || 0))
       }
     }
+    if (Array.isArray(d.tradingSessions)) {
+      const insert = db.prepare(`INSERT OR REPLACE INTO trading_sessions
+        (id,startedAt,endedAt,status,sourceId,sourceLabel,recordingFile,mimeType,size,recordingStatus,notes,createdAt,updatedAt)
+        VALUES (@id,@startedAt,@endedAt,@status,'',@sourceLabel,'','',0,@recordingStatus,@notes,@createdAt,@updatedAt)`)
+      for (const session of d.tradingSessions) {
+        const now = new Date().toISOString()
+        insert.run({
+          id: String(session.id || randomUUID()), startedAt: String(session.startedAt || now),
+          endedAt: String(session.endedAt || session.updatedAt || now),
+          status: session.status === 'completed' ? 'completed' : 'interrupted',
+          sourceLabel: String(session.sourceLabel || ''),
+          recordingStatus: session.hadRecording ? 'missing' : 'off',
+          notes: String(session.notes || ''), createdAt: String(session.createdAt || now),
+          updatedAt: String(session.updatedAt || now)
+        })
+      }
+    }
+    if (Array.isArray(d.tradingSessionTrades)) {
+      const sessionExists = db.prepare('SELECT 1 FROM trading_sessions WHERE id = ?')
+      const tradeExists = db.prepare('SELECT 1 FROM trades WHERE id = ?')
+      const insert = db.prepare('INSERT OR REPLACE INTO trading_session_trades (sessionId,tradeId,linkedAt) VALUES (?,?,?)')
+      for (const link of d.tradingSessionTrades) {
+        const sessionId = String(link.sessionId || ''), tradeId = String(link.tradeId || '')
+        if (sessionExists.get(sessionId) && tradeExists.get(tradeId)) {
+          insert.run(sessionId, tradeId, String(link.linkedAt || new Date().toISOString()))
+        }
+      }
+    }
     if (d.goals) setGoals(d.goals)
     if (d.reviews) for (const [p, text] of Object.entries(d.reviews)) setReview(p, text)
     if (d.settings) setSettings(d.settings)
@@ -1626,6 +1854,7 @@ export function restoreData(data) {
     instrumentProfiles: listInstrumentProfiles(), savedSearches: listSavedSearches(), tradePlans: listTradePlans(),
     commitments: listCoachCommitments(), commitmentResults: db.prepare('SELECT * FROM commitment_results').all(),
     playbook: listPlaybook(), dayLogs: listDayLogs(), payouts: listPayouts(), importBatches: listImportBatches(),
+    tradingSessions: listTradingSessions(100),
     goals: getGoals(), reviews: getReviews(), settings: getSettings()
   }
 }

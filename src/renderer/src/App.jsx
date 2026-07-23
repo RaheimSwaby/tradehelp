@@ -9,6 +9,7 @@ import { fmt$, fmtN, parseRules, IMPACT_RANK, ALERT_LEADS, GATE_CONFIGURED, isNe
 import { computeStats, computeAchievements } from './stats.js'
 import { RELEASE_NOTES } from './releaseNotes.js'
 import { Readout } from './components/Shared.jsx'
+import { PageAnimationContext } from './pageAnimation.js'
 import { NotesModal } from './components/NotesModal.jsx'
 import { WhatsNew } from './components/WhatsNew.jsx'
 import { Journal } from './tabs/JournalTab.jsx'
@@ -21,7 +22,7 @@ import { Coach } from './tabs/CoachTab.jsx'
 import { Patterns } from './tabs/PatternsTab.jsx'
 import { PlaybookTab } from './tabs/PlaybookTab.jsx'
 import { PropFirm } from './tabs/PropFirmTab.jsx'
-import { TradeModeTab, Preflight, LiveBanner, Lockout } from './tabs/TradeModeTab.jsx'
+import { TradeModeTab, Preflight, LiveBanner, SessionEndReview, Lockout } from './tabs/TradeModeTab.jsx'
 import { TrialBanner, Paywall, SettingsTab } from './tabs/SettingsTab.jsx'
 import { Ticker } from './widgets/Ticker.jsx'
 import { EventBanner, FloatingEvents } from './widgets/EventBanner.jsx'
@@ -38,6 +39,7 @@ import { dHashDataUrl, IMAGE_FINGERPRINT_VERSION } from './workflow.js'
 import { formatClockMinute, localDateKey, inferTradingSchedule, manualTradingSchedule, personalTradingClock, sessionEdgeCue } from './sessionClock.js'
 import { selectFloatingNotice } from './notificationQueue.js'
 import { tradeDateKey } from './periodRetrospective.js'
+import { startSessionRecorder } from './sessionRecorder.js'
 
 /* ───────── logo mark: three ascending candles, tracks the live theme ───────── */
 function LogoMark({ size = 22, ignite = false, live = false }) {
@@ -170,14 +172,37 @@ export default function App() {
   const [workflowMsg, setWorkflowMsg] = useState(null)
   const [customBg, setCustomBg] = useState('')
   const [pnlFeedback, setPnlFeedback] = useState(null)
+  const [demoPnlTotal, setDemoPnlTotal] = useState(null)
+  const [pageAnimationReplay, setPageAnimationReplay] = useState(0)
   const [journalDrilldown, setJournalDrilldown] = useState(null)
+  const [tradingSessions, setTradingSessions] = useState([])
+  const [activeSession, setActiveSession] = useState(null)
+  const [sessionReview, setSessionReview] = useState(null)
+  const [recordingEnabled, setRecordingEnabled] = useState(true)
+  const [captureSources, setCaptureSources] = useState([])
+  const [selectedCaptureSource, setSelectedCaptureSource] = useState(null)
+  const [captureLoading, setCaptureLoading] = useState(false)
+  const [captureError, setCaptureError] = useState('')
+  const [recordingState, setRecordingState] = useState({ status: 'off', error: '' })
+  const [sessionTick, setSessionTick] = useState(Date.now())
   const goTimerRef = useRef(null)
+  const sessionRecorderRef = useRef(null)
   const pnlFeedbackTimerRef = useRef(null)
+  const pnlDemoTimerRef = useRef(null)
 
   useEffect(() => () => {
     clearTimeout(goTimerRef.current)
     clearTimeout(pnlFeedbackTimerRef.current)
+    clearTimeout(pnlDemoTimerRef.current)
+    sessionRecorderRef.current?.stopTracks?.()
   }, [])
+
+  useEffect(() => {
+    if (!tradeMode || !activeSession) return undefined
+    setSessionTick(Date.now())
+    const timer = setInterval(() => setSessionTick(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [tradeMode, activeSession])
 
   const hasApi = typeof window !== 'undefined' && window.api
   const reportDay = useMemo(() => {
@@ -200,6 +225,7 @@ export default function App() {
       if (window.api.listCommitments) setCommitments(await window.api.listCommitments())
       if (window.api.listInstrumentProfiles) setInstrumentProfiles(await window.api.listInstrumentProfiles())
       if (window.api.listSavedSearches) setSavedSearches(await window.api.listSavedSearches())
+      if (window.api.listTradingSessions) setTradingSessions(await window.api.listTradingSessions())
       setReady(true)
     })()
   }, [hasApi])
@@ -308,6 +334,28 @@ export default function App() {
       return image
     }
   }
+  function showPnlFeedback(from, to, id = 'pnl') {
+    const delta = Number(to) - Number(from)
+    if (!Number.isFinite(delta) || Math.abs(delta) < 0.001) return
+    clearTimeout(pnlFeedbackTimerRef.current)
+    setPnlFeedback({ id: `${id}-${Date.now()}`, from: Number(from), to: Number(to), delta })
+    pnlFeedbackTimerRef.current = setTimeout(() => setPnlFeedback(null), 2600)
+  }
+  function demoPnlCount() {
+    const from = stats.totalPnl
+    const to = from + 125
+    clearTimeout(pnlDemoTimerRef.current)
+    setDemoPnlTotal(to)
+    showPnlFeedback(from, to, 'dev-demo')
+    pnlDemoTimerRef.current = setTimeout(() => {
+      setDemoPnlTotal(null)
+      showPnlFeedback(to, from, 'dev-demo-reset')
+    }, 2800)
+  }
+  function demoPageCounts() {
+    setTab('dashboard')
+    setPageAnimationReplay((value) => value + 1)
+  }
   async function addTrade(t, images = [], videoTokens = []) {
     if (!hasApi) return
     const previousTotal = stats.totalPnl
@@ -326,12 +374,7 @@ export default function App() {
     }
     const nextTrades = await refreshWorkflow()
     const nextTotal = nextTrades.reduce((sum, trade) => sum + (Number(trade.pnl) || 0), 0)
-    const delta = Number(t.pnl) || 0
-    if (delta !== 0 && nextTotal !== previousTotal) {
-      clearTimeout(pnlFeedbackTimerRef.current)
-      setPnlFeedback({ id: `${t.id || 'trade'}-${Date.now()}`, from: previousTotal, to: nextTotal, delta })
-      pnlFeedbackTimerRef.current = setTimeout(() => setPnlFeedback(null), 2200)
-    }
+    showPnlFeedback(previousTotal, nextTotal, t.id || 'trade')
     return { videoErrors }
   }
   async function updateTrade(t, images = [], videoTokens = []) {
@@ -462,6 +505,7 @@ export default function App() {
   const dailyGoal = parseFloat(settings?.dailyGoal) || 0
   const maxLoss = parseFloat(settings?.maxDailyLoss) || 0
   const lossHit = maxLoss > 0 && todayNet <= -maxLoss
+  const sessionElapsed = activeSession ? Math.max(0, sessionTick - new Date(activeSession.startedAt).getTime()) : 0
   const personalClockAlerts = settings?.personalClockAlerts !== 'false'
   const personalClockAmbience = settings?.personalClockAmbience !== 'false'
   const personalClockEnabled = personalClockAlerts || personalClockAmbience
@@ -489,19 +533,67 @@ export default function App() {
   }, [now, sessionClock, stats, personalClockAlerts])
 
   function clearGoTimer() { clearTimeout(goTimerRef.current); goTimerRef.current = null }
+  async function loadCaptureSources() {
+    if (!window.api?.listCaptureSources) return
+    setCaptureLoading(true)
+    setCaptureError('')
+    try {
+      const sources = await window.api.listCaptureSources()
+      setCaptureSources(Array.isArray(sources) ? sources : [])
+      setSelectedCaptureSource((current) => sources.find((source) => source.id === current?.id) || sources.find((source) => source.kind === 'screen') || sources[0] || null)
+      if (!sources.length) setCaptureError('No screens or windows were available. You can still start without recording.')
+    } catch (error) {
+      setCaptureSources([])
+      setSelectedCaptureSource(null)
+      setCaptureError(error?.message || 'Capture choices could not be loaded.')
+    } finally {
+      setCaptureLoading(false)
+    }
+  }
   function startDay() {
     if (goTransition) return
     clearGoTimer()
     setChecks({})
     setLockoutDismissed(false)
+    setRecordingState({ status: 'off', error: '' })
+    loadCaptureSources()
     setGoTransition('arming')
     goTimerRef.current = setTimeout(() => { setGoTransition(null); setPreflight(true) }, 360)
   }
   function cancelPreflight() { clearGoTimer(); setGoTransition(null); setPreflight(false) }
-  function goLive() {
+  async function goLive() {
     if (goTransition === 'launching') return
     clearGoTimer()
     setGoTransition('launching')
+    let session
+    try {
+      session = await window.api.createTradingSession({
+        recordingRequested: recordingEnabled,
+        sourceId: recordingEnabled ? selectedCaptureSource?.id : '',
+        sourceLabel: recordingEnabled ? selectedCaptureSource?.name : ''
+      })
+      setActiveSession(session)
+      setSessionTick(Date.now())
+      if (recordingEnabled && selectedCaptureSource) {
+        try {
+          sessionRecorderRef.current = await startSessionRecorder({
+            sessionId: session.id,
+            sourceId: selectedCaptureSource.id,
+            onState: (state) => setRecordingState((current) => ({ ...current, ...state }))
+          })
+          setRecordingState({ status: 'recording', error: '' })
+        } catch (error) {
+          setRecordingState({ status: 'failed', error: error?.message || 'Screen recording could not start.' })
+          try { session = await window.api.discardTradingSessionRecording(session.id); setActiveSession(session) } catch {}
+        }
+      } else {
+        setRecordingState({ status: 'off', error: '' })
+      }
+    } catch (error) {
+      setGoTransition(null)
+      setWorkflowMsg(error?.message || 'The trading session could not be started.')
+      return
+    }
     goTimerRef.current = setTimeout(() => {
       setPreflight(false)
       setTradeMode(true)
@@ -509,7 +601,44 @@ export default function App() {
       goTimerRef.current = setTimeout(() => setGoTransition(null), 760)
     }, 150)
   }
-  function endSession() { clearGoTimer(); setGoTransition(null); setTradeMode(false); setPreflight(false); setChecks({}); setLockoutDismissed(false) }
+  async function endSession() {
+    clearGoTimer()
+    setGoTransition(null)
+    let nextSession = activeSession
+    if (sessionRecorderRef.current) {
+      setRecordingState((current) => ({ ...current, status: 'stopping' }))
+      try {
+        nextSession = await sessionRecorderRef.current.stop()
+        setRecordingState({ status: 'ready', error: '' })
+      } catch (error) {
+        setRecordingState({ status: 'failed', error: error?.message || 'The recording could not be finalized.' })
+      } finally {
+        sessionRecorderRef.current = null
+      }
+    }
+    if (nextSession?.id) {
+      try { nextSession = await window.api.finishTradingSession(nextSession.id, { endedAt: new Date().toISOString(), notes: '' }) } catch {}
+      setSessionReview(nextSession)
+    }
+    setTradeMode(false)
+    setPreflight(false)
+    setChecks({})
+    setLockoutDismissed(false)
+  }
+  async function saveSessionReview(notes) {
+    if (!sessionReview?.id) return
+    const saved = await window.api.finishTradingSession(sessionReview.id, { endedAt: sessionReview.endedAt, notes })
+    setTradingSessions(await window.api.listTradingSessions())
+    setSessionReview(null)
+    setActiveSession(null)
+    setRecordingState({ status: 'off', error: '' })
+    return saved
+  }
+  async function discardSessionRecording() {
+    if (!sessionReview?.id) return
+    const updated = await window.api.discardTradingSessionRecording(sessionReview.id)
+    setSessionReview(updated)
+  }
 
   // ── economic-calendar alerts ──
   const eventsEnabled = (settings?.eventsEnabled ?? 'true') !== 'false'
@@ -644,7 +773,7 @@ export default function App() {
       {updateAvail && <UpdateAvailableBanner info={updateAvail} onClose={() => setUpdateAvail(null)} />}
       {GATE_CONFIGURED && license?.state === 'trial' && <TrialBanner days={license.daysLeft} />}
       {imminentEvent && <EventBanner event={imminentEvent} now={now} />}
-      {tradeMode && <LiveBanner net={todayNet} goal={dailyGoal} maxLoss={maxLoss} lossHit={lossHit} onEnd={endSession} />}
+      {tradeMode && <LiveBanner net={todayNet} goal={dailyGoal} maxLoss={maxLoss} lossHit={lossHit} recordingState={recordingState} elapsed={sessionElapsed} onEnd={endSession} />}
       <div className="max-w-6xl mx-auto px-4 py-5">
         <header className="flex flex-wrap items-center justify-between gap-3 pb-4 mb-4" style={{ borderBottom: `1px solid ${T.line}` }}>
           <div className="flex items-center gap-2">
@@ -655,7 +784,17 @@ export default function App() {
             <span className="text-xs px-1.5 py-0.5 rounded" style={{ color: tradeMode ? T.accent : T.faint, border: `1px solid ${tradeMode ? T.accent : T.line}` }}>{tradeMode ? 'live' : 'offline'}</span>
           </div>
           <div className="flex items-center gap-5 text-sm" style={mono}>
-            <Readout label="NET" value={fmt$(stats.totalPnl)} tone={stats.totalPnl >= 0 ? 'up' : 'down'} feedback={pnlFeedback} />
+            <Readout label="NET" value={fmt$(demoPnlTotal ?? stats.totalPnl)} tone={(demoPnlTotal ?? stats.totalPnl) >= 0 ? 'up' : 'down'} feedback={pnlFeedback} />
+            {import.meta.env.DEV && (
+              <>
+                <button type="button" onClick={demoPnlCount} className="px-2 py-1 rounded text-[10px] font-semibold" title="Preview the P&L count animation without saving a trade" style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}` }}>
+                  Demo +$125
+                </button>
+                <button type="button" onClick={demoPageCounts} className="px-2 py-1 rounded text-[10px] font-semibold" title="Open Dashboard and replay its page-entry count-up animations" style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}` }}>
+                  Demo page counts
+                </button>
+              </>
+            )}
             <Readout label="WIN" value={`${fmtN(stats.winRate, 1)}%`} />
             <Readout label="PF" value={stats.profitFactor === Infinity ? '∞' : fmtN(stats.profitFactor, 2)} />
             <Readout label="STREAK" value={String(stats.currentStreak)} tone={String(stats.currentStreak).endsWith('W') ? 'up' : String(stats.currentStreak).endsWith('L') ? 'down' : 'none'} />
@@ -696,9 +835,10 @@ export default function App() {
         ) : GATE_CONFIGURED && license?.state === 'expired' ? (
           <Paywall onActivated={refreshLicense} />
         ) : (
+          <PageAnimationContext.Provider value={`${tab}-${pageAnimationReplay}`}>
           <div key={tab} className="th-cinematic">
             {tab === 'journal' && <Journal trades={trades} onAdd={addTrade} onUpdate={updateTrade} onRemove={removeTrade} onNotes={setNotesView} onImport={importTrades} onRollbackImport={rollbackImport} accounts={propFirmAccounts} profiles={instrumentProfiles} savedSearches={savedSearches} onAddSavedSearch={addSavedSearch} onUpdateSavedSearch={updateSavedSearch} onDeleteSavedSearch={deleteSavedSearch} onRefreshSavedSearches={refreshSavedSearches} settings={settings} onSaveSettings={saveSettings} dayLogs={dayLogs} onAddDayLog={addDayLog} onDeleteDayLog={deleteDayLog} drilldown={journalDrilldown} onConsumeDrilldown={() => setJournalDrilldown(null)} />}
-            {tab === 'trade' && <TradeModeTab settings={settings} onSave={saveSettings} rules={rules} live={tradeMode} arming={goTransition === 'arming'} todayNet={todayNet} todayCount={todayTrades.length} weekNet={weekNet} goal={dailyGoal} maxLoss={maxLoss} onStart={startDay} onEnd={endSession} plans={tradePlans} trades={trades} accounts={propFirmAccounts} playbook={playbook} profiles={instrumentProfiles} planPrefill={planPrefill} onConsumePlanPrefill={() => setPlanPrefill(null)} commitment={activeCommitment} onAddPlan={addTradePlan} onUpdatePlan={updateTradePlan} onDeletePlan={deleteTradePlan} />}
+            {tab === 'trade' && <TradeModeTab settings={settings} onSave={saveSettings} rules={rules} live={tradeMode} arming={goTransition === 'arming'} todayNet={todayNet} todayCount={todayTrades.length} weekNet={weekNet} goal={dailyGoal} maxLoss={maxLoss} onStart={startDay} onEnd={endSession} session={activeSession} recordingState={recordingState} elapsed={sessionElapsed} sessions={tradingSessions} plans={tradePlans} trades={trades} accounts={propFirmAccounts} playbook={playbook} profiles={instrumentProfiles} planPrefill={planPrefill} onConsumePlanPrefill={() => setPlanPrefill(null)} commitment={activeCommitment} onAddPlan={addTradePlan} onUpdatePlan={updateTradePlan} onDeletePlan={deleteTradePlan} />}
             {tab === 'propfirm' && <PropFirm trades={trades} accounts={propFirmAccounts} onSave={savePropFirmAccounts} settings={settings} onSaveSettings={saveSettings} payouts={payouts} onAddPayout={addPayout} onDeletePayout={deletePayout} />}
             {tab === 'dashboard' && <Dashboard stats={stats} trades={trades} accounts={propFirmAccounts} settings={settings} journalData={{ reviews, playbook, dayLogs, goals, payouts }} payouts={payouts} plans={tradePlans} commitments={commitments} pnlFeedback={pnlFeedback} onAddCommitment={addCommitment} onUpdateCommitment={updateCommitment} onDeleteCommitment={deleteCommitment} onSaveSettings={saveSettings} onOpenCoach={() => setTab('coach')} onOpenTrade={setNotesView} onTimingDrilldown={openTimingJournal} personalClock={sessionClock} personalSchedule={personalSchedule} now={now} />}
             {tab === 'psych' && <Psychology stats={stats} />}
@@ -710,6 +850,7 @@ export default function App() {
             {tab === 'playbook' && <PlaybookTab entries={playbook} trades={trades} onAdd={addPlaybookEntry} onUpdate={updatePlaybookEntry} onDelete={deletePlaybookEntry} onPlan={planFromPlaybook} />}
             {tab === 'settings' && <SettingsTab settings={settings} onSave={saveSettings} license={license} onLicenseChange={refreshLicense} onReload={reloadAll} profiles={instrumentProfiles} onAddProfile={addInstrumentProfile} onUpdateProfile={updateInstrumentProfile} onDeleteProfile={deleteInstrumentProfile} />}
           </div>
+          </PageAnimationContext.Provider>
         )}
       </div>
 
@@ -718,8 +859,12 @@ export default function App() {
         <Preflight rules={rules} checks={checks} setChecks={setChecks}
           snapshot={{ todayNet, todayCount: todayTrades.length, weekNet }}
           goal={dailyGoal} maxLoss={maxLoss} imminent={imminentEvent} now={now} commitment={activeCommitment}
-          launching={goTransition === 'launching'} onCancel={cancelPreflight} onGoLive={goLive} />
+          launching={goTransition === 'launching'} recordingEnabled={recordingEnabled} setRecordingEnabled={setRecordingEnabled}
+          captureSources={captureSources} selectedSource={selectedCaptureSource} setSelectedSource={setSelectedCaptureSource}
+          captureLoading={captureLoading} captureError={captureError} onRefreshSources={loadCaptureSources}
+          onCancel={cancelPreflight} onGoLive={goLive} />
       )}
+      {sessionReview && <SessionEndReview session={sessionReview} recordingState={recordingState} onSave={saveSessionReview} onDiscardRecording={discardSessionRecording} />}
       {goTransition === 'live' && <GoTimeTransition />}
       {tradeMode && lossHit && !lockoutDismissed && (
         <Lockout net={todayNet} maxLoss={maxLoss} onEnd={endSession} onDismiss={() => setLockoutDismissed(true)} />

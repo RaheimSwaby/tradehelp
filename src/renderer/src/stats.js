@@ -1,4 +1,4 @@
-import { Trophy, Brain, Snowflake, Shield, Target, BookOpen, Camera, TrendingUp, Calendar, Flame, Wallet, Banknote, CalendarCheck, Coffee, Sunrise, Crosshair, Handshake, Repeat, ShieldCheck } from 'lucide-react'
+import { Trophy, Brain, Snowflake, Shield, Target, BookOpen, Camera, TrendingUp, Calendar, Flame, Wallet, Banknote, CalendarCheck, Coffee, Sunrise, Crosshair, Handshake, Repeat, ShieldCheck, Scale } from 'lucide-react'
 import { TILT, REASONS, clamp, fmtN, holdMs, periodKey, pad2 } from './utils.js'
 import { TRADING_WINDOW_HISTORY_LIMITS } from './sessionClock.js'
 import { parsePeriodRetrospective } from './periodRetrospective.js'
@@ -143,6 +143,24 @@ function rankTiming(summaries, direction) {
     })[0] || null
 }
 
+export function normalizeTimeframe(value) {
+  const raw = String(value || '').trim().toLowerCase().replace(/\s+/g, '')
+  const match = raw.match(/^(\d+)(s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days|w|wk|wks|week|weeks)$/)
+  if (!match) {
+    if (raw === 'daily') return '1D'
+    if (raw === 'weekly') return '1W'
+    return String(value || '').trim()
+  }
+  const units = {
+    s: 's', sec: 's', secs: 's', second: 's', seconds: 's',
+    m: 'm', min: 'm', mins: 'm', minute: 'm', minutes: 'm',
+    h: 'h', hr: 'h', hrs: 'h', hour: 'h', hours: 'h',
+    d: 'D', day: 'D', days: 'D',
+    w: 'W', wk: 'W', wks: 'W', week: 'W', weeks: 'W'
+  }
+  return `${Number(match[1])}${units[match[2]]}`
+}
+
 /* ───────── stats ───────── */
 export function computeStats(trades) {
   const sorted = [...trades].sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''))
@@ -161,6 +179,17 @@ export function computeStats(trades) {
   const expectancy = n ? totalPnl / n : 0
   const rrs = sorted.map((t) => Number(t.rr)).filter((r) => r > 0)
   const avgRR = rrs.length ? rrs.reduce((a, b) => a + b, 0) / rrs.length : 0
+  const risks = sorted.map((trade) => Math.abs(Number(trade.riskAmount) || 0)).filter((risk) => risk > 0).sort((a, b) => a - b)
+  const riskSample = risks.length
+  const totalRisk = risks.reduce((sum, risk) => sum + risk, 0)
+  const avgRisk = riskSample ? totalRisk / riskSample : 0
+  const medianRisk = riskSample ? risks[Math.floor(riskSample / 2)] : 0
+  const riskBandLow = medianRisk * 0.8
+  const riskBandHigh = medianRisk * 1.2
+  const riskConsistentCount = medianRisk ? risks.filter((risk) => risk >= riskBandLow && risk <= riskBandHigh).length : 0
+  const riskConsistency = riskSample ? (riskConsistentCount / riskSample) * 100 : 0
+  const riskPoints = sorted.map((trade) => Math.abs(Number(trade.riskPoints) || 0)).filter((points) => points > 0)
+  const avgRiskPoints = riskPoints.length ? riskPoints.reduce((sum, points) => sum + points, 0) / riskPoints.length : 0
 
   let eq = 0, peak = 0, maxDD = 0
   const equity = sorted.map((t, i) => {
@@ -190,10 +219,10 @@ export function computeStats(trades) {
   const daily = Object.entries(dayMap).map(([d, v]) => ({ day: d.slice(5), pnl: v })).slice(-14)
   const activeDays = Object.keys(dayMap).length
 
-  const groupPnl = (key) => {
+  const groupPnl = (key, normalize = (value) => value) => {
     const m = {}
     for (const t of sorted) {
-      const k = t[key] || '—'
+      const k = normalize(t[key] || '—')
       if (!m[k]) m[k] = { name: k, pnl: 0, n: 0, w: 0 }
       m[k].pnl += Number(t.pnl) || 0
       m[k].n += 1
@@ -263,7 +292,13 @@ export function computeStats(trades) {
     maxDD, currentStreak, bestWin, worstLoss, equity, daily, activeDays,
     grossProfit, grossLoss, nonTiltStreak: ntCur, bestNonTilt: ntBest,
     reasonsWin: toReasonArr(reasonsWin), reasonsLoss: toReasonArr(reasonsLoss),
-    byEmotion: groupPnl('emotion'), bySetup: groupPnl('setup'), byHour, byWeekday,
+    byEmotion: groupPnl('emotion'), bySetup: groupPnl('setup'),
+    byAnalysisTimeframe: groupPnl('analysisTimeframe', normalizeTimeframe),
+    byEntryTimeframe: groupPnl('entryTimeframe', normalizeTimeframe),
+    byManagementTimeframe: groupPnl('managementTimeframe', normalizeTimeframe),
+    riskSample, totalRisk, avgRisk, medianRisk, riskBandLow, riskBandHigh, riskConsistentCount, riskConsistency,
+    riskPointsSample: riskPoints.length, avgRiskPoints,
+    byHour, byWeekday,
     byHourDay, bestHour, worstHour, bestDay, worstDay,
     timingSample, timingRecordedSample, timingDays, timingCoverage, timingWinRate,
     timingHistoryStart, timingHistoryEnd, timingMinSample: TIMING_CONFIDENT_SAMPLE,
@@ -417,6 +452,9 @@ export const ACH_TIERS = {
 export function computeAchievements(trades, stats, payouts = [], dayLogs = [], commitments = []) {
   const sorted = [...trades].sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''))
   let aGradeLosses = 0, stopSet = 0, withShots = 0, honoredCur = 0, honoredBest = 0, planned = 0
+  const loggedRisks = sorted.map((trade) => Math.abs(Number(trade.riskAmount) || 0)).filter((risk) => risk > 0).sort((a, b) => a - b)
+  const medianLoggedRisk = loggedRisks.length ? loggedRisks[Math.floor(loggedRisks.length / 2)] : 0
+  let steadyRiskCur = 0, steadyRiskBest = 0
   const dayTilt = {}
   const days = {} // date → { pnl, tilt, honored } for streak/bounce-back logic
   for (const t of sorted) {
@@ -429,6 +467,12 @@ export function computeAchievements(trades, stats, payouts = [], dayLogs = [], c
     if ((t.imageCount || 0) > 0) withShots++
     const honored = pnl >= 0 || risk <= 0 || Math.abs(pnl) <= 1.1 * risk
     if (honored) { honoredCur++; honoredBest = Math.max(honoredBest, honoredCur) } else honoredCur = 0
+    if (risk > 0 && medianLoggedRisk > 0) {
+      if (risk >= medianLoggedRisk * 0.8 && risk <= medianLoggedRisk * 1.2) {
+        steadyRiskCur++
+        steadyRiskBest = Math.max(steadyRiskBest, steadyRiskCur)
+      } else steadyRiskCur = 0
+    }
     const d = (t.entryTime || t.timestamp || '').slice(0, 10)
     if (d) {
       if (!(d in dayTilt)) dayTilt[d] = false
@@ -474,6 +518,7 @@ export function computeAchievements(trades, stats, payouts = [], dayLogs = [], c
     { id: 'stophonored', name: 'Stop Honored', Icon: Shield, tier: 'silver', desc: '15 trades in a row with no loss past your planned risk.', current: honoredBest, goal: 15 },
     { id: 'riskmgr', name: 'Risk Manager', Icon: Target, tier: 'silver', desc: '50 trades logged with a stop set.', current: stopSet, goal: 50 },
     { id: 'definedrisk', name: 'Defined Risk', Icon: Crosshair, tier: 'silver', desc: '25 trades entered with both a stop and a target set.', current: planned, goal: 25 },
+    { id: 'riskrhythm', name: 'Risk Rhythm', Icon: Scale, tier: 'silver', desc: '20 risk-logged trades in a row stayed within 20% of your median risk.', current: steadyRiskBest, goal: 20 },
     { id: 'journaler', name: 'Journaler', Icon: BookOpen, tier: 'gold', desc: '100 trades journaled.', current: stats.n, goal: 100 },
     { id: 'reviewer', name: 'Reviewer', Icon: Camera, tier: 'bronze', desc: 'Screenshots attached to 20 trades.', current: withShots, goal: 20 },
     { id: 'edge', name: 'Edge Confirmed', Icon: TrendingUp, tier: 'diamond', desc: 'Profit factor over 1.5 across 50+ trades.', current: Math.min(stats.n, 50), goal: 50, gate: PF > 1.5 },
@@ -547,10 +592,15 @@ function tradePromptRow(t, includeWritten, accountName) {
     `target=${promptNum(t.target)}`,
     `size=${promptNum(t.size)}`,
     `risk=${promptNum(t.riskAmount)}`,
+    `riskPoints=${promptNum(t.riskPoints)}`,
+    `rewardPoints=${promptNum(t.rewardPoints)}`,
     `pnl=${promptNum(t.pnl)}`,
     `fees=${promptNum(t.fees)}`,
     `rr=${t.rr ? fmtN(t.rr, 1) : '-'}`,
     `setup=${promptText(t.setup, 80) || '(none)'}`,
+    `analysisTimeframe=${promptText(t.analysisTimeframe, 20) || '(none)'}`,
+    `entryTimeframe=${promptText(t.entryTimeframe, 20) || '(none)'}`,
+    `managementTimeframe=${promptText(t.managementTimeframe, 20) || '(none)'}`,
     `emotion=${promptText(t.emotion, 40) || '(none)'}`,
     `reason=${promptText(t.reason, 160) || '(none)'}`,
     `selfSetup=${promptText(t.selfSetup, 4) || '(none)'}`,
@@ -567,8 +617,10 @@ export function tradeContext(trades, stats, { includeWritten = true, maxChars = 
   const header = `AGGREGATED STATS (all ${stats.n} trades):
 netPnL=${fmtN(stats.totalPnl)} winRate=${fmtN(stats.winRate, 1)}% profitFactor=${stats.profitFactor === Infinity ? 'inf' : fmtN(stats.profitFactor, 2)} expectancy=${fmtN(stats.expectancy)}
 avgWin=${fmtN(stats.avgWin)} avgLoss=${fmtN(stats.avgLoss)} maxDD=${fmtN(stats.maxDD)} avgRR=${fmtN(stats.avgRR, 1)} currentStreak=${stats.currentStreak} nonTiltStreak=${stats.nonTiltStreak}
+riskSample=${stats.riskSample || 0} avgRisk=${fmtN(stats.avgRisk)} medianRisk=${fmtN(stats.medianRisk)} riskConsistency=${fmtN(stats.riskConsistency, 0)}%
 P&L by emotion: ${top(stats.byEmotion) || '(none)'}
 P&L by setup: ${top(stats.bySetup) || '(none)'}
+P&L by entry timeframe: ${top((stats.byEntryTimeframe || []).filter((row) => row.name !== '—')) || '(none)'}
 Most common win reasons: ${reasons(stats.reasonsWin) || '(none)'}
 Most common loss reasons: ${reasons(stats.reasonsLoss) || '(none)'}
 

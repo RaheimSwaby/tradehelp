@@ -60,6 +60,59 @@ function LeakFinder({ trades }) {
   )
 }
 
+function TimeframePerformance({ stats }) {
+  const groups = [
+    ['Entry', stats.byEntryTimeframe],
+    ['Analysis', stats.byAnalysisTimeframe],
+    ['Management', stats.byManagementTimeframe]
+  ]
+  const hasData = groups.some(([, rows]) => rows?.some((row) => row.name !== '—'))
+  if (!hasData) return null
+  return (
+    <Panel title="Performance by timeframe">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {groups.map(([label, rows]) => (
+          <div key={label}>
+            <div className="text-[10px] uppercase font-semibold mb-1.5" style={{ color: T.faint }}>{label}</div>
+            <div className="space-y-1">
+              {(rows || []).filter((row) => row.name !== '—').slice(0, 5).map((row) => (
+                <div key={row.name} className="grid grid-cols-[44px_1fr_auto] items-center gap-2 text-xs py-1" style={{ borderBottom: `1px solid ${T.line}` }}>
+                  <strong style={{ color: T.text }}>{row.name}</strong>
+                  <span style={{ color: T.dim }}>{row.n} trades · {fmtN(row.wr, 0)}%</span>
+                  <span style={{ ...mono, color: row.pnl >= 0 ? T.up : T.down }}>{fmt$(row.pnl)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </Panel>
+  )
+}
+
+function RiskConsistency({ stats }) {
+  if (!stats.riskSample) return null
+  return (
+    <Panel title="Risk consistency" right={<span className="text-[10px]" style={{ color: T.faint }}>{stats.riskSample} trades with risk</span>}>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <Stat label="Average risk" value={fmt$(stats.avgRisk)} />
+        <Stat label="Median risk" value={fmt$(stats.medianRisk)} tone="accent" />
+        <Stat label="Inside band" value={`${stats.riskConsistentCount}/${stats.riskSample}`} sub={`${fmtN(stats.riskConsistency, 0)}% consistent`} />
+        <Stat label="Avg points risk" value={stats.riskPointsSample ? fmtN(stats.avgRiskPoints, 2) : '—'} sub={stats.riskPointsSample ? `${stats.riskPointsSample} point-based trades` : 'No point-based trades'} />
+      </div>
+      <div className="mt-3">
+        <div className="flex justify-between text-[10px] mb-1" style={{ color: T.faint }}>
+          <span>Personal consistency band</span>
+          <span>{fmt$(stats.riskBandLow)}–{fmt$(stats.riskBandHigh)} · ±20% of median</span>
+        </div>
+        <div className="h-2 rounded-full overflow-hidden" style={{ background: T.surface2 }}>
+          <div className="h-full rounded-full" style={{ width: `${Math.min(100, stats.riskConsistency)}%`, background: stats.riskConsistency >= 80 ? T.up : T.accent }} />
+        </div>
+      </div>
+    </Panel>
+  )
+}
+
 function fmtHour(hour) {
   const value = Number.parseInt(hour, 10)
   const normalized = ((value % 24) + 24) % 24
@@ -294,6 +347,8 @@ export function Dashboard({ stats, trades, accounts = [], settings, journalData,
         <Stat label="Streaks" value={String(vStats.currentStreak)} sub={`best ${vStats.bestWin}W · worst ${vStats.worstLoss}L`} />
       </div>
 
+      <RiskConsistency stats={vStats} />
+      <TimeframePerformance stats={vStats} />
       <LeakFinder trades={viewTrades} />
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl px-3 py-2.5" style={{ background: T.surface, border: `1px solid ${T.line}` }}>

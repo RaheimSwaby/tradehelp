@@ -8,7 +8,7 @@ import { ImportModal } from '../widgets/ImportModal.jsx'
 import { ImportCenterModal } from '../widgets/ImportCenterModal.jsx'
 import { AnnotateModal } from '../components/AnnotateModal.jsx'
 import { describeJournalDrilldown, matchesJournalDrilldown, matchesJournalFilters, parseJournalQuery } from '../journalSearch.js'
-import { averageCostFillPreview, selectInstrumentProfile, synthesizeTradeFills } from '../workflow.js'
+import { averageCostFillPreview, calculatePointRisk, selectInstrumentProfile, synthesizeTradeFills } from '../workflow.js'
 
 const NO_TRADE_REASONS = [
   'Followed my rules — no clean setup',
@@ -18,6 +18,7 @@ const NO_TRADE_REASONS = [
   'Rules kept me out (news, lockout)',
   'Other'
 ]
+const TIMEFRAMES = ['15s', '30s', '1m', '2m', '3m', '5m', '10m', '15m', '30m', '1h', '2h', '4h', 'Daily', 'Weekly']
 
 function parseList(v) { try { const a = JSON.parse(v || '[]'); return Array.isArray(a) ? a : [] } catch { return [] } }
 function formatFileSize(value) {
@@ -36,7 +37,12 @@ function attachmentTitle(trade) {
 
 /* ───────── journal ───────── */
 export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, onRollbackImport, accounts = [], profiles = [], savedSearches = [], onAddSavedSearch, onUpdateSavedSearch, onDeleteSavedSearch, onRefreshSavedSearches, settings, onSaveSettings, dayLogs = [], onAddDayLog, onDeleteDayLog, drilldown = null, onConsumeDrilldown }) {
-  const blank = { symbol: '', direction: 'Long', entry: '', exit: '', stop: '', target: '', size: '', riskAmount: '', pnl: '', fees: '', emotion: 'Neutral', setup: 'Pullback', notes: '', entryTime: nowLocalInput(), exitTime: nowLocalInput(), reason: '', account: '', selfSetup: '', selfExec: '' }
+  const blank = {
+    symbol: '', direction: 'Long', entry: '', exit: '', stop: '', target: '', size: '', riskAmount: '',
+    riskPoints: '', rewardPoints: '', riskMode: 'price', analysisTimeframe: '', entryTimeframe: '',
+    managementTimeframe: '', pnl: '', fees: '', emotion: 'Neutral', setup: 'Pullback', notes: '',
+    entryTime: nowLocalInput(), exitTime: nowLocalInput(), reason: '', account: '', selfSetup: '', selfExec: ''
+  }
   const [f, setF] = useState(blank)
   const [images, setImages] = useState([])
   const [videos, setVideos] = useState([])
@@ -57,6 +63,7 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
   const [fillsEnabled, setFillsEnabled] = useState(false)
   const [fills, setFills] = useState([])
   const [fillProfileId, setFillProfileId] = useState('')
+  const [riskProfileId, setRiskProfileId] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const fileRef = useRef(null)
@@ -219,10 +226,15 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
     setFills(existingFills)
     setFillsEnabled(existingFills.length > 0)
     setFillProfileId(selectInstrumentProfile(profiles, t.symbol)?.id || '')
+    setRiskProfileId(selectInstrumentProfile(profiles, t.symbol)?.id || '')
     setF({
       symbol: t.symbol || '', direction: t.direction || 'Long',
       entry: String(t.entry ?? ''), exit: String(t.exit ?? ''), stop: String(t.stop ?? ''), target: String(t.target ?? ''),
       size: String(t.size ?? ''), riskAmount: String(t.riskAmount ?? ''),
+      riskPoints: t.riskPoints ? String(t.riskPoints) : '', rewardPoints: t.rewardPoints ? String(t.rewardPoints) : '',
+      riskMode: t.riskMode === 'points' ? 'points' : 'price',
+      analysisTimeframe: t.analysisTimeframe || '', entryTimeframe: t.entryTimeframe || '',
+      managementTimeframe: t.managementTimeframe || '',
       pnl: String((Number(t.pnl) || 0) + (Number(t.fees) || 0)), fees: t.fees ? String(t.fees) : '',
       emotion: t.emotion || 'Neutral', setup: t.setup || '', notes: t.notes || '',
       entryTime: t.entryTime ? t.entryTime.replace(' ', 'T') : '', exitTime: t.exitTime ? t.exitTime.replace(' ', 'T') : '',
@@ -230,12 +242,13 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
     })
     if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
   }
-  function cancelEdit() { discardPendingVideos(); setEditing(null); setF(blank); setImages([]); setFillsEnabled(false); setFills([]); setFillProfileId('') }
+  function cancelEdit() { discardPendingVideos(); setEditing(null); setF(blank); setImages([]); setFillsEnabled(false); setFills([]); setFillProfileId(''); setRiskProfileId('') }
   const set = (k) => (e) => setF((p) => ({ ...p, [k]: e.target.value }))
   function setSymbol(event) {
     const symbol = event.target.value
     setF((current) => ({ ...current, symbol }))
     if (fillsEnabled) setFillProfileId(selectInstrumentProfile(profiles, symbol)?.id || '')
+    setRiskProfileId(selectInstrumentProfile(profiles, symbol)?.id || '')
   }
   function toggleFills() {
     if (fillsEnabled) {
@@ -280,17 +293,24 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
     return null
   }, [f.entry, f.exit, f.size, f.direction])
 
-  const derivedRR = useMemo(() => {
-    const en = parseFloat(f.entry), st = parseFloat(f.stop), tg = parseFloat(f.target)
-    if (!isNaN(en) && !isNaN(st) && !isNaN(tg) && Math.abs(en - st) > 0) return Math.abs(tg - en) / Math.abs(en - st)
-    return null
-  }, [f.entry, f.stop, f.target])
+  const pointRisk = f.riskMode === 'points'
+    ? Math.abs(parseFloat(f.riskPoints) || 0)
+    : Math.abs((parseFloat(f.entry) || 0) - (parseFloat(f.stop) || 0))
+  const pointReward = f.riskMode === 'points'
+    ? Math.abs(parseFloat(f.rewardPoints) || 0)
+    : Math.abs((parseFloat(f.target) || 0) - (parseFloat(f.entry) || 0))
+  const derivedRR = pointRisk > 0 && pointReward > 0 ? pointReward / pointRisk : null
 
   const derivedHold = useMemo(() => {
     const a = parseLocal(f.entryTime), b = parseLocal(f.exitTime)
     return a && b ? b - a : null
   }, [f.entryTime, f.exitTime])
   const exactFillProfile = useMemo(() => selectInstrumentProfile(profiles, f.symbol), [profiles, f.symbol])
+  const riskProfile = useMemo(() => selectInstrumentProfile(profiles, f.symbol, riskProfileId), [profiles, f.symbol, riskProfileId])
+  const pointPlan = useMemo(() => calculatePointRisk(f, riskProfile), [f.entry, f.direction, f.riskPoints, f.rewardPoints, f.size, riskProfile])
+  const calculatedStop = pointPlan.stop || null
+  const calculatedTarget = pointPlan.target || null
+  const derivedRiskAmount = pointPlan.calculated ? pointPlan.riskAmount : null
   const genericStockProfile = useMemo(() => profiles.find((profile) => String(profile.symbol).toUpperCase() === 'STOCK') || null, [profiles])
   // Offer every configured profile — the symbol's own match first, generic stock last.
   // A mismatched pick is allowed but warned about below: the wrong tick economics
@@ -388,11 +408,16 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
       const fees = parseFloat(f.fees) || 0
       const pnl = (isNaN(grossPnl) ? 0 : grossPnl) - fees // store P&L net of fees
       const rr = derivedRR ?? (f.riskAmount && f.pnl ? Math.abs(parseFloat(f.pnl)) / Math.abs(parseFloat(f.riskAmount)) : 0)
+      const riskAmount = f.riskAmount !== '' ? parseFloat(f.riskAmount) : (derivedRiskAmount ?? 0)
       const base = {
         symbol: f.symbol.trim().toUpperCase(), direction: f.direction,
         entry: parseFloat(f.entry) || 0, exit: parseFloat(f.exit) || 0,
-        stop: parseFloat(f.stop) || 0, target: parseFloat(f.target) || 0,
-        size: parseFloat(f.size) || 0, riskAmount: parseFloat(f.riskAmount) || 0,
+        stop: f.riskMode === 'points' ? (calculatedStop || 0) : (parseFloat(f.stop) || 0),
+        target: f.riskMode === 'points' ? (calculatedTarget || 0) : (parseFloat(f.target) || 0),
+        size: parseFloat(f.size) || 0, riskAmount: Number.isFinite(riskAmount) ? riskAmount : 0,
+        riskPoints: pointRisk, rewardPoints: pointReward, riskMode: f.riskMode,
+        analysisTimeframe: f.analysisTimeframe.trim(), entryTimeframe: f.entryTimeframe.trim(),
+        managementTimeframe: f.managementTimeframe.trim(),
         pnl: isNaN(pnl) ? 0 : pnl, fees, rr: rr || 0,
         emotion: f.emotion, setup: f.setup.trim(), notes: f.notes.trim(),
         entryTime: f.entryTime ? f.entryTime.replace('T', ' ') : '',
@@ -410,7 +435,7 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
         setEditing(null); setF(blank); setImages([]); setVideos([]); setFillsEnabled(false); setFills([])
       } else {
         result = await onAdd({ ...base, id: Date.now() + Math.random().toString(16).slice(2), timestamp: new Date().toISOString().slice(0, 16).replace('T', ' ') }, screenshots, videoTokens)
-        setF(blank); setImages([]); setVideos([]); setFillsEnabled(false); setFills([]); setFillProfileId('')
+        setF(blank); setImages([]); setVideos([]); setFillsEnabled(false); setFills([]); setFillProfileId(''); setRiskProfileId('')
       }
       if (result?.videoErrors?.length) setSubmitError(`${savedLabel}, but some recordings were not attached. ${result.videoErrors.join(' ')}`)
     } catch (error) {
@@ -445,14 +470,53 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
             <select style={inputStyle} className={inp} value={f.direction} onChange={set('direction')}><option>Long</option><option>Short</option></select>
           </Field>
           {!compact && <>
+            <div className="col-span-2 flex items-center gap-1 rounded-md p-1" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
+              {[['price', 'Price levels'], ['points', 'Points']].map(([mode, label]) => (
+                <button key={mode} type="button" onClick={() => setF((current) => ({ ...current, riskMode: mode }))}
+                  className="flex-1 rounded px-2 py-1.5 text-xs font-semibold"
+                  style={{ background: f.riskMode === mode ? T.surface : 'transparent', color: f.riskMode === mode ? T.accent : T.dim, border: `1px solid ${f.riskMode === mode ? T.line : 'transparent'}` }}>
+                  {label}
+                </button>
+              ))}
+            </div>
             <Field label="Entry"><input style={inputStyle} className={inp} value={f.entry} onChange={set('entry')} inputMode="decimal" /></Field>
             <Field label="Exit"><input style={inputStyle} className={inp} value={f.exit} onChange={set('exit')} inputMode="decimal" /></Field>
-            <Field label="Stop"><input style={inputStyle} className={inp} value={f.stop} onChange={set('stop')} inputMode="decimal" /></Field>
-            <Field label="Target"><input style={inputStyle} className={inp} value={f.target} onChange={set('target')} inputMode="decimal" /></Field>
+            {f.riskMode === 'points' ? <>
+              <Field label="Risk points"><input style={inputStyle} className={inp} value={f.riskPoints} onChange={set('riskPoints')} inputMode="decimal" placeholder="e.g. 9" /></Field>
+              <Field label="Reward points"><input style={inputStyle} className={inp} value={f.rewardPoints} onChange={set('rewardPoints')} inputMode="decimal" placeholder="optional" /></Field>
+            </> : <>
+              <Field label="Stop"><input style={inputStyle} className={inp} value={f.stop} onChange={set('stop')} inputMode="decimal" /></Field>
+              <Field label="Target"><input style={inputStyle} className={inp} value={f.target} onChange={set('target')} inputMode="decimal" /></Field>
+            </>}
             <Field label="Size / contracts"><input style={inputStyle} className={inp} value={f.size} onChange={set('size')} inputMode="decimal" /></Field>
-            <Field label="Risk $"><input style={inputStyle} className={inp} value={f.riskAmount} onChange={set('riskAmount')} inputMode="decimal" /></Field>
+            <Field label={derivedRiskAmount != null ? `Risk $ · auto ${fmt$(derivedRiskAmount)}` : 'Risk $'}>
+              <input style={inputStyle} className={inp} value={f.riskAmount} onChange={set('riskAmount')} inputMode="decimal" placeholder={derivedRiskAmount != null ? `auto: ${fmtN(derivedRiskAmount, 2)}` : 'manual'} />
+            </Field>
           </>}
         </div>
+        {!compact && f.riskMode === 'points' && (
+          <div className="mt-2 rounded-md px-3 py-2" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs" style={{ color: T.dim }}>Instrument economics</span>
+              <select value={riskProfileId || exactFillProfile?.id || ''} onChange={(event) => setRiskProfileId(event.target.value)}
+                className="min-w-0 flex-1 rounded px-2 py-1 text-xs" style={inputStyle}>
+                {!exactFillProfile && <option value="">Choose a profile for dollar risk</option>}
+                {fillProfileOptions.map((profile) => <option key={profile.id} value={profile.id}>{profile.symbol} · {profile.name || profile.assetClass}</option>)}
+              </select>
+            </div>
+            <div className="text-[10px] mt-1.5" style={{ color: riskProfile ? T.faint : T.down }}>
+              {riskProfile
+                ? `${fmtN(pointRisk, 2)} points × ${fmtN(parseFloat(f.size) || 0, 2)} size = ${derivedRiskAmount == null ? 'enter size to calculate dollars' : fmt$(derivedRiskAmount)}${calculatedStop != null ? ` · stop ${fmtN(calculatedStop, 4)}` : ''}${calculatedTarget != null ? ` · target ${fmtN(calculatedTarget, 4)}` : ''}`
+                : 'Points will still be saved, but dollar risk needs a matching instrument profile or a manual Risk $ value.'}
+            </div>
+          </div>
+        )}
+        {!compact && <div className="grid grid-cols-3 gap-2 mt-3">
+          <Field label="Analysis TF"><input list="tradehelp-timeframes" style={inputStyle} className={inp} value={f.analysisTimeframe} onChange={set('analysisTimeframe')} placeholder="4h" /></Field>
+          <Field label="Entry TF"><input list="tradehelp-timeframes" style={inputStyle} className={inp} value={f.entryTimeframe} onChange={set('entryTimeframe')} placeholder="1m" /></Field>
+          <Field label="Manage TF"><input list="tradehelp-timeframes" style={inputStyle} className={inp} value={f.managementTimeframe} onChange={set('managementTimeframe')} placeholder="5m" /></Field>
+          <datalist id="tradehelp-timeframes">{TIMEFRAMES.map((timeframe) => <option key={timeframe} value={timeframe} />)}</datalist>
+        </div>}
         <div className="grid grid-cols-2 gap-3 mt-3">
           <Field label={compact ? 'Date & time' : 'Entry time'}><input type="datetime-local" style={inputStyle} className={inp} value={f.entryTime} onChange={set('entryTime')} /></Field>
           {!compact && <Field label="Exit time"><input type="datetime-local" style={inputStyle} className={inp} value={f.exitTime} onChange={set('exitTime')} /></Field>}

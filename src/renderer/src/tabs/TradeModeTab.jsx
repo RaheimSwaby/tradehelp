@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { CheckSquare, Square, Zap, Play, Plus, Trash2, AlertTriangle, Target } from 'lucide-react'
+import { CheckSquare, Square, Zap, Play, Plus, Trash2, AlertTriangle, Target, Monitor, Video, RefreshCw, Clock3 } from 'lucide-react'
 import { T, mono, inputStyle } from '../theme.js'
 import { fmt$, fmtN, clamp, untilLabel } from '../utils.js'
 import { Stat, Panel, Field } from '../components/Shared.jsx'
@@ -16,7 +16,21 @@ export function Check({ on, label, onClick }) {
   )
 }
 
-export function TradeModeTab({ settings, onSave, rules, live, arming = false, todayNet, todayCount, weekNet, goal, maxLoss, onStart, onEnd, plans = [], trades = [], accounts = [], playbook = [], profiles = [], planPrefill, onConsumePlanPrefill, commitment, onAddPlan, onUpdatePlan, onDeletePlan }) {
+function durationLabel(milliseconds) {
+  const total = Math.max(0, Math.floor((Number(milliseconds) || 0) / 1000))
+  const hours = Math.floor(total / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+  const seconds = total % 60
+  return [hours, minutes, seconds].map((value) => String(value).padStart(2, '0')).join(':')
+}
+
+function sizeLabel(bytes) {
+  const value = Number(bytes) || 0
+  if (value < 1024 * 1024) return `${Math.max(0, Math.round(value / 1024))} KB`
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`
+}
+
+export function TradeModeTab({ settings, onSave, rules, live, arming = false, todayNet, todayCount, weekNet, goal, maxLoss, onStart, onEnd, session, recordingState, elapsed = 0, sessions = [], plans = [], trades = [], accounts = [], playbook = [], profiles = [], planPrefill, onConsumePlanPrefill, commitment, onAddPlan, onUpdatePlan, onDeletePlan }) {
   const [list, setList] = useState(rules)
   const [g, setG] = useState(String(goal || ''))
   const [ml, setMl] = useState(String(maxLoss || ''))
@@ -93,7 +107,14 @@ export function TradeModeTab({ settings, onSave, rules, live, arming = false, to
         <Panel title="Session">
           {live ? (
             <div className="space-y-4">
-              <div className="text-sm flex items-center gap-2" style={{ color: T.accent }}><span>●</span> You're live.</div>
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-sm flex items-center gap-2" style={{ color: T.accent }}><span>●</span> You're live.</div>
+                <div className="text-xs flex items-center gap-1.5" style={{ ...mono, color: recordingState?.status === 'recording' ? T.down : T.dim }}>
+                  {recordingState?.status === 'recording' ? <Video size={13} /> : <Clock3 size={13} />}
+                  {recordingState?.status === 'recording' ? 'REC ' : ''}{durationLabel(elapsed)}
+                </div>
+              </div>
+              {recordingState?.error && <div className="text-xs rounded-md px-2.5 py-2" style={{ color: T.down, background: `${T.down}14`, border: `1px solid ${T.down}55` }}>{recordingState.error} Session timing is still active.</div>}
               <div>
                 <div className="flex justify-between text-xs mb-1"><span style={{ color: T.dim }}>Toward goal</span><span style={{ ...mono, color: T.text }}>{fmt$(todayNet)} / {fmt$(goal)}</span></div>
                 <div className="h-2.5 rounded-full overflow-hidden" style={{ background: T.surface2 }}><div className="h-full rounded-full" style={{ width: `${goalPct}%`, background: T.up, transition: 'width .4s' }} /></div>
@@ -117,18 +138,35 @@ export function TradeModeTab({ settings, onSave, rules, live, arming = false, to
             </div>
           )}
         </Panel>
+        {!live && sessions.length > 0 && (
+          <Panel title="Recent sessions">
+            <div className="space-y-2">
+              {sessions.slice(0, 4).map((item) => (
+                <div key={item.id} className="flex items-center gap-3 rounded-md px-2.5 py-2" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-semibold">{new Date(item.startedAt).toLocaleString()}</div>
+                    <div className="text-[11px] mt-0.5" style={{ color: T.dim }}>
+                      {item.tradeCount} trade{item.tradeCount === 1 ? '' : 's'} · {fmt$(item.netPnl)} · {durationLabel(new Date(item.endedAt || item.startedAt) - new Date(item.startedAt))}
+                    </div>
+                  </div>
+                  {item.recordingUrl && <video controls preload="metadata" src={item.recordingUrl} className="w-24 h-14 object-cover rounded" />}
+                </div>
+              ))}
+            </div>
+          </Panel>
+        )}
       </div>
     </div>
   )
 }
 
-export function Preflight({ rules, checks, setChecks, snapshot, goal, maxLoss, imminent, now, commitment, launching = false, onCancel, onGoLive }) {
+export function Preflight({ rules, checks, setChecks, snapshot, goal, maxLoss, imminent, now, commitment, launching = false, recordingEnabled, setRecordingEnabled, captureSources = [], selectedSource, setSelectedSource, captureLoading, captureError, onRefreshSources, onCancel, onGoLive }) {
   const toggle = (i) => setChecks((c) => ({ ...c, [i]: !c[i] }))
   const unchecked = rules.reduce((n, _, i) => n + (checks[i] ? 0 : 1), 0)
   const dateLabel = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })
   return (
     <div className="th-overlay fixed inset-0 flex items-center justify-center p-4 z-50" style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }} onClick={onCancel}>
-      <div className="rounded-xl w-full max-w-lg" style={{ background: T.surface, border: `1px solid ${T.line}` }} onClick={(e) => e.stopPropagation()}>
+      <div className="rounded-xl w-full max-w-2xl max-h-[92vh] overflow-y-auto" style={{ background: T.surface, border: `1px solid ${T.line}` }} onClick={(e) => e.stopPropagation()}>
         <div className="px-5 py-4 flex items-center gap-2" style={{ borderBottom: `1px solid ${T.line}` }}>
           <Zap size={18} style={{ color: T.accent }} />
           <div>
@@ -169,10 +207,43 @@ export function Preflight({ rules, checks, setChecks, snapshot, goal, maxLoss, i
             )}
             <div className="text-xs mt-2" style={{ color: T.faint }}>Tick what you've confirmed — this is on your honor.</div>
           </div>
+          <div>
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <div>
+                <div className="text-xs uppercase tracking-wider" style={{ color: T.faint }}>Session recording</div>
+                <div className="text-xs mt-0.5" style={{ color: T.dim }}>Video only. Saved locally and linked to trades from this session.</div>
+              </div>
+              <button type="button" onClick={() => setRecordingEnabled(!recordingEnabled)} className="rounded-md px-2.5 py-1.5 text-xs font-semibold" style={{ background: recordingEnabled ? T.accentSoft : T.surface2, color: recordingEnabled ? T.accent : T.dim, border: `1px solid ${recordingEnabled ? T.accent : T.line}` }}>
+                {recordingEnabled ? 'Recording on' : 'No recording'}
+              </button>
+            </div>
+            {recordingEnabled && (
+              <div className="rounded-lg p-3" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs" style={{ color: T.dim }}>{captureLoading ? 'Finding screens and windows…' : 'Choose what TradeHelp should record'}</span>
+                  <button type="button" onClick={onRefreshSources} disabled={captureLoading} title="Refresh capture choices" style={{ color: T.faint }}><RefreshCw size={14} className={captureLoading ? 'animate-spin' : ''} /></button>
+                </div>
+                {captureError && <div className="text-xs mb-2" style={{ color: T.down }}>{captureError}</div>}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {captureSources.map((source) => {
+                    const active = selectedSource?.id === source.id
+                    return (
+                      <button key={source.id} type="button" onClick={() => setSelectedSource(source)} className="text-left rounded-md overflow-hidden" style={{ background: T.surface, border: `1px solid ${active ? T.accent : T.line}` }}>
+                        <div className="aspect-video flex items-center justify-center overflow-hidden" style={{ background: '#090C12' }}>
+                          {source.thumbnail ? <img src={source.thumbnail} alt="" className="w-full h-full object-cover" /> : <Monitor size={22} style={{ color: T.faint }} />}
+                        </div>
+                        <div className="px-2 py-1.5 text-[11px] truncate" style={{ color: active ? T.accent : T.dim }}>{source.name}</div>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
         <div className="px-5 py-4 flex items-center justify-end gap-2" style={{ borderTop: `1px solid ${T.line}` }}>
           <button type="button" onClick={onCancel} disabled={launching} className="rounded-md px-3 py-2 text-sm" style={{ background: T.surface2, color: T.text, border: `1px solid ${T.line}` }}>Cancel</button>
-          <button type="button" onClick={onGoLive} disabled={launching} aria-busy={launching} className={`th-go-trigger rounded-md px-4 py-2 text-sm font-semibold flex items-center gap-1.5${launching ? ' th-go-trigger-on' : ''}`} style={{ background: T.accent, color: '#1A1306' }}>
+          <button type="button" onClick={onGoLive} disabled={launching || (recordingEnabled && !selectedSource)} aria-busy={launching} className={`th-go-trigger rounded-md px-4 py-2 text-sm font-semibold flex items-center gap-1.5${launching ? ' th-go-trigger-on' : ''}`} style={{ background: T.accent, color: '#1A1306', opacity: recordingEnabled && !selectedSource ? 0.5 : 1 }}>
             <Zap size={15} /> {launching ? 'Locking in…' : `Go live${unchecked > 0 ? ` (${unchecked} unchecked)` : ''}`}
           </button>
         </div>
@@ -181,13 +252,17 @@ export function Preflight({ rules, checks, setChecks, snapshot, goal, maxLoss, i
   )
 }
 
-export function LiveBanner({ net, goal, maxLoss, lossHit, onEnd }) {
+export function LiveBanner({ net, goal, maxLoss, lossHit, recordingState, elapsed = 0, onEnd }) {
   const lossPct = maxLoss > 0 ? clamp((-net / maxLoss) * 100, 0, 100) : 0
   const bg = lossHit ? T.down : T.accent
   return (
     <div className="w-full" style={{ background: bg, color: '#1A0E06' }}>
       <div className="max-w-6xl mx-auto px-4 py-2 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm" style={mono}>
         <span className="font-bold tracking-wide flex items-center gap-2">● LIVE — TRADE MODE</span>
+        <span className="flex items-center gap-1.5 font-semibold">
+          {recordingState?.status === 'recording' && <span className="inline-block w-2 h-2 rounded-full animate-pulse" style={{ background: '#7A0B18' }} />}
+          {recordingState?.status === 'recording' ? 'REC' : 'SESSION'} {durationLabel(elapsed)}
+        </span>
         <span>Today <strong>{fmt$(net)}</strong>{goal > 0 ? ` / ${fmt$(goal)}` : ''}</span>
         {maxLoss > 0 && (
           <span className="flex items-center gap-2">
@@ -199,6 +274,52 @@ export function LiveBanner({ net, goal, maxLoss, lossHit, onEnd }) {
           </span>
         )}
         <button type="button" onClick={onEnd} className="ml-auto px-3 py-1 rounded-md text-sm font-semibold" style={{ background: '#1A0E06', color: bg }}>End session</button>
+      </div>
+    </div>
+  )
+}
+
+export function SessionEndReview({ session, recordingState, onSave, onDiscardRecording }) {
+  const [notes, setNotes] = useState('')
+  const [saving, setSaving] = useState(false)
+  if (!session) return null
+  async function submit(discard = false) {
+    setSaving(true)
+    try {
+      if (discard) await onDiscardRecording()
+      await onSave(notes)
+    } finally {
+      setSaving(false)
+    }
+  }
+  return (
+    <div className="th-overlay fixed inset-0 flex items-center justify-center p-4 z-[80]" style={{ background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(5px)' }}>
+      <div className="rounded-xl w-full max-w-lg" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
+        <div className="px-5 py-4" style={{ borderBottom: `1px solid ${T.line}` }}>
+          <div className="text-base font-semibold">Session complete</div>
+          <div className="text-xs mt-1" style={{ color: T.dim }}>Review the session before returning to normal mode.</div>
+        </div>
+        <div className="p-5 space-y-4">
+          <div className="grid grid-cols-3 gap-3">
+            <Stat label="Duration" value={durationLabel(new Date(session.endedAt || Date.now()) - new Date(session.startedAt))} />
+            <Stat label="Trades" value={String(session.tradeCount || 0)} />
+            <Stat label="Net P&L" value={fmt$(session.netPnl)} tone={session.netPnl >= 0 ? 'up' : 'down'} />
+          </div>
+          {session.recordingStatus === 'ready' && (
+            <div className="rounded-lg p-3" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
+              <div className="flex justify-between text-xs mb-2"><span>Session recording</span><span style={{ color: T.dim }}>{sizeLabel(session.size)}</span></div>
+              <video controls preload="metadata" src={session.recordingUrl} className="w-full rounded-md max-h-56" />
+            </div>
+          )}
+          {recordingState?.error && <div className="text-xs" style={{ color: T.down }}>{recordingState.error}</div>}
+          <Field label="Session notes">
+            <textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={3} placeholder="What worked? What needs adjustment?" className="w-full rounded-md px-3 py-2 text-sm resize-y" style={inputStyle} />
+          </Field>
+        </div>
+        <div className="px-5 py-4 flex flex-wrap justify-end gap-2" style={{ borderTop: `1px solid ${T.line}` }}>
+          {session.recordingStatus === 'ready' && <button type="button" disabled={saving} onClick={() => submit(true)} className="rounded-md px-3 py-2 text-sm" style={{ background: T.surface2, color: T.down, border: `1px solid ${T.line}` }}>Delete recording &amp; save</button>}
+          <button type="button" disabled={saving} onClick={() => submit(false)} className="rounded-md px-4 py-2 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306' }}>{saving ? 'Saving…' : 'Save session'}</button>
+        </div>
       </div>
     </div>
   )

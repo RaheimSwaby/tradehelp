@@ -51,6 +51,16 @@ const api = {
   listTradeVideos: (tradeId) => ipcRenderer.invoke('videos:list', tradeId),
   deleteTradeVideo: (id) => ipcRenderer.invoke('videos:delete', id),
 
+  listTradingSessions: (limit) => ipcRenderer.invoke('sessions:list', limit),
+  getActiveTradingSession: () => ipcRenderer.invoke('sessions:active'),
+  createTradingSession: (input) => ipcRenderer.invoke('sessions:create', input),
+  finishTradingSession: (id, input) => ipcRenderer.invoke('sessions:finish', id, input),
+  discardTradingSessionRecording: (id) => ipcRenderer.invoke('sessions:recording:discard', id),
+  listCaptureSources: () => ipcRenderer.invoke('capture:sources'),
+  startSessionRecording: (id, input) => ipcRenderer.invoke('sessions:recording:start', id, input),
+  appendSessionRecording: (id, chunk) => ipcRenderer.invoke('sessions:recording:append', id, chunk),
+  finishSessionRecording: (id) => ipcRenderer.invoke('sessions:recording:finish', id),
+
   listTradePlans: () => ipcRenderer.invoke('plans:list'),
   addTradePlan: (plan) => ipcRenderer.invoke('plans:add', plan),
   updateTradePlan: (plan) => ipcRenderer.invoke('plans:update', plan),

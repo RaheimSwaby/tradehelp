@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   instrumentRootSymbol, defaultInstrumentProfile, selectInstrumentProfile, instrumentMultiplier,
-  calculatePlanSizing, scoreTradePlanV1, scorePlanExecutionV1, parsePlaybookTarget,
+  calculatePlanSizing, calculatePointRisk, scoreTradePlanV1, scorePlanExecutionV1, parsePlaybookTarget,
   synthesizeTradeFills, averageCostFillPreview, reviewCommitmentSuggestion,
   summarizeTradeSession, tradeSessionDate, dHashFromRgba, hammingDistance64, dHashSimilarity,
   INSTRUMENT_PROFILE_DEFAULTS
@@ -52,6 +52,23 @@ describe('instrumentMultiplier', () => {
   it('falls back to 1 when the profile is unusable', () => {
     expect(instrumentMultiplier(null)).toBe(1)
     expect(instrumentMultiplier({ tickSize: 0, tickValue: 5 })).toBe(1)
+  })
+})
+
+describe('calculatePointRisk', () => {
+  it('derives long stop, target, R:R and dollar risk from points', () => {
+    expect(calculatePointRisk({
+      entry: 6000, direction: 'Long', riskPoints: 9, rewardPoints: 18, size: 2
+    }, ES)).toMatchObject({
+      stop: 5991, target: 6018, riskPoints: 9, rewardPoints: 18,
+      riskAmount: 900, rr: 2, calculated: true
+    })
+  })
+
+  it('places short stop and target on the correct sides', () => {
+    expect(calculatePointRisk({
+      entry: 20000, direction: 'Short', riskPoints: 10, rewardPoints: 15, size: 1
+    }, MNQ)).toMatchObject({ stop: 20010, target: 19985, riskAmount: 20, rr: 1.5 })
   })
 })
 

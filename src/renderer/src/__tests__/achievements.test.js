@@ -45,6 +45,18 @@ describe('Defined Risk', () => {
   })
 })
 
+describe('Risk Rhythm', () => {
+  it('unlocks after 20 consecutive risk entries within 20% of the median', () => {
+    const trades = Array.from({ length: 20 }, (_, index) => trade({
+      timestamp: `2026-06-${String(index + 1).padStart(2, '0')} 09:30`,
+      riskAmount: 100 + (index % 3) * 5
+    }))
+    const a = byId(ach(trades), 'riskrhythm')
+    expect(a.current).toBe(20)
+    expect(a.unlocked).toBe(true)
+  })
+})
+
 describe('Locked In', () => {
   it('rides through weekends but breaks on longer gaps', () => {
     // Mon Jun 1 – Fri Jun 5, then Mon Jun 8 – Fri Jun 12 (Fri→Mon gap of 3 days is fine)

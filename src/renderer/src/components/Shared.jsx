@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useContext, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { T, mono } from '../theme.js'
 import { executionGrade } from '../stats.js'
+import { PageAnimationContext } from '../pageAnimation.js'
 
-const ANIM_MS = 720
+const ANIM_MS = 1000
 
 export function numberDisplayParts(display) {
   const raw = String(display ?? '').trim()
@@ -45,34 +46,40 @@ function prefersReducedMotion() {
   return typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 }
 
-export function AnimatedValue({ value, className = '', style, from, animationKey }) {
+export function AnimatedValue({ value, className = '', style, from, animationKey, animateOnMount = false }) {
+  const pageAnimationKey = useContext(PageAnimationContext)
   const parts = useMemo(() => numberDisplayParts(value), [value])
   const target = parts?.value ?? null
   const explicitFrom = Number.isFinite(Number(from)) ? Number(from) : null
-  const [current, setCurrent] = useState(target ?? 0)
+  const initialValue = animateOnMount && target != null ? 0 : target ?? 0
+  const [current, setCurrent] = useState(initialValue)
   const [animating, setAnimating] = useState(false)
-  const currentRef = useRef(target ?? 0)
+  const currentRef = useRef(initialValue)
   const mounted = useRef(false)
   const lastAnimationKey = useRef(null)
+  const lastPageAnimationKey = useRef(pageAnimationKey)
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const firstRender = !mounted.current
     mounted.current = true
     const hasExplicitStart = explicitFrom != null && animationKey != null && animationKey !== lastAnimationKey.current
+    const pageReplay = animateOnMount && pageAnimationKey !== lastPageAnimationKey.current
+    const enterAnimation = animateOnMount && (firstRender || pageReplay)
     lastAnimationKey.current = animationKey
+    lastPageAnimationKey.current = pageAnimationKey
 
     if (target == null || prefersReducedMotion()) {
       setAnimating(false)
       if (target != null) { currentRef.current = target; setCurrent(target) }
       return
     }
-    if (firstRender && !hasExplicitStart) {
+    if (firstRender && !hasExplicitStart && !enterAnimation) {
       currentRef.current = target
       setCurrent(target)
       return
     }
 
-    const start = resolveAnimatedStart(currentRef.current, explicitFrom, firstRender, hasExplicitStart)
+    const start = enterAnimation ? 0 : resolveAnimatedStart(currentRef.current, explicitFrom, firstRender, hasExplicitStart)
     const delta = target - start
     if (Math.abs(delta) < 0.001) { setAnimating(false); currentRef.current = target; setCurrent(target); return }
     currentRef.current = start
@@ -90,7 +97,7 @@ export function AnimatedValue({ value, className = '', style, from, animationKey
     }
     frame = requestAnimationFrame(step)
     return () => cancelAnimationFrame(frame)
-  }, [target, explicitFrom, animationKey])
+  }, [target, explicitFrom, animationKey, animateOnMount, pageAnimationKey])
 
   if (!parts) return <span key={String(value)} className={`th-val ${className}`.trim()} style={style}>{value}</span>
   const display = formatAnimatedNumber(current, parts)
@@ -110,7 +117,7 @@ function Spark({ points, color }) {
   )
 }
 
-export function Stat({ label, value, sub, tone, spark, feedback }) {
+export function Stat({ label, value, sub, tone, spark, feedback, animateOnMount = true }) {
   const color = tone === 'up' ? T.up : tone === 'down' ? T.down : tone === 'accent' ? T.accent : T.text
   const pulseColor = Number(feedback?.delta) >= 0 ? T.up : T.down
   const feedbackClass = feedback ? ` th-pnl-feedback th-pnl-feedback-${Number(feedback.delta) >= 0 ? 'win' : 'loss'}` : ''
@@ -118,7 +125,7 @@ export function Stat({ label, value, sub, tone, spark, feedback }) {
     <div className={`rounded-lg p-3 th-card${feedbackClass}`} style={{ background: T.surface, border: `1px solid ${T.line}`, '--pnl-pulse': pulseColor, '--pnl-settle': color }}>
       <div className="text-xs uppercase tracking-wider" style={{ color: T.faint }}>{label}</div>
       <div className="mt-1 text-xl font-semibold th-pnl-number" style={{ ...mono, color }}>
-        <AnimatedValue value={value} from={feedback?.from} animationKey={feedback?.id} />
+        <AnimatedValue value={value} from={feedback?.from} animationKey={feedback?.id} animateOnMount={animateOnMount} />
       </div>
       {sub && <div className="text-xs mt-0.5" style={{ color: T.dim }}>{sub}</div>}
       <Spark points={spark} color={tone === 'down' ? T.down : T.accent} />

@@ -31,6 +31,9 @@ import {
   getGoals, setGoals,
   getSettings, setSettings,
   addImage, listImages, getImage, deleteImage,
+  createTradingSession, getActiveTradingSession, getTradingSession, listTradingSessions,
+  beginTradingSessionRecording, completeTradingSessionRecording, discardTradingSessionRecording,
+  finishTradingSession,
   getAllData, restoreData,
 } from '../db.js'
 
@@ -66,12 +69,19 @@ afterAll(() => {
 
 describe('trades — add / list', () => {
   it('adds a trade and returns it in listTrades', () => {
-    const t = makeTrade()
+    const t = makeTrade({
+      analysisTimeframe: '4h', entryTimeframe: '1m', managementTimeframe: '5m',
+      riskPoints: 8, rewardPoints: 16, riskMode: 'points'
+    })
     const trades = addTrade(t)
     const found = trades.find((r) => r.id === t.id)
     expect(found).toBeDefined()
     expect(found.symbol).toBe('SPY')
     expect(found.pnl).toBe(500)
+    expect(found).toMatchObject({
+      analysisTimeframe: '4h', entryTimeframe: '1m', managementTimeframe: '5m',
+      riskPoints: 8, rewardPoints: 16, riskMode: 'points'
+    })
   })
 
   it('listTrades is ordered by timestamp ascending', () => {
@@ -111,6 +121,54 @@ describe('trades — delete', () => {
     addTrade(t)
     const after = deleteTrade(t.id)
     expect(after.find((r) => r.id === t.id)).toBeUndefined()
+  })
+})
+
+describe('trading sessions', () => {
+  it('tracks an active session and links trades inside its time window', () => {
+    const session = createTradingSession({
+      id: '11111111-1111-4111-8111-111111111111',
+      startedAt: '2026-02-10T13:00:00.000Z'
+    })
+    expect(session.status).toBe('active')
+    expect(getActiveTradingSession()?.id).toBe(session.id)
+
+    addTrade(makeTrade({
+      id: 'session-trade',
+      timestamp: '2026-02-10 09:30',
+      entryTime: '09:30',
+      pnl: 275
+    }))
+    const finished = finishTradingSession(session.id, {
+      endedAt: '2026-02-10T16:00:00.000Z',
+      notes: 'Stayed selective.'
+    })
+    expect(finished).toMatchObject({
+      status: 'completed',
+      tradeCount: 1,
+      netPnl: 275,
+      notes: 'Stayed selective.'
+    })
+    expect(getActiveTradingSession()).toBeNull()
+    expect(listTradingSessions().some((item) => item.id === session.id)).toBe(true)
+  })
+
+  it('stores and discards local recording metadata', () => {
+    const session = createTradingSession({
+      id: '22222222-2222-4222-8222-222222222222',
+      startedAt: '2026-02-11T09:00:00.000Z',
+      recordingRequested: true,
+      sourceId: 'screen:1:0',
+      sourceLabel: 'Main screen'
+    })
+    beginTradingSessionRecording(session.id, { file: `${session.id}.webm`, mimeType: 'video/webm' })
+    const ready = completeTradingSessionRecording(session.id, 4096)
+    expect(ready).toMatchObject({ recordingStatus: 'ready', size: 4096 })
+    expect(ready.recordingUrl).toContain(session.id)
+    const discarded = discardTradingSessionRecording(session.id)
+    expect(discarded).toMatchObject({ recordingStatus: 'discarded', size: 0, recordingUrl: '' })
+    finishTradingSession(session.id, { endedAt: '2026-02-11T10:00:00.000Z' })
+    expect(getTradingSession(session.id)?.status).toBe('completed')
   })
 })
 

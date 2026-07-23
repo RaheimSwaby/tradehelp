@@ -62,6 +62,8 @@ export function NotesModal({ trade, onClose, onUpdate, onAttachmentsChange }) {
       const ctx = [
         `Trade: ${trade.symbol} ${trade.direction} · setup=${trade.setup || '-'} · outcome=${(Number(trade.pnl) || 0) >= 0 ? 'WIN' : 'LOSS'} (${fmt$(trade.pnl)})`,
         `R:R=${trade.rr ? `1:${fmtN(trade.rr, 1)}` : '-'} · emotion=${trade.emotion || '-'}${trade.reason ? ` · reason=${trade.reason}` : ''}`,
+        `Timeframes: analysis=${trade.analysisTimeframe || '-'} · entry=${trade.entryTimeframe || '-'} · management=${trade.managementTimeframe || '-'}`,
+        `Risk: ${trade.riskPoints ? `${fmtN(trade.riskPoints, 2)} points` : '-'} · ${fmt$(trade.riskAmount)}`,
         `Image tags (in order): ${withPics.map((i) => i.tag || 'untagged').join(', ')}`,
         `Trader-marked levels on the chart(s): ${withPics.map((i) => i.caption).filter(Boolean).join('; ') || 'none'}`,
         `Notes: ${trade.notes || '(none)'}`
@@ -84,6 +86,16 @@ export function NotesModal({ trade, onClose, onUpdate, onAttachmentsChange }) {
             {(trade.entryTime || trade.exitTime) && (
               <div className="text-xs mt-0.5" style={{ color: T.faint, ...mono }}>
                 {trade.entryTime || '—'} → {trade.exitTime || '—'}{holdMs(trade) ? ` · held ${fmtDuration(holdMs(trade))}` : ''}
+              </div>
+            )}
+            {(trade.analysisTimeframe || trade.entryTimeframe || trade.managementTimeframe) && (
+              <div className="text-xs mt-0.5" style={{ color: T.faint }}>
+                TF · analysis {trade.analysisTimeframe || '—'} · entry {trade.entryTimeframe || '—'} · manage {trade.managementTimeframe || '—'}
+              </div>
+            )}
+            {(Number(trade.riskPoints) > 0 || Number(trade.rewardPoints) > 0) && (
+              <div className="text-xs mt-0.5" style={{ color: T.faint, ...mono }}>
+                Risk {fmtN(trade.riskPoints, 2)} pts · reward {Number(trade.rewardPoints) > 0 ? `${fmtN(trade.rewardPoints, 2)} pts` : '—'} · {fmt$(trade.riskAmount)}
               </div>
             )}
             <div className="text-xs mt-1 flex items-center gap-1.5" style={{ color: T.faint }}>Execution <GradeChip t={trade} /> <span>· {trade.source === 'import' ? 'imported (outcome-based)' : 'process, not outcome'}</span></div>

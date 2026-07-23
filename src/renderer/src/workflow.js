@@ -51,6 +51,26 @@ export function instrumentMultiplier(profile) {
   return tickSize > 0 && Number.isFinite(tickValue) ? tickValue / tickSize : 1
 }
 
+export function calculatePointRisk({ entry, direction = 'Long', riskPoints, rewardPoints, size }, profile = null) {
+  const entryPrice = Number(entry)
+  const riskDistance = Math.abs(Number(riskPoints) || 0)
+  const rewardDistance = Math.abs(Number(rewardPoints) || 0)
+  const quantity = Math.abs(Number(size) || 0)
+  const short = direction === 'Short'
+  const stop = Number.isFinite(entryPrice) && riskDistance ? entryPrice + (short ? riskDistance : -riskDistance) : 0
+  const target = Number.isFinite(entryPrice) && rewardDistance ? entryPrice + (short ? -rewardDistance : rewardDistance) : 0
+  const tickSize = Number(profile?.tickSize) || 0
+  const tickValue = Number(profile?.tickValue) || 0
+  const riskAmount = riskDistance && quantity && tickSize > 0 && tickValue > 0
+    ? (riskDistance / tickSize) * tickValue * quantity
+    : 0
+  return {
+    stop, target, riskPoints: riskDistance, rewardPoints: rewardDistance, riskAmount,
+    rr: riskDistance && rewardDistance ? rewardDistance / riskDistance : 0,
+    calculated: Boolean(riskDistance && quantity && tickSize > 0 && tickValue > 0)
+  }
+}
+
 function finitePositive(value) {
   const number = Number(value)
   return Number.isFinite(number) && number > 0 ? number : 0

@@ -1,6 +1,6 @@
-import { app, BrowserWindow, ipcMain, shell, dialog, protocol, net, Notification } from 'electron'
+import { app, BrowserWindow, ipcMain, shell, dialog, protocol, net, Notification, desktopCapturer } from 'electron'
 import { extname, join } from 'path'
-import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'fs'
+import { copyFileSync, createWriteStream, existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'fs'
 import { randomUUID } from 'crypto'
 import { pathToFileURL } from 'url'
 import * as db from './db.js'
@@ -20,6 +20,7 @@ const VIDEO_SCHEME = 'tradehelp-media'
 const VIDEO_PICK_TTL_MS = 15 * 60 * 1000
 const MAX_VIDEO_PICKS = 10
 const pendingVideoPicks = new Map()
+const activeSessionRecordings = new Map()
 const BG_MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' }
 
 protocol.registerSchemesAsPrivileged([{
@@ -70,10 +71,10 @@ function registerVideoProtocol() {
       if (request.method !== 'GET' && request.method !== 'HEAD') return new Response(null, { status: 405 })
       const url = new URL(request.url)
       const id = decodeURIComponent(url.pathname.replace(/^\/+/, ''))
-      if (url.hostname !== 'video' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      if (!['video', 'session'].includes(url.hostname) || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
         return new Response(null, { status: 404 })
       }
-      const video = db.getTradeVideoFile(id)
+      const video = url.hostname === 'session' ? db.getTradingSessionRecordingFile(id) : db.getTradeVideoFile(id)
       if (!video) return new Response(null, { status: 404 })
       const response = await net.fetch(pathToFileURL(video.path).toString(), {
         method: request.method,
@@ -153,6 +154,11 @@ app.on('before-quit', () => {
   if (videoPickCleanupTimer) clearInterval(videoPickCleanupTimer)
   importWatcher?.stop()
   pendingVideoPicks.clear()
+  for (const [sessionId, recording] of activeSessionRecordings) {
+    try { recording.stream.destroy() } catch {}
+    try { db.failTradingSessionRecording(sessionId) } catch {}
+  }
+  activeSessionRecordings.clear()
 })
 
 app.on('window-all-closed', () => {
@@ -301,6 +307,74 @@ function registerIpc() {
   })
   ipcMain.handle('videos:list', (_event, tradeId) => publicVideos(db.listTradeVideos(tradeId)))
   ipcMain.handle('videos:delete', (_event, id) => publicVideos(db.deleteTradeVideo(id)))
+
+  ipcMain.handle('sessions:list', (_event, limit) => db.listTradingSessions(limit))
+  ipcMain.handle('sessions:active', () => db.getActiveTradingSession())
+  ipcMain.handle('sessions:create', (_event, input) => db.createTradingSession(input))
+  ipcMain.handle('sessions:finish', (_event, id, input) => db.finishTradingSession(id, input))
+  ipcMain.handle('sessions:recording:discard', async (_event, id) => {
+    const active = activeSessionRecordings.get(String(id))
+    if (active) {
+      await new Promise((resolve) => active.stream.end(resolve))
+      activeSessionRecordings.delete(String(id))
+    }
+    return db.discardTradingSessionRecording(id)
+  })
+  ipcMain.handle('capture:sources', async () => {
+    const sources = await desktopCapturer.getSources({
+      types: ['screen', 'window'],
+      thumbnailSize: { width: 320, height: 180 },
+      fetchWindowIcons: false
+    })
+    return sources.map((source) => ({
+      id: source.id,
+      name: source.name,
+      displayId: source.display_id || '',
+      kind: source.id.startsWith('screen:') ? 'screen' : 'window',
+      thumbnail: source.thumbnail?.isEmpty() ? '' : source.thumbnail.toDataURL()
+    }))
+  })
+  ipcMain.handle('sessions:recording:start', (event, id, input = {}) => {
+    const sessionId = String(id)
+    if (activeSessionRecordings.has(sessionId)) throw new Error('This session is already recording')
+    if (activeSessionRecordings.size) throw new Error('Another session is already recording')
+    const file = `${sessionId}.webm`
+    const path = db.tradingSessionRecordingPath(file)
+    const stream = createWriteStream(path, { flags: 'w' })
+    const recording = { stream, path, bytes: 0, ownerId: event.sender.id, failed: false }
+    stream.on('error', () => {
+      recording.failed = true
+      activeSessionRecordings.delete(sessionId)
+      try { db.failTradingSessionRecording(sessionId) } catch {}
+    })
+    activeSessionRecordings.set(sessionId, recording)
+    return db.beginTradingSessionRecording(sessionId, { file, mimeType: input.mimeType || 'video/webm' })
+  })
+  ipcMain.handle('sessions:recording:append', async (event, id, chunk) => {
+    const sessionId = String(id)
+    const recording = activeSessionRecordings.get(sessionId)
+    if (!recording || recording.ownerId !== event.sender.id || recording.failed) throw new Error('Session recording is not active')
+    const data = Buffer.from(chunk)
+    if (!data.length) return { ok: true, size: recording.bytes }
+    if (recording.bytes + data.length > db.TRADE_VIDEO_MAX_BYTES) throw new Error('Session recording reached the 2 GB limit')
+    await new Promise((resolve, reject) => {
+      recording.stream.write(data, (error) => error ? reject(error) : resolve())
+    })
+    recording.bytes += data.length
+    return { ok: true, size: recording.bytes }
+  })
+  ipcMain.handle('sessions:recording:finish', async (event, id) => {
+    const sessionId = String(id)
+    const recording = activeSessionRecordings.get(sessionId)
+    if (!recording) return db.getTradingSession(sessionId)
+    if (recording.ownerId !== event.sender.id) throw new Error('Session recording owner changed')
+    await new Promise((resolve, reject) => {
+      recording.stream.end((error) => error ? reject(error) : resolve())
+    })
+    activeSessionRecordings.delete(sessionId)
+    const size = existsSync(recording.path) ? statSync(recording.path).size : recording.bytes
+    return db.completeTradingSessionRecording(sessionId, size)
+  })
 
   ipcMain.handle('plans:list', () => db.listTradePlans())
   ipcMain.handle('plans:add', (_e, plan) => db.addTradePlan(plan))
