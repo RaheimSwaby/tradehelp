@@ -9,3 +9,6 @@ dist/
 
 # Personal NinjaTrader strategy — never publish
 /ninjatrader/
+
+# Local demo/screenshot output — large binaries, not part of the app
+/artifacts/
