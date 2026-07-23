@@ -59,7 +59,11 @@
                               "category":  "public.app-category.finance",
                               "target":  "dmg",
                               "icon":  "build/icon.png",
-                              "identity":  null
+                              "hardenedRuntime":  true,
+                              "gatekeeperAssess":  false,
+                              "entitlements":  "build/entitlements.mac.plist",
+                              "entitlementsInherit":  "build/entitlements.mac.plist",
+                              "notarize":  true
                           },
                   "win":  {
                               "target":  "nsis",
