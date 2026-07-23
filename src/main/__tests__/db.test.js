@@ -126,9 +126,13 @@ describe('trades — delete', () => {
 
 describe('trading sessions', () => {
   it('tracks an active session and links trades inside its time window', () => {
+    // A trade's timestamp is local wall-clock ('2026-02-10 09:30') but a session stores
+    // real UTC instants, so the window has to be built from the same local basis as the
+    // trade. Hardcoded Z instants only bracketed 09:30 in US Eastern and failed in UTC.
+    const localInstant = (time) => new Date(`2026-02-10T${time}`).toISOString()
     const session = createTradingSession({
       id: '11111111-1111-4111-8111-111111111111',
-      startedAt: '2026-02-10T13:00:00.000Z'
+      startedAt: localInstant('08:00')
     })
     expect(session.status).toBe('active')
     expect(getActiveTradingSession()?.id).toBe(session.id)
@@ -140,7 +144,7 @@ describe('trading sessions', () => {
       pnl: 275
     }))
     const finished = finishTradingSession(session.id, {
-      endedAt: '2026-02-10T16:00:00.000Z',
+      endedAt: localInstant('11:00'),
       notes: 'Stayed selective.'
     })
     expect(finished).toMatchObject({
