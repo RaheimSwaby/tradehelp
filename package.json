@@ -1,6 +1,6 @@
 {
     "name":  "tradehelp",
-    "version":  "0.40.0",
+    "version":  "0.40.1",
     "description":  "Local-first trading journal with an offline AI coach (Electron + React + SQLite + Ollama)",
     "main":  "./out/main/index.js",
     "license":  "MIT",
@@ -45,7 +45,7 @@
                                       "provider":  "github",
                                       "owner":  "RaheimSwaby",
                                       "repo":  "tradehelp",
-                                      "releaseType":  "release"
+                                      "releaseType":  "draft"
                                   }
                               ],
                   "asarUnpack":  [
@@ -58,8 +58,14 @@
                   "mac":  {
                               "category":  "public.app-category.finance",
                               "target":  [
-                                             "dmg",
-                                             "zip"
+                                             {
+                                                 "target":  "dmg",
+                                                 "arch":  [ "universal" ]
+                                             },
+                                             {
+                                                 "target":  "zip",
+                                                 "arch":  [ "universal" ]
+                                             }
                                          ],
                               "icon":  "build/icon.png",
                               "hardenedRuntime":  true,
