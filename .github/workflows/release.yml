@@ -33,15 +33,30 @@ jobs:
           node-version: 20
       - run: npm ci
       - run: npm run build
+      # Windows and Linux get no Apple credentials at all — electron-builder also reads
+      # CSC_LINK for Windows signing, so handing it the Apple .p12 would fail that build.
       - name: Build & publish installer
+        if: matrix.os != 'macos-latest'
         run: npx electron-builder --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # macOS signing + notarization. CSC_LINK/CSC_KEY_PASSWORD are scoped to the
-          # mac runner on purpose: electron-builder also reads them for Windows signing,
-          # so leaking the Apple .p12 onto the Windows job would fail that build.
-          CSC_LINK: ${{ matrix.os == 'macos-latest' && secrets.MAC_CERT_P12_BASE64 || '' }}
-          CSC_KEY_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.MAC_CERT_PASSWORD || '' }}
+
+      - name: Build & publish installer (macOS, signed + notarised)
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        # A secret pasted through the GitHub UI can carry a trailing newline. Apple's
+        # notary service then rejects it with "HTTP 401 Invalid credentials", which reads
+        # like a wrong password and cost a release to track down — the credentials were
+        # correct, the newline was not. Strip CR/LF before electron-builder sees them.
+        run: |
+          export APPLE_ID="$(printf '%s' "$APPLE_ID" | tr -d '\r\n')"
+          export APPLE_APP_SPECIFIC_PASSWORD="$(printf '%s' "$APPLE_APP_SPECIFIC_PASSWORD" | tr -d '\r\n')"
+          export APPLE_TEAM_ID="$(printf '%s' "$APPLE_TEAM_ID" | tr -d '\r\n')"
+          npx electron-builder --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_LINK: ${{ secrets.MAC_CERT_P12_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
