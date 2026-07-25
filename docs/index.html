@@ -97,6 +97,8 @@
 
   footer{border-top:1px solid var(--line);padding:28px 0;color:var(--faint);font-size:13px;text-align:center}
   footer a{color:var(--dim)}
+  .share-link{background:none;border:none;padding:0;font:inherit;color:var(--accent);text-decoration:underline;cursor:pointer}
+  .share-link:hover{filter:brightness(1.1)}
 
   /* mobile handoff — shown only to phone visitors, who can't install a desktop app */
   .mobile-cta{display:none;max-width:520px;margin:22px auto 0;text-align:left;background:var(--surface);border:1px solid var(--accent);border-radius:12px;padding:16px}
@@ -319,6 +321,10 @@
              style="width:230px;max-width:100%;height:auto;vertical-align:middle" />
       </a>
     </p>
+    <p style="margin-bottom:14px">
+      Built by one trader, spread by word of mouth — know a trader who'd like it?
+      <button type="button" id="shareBtn" class="share-link">Share TradeHelp</button><span id="shareMsg" aria-live="polite" style="color:var(--up)"></span>
+    </p>
     <p style="margin-bottom:10px">
       <a href="vs-tradezella.html">TradeHelp vs TradeZella</a> ·
       <a href="prop-firm-trading-journal.html">Journal for prop-firm traders</a> ·
@@ -365,6 +371,27 @@
         })
         .catch(function () { msg.textContent = 'Network error — please try again.'; msg.className = 'note err'; })
         .then(function () { btn.disabled = false; btn.textContent = label; });
+    });
+  })();
+
+  // "Share TradeHelp" — native share sheet on mobile, copy-link on desktop.
+  (function () {
+    var btn = document.getElementById('shareBtn');
+    if (!btn) return;
+    var msg = document.getElementById('shareMsg');
+    var url = 'https://trade-help.app';
+    btn.addEventListener('click', function () {
+      if (window.goatcounter && window.goatcounter.count) window.goatcounter.count({ path: 'share', title: 'Share click', event: true });
+      if (navigator.share) {
+        navigator.share({ title: 'TradeHelp', text: 'A local-first trading journal with an offline AI coach.', url: url }).catch(function () {});
+      } else if (navigator.clipboard) {
+        navigator.clipboard.writeText(url).then(function () {
+          msg.textContent = ' Link copied!';
+          setTimeout(function () { msg.textContent = ''; }, 2500);
+        }).catch(function () { msg.textContent = ' ' + url; });
+      } else {
+        msg.textContent = ' ' + url;
+      }
     });
   })();
 
