@@ -86,6 +86,15 @@
   .privacy h2{margin-bottom:10px}
   .privacy p{color:var(--dim);max-width:620px;margin:0 auto}
 
+  /* newsletter capture */
+  .sub-form{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;max-width:440px;margin:0 auto}
+  .sub-input{flex:1;min-width:220px;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:11px 14px;color:var(--text);font-size:15px;font-family:inherit;transition:border-color .15s ease}
+  .sub-input:focus{outline:none;border-color:var(--accent)}
+  .sub-form .btn{white-space:nowrap}
+  #subMsg{min-height:18px;margin-top:12px}
+  #subMsg.ok{color:var(--up)}
+  #subMsg.err{color:var(--down)}
+
   footer{border-top:1px solid var(--line);padding:28px 0;color:var(--faint);font-size:13px;text-align:center}
   footer a{color:var(--dim)}
 
@@ -286,6 +295,20 @@
   </div>
 </section>
 
+<section id="stay">
+  <div class="wrap">
+    <div class="privacy" style="max-width:560px;margin:0 auto">
+      <h2>Not ready to install?</h2>
+      <p style="margin:10px auto 20px">Get one email: a 5-minute guide to setting up the offline AI coach, plus new features as they ship. No spam, unsubscribe anytime — and your trades are never part of it.</p>
+      <form id="subscribeForm" class="sub-form" novalidate>
+        <input type="email" id="subEmail" class="sub-input" placeholder="you@email.com" autocomplete="email" required aria-label="Email address" />
+        <button type="submit" class="btn" id="subBtn">Keep me posted</button>
+      </form>
+      <p class="note" id="subMsg" role="status" aria-live="polite"></p>
+    </div>
+  </div>
+</section>
+
 <footer>
   <div class="wrap">
     <p style="margin-bottom:18px">
@@ -310,6 +333,41 @@
 </footer>
 
 <script>
+  // Newsletter signup → Loops public newsletter-form endpoint (write-only, no secret key).
+  // TODO: replace LOOPS_FORM_ID with the id from the Loops form's embed snippet before going live.
+  (function () {
+    var LOOPS_FORM_ID = 'LOOPS_FORM_ID';
+    var form = document.getElementById('subscribeForm');
+    if (!form || LOOPS_FORM_ID === 'LOOPS_FORM_ID') return; // stays inert until the real id is set
+    var email = document.getElementById('subEmail');
+    var btn = document.getElementById('subBtn');
+    var msg = document.getElementById('subMsg');
+    var re = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var val = (email.value || '').trim();
+      if (!re.test(val)) { msg.textContent = 'Please enter a valid email.'; msg.className = 'note err'; return; }
+      var label = btn.textContent;
+      btn.disabled = true; btn.textContent = 'Sending…'; msg.textContent = ''; msg.className = 'note';
+      fetch('https://app.loops.so/api/newsletter-form/' + LOOPS_FORM_ID, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'email=' + encodeURIComponent(val)
+      })
+        .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, d: d }; }); })
+        .then(function (res) {
+          if (res.ok && res.d.success !== false) {
+            msg.textContent = 'Thanks — check your inbox to confirm.'; msg.className = 'note ok'; form.reset();
+            if (window.goatcounter && window.goatcounter.count) window.goatcounter.count({ path: 'subscribe', title: 'Newsletter signup', event: true });
+          } else {
+            msg.textContent = (res.d && res.d.message) || 'Something went wrong — please try again.'; msg.className = 'note err';
+          }
+        })
+        .catch(function () { msg.textContent = 'Network error — please try again.'; msg.className = 'note err'; })
+        .then(function () { btn.disabled = false; btn.textContent = label; });
+    });
+  })();
+
   // Progressive scroll-reveal: gate on a .js class so the page is fully visible if this never runs.
   (function () {
     var root = document.documentElement;
