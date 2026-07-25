@@ -336,7 +336,7 @@
   // Newsletter signup → Loops public newsletter-form endpoint (write-only, no secret key).
   // TODO: replace LOOPS_FORM_ID with the id from the Loops form's embed snippet before going live.
   (function () {
-    var LOOPS_FORM_ID = 'LOOPS_FORM_ID';
+    var LOOPS_FORM_ID = 'cms0jsnwy0tul0jzy3jdp0zii';
     var form = document.getElementById('subscribeForm');
     if (!form || LOOPS_FORM_ID === 'LOOPS_FORM_ID') return; // stays inert until the real id is set
     var email = document.getElementById('subEmail');
@@ -352,7 +352,7 @@
       fetch('https://app.loops.so/api/newsletter-form/' + LOOPS_FORM_ID, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'email=' + encodeURIComponent(val)
+        body: 'userGroup=&mailingLists=&email=' + encodeURIComponent(val)
       })
         .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, d: d }; }); })
         .then(function (res) {
