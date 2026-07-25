@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { Plus, Trash2, Upload, Paperclip, X, Pencil, ImagePlus, Video, ChevronLeft, ChevronRight, Search, CalendarOff, Check, Coffee, Bookmark, ArrowUp, ArrowDown, Inbox } from 'lucide-react'
+import { Plus, Trash2, Upload, Paperclip, X, Pencil, ImagePlus, Video, ChevronLeft, ChevronRight, Search, CalendarOff, Check, Coffee, Bookmark, ArrowUp, ArrowDown, Inbox, RotateCcw } from 'lucide-react'
 import { T, mono, inputStyle } from '../theme.js'
 import { fmt$, fmtN, nowLocalInput, parseLocal, holdMs, fmtDuration, EMOTIONS, SETUPS, WIN_REASONS, LOSS_REASONS, SELF_GRADES, pad2, MONTHS, downscale, fileToDataUrl } from '../utils.js'
 import { Field, Panel, GradeChip } from '../components/Shared.jsx'
@@ -19,6 +19,7 @@ const NO_TRADE_REASONS = [
   'Other'
 ]
 const TIMEFRAMES = ['15s', '30s', '1m', '2m', '3m', '5m', '10m', '15m', '30m', '1h', '2h', '4h', 'Daily', 'Weekly']
+const DELETE_UNDO_SECONDS = 15
 
 function parseList(v) { try { const a = JSON.parse(v || '[]'); return Array.isArray(a) ? a : [] } catch { return [] } }
 function formatFileSize(value) {
@@ -99,25 +100,34 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
   // Deleting is deferred while the undo toast is up — the DB delete unlinks
   // screenshots and recordings, so committing early would make undo lossy.
   const [pendingDelete, setPendingDelete] = useState(null) // { id, symbol }
+  const [undoSeconds, setUndoSeconds] = useState(0)
   const deleteTimerRef = useRef(null)
   const pendingRef = useRef(null)
   function requestDelete(t) {
     if (pendingRef.current) commitDelete() // a second delete flushes the first
     pendingRef.current = t.id
     setPendingDelete({ id: t.id, symbol: t.symbol })
-    deleteTimerRef.current = setTimeout(commitDelete, 6000)
+    setUndoSeconds(DELETE_UNDO_SECONDS)
+    deleteTimerRef.current = setTimeout(commitDelete, DELETE_UNDO_SECONDS * 1000)
   }
   function commitDelete() {
     clearTimeout(deleteTimerRef.current)
     if (pendingRef.current) onRemove(pendingRef.current)
     pendingRef.current = null
     setPendingDelete(null)
+    setUndoSeconds(0)
   }
   function undoDelete() {
     clearTimeout(deleteTimerRef.current)
     pendingRef.current = null
     setPendingDelete(null)
+    setUndoSeconds(0)
   }
+  useEffect(() => {
+    if (!pendingDelete) return undefined
+    const timer = setInterval(() => setUndoSeconds((current) => Math.max(0, current - 1)), 1000)
+    return () => clearInterval(timer)
+  }, [pendingDelete])
   // Leaving the tab (unmount) commits any pending delete so it isn't lost.
   useEffect(() => () => { if (pendingRef.current) { clearTimeout(deleteTimerRef.current); onRemove(pendingRef.current) } }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -753,9 +763,14 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
 
       <div className="rounded-xl overflow-hidden" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
         <div className="px-4 py-3" style={{ borderBottom: `1px solid ${T.line}` }}>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-sm font-semibold">Trade history <span style={{ color: T.faint }}>· {filtered.length === trades.length ? trades.length : `${filtered.length} of ${trades.length}`}</span></span>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <button type="button" onClick={undoDelete} disabled={!pendingDelete} title={pendingDelete ? `Restore ${pendingDelete.symbol}` : 'No recently deleted trade'}
+                className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-md"
+                style={{ background: T.surface2, color: pendingDelete ? T.accent : T.faint, border: `1px solid ${T.line}`, opacity: pendingDelete ? 1 : 0.55, cursor: pendingDelete ? 'pointer' : 'not-allowed' }}>
+                <RotateCcw size={13} /> Undo delete{pendingDelete ? ` (${undoSeconds}s)` : ''}
+              </button>
               <button type="button" onClick={() => setImportCenterOpen(true)} className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-md" style={{ background: T.surface2, color: importInboxCount ? T.accent : T.dim, border: `1px solid ${T.line}` }}><Inbox size={13} /> Inbox{importInboxCount ? ` ${importInboxCount}` : ''}</button>
               <button type="button" onClick={() => { setPendingImport(null); setImportOpen(true) }} className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-md" style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}` }}><Upload size={13} /> Import CSV</button>
             </div>
@@ -881,11 +896,11 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
       {annotating && <AnnotateModal src={annotating.dataUrl} onClose={() => setAnnotating(null)} onSave={(dataUrl, labels) => { setImages((p) => p.map((im) => (im.tmpId === annotating.tmpId ? { ...im, dataUrl, labels } : im))); setAnnotating(null) }} />}
       {noTradeOpen && <NoTradeModal emotions={allEmotions} onClose={() => setNoTradeOpen(false)} onSave={async (entry) => { await onAddDayLog?.(entry); setNoTradeOpen(false) }} />}
       {pendingDelete && (
-        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[80] flex items-center gap-3 rounded-lg px-4 py-2.5 text-sm shadow-lg"
+        <div role="status" aria-live="polite" className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[80] flex items-center gap-3 rounded-lg px-4 py-2.5 text-sm shadow-lg"
           style={{ background: T.surface, border: `1px solid ${T.line}`, color: T.text }}>
           <Trash2 size={14} style={{ color: T.down }} />
-          <span>Deleted <span className="font-semibold">{pendingDelete.symbol}</span></span>
-          <button type="button" onClick={undoDelete} className="font-semibold px-2 py-0.5 rounded" style={{ color: T.accent, border: `1px solid ${T.line}` }}>Undo</button>
+          <span><span className="font-semibold">{pendingDelete.symbol}</span> removed</span>
+          <button type="button" onClick={undoDelete} className="font-semibold px-2 py-0.5 rounded" style={{ color: T.accent, border: `1px solid ${T.line}` }}>Undo delete ({undoSeconds}s)</button>
         </div>
       )}
     </div>
