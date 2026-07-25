@@ -131,6 +131,7 @@
   .frame{position:relative;min-height:140px}
   .frame .ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;color:var(--faint);font-size:13px;font-family:ui-monospace,Consolas,monospace}
   .frame img{position:relative;z-index:1;display:block;width:100%;height:auto;cursor:zoom-in}
+  .frame video{position:relative;z-index:1;display:block;width:100%;height:auto;background:#000}
   .frame.has-img .ph{display:none}
   .hero-shot{max-width:980px;margin:26px auto 0}
   .shots-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:18px}
@@ -190,10 +191,13 @@
 
 <div class="wrap">
   <figure class="shot hero-shot">
-    <div class="bar"><i></i><i></i><i></i><span class="t">TradeHelp — Dashboard</span></div>
+    <div class="bar"><i></i><i></i><i></i><span class="t">TradeHelp — Full tour</span></div>
     <div class="frame">
-      <span class="ph">shots/dashboard.png</span>
-      <img src="shots/dashboard.png" alt="TradeHelp dashboard — AI coach brief, net P&amp;L, win rate, profit factor, the leak finder and a P&amp;L calendar" loading="lazy" onload="this.parentNode.classList.add('has-img')" onerror="this.remove()" />
+      <video id="tourVideo" controls preload="metadata" playsinline poster="shots/dashboard.png"
+             aria-label="TradeHelp full product tour">
+        <source src="tour.mp4" type="video/mp4" />
+        <a href="tour.mp4">Watch the TradeHelp tour</a> (your browser can't play the embedded video).
+      </video>
     </div>
   </figure>
 </div>
@@ -392,6 +396,18 @@
       } else {
         msg.textContent = ' ' + url;
       }
+    });
+  })();
+
+  // Count the first play of the tour video as a GoatCounter event.
+  (function () {
+    var v = document.getElementById('tourVideo');
+    if (!v) return;
+    var counted = false;
+    v.addEventListener('play', function () {
+      if (counted) return;
+      counted = true;
+      if (window.goatcounter && window.goatcounter.count) window.goatcounter.count({ path: 'video-play', title: 'Promo video play', event: true });
     });
   })();
 
