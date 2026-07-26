@@ -741,14 +741,14 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
             style={{ background: T.accent, color: '#1A1306' }}>
             <MessagesSquare size={16} /> Join our Discord
           </button>
-          <button type="button" onClick={() => window.api.openExternal('https://instagram.com/tradehelp.io')}
+          <button type="button" onClick={() => window.api.openExternal('https://instagram.com/tradehelp.app')}
             className="rounded-md px-3 py-2.5 text-sm font-semibold flex items-center justify-center gap-2"
             style={{ background: T.surface2, color: T.text, border: `1px solid ${T.line}` }}>
             <Instagram size={16} style={{ color: T.accent }} /> Instagram
           </button>
         </div>
         <p className="mt-3 text-xs" style={{ color: T.faint }}>
-          Join the <span style={{ color: T.accent }}>Discord</span> to report bugs, request features and talk trades — or DM <span style={{ color: T.accent }}>@tradehelp.io</span> on Instagram. A quick feedback form is coming soon.
+          Join the <span style={{ color: T.accent }}>Discord</span> to report bugs, request features and talk trades — or DM <span style={{ color: T.accent }}>@tradehelp.app</span> on Instagram. A quick feedback form is coming soon.
         </p>
       </Panel>
     </div>
