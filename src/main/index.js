@@ -405,6 +405,9 @@ function registerIpc() {
   ipcMain.handle('payout:list', () => db.listPayouts())
   ipcMain.handle('payout:add', (_e, entry) => db.addPayout(entry))
   ipcMain.handle('payout:delete', (_e, id) => db.deletePayout(id))
+  ipcMain.handle('prop-expense:list', () => db.listPropExpenses())
+  ipcMain.handle('prop-expense:add', (_e, entry) => db.addPropExpense(entry))
+  ipcMain.handle('prop-expense:delete', (_e, id) => db.deletePropExpense(id))
 
   ipcMain.handle('license:status', () => license.status(db))
   ipcMain.handle('license:activate', (_e, key) => license.activate(db, key))

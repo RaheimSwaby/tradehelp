@@ -34,6 +34,7 @@ import {
   createTradingSession, getActiveTradingSession, getTradingSession, listTradingSessions,
   beginTradingSessionRecording, completeTradingSessionRecording, discardTradingSessionRecording,
   finishTradingSession,
+  addPropExpense, listPropExpenses, deletePropExpense,
   getAllData, restoreData,
 } from '../db.js'
 
@@ -329,6 +330,28 @@ describe('images — lazy metadata', () => {
   })
 })
 
+describe('prop expenses — add / list / delete', () => {
+  it('stores signed account expenses and credits', () => {
+    const accountId = `prop-${Date.now()}`
+    const expenses = addPropExpense({ accountId, date: '2026-07-25', amount: 49.99, category: 'evaluation', note: 'Challenge fee' })
+    const charge = expenses.find((expense) => expense.accountId === accountId)
+
+    expect(charge).toMatchObject({
+      accountId,
+      date: '2026-07-25',
+      amount: 49.99,
+      category: 'evaluation',
+      note: 'Challenge fee'
+    })
+
+    const withCredit = addPropExpense({ accountId, date: '2026-07-26', amount: -10, category: 'refund', note: 'Discount credit' })
+    expect(withCredit.find((expense) => expense.accountId === accountId && expense.category === 'refund')?.amount).toBe(-10)
+
+    deletePropExpense(charge.id)
+    expect(listPropExpenses().some((expense) => expense.id === charge.id)).toBe(false)
+  })
+})
+
 // ── export / import ───────────────────────────────────────────────────────────
 
 describe('getAllData — export', () => {
@@ -343,6 +366,7 @@ describe('getAllData — export', () => {
   it('includes trades array and goals object', () => {
     const data = getAllData()
     expect(Array.isArray(data.trades)).toBe(true)
+    expect(Array.isArray(data.propExpenses)).toBe(true)
     expect(data.goals).toMatchObject({ weekly: expect.any(Number), monthly: expect.any(Number) })
   })
 
@@ -357,5 +381,21 @@ describe('getAllData — export', () => {
     expect(restored).toBeDefined()
     expect(restored.symbol).toBe('QQQ')
     expect(restored.pnl).toBe(123)
+  })
+
+  it('round-trips prop expenses through restoreData', () => {
+    const accountId = `backup-prop-${Date.now()}`
+    const added = addPropExpense({ accountId, date: '2026-07-25', amount: 129, category: 'activation' })
+      .find((expense) => expense.accountId === accountId)
+    const snapshot = getAllData()
+
+    deletePropExpense(added.id)
+    restoreData(snapshot)
+
+    expect(listPropExpenses().find((expense) => expense.id === added.id)).toMatchObject({
+      accountId,
+      amount: 129,
+      category: 'activation'
+    })
   })
 })

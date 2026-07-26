@@ -165,6 +165,7 @@ export default function App() {
   const [playbook, setPlaybook] = useState([])
   const [dayLogs, setDayLogs] = useState([])
   const [payouts, setPayouts] = useState([])
+  const [propExpenses, setPropExpenses] = useState([])
   const [tradePlans, setTradePlans] = useState([])
   const [commitments, setCommitments] = useState([])
   const [instrumentProfiles, setInstrumentProfiles] = useState([])
@@ -222,6 +223,7 @@ export default function App() {
       if (window.api.listPlaybook) setPlaybook(await window.api.listPlaybook())
       if (window.api.listDayLogs) setDayLogs(await window.api.listDayLogs())
       if (window.api.listPayouts) setPayouts(await window.api.listPayouts())
+      if (window.api.listPropExpenses) setPropExpenses(await window.api.listPropExpenses())
       if (window.api.listTradePlans) setTradePlans(await window.api.listTradePlans())
       if (window.api.listCommitments) setCommitments(await window.api.listCommitments())
       if (window.api.listInstrumentProfiles) setInstrumentProfiles(await window.api.listInstrumentProfiles())
@@ -402,15 +404,18 @@ export default function App() {
   async function rollbackImport(id) { if (hasApi) { const result = await window.api.rollbackImportBatch(id); await refreshWorkflow(); return result } }
   async function reloadAll() {
     if (!hasApi) return
-    const [nextTrades, nextGoals, nextReviews, nextSettings, nextPlans, nextCommitments, nextProfiles, nextSearches] = await Promise.all([
+    const [nextTrades, nextGoals, nextReviews, nextSettings, nextPlans, nextCommitments, nextProfiles, nextSearches, nextPayouts, nextPropExpenses] = await Promise.all([
       window.api.listTrades(), window.api.getGoals(), window.api.getReviews(), window.api.getSettings(),
       window.api.listTradePlans ? window.api.listTradePlans() : [],
       window.api.listCommitments ? window.api.listCommitments() : [],
       window.api.listInstrumentProfiles ? window.api.listInstrumentProfiles() : [],
-      window.api.listSavedSearches ? window.api.listSavedSearches() : []
+      window.api.listSavedSearches ? window.api.listSavedSearches() : [],
+      window.api.listPayouts ? window.api.listPayouts() : [],
+      window.api.listPropExpenses ? window.api.listPropExpenses() : []
     ])
     setTrades(nextTrades); setGoals(nextGoals); setReviews(nextReviews); setSettings(nextSettings)
     setTradePlans(nextPlans); setCommitments(nextCommitments); setInstrumentProfiles(nextProfiles); setSavedSearches(nextSearches)
+    setPayouts(nextPayouts); setPropExpenses(nextPropExpenses)
   }
   async function saveGoals(g) { if (hasApi) setGoals(await window.api.setGoals(g)) }
   async function saveReview(period, text) { if (hasApi) setReviews(await window.api.setReview(period, text)) }
@@ -467,6 +472,8 @@ export default function App() {
 
   async function addPayout(e) { if (hasApi && window.api.addPayout) setPayouts(await window.api.addPayout(e)) }
   async function deletePayout(id) { if (hasApi && window.api.deletePayout) setPayouts(await window.api.deletePayout(id)) }
+  async function addPropExpense(e) { if (hasApi && window.api.addPropExpense) setPropExpenses(await window.api.addPropExpense(e)) }
+  async function deletePropExpense(id) { if (hasApi && window.api.deletePropExpense) setPropExpenses(await window.api.deletePropExpense(id)) }
 
   function seenNudges() {
     try { const arr = JSON.parse(settings?.easterEggSeen || '[]'); if (Array.isArray(arr)) return arr } catch {}
@@ -847,7 +854,7 @@ export default function App() {
           <div key={tab} className="th-cinematic">
             {tab === 'journal' && <Journal trades={trades} onAdd={addTrade} onUpdate={updateTrade} onRemove={removeTrade} onNotes={setNotesView} onImport={importTrades} onRollbackImport={rollbackImport} accounts={propFirmAccounts} profiles={instrumentProfiles} savedSearches={savedSearches} onAddSavedSearch={addSavedSearch} onUpdateSavedSearch={updateSavedSearch} onDeleteSavedSearch={deleteSavedSearch} onRefreshSavedSearches={refreshSavedSearches} settings={settings} onSaveSettings={saveSettings} dayLogs={dayLogs} onAddDayLog={addDayLog} onDeleteDayLog={deleteDayLog} drilldown={journalDrilldown} onConsumeDrilldown={() => setJournalDrilldown(null)} />}
             {tab === 'trade' && <TradeModeTab settings={settings} onSave={saveSettings} rules={rules} live={tradeMode} arming={goTransition === 'arming'} todayNet={todayNet} todayCount={todayTrades.length} weekNet={weekNet} goal={dailyGoal} maxLoss={maxLoss} onStart={startDay} onEnd={endSession} session={activeSession} recordingState={recordingState} elapsed={sessionElapsed} sessions={tradingSessions} plans={tradePlans} trades={trades} accounts={propFirmAccounts} playbook={playbook} profiles={instrumentProfiles} planPrefill={planPrefill} onConsumePlanPrefill={() => setPlanPrefill(null)} commitment={activeCommitment} onAddPlan={addTradePlan} onUpdatePlan={updateTradePlan} onDeletePlan={deleteTradePlan} />}
-            {tab === 'propfirm' && <PropFirm trades={trades} accounts={propFirmAccounts} onSave={savePropFirmAccounts} settings={settings} onSaveSettings={saveSettings} payouts={payouts} onAddPayout={addPayout} onDeletePayout={deletePayout} />}
+            {tab === 'propfirm' && <PropFirm trades={trades} accounts={propFirmAccounts} onSave={savePropFirmAccounts} settings={settings} onSaveSettings={saveSettings} payouts={payouts} onAddPayout={addPayout} onDeletePayout={deletePayout} expenses={propExpenses} onAddExpense={addPropExpense} onDeleteExpense={deletePropExpense} />}
             {tab === 'dashboard' && <Dashboard stats={stats} trades={trades} accounts={propFirmAccounts} settings={settings} journalData={{ reviews, playbook, dayLogs, goals, payouts }} payouts={payouts} plans={tradePlans} commitments={commitments} pnlFeedback={pnlFeedback} onAddCommitment={addCommitment} onUpdateCommitment={updateCommitment} onDeleteCommitment={deleteCommitment} onSaveSettings={saveSettings} onOpenCoach={() => setTab('coach')} onOpenTrade={setNotesView} onTimingDrilldown={openTimingJournal} personalClock={sessionClock} personalSchedule={personalSchedule} now={now} />}
             {tab === 'psych' && <Psychology stats={stats} />}
             {tab === 'rating' && <Rating trades={trades} stats={stats} achievements={achievements} unlockedAt={unlockedAt} settings={settings} onSave={saveSettings} payouts={payouts} />}

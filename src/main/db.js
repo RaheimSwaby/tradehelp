@@ -218,6 +218,16 @@ export function initDb() {
       createdAt TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_payouts_account ON payouts(accountId);
+    CREATE TABLE IF NOT EXISTS prop_expenses (
+      id TEXT PRIMARY KEY,
+      accountId TEXT NOT NULL,
+      date TEXT NOT NULL,
+      amount REAL DEFAULT 0,
+      category TEXT DEFAULT 'other',
+      note TEXT DEFAULT '',
+      createdAt TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_prop_expenses_account ON prop_expenses(accountId);
     CREATE TABLE IF NOT EXISTS import_batches (
       id TEXT PRIMARY KEY,
       sourceId TEXT DEFAULT '',
@@ -1584,7 +1594,7 @@ export function getAllData() {
   const settings = getSettings()
   for (const k of SECRET_KEYS) delete settings[k]
   return {
-    app: 'tradehelp', version: 6, exportedAt: new Date().toISOString(),
+    app: 'tradehelp', version: 7, exportedAt: new Date().toISOString(),
     trades: db.prepare('SELECT * FROM trades').all(),
     tradeFills: db.prepare(`SELECT id,tradeId,kind,side,quantity,price,fee,filledAt,sequence,sourceRef
       FROM trade_fills ORDER BY tradeId,sequence,filledAt,rowid`).all(),
@@ -1599,6 +1609,7 @@ export function getAllData() {
     playbook: listPlaybook(),
     dayLogs: listDayLogs(),
     payouts: listPayouts(),
+    propExpenses: listPropExpenses(),
     importBatches: listImportBatches(),
     importBatchTrades: db.prepare('SELECT batchId,tradeId,sourceRow FROM import_batch_trades ORDER BY batchId,sourceRow').all(),
     tradingSessions: db.prepare(`SELECT id,startedAt,endedAt,status,sourceLabel,
@@ -1613,7 +1624,7 @@ export function getAllData() {
 
 export function restoreData(data) {
   const version = Number(data?.version || 3)
-  if (![3, 4, 5, 6].includes(version)) throw new Error('Unsupported backup version')
+  if (![3, 4, 5, 6, 7].includes(version)) throw new Error('Unsupported backup version')
   const tx = db.transaction((d) => {
     if (Array.isArray(d.trades)) {
       const ins = db.prepare(`INSERT OR REPLACE INTO trades
@@ -1799,6 +1810,18 @@ export function restoreData(data) {
         })
       }
     }
+    if (Array.isArray(d.propExpenses)) {
+      const ins = db.prepare(`INSERT OR REPLACE INTO prop_expenses (id,accountId,date,amount,category,note,createdAt)
+        VALUES (@id,@accountId,@date,@amount,@category,@note,@createdAt)`)
+      for (const expense of d.propExpenses) {
+        ins.run({
+          id: String(expense.id || randomUUID()), accountId: String(expense.accountId || ''),
+          date: String(expense.date || '').slice(0, 10), amount: num(expense.amount),
+          category: String(expense.category || 'other'), note: String(expense.note || ''),
+          createdAt: String(expense.createdAt || new Date().toISOString())
+        })
+      }
+    }
     if (Array.isArray(d.importBatchTrades)) {
       const batchExists = db.prepare('SELECT 1 FROM import_batches WHERE id = ?')
       const tradeExists = db.prepare('SELECT 1 FROM trades WHERE id = ?')
@@ -1853,7 +1876,7 @@ export function restoreData(data) {
     trades: listTrades(), tradeFills: db.prepare('SELECT * FROM trade_fills ORDER BY tradeId,sequence,filledAt,rowid').all(),
     instrumentProfiles: listInstrumentProfiles(), savedSearches: listSavedSearches(), tradePlans: listTradePlans(),
     commitments: listCoachCommitments(), commitmentResults: db.prepare('SELECT * FROM commitment_results').all(),
-    playbook: listPlaybook(), dayLogs: listDayLogs(), payouts: listPayouts(), importBatches: listImportBatches(),
+    playbook: listPlaybook(), dayLogs: listDayLogs(), payouts: listPayouts(), propExpenses: listPropExpenses(), importBatches: listImportBatches(),
     tradingSessions: listTradingSessions(100),
     goals: getGoals(), reviews: getReviews(), settings: getSettings()
   }
@@ -1954,6 +1977,36 @@ export function addPayout(e) {
 export function deletePayout(id) {
   db.prepare('DELETE FROM payouts WHERE id = ?').run(String(id))
   return listPayouts()
+}
+
+// ───── Prop firm expenses ─────
+
+export function listPropExpenses() {
+  return db.prepare('SELECT * FROM prop_expenses ORDER BY date DESC, createdAt DESC').all()
+}
+
+export function addPropExpense(e = {}) {
+  const accountId = String(e.accountId || '').trim()
+  const amount = num(e.amount)
+  if (!accountId) throw new Error('Choose a prop account')
+  if (!amount) throw new Error('Expense amount must be non-zero')
+  const row = {
+    id: randomUUID(),
+    accountId,
+    date: String(e.date || new Date().toISOString().slice(0, 10)).slice(0, 10),
+    amount,
+    category: String(e.category || 'other'),
+    note: String(e.note || '').trim(),
+    createdAt: new Date().toISOString()
+  }
+  db.prepare(`INSERT INTO prop_expenses (id, accountId, date, amount, category, note, createdAt)
+    VALUES (@id, @accountId, @date, @amount, @category, @note, @createdAt)`).run(row)
+  return listPropExpenses()
+}
+
+export function deletePropExpense(id) {
+  db.prepare('DELETE FROM prop_expenses WHERE id = ?').run(String(id))
+  return listPropExpenses()
 }
 
 // Daily snapshot of the SQLite file into userData/backups, keeping the last 7.

@@ -1,10 +1,22 @@
 import React, { useState, useMemo } from 'react'
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, ReferenceLine, Tooltip } from 'recharts'
-import { CheckSquare, Square, Plus, Trash2, Wallet } from 'lucide-react'
+import { CheckSquare, Square, Plus, Trash2, Wallet, ReceiptText } from 'lucide-react'
 import { T, mono, inputStyle } from '../theme.js'
 import { fmt$, fmtN, clamp, PROP_PRESETS } from '../utils.js'
 import { computePropFirm, computeStats } from '../stats.js'
+import { computePropCash } from '../propCash.js'
 import { Stat, Panel, Field } from '../components/Shared.jsx'
+
+const EXPENSE_CATEGORIES = [
+  ['evaluation', 'Evaluation / account fee'],
+  ['activation', 'Activation fee'],
+  ['reset', 'Reset fee'],
+  ['subscription', 'Monthly subscription'],
+  ['platform', 'Platform / data fee'],
+  ['refund', 'Refund / credit'],
+  ['other', 'Other expense']
+]
+const EXPENSE_LABELS = Object.fromEntries(EXPENSE_CATEGORIES)
 
 // Per-account or all-time payout/withdrawal log. accountId fixed = scoped to one account.
 function PayoutPanel({ payouts = [], accounts = [], accountId, onAdd, onDelete, noun = 'payout' }) {
@@ -128,7 +140,7 @@ export function PropFirmForm({ account, onSave, onCancel, canCancel }) {
   )
 }
 
-export function AccountCard({ acc, r, tight, payout = 0, onClick }) {
+export function AccountCard({ acc, r, tight, cash, onClick }) {
   const status = r.status === 'passed' ? { label: 'PASSED', color: T.up } : r.status === 'failed' ? { label: 'FAILED', color: T.down } : { label: 'ACTIVE', color: T.accent }
   const ddPct = r.maxDD > 0 ? r.ddBuffer / r.maxDD : 1
   const ddColor = r.floorBreached ? T.down : ddPct > 0.5 ? T.up : ddPct > 0.2 ? T.accent : T.down
@@ -140,7 +152,7 @@ export function AccountCard({ acc, r, tight, payout = 0, onClick }) {
         <span className="text-sm font-semibold">{acc.label || 'Account'}</span>
         <span className="text-xs px-1.5 py-0.5 rounded" style={{ color: status.color, border: `1px solid ${status.color}` }}>{status.label}</span>
       </div>
-      <div className="text-xs mt-0.5" style={{ color: T.faint }}>{fmt$(r.start)} · {acc.scope === 'own' ? 'tagged trades' : 'copy-trade'}{Number(acc.sizeScale) !== 1 ? ` · ${acc.sizeScale}×` : ''}{payout > 0 ? ` · ${fmt$(payout)} paid out` : ''}</div>
+      <div className="text-xs mt-0.5" style={{ color: T.faint }}>{fmt$(r.start)} · {acc.scope === 'own' ? 'tagged trades' : 'copy-trade'}{Number(acc.sizeScale) !== 1 ? ` · ${acc.sizeScale}×` : ''}</div>
       <div className="grid grid-cols-2 gap-2 mt-3 text-xs">
         <div><div style={{ color: T.faint }}>Net P&L</div><div style={{ ...mono, color: r.netProfit >= 0 ? T.up : T.down }}>{fmt$(r.netProfit)} / {fmt$(r.target)}</div></div>
         <div><div style={{ color: T.faint }}>DD cushion</div><div style={{ ...mono, color: ddColor }}>{fmt$(r.ddBuffer)}</div></div>
@@ -155,13 +167,19 @@ export function AccountCard({ acc, r, tight, payout = 0, onClick }) {
           <div className="h-1.5 rounded-full overflow-hidden" style={{ background: T.surface2 }}><div className="h-full" style={{ width: `${clamp(ddPct, 0, 1) * 100}%`, background: ddColor, transition: 'width .4s' }} /></div>
         </div>
       </div>
+      <div className="grid grid-cols-3 gap-2 mt-3 pt-2 text-[10px]" style={{ borderTop: `1px solid ${T.line}` }}>
+        <div><div style={{ color: T.faint }}>Spent</div><div style={{ ...mono, color: T.down }}>{fmt$(cash?.spent || 0)}</div></div>
+        <div><div style={{ color: T.faint }}>Payouts</div><div style={{ ...mono, color: T.up }}>{fmt$(cash?.payouts || 0)}</div></div>
+        <div><div style={{ color: T.faint }}>Cash net</div><div style={{ ...mono, color: (cash?.net || 0) >= 0 ? T.up : T.down }}>{fmt$(cash?.net || 0)}</div></div>
+      </div>
       {tight && <div className="text-xs mt-2" style={{ color: T.down }}>⚠ tightest account — your real limit today</div>}
     </button>
   )
 }
 
-export function PropFirmDetail({ trades, acc, onBack, onEdit, onDelete, payouts = [], accounts = [], onAddPayout, onDeletePayout }) {
+export function PropFirmDetail({ trades, acc, onBack, onEdit, onDelete, payouts = [], accounts = [], onAddPayout, onDeletePayout, expenses = [], onAddExpense, onDeleteExpense }) {
   const r = computePropFirm(trades, acc)
+  const cash = computePropCash(payouts, expenses).byAccount[acc.id] || computePropCash([], []).overall
   const ddPct = r.maxDD > 0 ? r.ddBuffer / r.maxDD : 1
   const ddColor = r.floorBreached ? T.down : ddPct > 0.5 ? T.up : ddPct > 0.2 ? T.accent : T.down
   const tgtPct = r.target > 0 ? r.netProfit / r.target : 0
@@ -205,7 +223,18 @@ export function PropFirmDetail({ trades, acc, onBack, onEdit, onDelete, payouts 
           <Req ok={!r.breached} label="No daily-loss or drawdown breach" />
         </div>
       </Panel>
-      <PayoutPanel payouts={payouts} accounts={accounts} accountId={acc.id} onAdd={onAddPayout} onDelete={onDeletePayout} />
+      <Panel title="Account cash profitability" right={<span className="text-xs" style={{ color: cash.net >= 0 ? T.up : T.down }}>{cash.net >= 0 ? 'Net positive' : 'Cost not recovered'}</span>}>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Stat label="Spent" value={fmt$(cash.spent)} tone={cash.spent > 0 ? 'down' : 'none'} />
+          <Stat label="Payouts" value={fmt$(cash.payouts)} tone={cash.payouts > 0 ? 'up' : 'none'} />
+          <Stat label="Net cash" value={fmt$(cash.net)} tone={cash.net >= 0 ? 'up' : 'down'} />
+          <Stat label="ROI" value={cash.roi == null ? '—' : `${cash.roi >= 0 ? '+' : ''}${fmtN(cash.roi, 1)}%`} sub={cash.recovery == null ? 'log spending first' : `${fmtN(cash.recovery, 1)}% recovered`} />
+        </div>
+      </Panel>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <PayoutPanel payouts={payouts} accounts={accounts} accountId={acc.id} onAdd={onAddPayout} onDelete={onDeletePayout} />
+        <ExpensePanel expenses={expenses} accounts={accounts} accountId={acc.id} onAdd={onAddExpense} onDelete={onDeleteExpense} />
+      </div>
       {r.curve.length > 1 && (
         <Panel title="Balance vs. drawdown floor">
           <ResponsiveContainer width="100%" height={220}>
@@ -224,22 +253,27 @@ export function PropFirmDetail({ trades, acc, onBack, onEdit, onDelete, payouts 
   )
 }
 
-function PropAccounts({ trades, accounts, onSave, payouts = [], onAddPayout, onDeletePayout }) {
+function PropAccounts({ trades, accounts, onSave, payouts = [], onAddPayout, onDeletePayout, expenses = [], onAddExpense, onDeleteExpense }) {
   const [view, setView] = useState('overview')
   function upsert(acc) {
     const next = accounts.some((a) => a.id === acc.id) ? accounts.map((a) => (a.id === acc.id ? acc : a)) : [...accounts, acc]
     onSave(next); setView('overview')
   }
   function remove(id) { onSave(accounts.filter((a) => a.id !== id)); setView('overview') }
-  const payoutByAccount = {}
-  for (const p of payouts) payoutByAccount[p.accountId] = (payoutByAccount[p.accountId] || 0) + (Number(p.amount) || 0)
+  const cash = computePropCash(payouts, expenses)
 
   if (view === 'add') return <PropFirmForm onSave={upsert} onCancel={() => setView('overview')} canCancel={accounts.length > 0} />
   if (view?.edit) { const a = accounts.find((x) => x.id === view.edit); if (a) return <PropFirmForm account={a} onSave={upsert} onCancel={() => setView('overview')} canCancel /> }
-  if (view?.detail) { const a = accounts.find((x) => x.id === view.detail); if (a) return <PropFirmDetail trades={trades} acc={a} onBack={() => setView('overview')} onEdit={() => setView({ edit: a.id })} onDelete={() => remove(a.id)} payouts={payouts} accounts={accounts} onAddPayout={onAddPayout} onDeletePayout={onDeletePayout} /> }
+  if (view?.detail) { const a = accounts.find((x) => x.id === view.detail); if (a) return <PropFirmDetail trades={trades} acc={a} onBack={() => setView('overview')} onEdit={() => setView({ edit: a.id })} onDelete={() => remove(a.id)} payouts={payouts} accounts={accounts} onAddPayout={onAddPayout} onDeletePayout={onDeletePayout} expenses={expenses} onAddExpense={onAddExpense} onDeleteExpense={onDeleteExpense} /> }
 
   if (accounts.length === 0) {
-    return <Panel title="Prop firm accounts"><div className="py-10 text-center"><div className="text-sm mb-3" style={{ color: T.dim }}>Track one or many prop firm challenges — targets, daily loss, trailing drawdown, pass/fail.</div><button type="button" onClick={() => setView('add')} className="rounded-md px-4 py-2 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306' }}>+ Add an account</button></div></Panel>
+    const hasCashHistory = cash.overall.grossSpend > 0 || cash.overall.credits > 0 || cash.overall.payouts !== 0
+    return (
+      <div className="space-y-4">
+        <Panel title="Prop firm accounts"><div className="py-10 text-center"><div className="text-sm mb-3" style={{ color: T.dim }}>Track one or many prop firm challenges — targets, daily loss, trailing drawdown, pass/fail.</div><button type="button" onClick={() => setView('add')} className="rounded-md px-4 py-2 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306' }}>+ Add an account</button></div></Panel>
+        {hasCashHistory && <CashSummary cash={cash.overall} />}
+      </div>
+    )
   }
   const rows = accounts.map((a) => ({ acc: a, r: computePropFirm(trades, a) }))
   const passing = rows.filter((x) => x.r.status === 'passed').length
@@ -253,11 +287,113 @@ function PropAccounts({ trades, accounts, onSave, payouts = [], onAddPayout, onD
         <div className="flex flex-wrap gap-2">{chip(passing, 'passing', T.up)}{chip(active, 'active', T.accent)}{chip(failed, 'failed', T.down)}</div>
         {tight && <div className="text-sm mt-3" style={{ color: T.dim }}>Tightest: <span style={{ color: T.text }}>{tight.acc.label}</span> — <span style={{ ...mono, color: T.down }}>{fmt$(tight.r.ddBuffer)}</span> before breach. That's your real limit today.</div>}
       </Panel>
+      <CashSummary cash={cash.overall} />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {rows.map(({ acc, r }) => <AccountCard key={acc.id} acc={acc} r={r} tight={tight?.acc.id === acc.id} payout={payoutByAccount[acc.id] || 0} onClick={() => setView({ detail: acc.id })} />)}
+        {rows.map(({ acc, r }) => <AccountCard key={acc.id} acc={acc} r={r} tight={tight?.acc.id === acc.id} cash={cash.byAccount[acc.id]} onClick={() => setView({ detail: acc.id })} />)}
       </div>
-      <PayoutPanel payouts={payouts} accounts={accounts} onAdd={onAddPayout} onDelete={onDeletePayout} />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <PayoutPanel payouts={payouts} accounts={accounts} onAdd={onAddPayout} onDelete={onDeletePayout} />
+        <ExpensePanel expenses={expenses} accounts={accounts} onAdd={onAddExpense} onDelete={onDeleteExpense} />
+      </div>
     </div>
+  )
+}
+
+function ExpensePanel({ expenses = [], accounts = [], accountId, onAdd, onDelete }) {
+  const [adding, setAdding] = useState(false)
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [amount, setAmount] = useState('')
+  const [category, setCategory] = useState('evaluation')
+  const [note, setNote] = useState('')
+  const [acctSel, setAcctSel] = useState(accountId || accounts[0]?.id || '')
+  const list = accountId ? expenses.filter((expense) => expense.accountId === accountId) : expenses
+  const total = list.reduce((sum, expense) => sum + (Number(expense.amount) || 0), 0)
+  const label = (id) => accounts.find((account) => account.id === id)?.label || 'Deleted account'
+  const inp = 'w-full rounded px-2 py-1.5 text-sm'
+  const enteredAmount = Math.abs(parseFloat(amount) || 0)
+
+  function save() {
+    if (!enteredAmount || !(accountId || acctSel)) return
+    onAdd?.({
+      accountId: accountId || acctSel,
+      date,
+      amount: category === 'refund' ? -enteredAmount : enteredAmount,
+      category,
+      note: note.trim()
+    })
+    setAmount('')
+    setNote('')
+    setAdding(false)
+  }
+
+  return (
+    <Panel title={accountId ? 'Account spending' : 'All-time spending'} right={<span className="text-sm" style={{ ...mono, color: total > 0 ? T.down : T.dim }}>{fmt$(total)}</span>}>
+      {!adding ? (
+        <button type="button" onClick={() => setAdding(true)} disabled={!accountId && accounts.length === 0}
+          className="w-full flex items-center justify-center gap-1.5 rounded-md py-2 text-sm"
+          style={{ background: 'transparent', color: T.dim, border: `1px dashed ${T.line}`, opacity: !accountId && accounts.length === 0 ? 0.5 : 1 }}>
+          <Plus size={14} /> Log an expense
+        </button>
+      ) : (
+        <div className="space-y-2 rounded-lg p-3" style={{ background: T.surface2 }}>
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="Date"><input type="date" style={inputStyle} className={inp} value={date} onChange={(event) => setDate(event.target.value)} /></Field>
+            <Field label="Amount $"><input autoFocus style={inputStyle} className={inp} value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="decimal" placeholder="e.g. 49.99" /></Field>
+          </div>
+          <Field label="Category">
+            <select style={inputStyle} className={inp} value={category} onChange={(event) => setCategory(event.target.value)}>
+              {EXPENSE_CATEGORIES.map(([value, text]) => <option key={value} value={value}>{text}</option>)}
+            </select>
+          </Field>
+          {!accountId && (
+            <Field label="Account">
+              <select style={inputStyle} className={inp} value={acctSel} onChange={(event) => setAcctSel(event.target.value)}>
+                {accounts.map((account) => <option key={account.id} value={account.id}>{account.label || 'Account'}</option>)}
+              </select>
+            </Field>
+          )}
+          <Field label="Note (optional)"><input style={inputStyle} className={inp} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Discount, invoice, reset reason..." /></Field>
+          {category === 'refund' && <div className="text-xs" style={{ color: T.up }}>This will reduce total spending.</div>}
+          <div className="flex gap-2">
+            <button type="button" onClick={() => setAdding(false)} className="flex-1 rounded-md py-1.5 text-sm" style={{ border: `1px solid ${T.line}`, color: T.dim }}>Cancel</button>
+            <button type="button" onClick={save} disabled={!enteredAmount || !(accountId || acctSel)} className="flex-1 rounded-md py-1.5 text-sm font-semibold"
+              style={{ background: T.accent, color: '#1A1306', opacity: enteredAmount && (accountId || acctSel) ? 1 : 0.5 }}>Save</button>
+          </div>
+        </div>
+      )}
+      {list.length > 0 && (
+        <div className="mt-3 space-y-1">
+          {list.map((expense) => {
+            const credit = Number(expense.amount) < 0
+            return (
+              <div key={expense.id} className="flex items-center gap-2 text-xs px-2.5 py-1.5 rounded-lg" style={{ background: T.surface2, ...mono }}>
+                <span style={{ color: T.faint }}>{expense.date}</span>
+                {!accountId && <span style={{ color: T.dim }} className="truncate">{label(expense.accountId)}</span>}
+                <span style={{ color: T.dim }} className="truncate">{EXPENSE_LABELS[expense.category] || 'Other expense'}</span>
+                {expense.note && <span style={{ color: T.faint }} className="truncate">{expense.note}</span>}
+                <span className="ml-auto font-semibold" style={{ color: credit ? T.up : T.down }}>{credit ? '-' : ''}{fmt$(Math.abs(Number(expense.amount) || 0))}</span>
+                <button type="button" onClick={() => onDelete?.(expense.id)} title="Delete expense" style={{ color: T.faint }}><Trash2 size={12} /></button>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </Panel>
+  )
+}
+
+function CashSummary({ cash }) {
+  const recovery = cash.recovery == null ? '—' : `${fmtN(cash.recovery, 1)}%`
+  return (
+    <Panel title="Prop cash profitability" right={<span className="inline-flex items-center gap-1.5 text-xs" style={{ color: cash.net >= 0 ? T.up : T.down }}><ReceiptText size={13} /> Self-reported</span>}>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Stat label="Total spent" value={fmt$(cash.spent)} tone={cash.spent > 0 ? 'down' : 'none'} sub={cash.credits > 0 ? `${fmt$(cash.credits)} credits applied` : 'account and firm costs'} />
+        <Stat label="Gross payouts" value={fmt$(cash.payouts)} tone={cash.payouts > 0 ? 'up' : 'none'} sub="cash received" />
+        <Stat label="Net prop cash" value={fmt$(cash.net)} tone={cash.net >= 0 ? 'up' : 'down'} sub="payouts minus spending" />
+        <Stat label="Cost recovery" value={recovery} tone={cash.recovery >= 100 ? 'up' : 'none'} sub={cash.roi == null ? 'log spending to calculate' : `ROI ${cash.roi >= 0 ? '+' : ''}${fmtN(cash.roi, 1)}%`} />
+      </div>
+      <div className="text-xs mt-3" style={{ color: T.faint }}>Cash profitability tracks payouts against prop-firm costs. It is separate from trading P&amp;L, commissions, and taxes.</div>
+    </Panel>
   )
 }
 
@@ -340,7 +476,7 @@ function LiveAccount({ trades, accounts = [], settings = {}, onSaveSettings, pay
   )
 }
 
-export function PropFirm({ trades, accounts = [], onSave, payouts = [], onAddPayout, onDeletePayout, settings = {}, onSaveSettings }) {
+export function PropFirm({ trades, accounts = [], onSave, payouts = [], onAddPayout, onDeletePayout, expenses = [], onAddExpense, onDeleteExpense, settings = {}, onSaveSettings }) {
   const [sub, setSub] = useState('live')
   const tabs = [['live', 'Live'], ['prop', accounts.length ? `Prop · ${accounts.length}` : 'Prop']]
   return (
@@ -356,7 +492,7 @@ export function PropFirm({ trades, accounts = [], onSave, payouts = [], onAddPay
       </div>
       {sub === 'live'
         ? <LiveAccount trades={trades} accounts={accounts} settings={settings} onSaveSettings={onSaveSettings} payouts={payouts} onAddPayout={onAddPayout} onDeletePayout={onDeletePayout} />
-        : <PropAccounts trades={trades} accounts={accounts} onSave={onSave} payouts={payouts} onAddPayout={onAddPayout} onDeletePayout={onDeletePayout} />}
+        : <PropAccounts trades={trades} accounts={accounts} onSave={onSave} payouts={payouts} onAddPayout={onAddPayout} onDeletePayout={onDeletePayout} expenses={expenses} onAddExpense={onAddExpense} onDeleteExpense={onDeleteExpense} />}
     </div>
   )
 }

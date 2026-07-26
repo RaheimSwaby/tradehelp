@@ -90,6 +90,9 @@ const api = {
   listPayouts: () => ipcRenderer.invoke('payout:list'),
   addPayout: (e) => ipcRenderer.invoke('payout:add', e),
   deletePayout: (id) => ipcRenderer.invoke('payout:delete', id),
+  listPropExpenses: () => ipcRenderer.invoke('prop-expense:list'),
+  addPropExpense: (e) => ipcRenderer.invoke('prop-expense:add', e),
+  deletePropExpense: (id) => ipcRenderer.invoke('prop-expense:delete', id),
 
   getSettings: () => ipcRenderer.invoke('settings:get'),
   setSettings: (s) => ipcRenderer.invoke('settings:set', s),
