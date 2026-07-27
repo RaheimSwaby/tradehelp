@@ -221,7 +221,15 @@ function registerIpc() {
       filters: [{ name: 'JSON', extensions: ['json'] }]
     })
     if (canceled || !filePath) return { ok: false }
-    try { writeFileSync(filePath, JSON.stringify(db.getAllData(), null, 2)); return { ok: true, path: filePath } }
+    try {
+      const data = db.getAllData()
+      writeFileSync(filePath, JSON.stringify(data, null, 2))
+      return {
+        ok: true,
+        path: filePath,
+        duplicateTradesRemoved: Number(data?.backupSummary?.duplicateTradesRemoved) || 0
+      }
+    }
     catch (e) { return { ok: false, error: String(e?.message || e) } }
   })
   ipcMain.handle('data:import', async () => {

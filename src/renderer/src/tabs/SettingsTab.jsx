@@ -119,11 +119,21 @@ export function LicensePanel({ license, onChange }) {
 
 export function DataPanel({ onReload }) {
   const [msg, setMsg] = useState(null)
-  async function exp() { const r = await window.api.exportData(); if (r?.ok) setMsg('Backup saved.'); else if (r?.error) setMsg('Export failed: ' + r.error) }
+  async function exp() {
+    const r = await window.api.exportData()
+    if (r?.ok) {
+      const removed = Number(r.duplicateTradesRemoved) || 0
+      setMsg(removed ? `Backup saved. ${removed} exact duplicate imported trade${removed === 1 ? '' : 's'} removed from the backup.` : 'Backup saved.')
+    } else if (r?.error) setMsg('Export failed: ' + r.error)
+  }
   async function imp() {
-    if (!window.confirm('Import a backup file? Trades with matching IDs will be overwritten.')) return
+    if (!window.confirm('Import a backup file? Trades with matching IDs will be overwritten; exact duplicate imported trades will be skipped.')) return
     const r = await window.api.importData()
-    if (r?.ok) { setMsg('Backup restored.'); onReload?.() } else if (r?.error) setMsg('Import failed: ' + r.error)
+    if (r?.ok) {
+      const ignored = Number(r.data?.restoreSummary?.duplicateTradesIgnored) || 0
+      setMsg(ignored ? `Backup restored. ${ignored} exact duplicate imported trade${ignored === 1 ? '' : 's'} skipped.` : 'Backup restored.')
+      onReload?.()
+    } else if (r?.error) setMsg('Import failed: ' + r.error)
   }
   return (
     <Panel title="Data &amp; backup">

@@ -370,6 +370,51 @@ describe('getAllData — export', () => {
     expect(data.goals).toMatchObject({ weekly: expect.any(Number), monthly: expect.any(Number) })
   })
 
+  it('exports one copy of exact imported duplicates but preserves identical manual trades', () => {
+    const imported = makeTrade({
+      id: 'backup-import-duplicate-a',
+      symbol: 'BKDUP',
+      source: 'import',
+      timestamp: '2026-12-20 09:45',
+      entryTime: '2026-12-20T09:45:00',
+      exitTime: '2026-12-20T09:51:00'
+    })
+    addTrade(imported)
+    addTrade({ ...imported, id: 'backup-import-duplicate-b' })
+    addTrade({ ...imported, id: 'backup-manual-identical', source: 'manual' })
+
+    const snapshot = getAllData()
+    const matching = snapshot.trades.filter((trade) => trade.symbol === 'BKDUP')
+
+    expect(matching.filter((trade) => trade.source === 'import')).toHaveLength(1)
+    expect(matching.filter((trade) => trade.source === 'manual')).toHaveLength(1)
+    expect(snapshot.backupSummary.duplicateTradesRemoved).toBeGreaterThanOrEqual(1)
+  })
+
+  it('restores old backups idempotently and skips exact imported duplicates with different IDs', () => {
+    const imported = makeTrade({
+      id: 'restore-import-duplicate-a',
+      symbol: 'RSTDUP',
+      source: 'import',
+      timestamp: '2026-12-21 10:15',
+      entryTime: '2026-12-21T10:15:00',
+      exitTime: '2026-12-21T10:23:00'
+    })
+    const backup = {
+      app: 'tradehelp',
+      version: 7,
+      trades: [imported, { ...imported, id: 'restore-import-duplicate-b' }]
+    }
+
+    const first = restoreData(backup)
+    const second = restoreData(backup)
+    const restored = listTrades().filter((trade) => trade.symbol === 'RSTDUP')
+
+    expect(first.restoreSummary.duplicateTradesIgnored).toBe(1)
+    expect(second.restoreSummary.duplicateTradesIgnored).toBe(1)
+    expect(restored).toHaveLength(1)
+  })
+
   it('round-trips data through restoreData', () => {
     const t = makeTrade({ symbol: 'QQQ', pnl: 123 })
     addTrade(t)

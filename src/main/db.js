@@ -1588,12 +1588,121 @@ export function setReview(period, text) {
 
 /* ───────── backup / export / import ───────── */
 const SECRET_KEYS = ['cloudKey', 'finnhubKey', 'fmpKey', 'licenseKey', 'licenseInstanceId']
+const PORTABLE_TRADE_FIELDS = [
+  'symbol', 'direction', 'entry', 'exit', 'stop', 'target', 'size', 'riskAmount', 'pnl', 'fees', 'rr',
+  'emotion', 'setup', 'notes', 'timestamp', 'entryTime', 'exitTime', 'reason', 'source', 'account',
+  'selfSetup', 'selfExec', 'analysisTimeframe', 'entryTimeframe', 'managementTimeframe',
+  'riskPoints', 'rewardPoints', 'riskMode'
+]
+
+function portableTradeIdentity(trade) {
+  const row = buildRow({ ...trade, id: 'portable' })
+  if (row.source !== 'import') return ''
+  return JSON.stringify(PORTABLE_TRADE_FIELDS.map((field) => {
+    const value = row[field]
+    return typeof value === 'string' ? value.trim() : value
+  }))
+}
+
+function uniqueMappedRows(rows, keyFor) {
+  const seen = new Set()
+  return rows.filter((row) => {
+    const key = keyFor(row)
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+function preparePortableData(input, existingTrades = []) {
+  const source = input && typeof input === 'object' ? input : {}
+  const existingIds = new Set(existingTrades.map((trade) => String(trade.id || '')).filter(Boolean))
+  const canonicalByIdentity = new Map()
+  for (const trade of existingTrades) {
+    const identity = portableTradeIdentity(trade)
+    if (identity && !canonicalByIdentity.has(identity)) canonicalByIdentity.set(identity, String(trade.id))
+  }
+
+  const incomingById = new Map()
+  for (const trade of Array.isArray(source.trades) ? source.trades : []) {
+    const id = String(trade?.id || randomUUID())
+    incomingById.set(id, { ...trade, id })
+  }
+
+  const tradeIdMap = new Map()
+  const trades = []
+  let duplicateTradesIgnored = 0
+  for (const trade of incomingById.values()) {
+    const id = String(trade.id)
+    const identity = portableTradeIdentity(trade)
+    if (!existingIds.has(id) && identity && canonicalByIdentity.has(identity)) {
+      tradeIdMap.set(id, canonicalByIdentity.get(identity))
+      duplicateTradesIgnored += 1
+      continue
+    }
+    tradeIdMap.set(id, id)
+    trades.push(trade)
+    if (identity && !canonicalByIdentity.has(identity)) canonicalByIdentity.set(identity, id)
+  }
+
+  const remapTradeId = (value) => tradeIdMap.get(String(value || '')) || String(value || '')
+  const tradeFills = uniqueMappedRows(
+    (Array.isArray(source.tradeFills) ? source.tradeFills : []).map((fill) => ({
+      ...fill,
+      tradeId: remapTradeId(fill?.tradeId)
+    })),
+    (fill) => JSON.stringify([
+      fill.tradeId, fill.kind, fill.side, num(fill.quantity), num(fill.price), num(fill.fee),
+      String(fill.filledAt || ''), Number(fill.sequence) || 0, String(fill.sourceRef || '')
+    ])
+  )
+  const commitments = (Array.isArray(source.commitments) ? source.commitments : []).map((commitment) => ({
+    ...commitment,
+    baselineTradeIds: JSON.stringify(
+      [...new Set([...parseBaselineTradeIds(commitment?.baselineTradeIds)].map(remapTradeId).filter(Boolean))]
+    )
+  }))
+
+  return {
+    duplicateTradesIgnored,
+    data: {
+      ...source,
+      ...(Array.isArray(source.trades) ? { trades } : {}),
+      ...(Array.isArray(source.tradeFills) ? { tradeFills } : {}),
+      ...(Array.isArray(source.commitments) ? { commitments } : {}),
+      ...(Array.isArray(source.tradePlans) ? {
+        tradePlans: source.tradePlans.map((plan) => ({
+          ...plan,
+          linkedTradeId: remapTradeId(plan?.linkedTradeId)
+        }))
+      } : {}),
+      ...(Array.isArray(source.commitmentResults) ? {
+        commitmentResults: uniqueMappedRows(source.commitmentResults.map((result) => ({
+          ...result,
+          tradeId: remapTradeId(result?.tradeId)
+        })), (result) => `${result.commitmentId}|${result.tradeId}`)
+      } : {}),
+      ...(Array.isArray(source.importBatchTrades) ? {
+        importBatchTrades: uniqueMappedRows(source.importBatchTrades.map((link) => ({
+          ...link,
+          tradeId: remapTradeId(link?.tradeId)
+        })), (link) => `${link.batchId}|${link.tradeId}`)
+      } : {}),
+      ...(Array.isArray(source.tradingSessionTrades) ? {
+        tradingSessionTrades: uniqueMappedRows(source.tradingSessionTrades.map((link) => ({
+          ...link,
+          tradeId: remapTradeId(link?.tradeId)
+        })), (link) => `${link.sessionId}|${link.tradeId}`)
+      } : {})
+    }
+  }
+}
 
 // Portable JSON snapshot of journal records (API keys and binary attachments excluded).
 export function getAllData() {
   const settings = getSettings()
   for (const k of SECRET_KEYS) delete settings[k]
-  return {
+  const snapshot = {
     app: 'tradehelp', version: 7, exportedAt: new Date().toISOString(),
     trades: db.prepare('SELECT * FROM trades').all(),
     tradeFills: db.prepare(`SELECT id,tradeId,kind,side,quantity,price,fee,filledAt,sequence,sourceRef
@@ -1620,11 +1729,18 @@ export function getAllData() {
     reviews: getReviews(),
     settings
   }
+  const prepared = preparePortableData(snapshot)
+  return {
+    ...prepared.data,
+    backupSummary: { duplicateTradesRemoved: prepared.duplicateTradesIgnored }
+  }
 }
 
 export function restoreData(data) {
   const version = Number(data?.version || 3)
   if (![3, 4, 5, 6, 7].includes(version)) throw new Error('Unsupported backup version')
+  const prepared = preparePortableData(data || {}, db.prepare('SELECT * FROM trades').all())
+  const portableData = prepared.data
   const tx = db.transaction((d) => {
     if (Array.isArray(d.trades)) {
       const ins = db.prepare(`INSERT OR REPLACE INTO trades
@@ -1863,11 +1979,11 @@ export function restoreData(data) {
     if (d.reviews) for (const [p, text] of Object.entries(d.reviews)) setReview(p, text)
     if (d.settings) setSettings(d.settings)
   })
-  tx(data || {})
-  if (!Array.isArray(data?.commitmentResults)) {
+  tx(portableData)
+  if (!Array.isArray(portableData?.commitmentResults)) {
     refreshCommitmentResults()
-    if (Array.isArray(data?.commitments)) {
-      for (const commitment of data.commitments) {
+    if (Array.isArray(portableData?.commitments)) {
+      for (const commitment of portableData.commitments) {
         if (commitment.status === 'completed' && commitment.id) refreshCommitmentResults(String(commitment.id), true)
       }
     }
@@ -1878,7 +1994,11 @@ export function restoreData(data) {
     commitments: listCoachCommitments(), commitmentResults: db.prepare('SELECT * FROM commitment_results').all(),
     playbook: listPlaybook(), dayLogs: listDayLogs(), payouts: listPayouts(), propExpenses: listPropExpenses(), importBatches: listImportBatches(),
     tradingSessions: listTradingSessions(100),
-    goals: getGoals(), reviews: getReviews(), settings: getSettings()
+    goals: getGoals(), reviews: getReviews(), settings: getSettings(),
+    restoreSummary: {
+      duplicateTradesIgnored: prepared.duplicateTradesIgnored
+        + Math.max(0, Number(data?.backupSummary?.duplicateTradesRemoved) || 0)
+    }
   }
 }
 
