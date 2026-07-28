@@ -38,6 +38,7 @@ import {
   KeyboardAvoidingView,
   Linking,
   Modal,
+  PanResponder,
   Platform,
   Pressable,
   RefreshControl,
@@ -48,6 +49,7 @@ import {
   Text,
   TextInput,
   useColorScheme,
+  useWindowDimensions,
   View
 } from 'react-native'
 import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Line, Path, Stop, Text as SvgText } from 'react-native-svg'
@@ -178,6 +180,96 @@ function triggerHaptic(type: 'light' | 'medium' | 'success' | 'selection' = 'lig
     else if (type === 'success') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
     else if (type === 'selection') Haptics.selectionAsync().catch(() => {})
   } catch {}
+}
+
+const FAB_SIZE = 58
+const FAB_MARGIN = 16
+
+/**
+ * The capture button has to be reachable from every screen, which means it
+ * inevitably covers something on some screen. Rather than pick a corner and
+ * hope, it can be dragged and it remembers where it was left. Release snaps it
+ * to the nearer side so it always sits flush instead of floating mid-screen.
+ */
+function DraggableFab({
+  onPress,
+  saved,
+  onMove,
+  colors,
+  styles
+}: {
+  onPress: () => void
+  saved: { x: number; y: number } | null
+  onMove: (position: { x: number; y: number }) => void
+  colors: Palette
+  styles: ReturnType<typeof createStyles>
+}) {
+  const { width, height } = useWindowDimensions()
+  const bounds = useMemo(() => ({
+    minX: FAB_MARGIN,
+    maxX: Math.max(FAB_MARGIN, width - FAB_SIZE - FAB_MARGIN),
+    minY: 84,
+    maxY: Math.max(84, height - FAB_SIZE - 104)
+  }), [width, height])
+
+  const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value))
+  const start = saved
+    ? { x: clamp(saved.x, bounds.minX, bounds.maxX), y: clamp(saved.y, bounds.minY, bounds.maxY) }
+    : { x: bounds.maxX, y: bounds.maxY }
+
+  const pan = useRef(new Animated.ValueXY(start)).current
+  const position = useRef(start)
+  const dragging = useRef(false)
+
+  useEffect(() => {
+    const id = pan.addListener((value) => { position.current = value })
+    return () => pan.removeListener(id)
+  }, [pan])
+
+  const responder = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    // A press only becomes a drag past a few pixels, so tapping to log a trade
+    // still works without the button sliding out from under the finger.
+    onMoveShouldSetPanResponder: (_event, gesture) => Math.abs(gesture.dx) > 4 || Math.abs(gesture.dy) > 4,
+    onPanResponderGrant: () => {
+      dragging.current = false
+      pan.setOffset({ ...position.current })
+      pan.setValue({ x: 0, y: 0 })
+    },
+    onPanResponderMove: (_event, gesture) => {
+      if (!dragging.current && (Math.abs(gesture.dx) > 4 || Math.abs(gesture.dy) > 4)) {
+        dragging.current = true
+        triggerHaptic('selection')
+      }
+      pan.setValue({ x: gesture.dx, y: gesture.dy })
+    },
+    onPanResponderRelease: () => {
+      pan.flattenOffset()
+      if (!dragging.current) {
+        onPress()
+        return
+      }
+      const current = position.current
+      const settled = {
+        x: current.x + FAB_SIZE / 2 < width / 2 ? bounds.minX : bounds.maxX,
+        y: clamp(current.y, bounds.minY, bounds.maxY)
+      }
+      triggerHaptic('light')
+      Animated.spring(pan, { toValue: settled, useNativeDriver: false, friction: 7, tension: 70 }).start()
+      onMove(settled)
+    }
+  }), [pan, bounds, width, onPress, onMove])
+
+  return (
+    <Animated.View
+      {...responder.panHandlers}
+      accessibilityRole="button"
+      accessibilityLabel="Log a trade. Drag to move this button."
+      style={[styles.fab, { left: pan.x, top: pan.y }]}
+    >
+      <Plus color="#17130B" size={26} strokeWidth={2.8} />
+    </Animated.View>
+  )
 }
 
 function Stat({ label, value, numValue, tone, wide, styles }: { label: string; value: string; numValue?: number; tone?: string; wide?: boolean; styles: ReturnType<typeof createStyles> }) {
@@ -2006,6 +2098,7 @@ function MobileApp() {
   const [newsLoading, setNewsLoading] = useState(false)
   const [ready, setReady] = useState(false)
   const [demoCount, setDemoCount] = useState(0)
+  const [fabPosition, setFabPosition] = useState<{ x: number; y: number } | null>(null)
   const syncInFlight = useRef(false)
   const autoSync = useRef<() => void>(() => {})
   const colors = palette(themeMode, systemScheme)
@@ -2030,11 +2123,18 @@ function MobileApp() {
       refresh(),
       getSetting(db, 'themeMode', 'system'),
       getSetting(db, 'pairingCode'),
-      getSetting(db, 'lastSyncedAt')
-    ]).then(([, storedTheme, storedCode, storedSync]) => {
+      getSetting(db, 'lastSyncedAt'),
+      getSetting(db, 'fabPosition')
+    ]).then(([, storedTheme, storedCode, storedSync, storedFab]) => {
       setThemeMode(['system', 'dark', 'light'].includes(storedTheme) ? storedTheme as ThemeMode : 'system')
       setPairingCode(storedCode)
       setLastSyncedAt(storedSync)
+      try {
+        const parsed = storedFab ? JSON.parse(storedFab) : null
+        if (parsed && Number.isFinite(parsed.x) && Number.isFinite(parsed.y)) setFabPosition(parsed)
+      } catch {
+        // A corrupt value just means the button starts in its default corner.
+      }
       setReady(true)
     }).catch((error) => {
       setSyncMessage(`Startup failed: ${String(error?.message || error)}`)
@@ -2048,6 +2148,11 @@ function MobileApp() {
     await clearDemoTrades(db)
     await refresh()
   }
+
+  const saveFabPosition = useCallback((next: { x: number; y: number }) => {
+    setFabPosition(next)
+    void setSetting(db, 'fabPosition', JSON.stringify(next))
+  }, [db])
 
   async function saveNextTrade(trade: MobileTrade) {
     // The sample trades exist to make an empty install look alive. The moment a
@@ -2267,14 +2372,13 @@ function MobileApp() {
       {/* Logging a trade is the whole point of the phone app, so it can't live
           buried below the fold on one screen — it needs to be one tap from
           anywhere. */}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Log a trade"
+      <DraggableFab
         onPress={() => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setIsLogging(true) }}
-        style={({ pressed }) => [styles.fab, pressed ? styles.fabPressed : null]}
-      >
-        <Plus color="#17130B" size={26} strokeWidth={2.8} />
-      </Pressable>
+        saved={fabPosition}
+        onMove={saveFabPosition}
+        colors={colors}
+        styles={styles}
+      />
 
       <LinearGradient colors={[colors.nav, colors.header]} style={styles.tabBar}>
         {tabs.map((item) => {
@@ -2367,13 +2471,14 @@ function createStyles(colors: Palette) {
       backgroundColor: colors.accent
     },
     demoBannerButtonText: { color: '#17130B', fontSize: 13, fontWeight: '800' },
+    // Placed with left/top because the position is animated and persisted;
+    // pairing those with right/bottom would fight over the same axis.
     fab: {
-      position: 'absolute', right: 18, bottom: 94, width: 58, height: 58, borderRadius: 29,
+      position: 'absolute', width: FAB_SIZE, height: FAB_SIZE, borderRadius: FAB_SIZE / 2,
       backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center', zIndex: 20,
       shadowColor: colors.accent, shadowOpacity: 0.42, shadowRadius: 14, shadowOffset: { width: 0, height: 6 },
       elevation: 8
     },
-    fabPressed: { transform: [{ scale: 0.94 }], shadowOpacity: 0.24 },
     eyebrow: { color: colors.accent, fontSize: 10, fontWeight: '800', letterSpacing: 1.4 },
     title: { color: colors.text, fontSize: 26, lineHeight: 32, fontWeight: '800', letterSpacing: -0.4 },
     copy: { color: colors.dim, fontSize: 14, lineHeight: 21 },
