@@ -5,9 +5,12 @@ import * as Notifications from 'expo-notifications'
 import { LinearGradient } from 'expo-linear-gradient'
 import { SQLiteProvider, useSQLiteContext } from 'expo-sqlite'
 import {
+  Award,
   BellRing,
   BookOpen,
+  Calendar,
   CalendarDays,
+  CheckCircle2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -15,17 +18,22 @@ import {
   History as HistoryIcon,
   House,
   ImagePlus,
+  List,
   Newspaper,
   Pencil,
   Plus,
+  Quote,
   RefreshCw,
   Save,
   ScanLine,
   Settings as SettingsIcon,
+  Share2,
   Smartphone,
+  Target,
   Trash2,
   TrendingUp,
-  Wifi
+  Wifi,
+  XCircle
 } from 'lucide-react-native'
 import type { LucideIcon } from 'lucide-react-native'
 import {
@@ -59,15 +67,19 @@ import {
   countDemoTrades,
   createLocalId,
   deleteLocalTrade,
+  deleteWatchlistItem,
   getRuleState,
   getSetting,
   listTrades,
+  listWatchlist,
   MobileTrade,
   pendingTradeChanges,
   saveRules,
   saveTrade,
+  saveWatchlistItem,
   setSetting,
-  updateLocalTrade
+  updateLocalTrade,
+  WatchlistItem
 } from './src/storage/repository'
 import { syncDesktop } from './src/sync/client'
 import {
@@ -77,7 +89,8 @@ import {
   scheduleNewsTestNotification,
   setNewsAlertsEnabled
 } from './src/news'
-import { computeMobileStats } from './src/stats'
+import { computeEdgeStats, computeMobileStats, computeTradeGrade } from './src/stats'
+import { getDailyQuote } from './src/quotes'
 import { palette, Palette, ThemeMode } from './src/theme'
 
 type CameraPermission = { granted: boolean; canAskAgain: boolean }
@@ -574,9 +587,371 @@ function PnlCurve({
   )
 }
 
+function TraderQuoteBanner({ colors, styles }: { colors: Palette; styles: ReturnType<typeof createStyles> }) {
+  const dailyQuote = useMemo(() => getDailyQuote(), [])
+  return (
+    <View style={styles.quoteCard}>
+      <View style={styles.actionRow}>
+        <Quote color={colors.accent} size={18} strokeWidth={2} />
+        <View style={styles.flexOne}>
+          <Text style={styles.quoteText}>"{dailyQuote.quote}"</Text>
+          <Text style={styles.quoteAuthor}>— {dailyQuote.author}</Text>
+        </View>
+      </View>
+    </View>
+  )
+}
+
+function ShareStatModal({
+  trades,
+  onClose,
+  colors,
+  styles
+}: {
+  trades: MobileTrade[]
+  onClose: () => void
+  colors: Palette
+  styles: ReturnType<typeof createStyles>
+}) {
+  const stats = useMemo(() => computeMobileStats(trades), [trades])
+  const today = localTimestamp().slice(0, 10)
+  const todayTrades = trades.filter((t) => t.tradeDate.slice(0, 10) === today)
+  const todayPnl = todayTrades.reduce((sum, t) => sum + t.pnl, 0)
+  const todayGrade = todayTrades.length && todayTrades[0] ? computeTradeGrade(todayTrades[0]).grade : 'A+'
+
+  function copySummary() {
+    triggerHaptic('success')
+    const summary = `📈 TradeHelp Session Recap\nDate: ${today}\nDaily P&L: ${money(todayPnl)}\nTrades: ${todayTrades.length}\nWin Rate: ${percent(stats.winRate)}\nGrade: ${todayGrade}\nTop Setup: ${stats.topSetup}`
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(summary)
+    }
+    Alert.alert('Summary Copied!', 'Session summary copied to clipboard to share with your trading partners!')
+  }
+
+  return (
+    <Modal visible animationType="fade" transparent onRequestClose={onClose}>
+      <View style={styles.lightboxOverlay}>
+        <View style={styles.shareCard}>
+          <View style={[styles.actionRow, styles.centeredRow]}>
+            <View style={styles.flexOne}>
+              <Text style={styles.eyebrow}>SESSION CARD</Text>
+              <Text style={styles.panelTitle}>Share Session Stats</Text>
+            </View>
+            <Pressable style={styles.compactButton} onPress={onClose}>
+              <Text style={styles.compactButtonText}>Close</Text>
+            </Pressable>
+          </View>
+
+          <LinearGradient colors={colors.panelGradient} style={styles.shareGraphic}>
+            <View style={[styles.actionRow, styles.centeredRow]}>
+              <View style={styles.logo}>
+                <View style={[styles.candle, { height: 12, backgroundColor: colors.down }]} />
+                <View style={[styles.candle, { height: 19, backgroundColor: colors.accent }]} />
+                <View style={[styles.candle, { height: 15, backgroundColor: colors.up }]} />
+              </View>
+              <Text style={styles.brand}>Trade<Text style={{ color: colors.accent }}>Help</Text></Text>
+              <View style={[styles.gradeBadge, { backgroundColor: todayPnl >= 0 ? colors.upSoft : colors.downSoft }]}>
+                <Text style={[styles.gradeText, { color: todayPnl >= 0 ? colors.up : colors.down }]}>{todayGrade}</Text>
+              </View>
+            </View>
+
+            <View style={{ alignItems: 'center', marginVertical: 12 }}>
+              <Text style={styles.heroLabel}>TODAY'S NET P&L</Text>
+              <Text style={[styles.heroValue, { color: todayPnl >= 0 ? colors.up : colors.down, fontSize: 36 }]}>{money(todayPnl)}</Text>
+            </View>
+
+            <View style={styles.heroMetrics}>
+              <View style={styles.heroMetric}>
+                <Text style={styles.heroMetricLabel}>TRADES</Text>
+                <Text style={styles.heroMetricValue}>{todayTrades.length}</Text>
+              </View>
+              <View style={[styles.heroMetric, styles.heroMetricBorder]}>
+                <Text style={styles.heroMetricLabel}>WIN RATE</Text>
+                <Text style={styles.heroMetricValue}>{percent(stats.winRate)}</Text>
+              </View>
+              <View style={[styles.heroMetric, styles.heroMetricBorder]}>
+                <Text style={styles.heroMetricLabel}>TOP SETUP</Text>
+                <Text style={styles.heroMetricValue}>{stats.topSetup.split(' ')[0]}</Text>
+              </View>
+            </View>
+          </LinearGradient>
+
+          <Pressable style={styles.primaryButton} onPress={copySummary}>
+            <View style={styles.buttonContent}>
+              <Share2 color="#17130B" size={17} strokeWidth={2.3} />
+              <Text style={styles.primaryButtonText}>Copy Session Summary</Text>
+            </View>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
+  )
+}
+
+function WatchlistSection({
+  watchlist,
+  onAdd,
+  onDelete,
+  colors,
+  styles
+}: {
+  watchlist: WatchlistItem[]
+  onAdd: (symbol: string, bias: 'Bullish' | 'Bearish' | 'Neutral', keyLevel: string, notes: string) => Promise<void>
+  onDelete: (id: string) => Promise<void>
+  colors: Palette
+  styles: ReturnType<typeof createStyles>
+}) {
+  const [adding, setAdding] = useState(false)
+  const [symbol, setSymbol] = useState('')
+  const [bias, setBias] = useState<'Bullish' | 'Bearish' | 'Neutral'>('Bullish')
+  const [keyLevel, setKeyLevel] = useState('')
+  const [notes, setNotes] = useState('')
+
+  async function submit() {
+    if (!symbol.trim()) return
+    triggerHaptic('success')
+    await onAdd(symbol.trim(), bias, keyLevel.trim(), notes.trim())
+    setSymbol('')
+    setKeyLevel('')
+    setNotes('')
+    setAdding(false)
+  }
+
+  return (
+    <View style={styles.panel}>
+      <View style={[styles.actionRow, styles.centeredRow]}>
+        <View style={styles.flexOne}>
+          <Text style={styles.kicker}>PRE-MARKET PREP</Text>
+          <Text style={styles.panelTitle}>Watchlist & Bias</Text>
+        </View>
+        <Pressable style={styles.compactButton} onPress={() => setAdding(!adding)}>
+          <Text style={styles.compactButtonText}>{adding ? 'Cancel' : '+ Add Ticker'}</Text>
+        </Pressable>
+      </View>
+
+      {adding ? (
+        <View style={{ gap: 10, marginTop: 10 }}>
+          <TextInput
+            autoCapitalize="characters"
+            placeholder="Symbol (e.g. NQ, TSLA)"
+            placeholderTextColor={colors.dim}
+            style={styles.input}
+            value={symbol}
+            onChangeText={setSymbol}
+          />
+          <View style={styles.segment}>
+            {(['Bullish', 'Bearish', 'Neutral'] as const).map((b) => (
+              <Pressable
+                key={b}
+                onPress={() => setBias(b)}
+                style={[styles.segmentOption, bias === b ? styles.segmentActive : null]}
+              >
+                <Text style={[styles.segmentText, bias === b ? { color: b === 'Bullish' ? colors.up : b === 'Bearish' ? colors.down : colors.accent } : null]}>{b}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <TextInput
+            placeholder="Key Level (e.g. 20,450 VWAP)"
+            placeholderTextColor={colors.dim}
+            style={styles.input}
+            value={keyLevel}
+            onChangeText={setKeyLevel}
+          />
+          <TextInput
+            placeholder="Plan Notes (e.g. Watch opening bell breakout)"
+            placeholderTextColor={colors.dim}
+            style={styles.input}
+            value={notes}
+            onChangeText={setNotes}
+          />
+          <Pressable style={styles.primaryButton} onPress={submit}>
+            <Text style={styles.primaryButtonText}>Save to Watchlist</Text>
+          </Pressable>
+        </View>
+      ) : !watchlist.length ? (
+        <Text style={styles.muted}>No tickers on watchlist yet. Add tickers to plan your trading session.</Text>
+      ) : (
+        <View style={{ gap: 8, marginTop: 8 }}>
+          {watchlist.map((item) => {
+            const tone = item.bias === 'Bullish' ? colors.up : item.bias === 'Bearish' ? colors.down : colors.accent
+            return (
+              <View key={item.id} style={styles.watchCard}>
+                <View style={[styles.actionRow, styles.centeredRow]}>
+                  <View style={[styles.pill, { backgroundColor: item.bias === 'Bullish' ? colors.upSoft : item.bias === 'Bearish' ? colors.downSoft : colors.accentSoft }]}>
+                    <Text style={[styles.pillText, { color: tone }]}>{item.bias.toUpperCase()}</Text>
+                  </View>
+                  <Text style={[styles.panelTitle, styles.flexOne]}>{item.symbol}</Text>
+                  {item.keyLevel ? <Text style={[styles.pillText, { color: colors.text }]}>{item.keyLevel}</Text> : null}
+                  <Pressable style={styles.compactButton} onPress={() => onDelete(item.id)}>
+                    <Trash2 color={colors.down} size={14} strokeWidth={2} />
+                  </Pressable>
+                </View>
+                {item.planNotes ? <Text style={styles.muted}>{item.planNotes}</Text> : null}
+              </View>
+            )
+          })}
+        </View>
+      )}
+    </View>
+  )
+}
+
+function CalendarView({
+  trades,
+  onSelectDate,
+  colors,
+  styles
+}: {
+  trades: MobileTrade[]
+  onSelectDate: (dateStr: string) => void
+  colors: Palette
+  styles: ReturnType<typeof createStyles>
+}) {
+  const [activeMonth, setActiveMonth] = useState(() => new Date())
+
+  const year = activeMonth.getFullYear()
+  const month = activeMonth.getMonth()
+
+  const monthName = activeMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+
+  const dailyPnlMap = useMemo(() => {
+    const map = new Map<string, { pnl: number; count: number }>()
+    for (const t of trades) {
+      const dayStr = t.tradeDate.slice(0, 10)
+      const curr = map.get(dayStr) || { pnl: 0, count: 0 }
+      curr.pnl += t.pnl
+      curr.count++
+      map.set(dayStr, curr)
+    }
+    return map
+  }, [trades])
+
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const firstDayOfWeek = new Date(year, month, 1).getDay()
+
+  const daysGrid = []
+  for (let i = 0; i < firstDayOfWeek; i++) daysGrid.push(null)
+  for (let d = 1; d <= daysInMonth; d++) {
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const dateStr = `${year}-${pad(month + 1)}-${pad(d)}`
+    const stats = dailyPnlMap.get(dateStr)
+    daysGrid.push({ day: d, dateStr, pnl: stats?.pnl ?? null, count: stats?.count ?? 0 })
+  }
+
+  function prevMonth() {
+    triggerHaptic('light')
+    setActiveMonth(new Date(year, month - 1, 1))
+  }
+
+  function nextMonth() {
+    triggerHaptic('light')
+    setActiveMonth(new Date(year, month + 1, 1))
+  }
+
+  return (
+    <View style={styles.calendarCard}>
+      <View style={[styles.actionRow, styles.centeredRow]}>
+        <Pressable style={styles.compactButton} onPress={prevMonth}>
+          <ChevronLeft color={colors.text} size={18} strokeWidth={2} />
+        </Pressable>
+        <Text style={[styles.panelTitle, styles.flexOne, { textAlign: 'center' }]}>{monthName}</Text>
+        <Pressable style={styles.compactButton} onPress={nextMonth}>
+          <ChevronRight color={colors.text} size={18} strokeWidth={2} />
+        </Pressable>
+      </View>
+
+      <View style={styles.calendarWeekHeader}>
+        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((w, idx) => (
+          <Text key={`w-${idx}`} style={styles.calendarWeekText}>{w}</Text>
+        ))}
+      </View>
+
+      <View style={styles.calendarGrid}>
+        {daysGrid.map((item, idx) => {
+          if (!item) return <View key={`empty-${idx}`} style={styles.calendarCellEmpty} />
+          const isWin = item.pnl !== null && item.pnl > 0
+          const isLoss = item.pnl !== null && item.pnl < 0
+          const bg = isWin ? colors.upSoft : isLoss ? colors.downSoft : colors.surface2
+          const tone = isWin ? colors.up : isLoss ? colors.down : colors.dim
+          return (
+            <Pressable
+              key={item.dateStr}
+              style={[styles.calendarCell, { backgroundColor: bg }]}
+              onPress={() => {
+                if (item.count > 0) {
+                  triggerHaptic('light')
+                  onSelectDate(item.dateStr)
+                }
+              }}
+            >
+              <Text style={styles.calendarDayNum}>{item.day}</Text>
+              {item.pnl !== null ? (
+                <Text style={[styles.calendarPnlText, { color: tone }]} numberOfLines={1}>
+                  {item.pnl >= 0 ? `+$${Math.round(item.pnl)}` : `-$${Math.abs(Math.round(item.pnl))}`}
+                </Text>
+              ) : null}
+            </Pressable>
+          )
+        })}
+      </View>
+    </View>
+  )
+}
+
+function EdgeAnalyticsCard({ trades, colors, styles }: { trades: MobileTrade[]; colors: Palette; styles: ReturnType<typeof createStyles> }) {
+  const edges = useMemo(() => computeEdgeStats(trades), [trades])
+  const topEdge = edges.find((e) => e.isTopEdge) || edges[0]
+  const leak = edges.find((e) => e.isLeak)
+
+  if (!edges.length) return null
+
+  return (
+    <View style={styles.panel}>
+      <View style={[styles.actionRow, styles.centeredRow]}>
+        <View style={styles.flexOne}>
+          <Text style={styles.kicker}>EDGE REFINING</Text>
+          <Text style={styles.panelTitle}>Setup Pattern Analytics</Text>
+        </View>
+        <Target color={colors.accent} size={18} strokeWidth={2} />
+      </View>
+
+      <View style={{ gap: 10, marginTop: 8 }}>
+        {topEdge ? (
+          <View style={styles.edgeItem}>
+            <View style={[styles.actionRow, styles.centeredRow]}>
+              <Award color={colors.up} size={16} strokeWidth={2} />
+              <Text style={[styles.panelTitle, styles.flexOne]}>Top Edge: {topEdge.name}</Text>
+              <View style={[styles.pill, { backgroundColor: colors.upSoft }]}>
+                <Text style={[styles.pillText, { color: colors.up }]}>{topEdge.winRate}% WR</Text>
+              </View>
+            </View>
+            <Text style={styles.muted}>Expectancy {money(topEdge.expectancy)}/trade across {topEdge.count} trades.</Text>
+          </View>
+        ) : null}
+
+        {leak ? (
+          <View style={styles.edgeItem}>
+            <View style={[styles.actionRow, styles.centeredRow]}>
+              <XCircle color={colors.down} size={16} strokeWidth={2} />
+              <Text style={[styles.panelTitle, styles.flexOne]}>Leak Setup: {leak.name}</Text>
+              <View style={[styles.pill, { backgroundColor: colors.downSoft }]}>
+                <Text style={[styles.pillText, { color: colors.down }]}>{leak.winRate}% WR</Text>
+              </View>
+            </View>
+            <Text style={styles.muted}>Net loss {money(leak.netPnl)} — consider tightening rules for this setup.</Text>
+          </View>
+        ) : null}
+      </View>
+    </View>
+  )
+}
+
 function Home({
   trades,
   pending,
+  watchlist,
+  onAddWatchlist,
+  onDeleteWatchlist,
   onLog,
   onSync,
   syncing,
@@ -588,6 +963,9 @@ function Home({
 }: {
   trades: MobileTrade[]
   pending: number
+  watchlist: WatchlistItem[]
+  onAddWatchlist: (symbol: string, bias: 'Bullish' | 'Bearish' | 'Neutral', keyLevel: string, notes: string) => Promise<void>
+  onDeleteWatchlist: (id: string) => Promise<void>
   onLog: () => void
   onSync: () => void
   syncing: boolean
@@ -597,6 +975,7 @@ function Home({
   colors: Palette
   styles: ReturnType<typeof createStyles>
 }) {
+  const [sharing, setSharing] = useState(false)
   const today = localTimestamp().slice(0, 10)
   const todayTrades = trades.filter((trade) => trade.tradeDate.slice(0, 10) === today)
   const todayPnl = todayTrades.reduce((sum, trade) => sum + trade.pnl, 0)
@@ -616,11 +995,19 @@ function Home({
         ? <RefreshControl refreshing={syncing} onRefresh={onSync} tintColor={colors.accent} colors={[colors.accent]} progressBackgroundColor={colors.surface} />
         : undefined}
     >
+      <TraderQuoteBanner colors={colors} styles={styles} />
+
       <View style={styles.pageIntro}>
         <View style={styles.flexOne}>
           <Text style={styles.eyebrow}>TODAY'S SESSION</Text>
           <Text style={styles.title}>{sessionDate}</Text>
         </View>
+        <Pressable style={styles.compactButton} onPress={() => { triggerHaptic('light'); setSharing(true) }}>
+          <View style={styles.actionRow}>
+            <Share2 color={colors.accent} size={14} strokeWidth={2} />
+            <Text style={[styles.compactButtonText, { color: colors.accent }]}>Share</Text>
+          </View>
+        </Pressable>
       </View>
 
       {demoCount > 0 ? (
@@ -698,6 +1085,8 @@ function Home({
         ? <Text style={styles.muted}>Rule discipline {percent(performance.ruleRate)} across your mobile checklists.</Text>
         : null}
 
+      <EdgeAnalyticsCard trades={trades} colors={colors} styles={styles} />
+
       <PnlCurve trades={trades} colors={colors} styles={styles} />
 
       <Pressable style={styles.primaryButton} onPress={onLog}>
@@ -706,6 +1095,8 @@ function Home({
           <Text style={styles.primaryButtonText}>Log a trade</Text>
         </View>
       </Pressable>
+
+      <WatchlistSection watchlist={watchlist} onAdd={onAddWatchlist} onDelete={onDeleteWatchlist} colors={colors} styles={styles} />
 
       <View style={styles.syncCard}>
         <View style={[styles.featureIcon, { backgroundColor: paired ? colors.upSoft : colors.accentSoft }]}>
@@ -727,6 +1118,8 @@ function Home({
           <View style={styles.pill}><Text style={styles.pillText}>OFFLINE</Text></View>
         )}
       </View>
+
+      {sharing ? <ShareStatModal trades={trades} onClose={() => setSharing(false)} colors={colors} styles={styles} /> : null}
     </ScrollView>
   )
 }
@@ -1537,6 +1930,13 @@ function History({
 }) {
   const [editing, setEditing] = useState<MobileTrade | null>(null)
   const [busyId, setBusyId] = useState('')
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list')
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
+
+  const filteredTrades = useMemo(() => {
+    if (!selectedDate) return trades
+    return trades.filter((t) => t.tradeDate.slice(0, 10) === selectedDate)
+  }, [trades, selectedDate])
 
   function confirmDelete(trade: MobileTrade) {
     Alert.alert(
@@ -1571,56 +1971,100 @@ function History({
       </View>
     )
   }
+
   return (
     <ScrollView contentContainerStyle={styles.content}>
       <View style={styles.pageTitleStack}>
-        <Text style={styles.eyebrow}>JOURNAL</Text>
-        <Text style={styles.title}>Trade history</Text>
-        <Text style={styles.copy}>{trades.length} trade{trades.length === 1 ? '' : 's'} available on this device.</Text>
-      </View>
-      {trades.map((trade) => (
-        <View key={trade.id} style={styles.tradeCard}>
-          <View style={styles.tradeRow}>
-            <View style={[styles.tradeOutcomeRail, { backgroundColor: trade.pnl < 0 ? colors.down : colors.up }]} />
-            <View style={styles.flexOne}>
-              <View style={styles.tradeTitleRow}>
-                <Text style={styles.tradeSymbol}>{trade.symbol || '-'}</Text>
-                <Text style={styles.tradeMeta}>{trade.direction} · {shortDate(trade.tradeDate)}</Text>
-              </View>
-              <Text style={styles.muted} numberOfLines={1}>
-                {[trade.setup, trade.timeframe, trade.ruleSummary].filter(Boolean).join(' · ') || 'No setup details'}
-              </Text>
-            </View>
-            <View style={styles.tradeRight}>
-              <View style={[styles.pnlPill, { backgroundColor: trade.pnl < 0 ? colors.downSoft : colors.upSoft }]}>
-                <Text style={[styles.tradePnl, { color: trade.pnl < 0 ? colors.down : colors.up }]}>{money(trade.pnl)}</Text>
-              </View>
-              <Text style={[styles.syncLabel, { color: trade.syncState === 'synced' ? colors.up : colors.accent }]}>
-                {trade.origin === 'desktop' && trade.syncState === 'synced' ? 'DESKTOP' : trade.syncState.toUpperCase()}
-              </Text>
-            </View>
+        <View style={[styles.actionRow, styles.centeredRow]}>
+          <View style={styles.flexOne}>
+            <Text style={styles.eyebrow}>JOURNAL</Text>
+            <Text style={styles.title}>Trade history</Text>
           </View>
-          <View style={styles.historyActions}>
-            <Pressable accessibilityLabel={`Edit ${trade.symbol} trade`} style={styles.historyAction}
-              onPress={() => setEditing(trade)}>
-              <View style={styles.buttonContent}>
-                <Pencil color={colors.text} size={14} strokeWidth={2} />
-                <Text style={styles.historyActionText}>Edit</Text>
-              </View>
+          <View style={styles.segment}>
+            <Pressable
+              onPress={() => { triggerHaptic('light'); setViewMode('list') }}
+              style={[styles.segmentOption, viewMode === 'list' ? styles.segmentActive : null]}
+            >
+              <List color={viewMode === 'list' ? colors.accent : colors.dim} size={16} strokeWidth={2} />
             </Pressable>
-            <Pressable accessibilityLabel={`Delete ${trade.symbol} trade`}
-              style={[styles.historyAction, styles.dangerAction]} onPress={() => confirmDelete(trade)}
-              disabled={busyId === trade.id}>
-              {busyId === trade.id
-                ? <ActivityIndicator color={colors.down} size="small" />
-                : <View style={styles.buttonContent}>
-                    <Trash2 color={colors.down} size={14} strokeWidth={2} />
-                    <Text style={[styles.historyActionText, { color: colors.down }]}>Delete</Text>
-                  </View>}
+            <Pressable
+              onPress={() => { triggerHaptic('light'); setViewMode('calendar') }}
+              style={[styles.segmentOption, viewMode === 'calendar' ? styles.segmentActive : null]}
+            >
+              <Calendar color={viewMode === 'calendar' ? colors.accent : colors.dim} size={16} strokeWidth={2} />
             </Pressable>
           </View>
         </View>
-      ))}
+        <Text style={styles.copy}>{trades.length} trade{trades.length === 1 ? '' : 's'} available on this device.</Text>
+      </View>
+
+      {viewMode === 'calendar' ? (
+        <CalendarView trades={trades} onSelectDate={(d) => setSelectedDate(d)} colors={colors} styles={styles} />
+      ) : null}
+
+      {selectedDate ? (
+        <View style={[styles.actionRow, styles.centeredRow, styles.panel]}>
+          <Text style={[styles.panelTitle, styles.flexOne]}>Filter: {selectedDate}</Text>
+          <Pressable style={styles.compactButton} onPress={() => setSelectedDate(null)}>
+            <Text style={styles.compactButtonText}>Clear Date Filter</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
+      {filteredTrades.map((trade) => {
+        const gradeInfo = computeTradeGrade(trade)
+        return (
+          <View key={trade.id} style={styles.tradeCard}>
+            <View style={styles.tradeRow}>
+              <View style={[styles.tradeOutcomeRail, { backgroundColor: trade.pnl < 0 ? colors.down : colors.up }]} />
+              <View style={styles.flexOne}>
+                <View style={styles.tradeTitleRow}>
+                  <Text style={styles.tradeSymbol}>{trade.symbol || '-'}</Text>
+                  <View style={[styles.gradeBadgeSmall, { backgroundColor: gradeInfo.color + '22' }]}>
+                    <Text style={[styles.gradeTextSmall, { color: gradeInfo.color }]}>{gradeInfo.grade}</Text>
+                  </View>
+                  <Text style={styles.tradeMeta}>{trade.direction} · {shortDate(trade.tradeDate)}</Text>
+                </View>
+                <Text style={styles.muted} numberOfLines={1}>
+                  {[trade.setup, trade.timeframe, trade.ruleSummary].filter(Boolean).join(' · ') || 'No setup details'}
+                </Text>
+                {trade.reasons && trade.reasons.length ? (
+                  <Text style={[styles.muted, { color: colors.accent, marginTop: 2 }]} numberOfLines={1}>
+                    💡 {trade.reasons.join(', ')}
+                  </Text>
+                ) : null}
+              </View>
+              <View style={styles.tradeRight}>
+                <View style={[styles.pnlPill, { backgroundColor: trade.pnl < 0 ? colors.downSoft : colors.upSoft }]}>
+                  <Text style={[styles.tradePnl, { color: trade.pnl < 0 ? colors.down : colors.up }]}>{money(trade.pnl)}</Text>
+                </View>
+                <Text style={[styles.syncLabel, { color: trade.syncState === 'synced' ? colors.up : colors.accent }]}>
+                  {trade.origin === 'desktop' && trade.syncState === 'synced' ? 'DESKTOP' : trade.syncState.toUpperCase()}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.historyActions}>
+              <Pressable accessibilityLabel={`Edit ${trade.symbol} trade`} style={styles.historyAction}
+                onPress={() => setEditing(trade)}>
+                <View style={styles.buttonContent}>
+                  <Pencil color={colors.text} size={14} strokeWidth={2} />
+                  <Text style={styles.historyActionText}>Edit</Text>
+                </View>
+              </Pressable>
+              <Pressable accessibilityLabel={`Delete ${trade.symbol} trade`}
+                style={[styles.historyAction, styles.dangerAction]} onPress={() => confirmDelete(trade)}
+                disabled={busyId === trade.id}>
+                {busyId === trade.id
+                  ? <ActivityIndicator color={colors.down} size="small" />
+                  : <View style={styles.buttonContent}>
+                      <Trash2 color={colors.down} size={14} strokeWidth={2} />
+                      <Text style={[styles.historyActionText, { color: colors.down }]}>Delete</Text>
+                    </View>}
+              </Pressable>
+            </View>
+          </View>
+        )
+      })}
       {editing ? (
         <TradeEditor
           trade={editing}
@@ -2086,6 +2530,7 @@ function MobileApp() {
   const systemScheme = useColorScheme()
   const [tab, setTab] = useState<Tab>('home')
   const [trades, setTrades] = useState<MobileTrade[]>([])
+  const [watchlist, setWatchlist] = useState<WatchlistItem[]>([])
   const [rules, setRules] = useState<string[]>([])
   const [rulesUpdatedAt, setRulesUpdatedAt] = useState('')
   const [themeMode, setThemeMode] = useState<ThemeMode>('system')
@@ -2105,13 +2550,15 @@ function MobileApp() {
   const styles = useMemo(() => createStyles(colors), [colors])
 
   const refresh = useCallback(async () => {
-    const [nextTrades, nextRuleState, nextChanges, nextDemoCount] = await Promise.all([
+    const [nextTrades, nextWatch, nextRuleState, nextChanges, nextDemoCount] = await Promise.all([
       listTrades(db),
+      listWatchlist(db),
       getRuleState(db),
       pendingTradeChanges(db),
       countDemoTrades(db)
     ])
     setTrades(nextTrades)
+    setWatchlist(nextWatch)
     setRules(nextRuleState.rules)
     setRulesUpdatedAt(nextRuleState.updatedAt)
     setPendingChangeCount(nextChanges.length)
@@ -2136,6 +2583,18 @@ function MobileApp() {
         // A corrupt value just means the button starts in its default corner.
       }
       setReady(true)
+
+      Notifications.scheduleNotificationAsync({
+        content: {
+          title: 'TradeHelp Journal',
+          body: "Did you trade today? Don't forget to journal your session & execution rules!"
+        },
+        trigger: {
+          hour: 17,
+          minute: 0,
+          repeats: true
+        } as unknown as Notifications.NotificationTriggerInput
+      }).catch(() => {})
     }).catch((error) => {
       setSyncMessage(`Startup failed: ${String(error?.message || error)}`)
       setReady(true)
@@ -2143,6 +2602,16 @@ function MobileApp() {
   }, [db, refresh])
 
   const [isLogging, setIsLogging] = useState(false)
+
+  async function addWatchlist(symbol: string, bias: 'Bullish' | 'Bearish' | 'Neutral', keyLevel: string, notes: string) {
+    await saveWatchlistItem(db, { symbol, bias, keyLevel, planNotes: notes })
+    await refresh()
+  }
+
+  async function removeWatchlist(id: string) {
+    await deleteWatchlistItem(db, id)
+    await refresh()
+  }
 
   async function dropDemoTrades() {
     await clearDemoTrades(db)
@@ -2155,9 +2624,6 @@ function MobileApp() {
   }, [db])
 
   async function saveNextTrade(trade: MobileTrade) {
-    // The sample trades exist to make an empty install look alive. The moment a
-    // real trade lands they stop being a demo and start being fake numbers
-    // inside someone's actual P&L, so they go first.
     await clearDemoTrades(db)
     await saveTrade(db, trade)
     await refresh()
@@ -2224,9 +2690,6 @@ function MobileApp() {
     const appState = AppState.addEventListener('change', (state) => {
       if (state !== 'active') return
       refreshMobileNews(false)
-      // Sync on every return to the app: the common path is logging trades on
-      // the phone during a session and then walking to the desk, and expecting
-      // the trader to remember a Sync button is how trades go missing.
       autoSync.current()
     })
     return () => appState.remove()
@@ -2242,10 +2705,6 @@ function MobileApp() {
     return () => response.remove()
   }, [])
 
-  // `silent` runs are the automatic ones (app foreground, just-saved a trade).
-  // They must never interrupt: a trader away from their desk is expected to be
-  // out of reach of the desktop, and the queued-changes count already says the
-  // work is safe.
   const syncNow = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
     if (!pairingCode.trim() || syncInFlight.current) return
     syncInFlight.current = true
@@ -2257,8 +2716,6 @@ function MobileApp() {
       setRules(result.rules)
       setRulesUpdatedAt(result.rulesUpdatedAt)
       if (result.pairingCode && result.pairingCode !== pairingCode) setPairingCode(result.pairingCode)
-      // A paired device has a real journal now — sample trades would sit in the
-      // same lists and totals as the trader's own history.
       await clearDemoTrades(db)
       await refresh()
       await refreshMobileNews(false)
@@ -2276,8 +2733,6 @@ function MobileApp() {
     }
   }, [db, pairingCode, refresh, refreshMobileNews])
 
-  // Held in a ref so the foreground listener below never has to resubscribe as
-  // the sync closure changes.
   useEffect(() => { autoSync.current = () => { void syncNow({ silent: true }) } }, [syncNow])
 
   const pending = pendingChangeCount
@@ -2340,7 +2795,7 @@ function MobileApp() {
       </View>
 
       <Animated.View style={[styles.screen, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-        {tab === 'home' && <Home trades={trades} pending={pending} onLog={() => setIsLogging(true)} onSync={syncNow} syncing={syncing} paired={Boolean(pairingCode)} demoCount={demoCount} onClearDemo={dropDemoTrades} colors={colors} styles={styles} />}
+        {tab === 'home' && <Home trades={trades} pending={pending} watchlist={watchlist} onAddWatchlist={addWatchlist} onDeleteWatchlist={removeWatchlist} onLog={() => setIsLogging(true)} onSync={syncNow} syncing={syncing} paired={Boolean(pairingCode)} demoCount={demoCount} onClearDemo={dropDemoTrades} colors={colors} styles={styles} />}
         {tab === 'history' && <History trades={trades} onUpdate={saveTradeChanges} onDelete={removeTrade} colors={colors} styles={styles} />}
         {tab === 'vault' && <Vault trades={trades} onUpdate={saveTradeChanges} colors={colors} styles={styles} />}
         {tab === 'news' && <News state={news} loading={newsLoading} onRefresh={() => refreshMobileNews(false)} onToggle={toggleNewsAlerts} onTest={scheduleNewsTestNotification} colors={colors} styles={styles} />}
@@ -2780,6 +3235,44 @@ function createStyles(colors: Palette) {
     lightboxPlaceholder: {
       width: '100%', height: 200, borderRadius: 14, backgroundColor: colors.surface2,
       borderWidth: 1, borderColor: colors.line, justifyContent: 'center', alignItems: 'center', gap: 10, padding: 16
+    },
+    quoteCard: {
+      backgroundColor: colors.surface, borderRadius: 16, borderWidth: 1, borderColor: colors.line,
+      padding: 14, marginTop: 4, shadowColor: colors.shadow, shadowOpacity: 0.08, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }
+    },
+    quoteText: { color: colors.text, fontSize: 13, fontStyle: 'italic', lineHeight: 19 },
+    quoteAuthor: { color: colors.accent, fontSize: 11, fontWeight: '700', marginTop: 4 },
+    shareCard: {
+      backgroundColor: colors.surface, borderRadius: 24, borderWidth: 1, borderColor: colors.line, padding: 20, gap: 16, maxWidth: 500, alignSelf: 'center', width: '100%'
+    },
+    shareGraphic: {
+      borderRadius: 18, borderWidth: 1, borderColor: colors.lineStrong, padding: 20, gap: 10
+    },
+    gradeBadge: {
+      borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4, alignItems: 'center', justifyContent: 'center'
+    },
+    gradeText: { fontSize: 16, fontWeight: '800' },
+    gradeBadgeSmall: {
+      borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, alignItems: 'center', justifyContent: 'center', marginLeft: 6
+    },
+    gradeTextSmall: { fontSize: 11, fontWeight: '800' },
+    watchCard: {
+      backgroundColor: colors.surface2, borderRadius: 14, borderWidth: 1, borderColor: colors.line, padding: 12, gap: 6
+    },
+    calendarCard: {
+      backgroundColor: colors.surface, borderRadius: 20, borderWidth: 1, borderColor: colors.line, padding: 16, gap: 12, marginTop: 4
+    },
+    calendarWeekHeader: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: colors.line, paddingBottom: 8 },
+    calendarWeekText: { flex: 1, color: colors.faint, fontSize: 11, fontWeight: '800', textAlign: 'center' },
+    calendarGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+    calendarCellEmpty: { width: '12%', aspectRatio: 1 },
+    calendarCell: {
+      width: '12%', aspectRatio: 1, borderRadius: 10, padding: 4, justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: colors.line
+    },
+    calendarDayNum: { color: colors.text, fontSize: 11, fontWeight: '700' },
+    calendarPnlText: { fontSize: 9, fontWeight: '800' },
+    edgeItem: {
+      backgroundColor: colors.surface2, borderRadius: 14, borderWidth: 1, borderColor: colors.line, padding: 12, gap: 4
     }
   })
 }

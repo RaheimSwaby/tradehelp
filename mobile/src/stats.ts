@@ -101,3 +101,69 @@ export function computeMobileStats(trades: MobileTrade[]): MobileStats {
     topSetup: topSetupText
   }
 }
+
+export function computeTradeGrade(trade: MobileTrade): { grade: 'A+' | 'A' | 'B' | 'C' | 'F'; score: number; color: string } {
+  const checks = trade.ruleChecks || []
+  if (!checks.length) return { grade: 'A', score: 90, color: '#10B981' }
+  const followed = checks.filter((c) => c.followed).length
+  const pct = (followed / checks.length) * 100
+  let grade: 'A+' | 'A' | 'B' | 'C' | 'F' = 'F'
+  let color = '#EF4444'
+  if (pct >= 100) { grade = 'A+'; color = '#10B981' }
+  else if (pct >= 85) { grade = 'A'; color = '#34D399' }
+  else if (pct >= 70) { grade = 'B'; color = '#F59E0B' }
+  else if (pct >= 50) { grade = 'C'; color = '#F97316' }
+  else { grade = 'F'; color = '#EF4444' }
+  return { grade, score: Math.round(pct), color }
+}
+
+export type SetupEdge = {
+  name: string
+  count: number
+  winRate: number
+  netPnl: number
+  expectancy: number
+  isTopEdge: boolean
+  isLeak: boolean
+}
+
+export function computeEdgeStats(trades: MobileTrade[]): SetupEdge[] {
+  const map = new Map<string, { wins: number; losses: number; count: number; pnl: number; winsPnl: number; lossesPnl: number }>()
+  for (const trade of trades) {
+    const name = trade.setup.trim() || 'General'
+    const curr = map.get(name) || { wins: 0, losses: 0, count: 0, pnl: 0, winsPnl: 0, lossesPnl: 0 }
+    curr.count++
+    curr.pnl += trade.pnl
+    if (trade.pnl > 0) {
+      curr.wins++
+      curr.winsPnl += trade.pnl
+    } else if (trade.pnl < 0) {
+      curr.losses++
+      curr.lossesPnl += Math.abs(trade.pnl)
+    }
+    map.set(name, curr)
+  }
+
+  const list: SetupEdge[] = []
+  for (const [name, d] of map.entries()) {
+    const wr = d.count ? (d.wins / d.count) * 100 : 0
+    const avgW = d.wins ? d.winsPnl / d.wins : 0
+    const avgL = d.losses ? d.lossesPnl / d.losses : 0
+    const exp = d.count ? (wr / 100) * avgW - ((100 - wr) / 100) * avgL : 0
+    list.push({
+      name,
+      count: d.count,
+      winRate: Math.round(wr),
+      netPnl: d.pnl,
+      expectancy: exp,
+      isTopEdge: false,
+      isLeak: false
+    })
+  }
+
+  list.sort((a, b) => b.expectancy - a.expectancy)
+  if (list[0] && list[0].netPnl > 0) list[0].isTopEdge = true
+  const last = list[list.length - 1]
+  if (list.length > 1 && last && last.netPnl < 0) last.isLeak = true
+  return list
+}

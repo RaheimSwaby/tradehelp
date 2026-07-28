@@ -18,6 +18,7 @@ export type MobileTrade = {
   screenshotUri: string
   ruleChecks: RuleCheck[]
   ruleSummary: string
+  reasons?: string[]
   origin: 'mobile' | 'desktop'
   desktopId: string
   syncState: 'pending' | 'synced'
@@ -46,6 +47,7 @@ type TradeRow = {
   screenshot_uri: string | null
   rule_checks: string
   rule_summary: string
+  reasons?: string
   origin: string
   desktop_id: string | null
   sync_state: string
@@ -55,6 +57,15 @@ type OutboxRow = {
   entity_id: string
   operation: string
   payload: string
+}
+
+export type WatchlistItem = {
+  id: string
+  symbol: string
+  bias: 'Bullish' | 'Bearish' | 'Neutral'
+  keyLevel: string
+  planNotes: string
+  createdAt: string
 }
 
 const DEFAULT_RULES = [
@@ -100,6 +111,16 @@ function parseChecks(value: string): RuleCheck[] {
   }
 }
 
+function parseReasons(value?: string): string[] {
+  if (!value) return []
+  try {
+    const parsed = JSON.parse(value)
+    return Array.isArray(parsed) ? parsed.map(String).filter(Boolean) : []
+  } catch {
+    return []
+  }
+}
+
 function publicTrade(row: TradeRow): MobileTrade {
   return {
     id: row.id,
@@ -116,6 +137,7 @@ function publicTrade(row: TradeRow): MobileTrade {
     screenshotUri: row.screenshot_uri || '',
     ruleChecks: parseChecks(row.rule_checks),
     ruleSummary: row.rule_summary || '',
+    reasons: parseReasons(row.reasons),
     origin: row.origin === 'desktop' ? 'desktop' : 'mobile',
     desktopId: row.desktop_id || '',
     syncState: row.sync_state === 'synced' ? 'synced' : 'pending'
@@ -150,11 +172,11 @@ export async function saveTrade(db: SQLiteDatabase, trade: MobileTrade) {
   await db.withTransactionAsync(async () => {
     await db.runAsync(`INSERT INTO mobile_trades
       (id,created_at,updated_at,trade_date,symbol,direction,pnl,fees,timeframe,setup,notes,
-       screenshot_uri,rule_checks,rule_summary,origin,desktop_id,sync_state)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       screenshot_uri,rule_checks,rule_summary,reasons,origin,desktop_id,sync_state)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       trade.id, trade.createdAt, trade.updatedAt, trade.tradeDate, trade.symbol, trade.direction,
       trade.pnl, trade.fees, trade.timeframe, trade.setup, trade.notes, trade.screenshotUri || null,
-      JSON.stringify(trade.ruleChecks), trade.ruleSummary, trade.origin, trade.desktopId || null, trade.syncState)
+      JSON.stringify(trade.ruleChecks), trade.ruleSummary, JSON.stringify(trade.reasons || []), trade.origin, trade.desktopId || null, trade.syncState)
     await db.runAsync(`INSERT OR REPLACE INTO sync_outbox
       (id,entity_type,entity_id,operation,payload,created_at,attempts)
       VALUES (?,?,?,?,?,?,0)`,
@@ -169,10 +191,10 @@ export async function updateLocalTrade(db: SQLiteDatabase, trade: MobileTrade) {
   await db.withTransactionAsync(async () => {
     await db.runAsync(`UPDATE mobile_trades SET
       updated_at=?,trade_date=?,symbol=?,direction=?,pnl=?,fees=?,timeframe=?,setup=?,notes=?,
-      screenshot_uri=?,rule_checks=?,rule_summary=?,sync_state='pending' WHERE id=?`,
+      screenshot_uri=?,rule_checks=?,rule_summary=?,reasons=?,sync_state='pending' WHERE id=?`,
       next.updatedAt, next.tradeDate, next.symbol, next.direction, next.pnl, next.fees,
       next.timeframe, next.setup, next.notes, next.screenshotUri || null,
-      JSON.stringify(next.ruleChecks), next.ruleSummary, next.id)
+      JSON.stringify(next.ruleChecks), next.ruleSummary, JSON.stringify(next.reasons || []), next.id)
     await db.runAsync(`INSERT OR REPLACE INTO sync_outbox
       (id,entity_type,entity_id,operation,payload,created_at,attempts)
       VALUES (?,?,?,?,?,?,0)`,
@@ -321,9 +343,47 @@ export async function applyRuleState(db: SQLiteDatabase, rules: unknown, updated
 }
 
 export async function getDeviceId(db: SQLiteDatabase) {
-  const current = await getSetting(db, 'deviceId')
-  if (current) return current
-  const id = createLocalId('ios')
-  await setSetting(db, 'deviceId', id)
+  let id = await getSetting(db, 'deviceId')
+  if (!id) {
+    id = createLocalId('device')
+    await setSetting(db, 'deviceId', id)
+  }
   return id
+}
+
+export async function listWatchlist(db: SQLiteDatabase): Promise<WatchlistItem[]> {
+  const rows = await db.getAllAsync<{
+    id: string
+    symbol: string
+    bias: string
+    key_level: string
+    plan_notes: string
+    created_at: string
+  }>('SELECT * FROM mobile_watchlist ORDER BY created_at DESC')
+  return rows.map((r) => ({
+    id: r.id,
+    symbol: r.symbol,
+    bias: r.bias === 'Bearish' ? 'Bearish' : r.bias === 'Neutral' ? 'Neutral' : 'Bullish',
+    keyLevel: r.key_level || '',
+    planNotes: r.plan_notes || '',
+    createdAt: r.created_at
+  }))
+}
+
+export async function saveWatchlistItem(
+  db: SQLiteDatabase,
+  item: Omit<WatchlistItem, 'id' | 'createdAt'> & { id?: string }
+): Promise<WatchlistItem> {
+  const id = item.id || createLocalId('watch')
+  const createdAt = new Date().toISOString()
+  await db.runAsync(
+    `INSERT OR REPLACE INTO mobile_watchlist (id, symbol, bias, key_level, plan_notes, created_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [id, item.symbol.toUpperCase(), item.bias, item.keyLevel || '', item.planNotes || '', createdAt]
+  )
+  return { id, symbol: item.symbol.toUpperCase(), bias: item.bias, keyLevel: item.keyLevel || '', planNotes: item.planNotes || '', createdAt }
+}
+
+export async function deleteWatchlistItem(db: SQLiteDatabase, id: string): Promise<void> {
+  await db.runAsync('DELETE FROM mobile_watchlist WHERE id = ?', [id])
 }

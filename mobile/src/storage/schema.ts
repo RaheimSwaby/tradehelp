@@ -48,6 +48,15 @@ export async function initializeDatabase(db: SQLiteDatabase) {
       value TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS mobile_watchlist (
+      id TEXT PRIMARY KEY NOT NULL,
+      symbol TEXT NOT NULL,
+      bias TEXT NOT NULL DEFAULT 'Bullish',
+      key_level TEXT NOT NULL DEFAULT '',
+      plan_notes TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS mobile_trades_date_idx
       ON mobile_trades (trade_date DESC);
     CREATE UNIQUE INDEX IF NOT EXISTS mobile_trades_desktop_idx
@@ -57,6 +66,7 @@ export async function initializeDatabase(db: SQLiteDatabase) {
   await ensureColumn(db, 'mobile_trades', 'direction', "TEXT NOT NULL DEFAULT 'Long'")
   await ensureColumn(db, 'mobile_trades', 'rule_checks', "TEXT NOT NULL DEFAULT '[]'")
   await ensureColumn(db, 'mobile_trades', 'rule_summary', "TEXT NOT NULL DEFAULT ''")
+  await ensureColumn(db, 'mobile_trades', 'reasons', "TEXT NOT NULL DEFAULT '[]'")
   await ensureColumn(db, 'mobile_trades', 'origin', "TEXT NOT NULL DEFAULT 'mobile'")
   await ensureColumn(db, 'mobile_trades', 'desktop_id', 'TEXT')
   // Sample rows are flagged with their own column rather than by overloading
