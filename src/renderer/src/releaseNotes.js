@@ -22,6 +22,15 @@ const V036_NOTES = `- Cosmetic Refresh - each theme preset now has its own restr
 - Dashboard quotes rotate daily and AI Coach quick prompts adapt to your journal`
 
 export const RELEASE_NOTES = {
+  // Nothing here is visible to an existing journal — the sample trades only
+  // appear on a brand-new install — so there is nothing to announce to someone
+  // updating.
+  '0.42.0': `- Bug fixes and small improvements`,
+  // 0.40.2–0.41.1 shipped without entries, so anyone updating from 0.40.1 saw an
+  // empty "What's new". Backfilled rather than left blank.
+  '0.41.1': `- Restoring a backup no longer creates duplicate copies of trades you already have`,
+  '0.41.0': `- Prop accounts now track cash profitability alongside your evaluation progress`,
+  '0.40.2': `- Deleting a trade can be undone, and the undo survives closing the app`,
   '0.40.1': `- The macOS build now runs natively on both Intel and Apple Silicon Macs`,
   '0.40.0': `- macOS builds are now signed and notarised by Apple — no more Terminal command to open the app
 - macOS updates now install themselves in the background, the same as Windows
