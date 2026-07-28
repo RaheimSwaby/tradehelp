@@ -58,16 +58,36 @@ export async function initializeDatabase(db: SQLiteDatabase) {
   await ensureColumn(db, 'mobile_trades', 'rule_summary', "TEXT NOT NULL DEFAULT ''")
   await ensureColumn(db, 'mobile_trades', 'origin', "TEXT NOT NULL DEFAULT 'mobile'")
   await ensureColumn(db, 'mobile_trades', 'desktop_id', 'TEXT')
+  // Sample rows are flagged with their own column rather than by overloading
+  // `origin`, which the sync layer keys off to decide what to push.
+  await ensureColumn(db, 'mobile_trades', 'is_demo', 'INTEGER NOT NULL DEFAULT 0')
 
-  // Seed rich demo trades if database is brand new and empty
+  // Installs that seeded sample trades before the flag existed got is_demo = 0
+  // from the column default, which would leave fabricated P&L sitting
+  // permanently in a real journal with no way to identify or clear it. The
+  // seeded ids are fixed and local ids are generated with a 'trade' prefix, so
+  // this can't catch a real trade.
+  await db.runAsync("UPDATE mobile_trades SET is_demo = 1 WHERE id LIKE 'demo-%' AND is_demo = 0")
+
+  // Seed sample trades so a brand-new install has something to show. They are
+  // flagged is_demo and cleared the moment real data arrives — see
+  // clearDemoTrades. Fabricated P&L must never be able to reach a trader's
+  // real numbers.
   const countResult = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM mobile_trades')
   if (countResult && countResult.count === 0) {
-    const now = Date.now()
     const day = 86_400_000
+    // Written in the same local, suffix-free shape as real trades
+    // (localTimestamp in App.tsx). Storing these as UTC made the same trade
+    // land on different days in Home and the Vault.
+    const localStamp = (offsetDays: number) => {
+      const date = new Date(Date.now() - offsetDays * day)
+      const pad = (value: number) => String(value).padStart(2, '0')
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+    }
     const demoTrades = [
       {
         id: 'demo-1',
-        trade_date: new Date(now - 1 * day).toISOString(),
+        trade_date: localStamp(1),
         symbol: 'NQ',
         direction: 'Long',
         pnl: 450.00,
@@ -80,7 +100,7 @@ export async function initializeDatabase(db: SQLiteDatabase) {
       },
       {
         id: 'demo-2',
-        trade_date: new Date(now - 2 * day).toISOString(),
+        trade_date: localStamp(2),
         symbol: 'ES',
         direction: 'Short',
         pnl: 280.50,
@@ -93,7 +113,7 @@ export async function initializeDatabase(db: SQLiteDatabase) {
       },
       {
         id: 'demo-3',
-        trade_date: new Date(now - 3 * day).toISOString(),
+        trade_date: localStamp(3),
         symbol: 'NVDA',
         direction: 'Long',
         pnl: -140.00,
@@ -106,7 +126,7 @@ export async function initializeDatabase(db: SQLiteDatabase) {
       },
       {
         id: 'demo-4',
-        trade_date: new Date(now - 4 * day).toISOString(),
+        trade_date: localStamp(4),
         symbol: 'TSLA',
         direction: 'Long',
         pnl: 620.00,
@@ -119,7 +139,7 @@ export async function initializeDatabase(db: SQLiteDatabase) {
       },
       {
         id: 'demo-5',
-        trade_date: new Date(now - 5 * day).toISOString(),
+        trade_date: localStamp(5),
         symbol: 'AAPL',
         direction: 'Short',
         pnl: 195.00,
@@ -132,7 +152,7 @@ export async function initializeDatabase(db: SQLiteDatabase) {
       },
       {
         id: 'demo-6',
-        trade_date: new Date(now - 7 * day).toISOString(),
+        trade_date: localStamp(7),
         symbol: 'NQ',
         direction: 'Long',
         pnl: 380.00,
@@ -147,8 +167,8 @@ export async function initializeDatabase(db: SQLiteDatabase) {
 
     for (const t of demoTrades) {
       await db.runAsync(
-        `INSERT INTO mobile_trades (id, created_at, updated_at, trade_date, symbol, direction, pnl, fees, timeframe, setup, notes, rule_summary, sync_state)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO mobile_trades (id, created_at, updated_at, trade_date, symbol, direction, pnl, fees, timeframe, setup, notes, rule_summary, sync_state, is_demo)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
         [t.id, t.trade_date, t.trade_date, t.trade_date, t.symbol, t.direction, t.pnl, t.fees, t.timeframe, t.setup, t.notes, t.rule_summary, t.sync_state]
       )
     }

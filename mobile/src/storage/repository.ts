@@ -130,6 +130,21 @@ export async function listTrades(db: SQLiteDatabase) {
   return rows.map(publicTrade)
 }
 
+export async function countDemoTrades(db: SQLiteDatabase) {
+  const row = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM mobile_trades WHERE is_demo = 1')
+  return Number(row?.count) || 0
+}
+
+/**
+ * Removes the seeded sample trades. Deleted directly rather than through
+ * deleteLocalTrade because these rows only ever existed on this device — they
+ * were never pushed, so queueing a delete would ask the desktop to remove
+ * trades it has never seen.
+ */
+export async function clearDemoTrades(db: SQLiteDatabase) {
+  await db.runAsync('DELETE FROM mobile_trades WHERE is_demo = 1')
+}
+
 export async function saveTrade(db: SQLiteDatabase, trade: MobileTrade) {
   await db.withTransactionAsync(async () => {
     await db.runAsync(`INSERT INTO mobile_trades

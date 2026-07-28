@@ -4,7 +4,7 @@
     "slug": "kingdd69",
     "version": "0.1.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "automatic",
     "scheme": "tradehelp",
     "icon": "./assets/icon.png",
     "ios": {
@@ -19,7 +19,11 @@
       }
     },
     "android": {
-      "package": "app.tradehelp.mobile"
+      "package": "app.tradehelp.mobile",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#0E1117"
+      }
     },
     "plugins": [
       "expo-sqlite",

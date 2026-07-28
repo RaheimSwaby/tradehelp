@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as Haptics from 'expo-haptics'
 import * as ImagePicker from 'expo-image-picker'
 import * as Notifications from 'expo-notifications'
@@ -50,9 +50,11 @@ import {
   useColorScheme,
   View
 } from 'react-native'
-import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Line, Path, Stop } from 'react-native-svg'
+import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Line, Path, Stop, Text as SvgText } from 'react-native-svg'
 import { initializeDatabase } from './src/storage/schema'
 import {
+  clearDemoTrades,
+  countDemoTrades,
   createLocalId,
   deleteLocalTrade,
   getRuleState,
@@ -146,6 +148,15 @@ function money(value: number) {
   return `${value < 0 ? '-' : ''}$${Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
+// Axis labels have ~40px to work with, so values are abbreviated rather than
+// written out in full.
+function compactMoney(value: number) {
+  const sign = value < 0 ? '-' : ''
+  const size = Math.abs(value)
+  if (size >= 1000) return `${sign}$${(size / 1000).toFixed(size >= 10_000 ? 0 : 1)}k`
+  return `${sign}$${Math.round(size)}`
+}
+
 function shortDate(value: string) {
   const parsed = new Date(value.replace(' ', 'T'))
   if (Number.isNaN(parsed.getTime())) return value.slice(0, 10)
@@ -169,14 +180,22 @@ function triggerHaptic(type: 'light' | 'medium' | 'success' | 'selection' = 'lig
   } catch {}
 }
 
-function Stat({ label, value, numValue, tone, styles }: { label: string; value: string; numValue?: number; tone?: string; styles: ReturnType<typeof createStyles> }) {
+function Stat({ label, value, numValue, tone, wide, styles }: { label: string; value: string; numValue?: number; tone?: string; wide?: boolean; styles: ReturnType<typeof createStyles> }) {
   return (
     <View style={styles.stat}>
       <Text style={styles.kicker}>{label}</Text>
       {numValue !== undefined && Number.isFinite(numValue) ? (
         <ScrubAnimatedNumber value={numValue} animateOnMount={true} duration={420} style={[styles.statValue, tone ? { color: tone } : null]} />
       ) : (
-        <Text style={[styles.statValue, tone ? { color: tone } : null]} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
+        // Free-text values (setup names) get a full row and two lines to land in;
+        // clipping a strategy name to "VWAP Re..." tells the trader nothing.
+        <Text
+          style={[styles.statValue, wide ? styles.statValueWide : null, tone ? { color: tone } : null]}
+          numberOfLines={wide ? 2 : 1}
+          adjustsFontSizeToFit={!wide}
+        >
+          {value}
+        </Text>
       )}
     </View>
   )
@@ -298,31 +317,65 @@ function PnlCurve({
   const activeValue = (isScrubbing ? values[scrubIndex] : periodNet) ?? 0
   const lineColor = activeValue < 0 ? colors.down : colors.up
 
-  const chartWidth = 360
-  const chartHeight = 150
-  const top = 10
-  const bottom = 138
+  // The viewBox tracks the real rendered width so the SVG never has to be
+  // stretched to fit. Scaling it non-uniformly is what turned the marker dots
+  // into ellipses and made the stroke weight drift.
+  const chartWidth = Math.max(1, Math.round(chartContainerWidth))
+  const chartHeight = 175
+  const top = 14
+  const bottom = 150
+  const rightGutter = 44 // room for the value labels
+  const plotWidth = Math.max(1, chartWidth - rightGutter)
   const rawMin = Math.min(...values)
   const rawMax = Math.max(...values)
   const span = Math.max(1, rawMax - rawMin)
   const min = rawMin - span * 0.12
   const max = rawMax + span * 0.12
 
+  const yFor = (value: number) => top + ((max - value) / Math.max(1, max - min)) * (bottom - top)
   const points = values.map((value, index) => ({
-    x: values.length === 1 ? 0 : (index / Math.max(1, values.length - 1)) * chartWidth,
-    y: top + ((max - value) / Math.max(1, max - min)) * (bottom - top)
+    x: values.length === 1 ? 0 : (index / Math.max(1, values.length - 1)) * plotWidth,
+    y: yFor(value)
   }))
 
-  const linePath = points.map((point, index) => `${index ? 'L' : 'M'} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(' ')
-  const areaPath = `${linePath} L ${chartWidth} ${chartHeight} L 0 ${chartHeight} Z`
-  const zeroY = top + ((max - 0) / Math.max(1, max - min)) * (bottom - top)
+  // Catmull-Rom control points with the handles clamped inside each segment, so
+  // the curve reads as smooth without inventing highs or lows the trader never
+  // actually hit.
+  function curvedPath(pts: Array<{ x: number; y: number }>) {
+    const first = pts[0]
+    if (!first) return ''
+    let d = `M ${first.x.toFixed(1)} ${first.y.toFixed(1)}`
+    for (let i = 0; i < pts.length - 1; i += 1) {
+      const p1 = pts[i]
+      const p2 = pts[i + 1]
+      if (!p1 || !p2) continue
+      const p0 = pts[i - 1] ?? p1
+      const p3 = pts[i + 2] ?? p2
+      const lo = Math.min(p1.y, p2.y)
+      const hi = Math.max(p1.y, p2.y)
+      const clamp = (y: number) => Math.max(lo, Math.min(hi, y))
+      const c1x = p1.x + (p2.x - p0.x) / 6
+      const c1y = clamp(p1.y + (p2.y - p0.y) / 6)
+      const c2x = p2.x - (p3.x - p1.x) / 6
+      const c2y = clamp(p2.y - (p3.y - p1.y) / 6)
+      d += ` C ${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${c2x.toFixed(1)} ${c2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`
+    }
+    return d
+  }
+
+  const linePath = curvedPath(points)
+  const areaPath = `${linePath} L ${points[points.length - 1]?.x.toFixed(1) ?? 0} ${chartHeight} L 0 ${chartHeight} Z`
+  const zeroY = yFor(0)
   const last = points[points.length - 1] ?? { x: 0, y: zeroY }
   const activePoint = isScrubbing ? points[scrubIndex] : last
+  const gridLines = [max, (max + min) / 2, min]
 
   const handleTouch = (evt: any) => {
     const x = evt.nativeEvent.locationX
-    if (typeof x === 'number' && chartContainerWidth > 0) {
-      const ratio = Math.max(0, Math.min(1, x / chartContainerWidth))
+    if (typeof x === 'number' && plotWidth > 0) {
+      // Mapped against the plot area rather than the full container, or the
+      // marker drifts away from the finger by the width of the label gutter.
+      const ratio = Math.max(0, Math.min(1, x / plotWidth))
       const idx = Math.round(ratio * (values.length - 1))
       if (idx !== scrubIndex) triggerHaptic('selection')
       setScrubIndex(idx)
@@ -355,7 +408,7 @@ function PnlCurve({
       </View>
 
       <Animated.View
-        style={[styles.chart, { opacity: chartAnim, transform: [{ scaleY: chartAnim }] }]}
+        style={[styles.chart, { opacity: chartAnim }]}
         onLayout={(e) => setChartContainerWidth(e.nativeEvent.layout.width)}
         onStartShouldSetResponder={() => true}
         onMoveShouldSetResponder={() => true}
@@ -363,30 +416,52 @@ function PnlCurve({
         onResponderMove={handleTouch}
         onResponderRelease={() => setScrubIndex(null)}
       >
-        <Svg width="100%" height="100%" viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none">
+        <Svg width="100%" height="100%" viewBox={`0 0 ${chartWidth} ${chartHeight}`}>
           <Defs>
             <SvgLinearGradient id="pnlArea" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0" stopColor={lineColor} stopOpacity="0.38" />
-              <Stop offset="0.7" stopColor={lineColor} stopOpacity="0.08" />
+              <Stop offset="0" stopColor={lineColor} stopOpacity="0.34" />
+              <Stop offset="0.72" stopColor={lineColor} stopOpacity="0.07" />
               <Stop offset="1" stopColor={lineColor} stopOpacity="0" />
             </SvgLinearGradient>
+            <SvgLinearGradient id="pnlLine" x1="0" y1="0" x2="1" y2="0">
+              <Stop offset="0" stopColor={lineColor} stopOpacity="0.55" />
+              <Stop offset="1" stopColor={lineColor} stopOpacity="1" />
+            </SvgLinearGradient>
           </Defs>
-          <Line x1="0" y1={zeroY} x2={chartWidth} y2={zeroY} stroke={colors.line} strokeWidth="1" strokeDasharray="4 5" />
+
+          {gridLines.map((value, index) => (
+            <Fragment key={`grid-${index}`}>
+              <Line
+                x1="0" y1={yFor(value)} x2={plotWidth} y2={yFor(value)}
+                stroke={colors.line} strokeWidth="1" opacity={index === 1 ? 0.35 : 0.55}
+              />
+              <SvgText
+                x={plotWidth + 7} y={yFor(value) + 3.5}
+                fill={colors.faint} fontSize="9" fontWeight="700"
+              >
+                {compactMoney(value)}
+              </SvgText>
+            </Fragment>
+          ))}
+
+          {/* Breakeven is the line that actually matters, so it stays visually
+              distinct from the evenly-spaced value grid. */}
+          {zeroY > top && zeroY < bottom ? (
+            <Line x1="0" y1={zeroY} x2={plotWidth} y2={zeroY} stroke={colors.dim} strokeWidth="1" strokeDasharray="4 5" opacity="0.7" />
+          ) : null}
+
           {periodTrades.length ? <Path d={areaPath} fill="url(#pnlArea)" /> : null}
-          <Path d={linePath} fill="none" stroke={lineColor} strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
-          
-          {isScrubbing && activePoint ? (
+          <Path d={linePath} fill="none" stroke="url(#pnlLine)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+
+          {activePoint ? (
             <>
-              <Line x1={activePoint.x} y1="0" x2={activePoint.x} y2={chartHeight} stroke={lineColor} strokeWidth="1.2" strokeDasharray="3 3" opacity="0.85" />
-              <Circle cx={activePoint.x} cy={activePoint.y} r="4.5" fill={lineColor} />
-              <Circle cx={activePoint.x} cy={activePoint.y} r="2" fill={colors.surface} />
+              {isScrubbing ? (
+                <Line x1={activePoint.x} y1={top} x2={activePoint.x} y2={bottom} stroke={lineColor} strokeWidth="1" strokeDasharray="3 4" opacity="0.6" />
+              ) : null}
+              <Circle cx={activePoint.x} cy={activePoint.y} r={isScrubbing ? 11 : 9} fill={lineColor} opacity="0.16" />
+              <Circle cx={activePoint.x} cy={activePoint.y} r={isScrubbing ? 6 : 5} fill={colors.bg} stroke={lineColor} strokeWidth="2.4" />
             </>
-          ) : (
-            <>
-              <Circle cx={last.x} cy={last.y} r="4.5" fill={lineColor} />
-              <Circle cx={last.x} cy={last.y} r="2" fill={colors.surface} />
-            </>
-          )}
+          ) : null}
         </Svg>
       </Animated.View>
 
@@ -414,6 +489,8 @@ function Home({
   onSync,
   syncing,
   paired,
+  demoCount,
+  onClearDemo,
   colors,
   styles
 }: {
@@ -423,6 +500,8 @@ function Home({
   onSync: () => void
   syncing: boolean
   paired: boolean
+  demoCount: number
+  onClearDemo: () => void
   colors: Palette
   styles: ReturnType<typeof createStyles>
 }) {
@@ -451,6 +530,20 @@ function Home({
           <Text style={styles.title}>{sessionDate}</Text>
         </View>
       </View>
+
+      {demoCount > 0 ? (
+        <View style={styles.demoBanner}>
+          <View style={styles.flexOne}>
+            <Text style={styles.demoBannerTitle}>Sample data</Text>
+            <Text style={styles.demoBannerCopy}>
+              These {demoCount} trades are examples so you can see the app with numbers in it. They disappear as soon as you log a real trade or pair with desktop.
+            </Text>
+          </View>
+          <Pressable style={styles.demoBannerButton} onPress={onClearDemo} accessibilityRole="button">
+            <Text style={styles.demoBannerButtonText}>Clear</Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       <LinearGradient
         colors={colors.heroGradient}
@@ -505,7 +598,9 @@ function Home({
       </View>
       <View style={styles.statsRow}>
         <Stat label="STREAK" value={performance.streak} tone={performance.streak.includes('Win') ? colors.up : colors.accent} styles={styles} />
-        <Stat label="TOP SETUP" value={performance.topSetup} styles={styles} />
+      </View>
+      <View style={styles.statsRow}>
+        <Stat label="TOP SETUP" value={performance.topSetup} wide styles={styles} />
       </View>
       {performance.ruleRate !== null
         ? <Text style={styles.muted}>Rule discipline {percent(performance.ruleRate)} across your mobile checklists.</Text>
@@ -620,7 +715,7 @@ function News({
         </View>
         {state.permission === 'denied' ? (
           <Pressable style={styles.secondaryButton} onPress={() => Linking.openSettings()}>
-            <Text style={styles.secondaryButtonText}>Open iOS notification settings</Text>
+            <Text style={styles.secondaryButtonText}>Open notification settings</Text>
           </Pressable>
         ) : null}
         {state.enabled && state.permission === 'granted' ? (
@@ -1910,21 +2005,24 @@ function MobileApp() {
   const [news, setNews] = useState<NewsState>(EMPTY_NEWS)
   const [newsLoading, setNewsLoading] = useState(false)
   const [ready, setReady] = useState(false)
+  const [demoCount, setDemoCount] = useState(0)
   const syncInFlight = useRef(false)
   const autoSync = useRef<() => void>(() => {})
   const colors = palette(themeMode, systemScheme)
   const styles = useMemo(() => createStyles(colors), [colors])
 
   const refresh = useCallback(async () => {
-    const [nextTrades, nextRuleState, nextChanges] = await Promise.all([
+    const [nextTrades, nextRuleState, nextChanges, nextDemoCount] = await Promise.all([
       listTrades(db),
       getRuleState(db),
-      pendingTradeChanges(db)
+      pendingTradeChanges(db),
+      countDemoTrades(db)
     ])
     setTrades(nextTrades)
     setRules(nextRuleState.rules)
     setRulesUpdatedAt(nextRuleState.updatedAt)
     setPendingChangeCount(nextChanges.length)
+    setDemoCount(nextDemoCount)
   }, [db])
 
   useEffect(() => {
@@ -1946,7 +2044,16 @@ function MobileApp() {
 
   const [isLogging, setIsLogging] = useState(false)
 
+  async function dropDemoTrades() {
+    await clearDemoTrades(db)
+    await refresh()
+  }
+
   async function saveNextTrade(trade: MobileTrade) {
+    // The sample trades exist to make an empty install look alive. The moment a
+    // real trade lands they stop being a demo and start being fake numbers
+    // inside someone's actual P&L, so they go first.
+    await clearDemoTrades(db)
     await saveTrade(db, trade)
     await refresh()
     setIsLogging(false)
@@ -2045,6 +2152,9 @@ function MobileApp() {
       setRules(result.rules)
       setRulesUpdatedAt(result.rulesUpdatedAt)
       if (result.pairingCode && result.pairingCode !== pairingCode) setPairingCode(result.pairingCode)
+      // A paired device has a real journal now — sample trades would sit in the
+      // same lists and totals as the trader's own history.
+      await clearDemoTrades(db)
       await refresh()
       await refreshMobileNews(false)
       const applied = [
@@ -2125,7 +2235,7 @@ function MobileApp() {
       </View>
 
       <Animated.View style={[styles.screen, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-        {tab === 'home' && <Home trades={trades} pending={pending} onLog={() => setIsLogging(true)} onSync={syncNow} syncing={syncing} paired={Boolean(pairingCode)} colors={colors} styles={styles} />}
+        {tab === 'home' && <Home trades={trades} pending={pending} onLog={() => setIsLogging(true)} onSync={syncNow} syncing={syncing} paired={Boolean(pairingCode)} demoCount={demoCount} onClearDemo={dropDemoTrades} colors={colors} styles={styles} />}
         {tab === 'history' && <History trades={trades} onUpdate={saveTradeChanges} onDelete={removeTrade} colors={colors} styles={styles} />}
         {tab === 'vault' && <Vault trades={trades} onUpdate={saveTradeChanges} colors={colors} styles={styles} />}
         {tab === 'news' && <News state={news} loading={newsLoading} onRefresh={() => refreshMobileNews(false)} onToggle={toggleNewsAlerts} onTest={scheduleNewsTestNotification} colors={colors} styles={styles} />}
@@ -2153,6 +2263,18 @@ function MobileApp() {
           />
         </SafeAreaView>
       </Modal>
+
+      {/* Logging a trade is the whole point of the phone app, so it can't live
+          buried below the fold on one screen — it needs to be one tap from
+          anywhere. */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Log a trade"
+        onPress={() => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setIsLogging(true) }}
+        style={({ pressed }) => [styles.fab, pressed ? styles.fabPressed : null]}
+      >
+        <Plus color="#17130B" size={26} strokeWidth={2.8} />
+      </Pressable>
 
       <LinearGradient colors={[colors.nav, colors.header]} style={styles.tabBar}>
         {tabs.map((item) => {
@@ -2223,10 +2345,35 @@ function createStyles(colors: Palette) {
     },
     offlineText: { color: colors.dim, fontSize: 10, fontWeight: '800', letterSpacing: 0.8 },
     statusDot: { width: 7, height: 7, borderRadius: 4 },
-    content: { paddingHorizontal: 18, paddingTop: 18, paddingBottom: 40, gap: 16 },
+    // Capped and centred so the layout still reads as a column on a tablet or a
+    // large phone in landscape. Left to stretch, the stat grid becomes two very
+    // wide boxes and body copy runs to unreadable line lengths.
+    content: {
+      paddingHorizontal: 18, paddingTop: 18, paddingBottom: 40, gap: 16,
+      width: '100%', maxWidth: 640, alignSelf: 'center'
+    },
     keyboardContent: { paddingBottom: 140 },
     pageIntro: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 12 },
     pageTitleStack: { gap: 4, marginBottom: 2 },
+    demoBanner: {
+      flexDirection: 'row', alignItems: 'center', gap: 12,
+      backgroundColor: colors.accentSoft, borderWidth: 1, borderColor: colors.accent,
+      borderRadius: 12, paddingVertical: 12, paddingHorizontal: 14
+    },
+    demoBannerTitle: { color: colors.accent, fontSize: 12, fontWeight: '800', letterSpacing: 0.6, marginBottom: 3 },
+    demoBannerCopy: { color: colors.dim, fontSize: 12, lineHeight: 17 },
+    demoBannerButton: {
+      minHeight: 36, paddingHorizontal: 14, borderRadius: 8, alignItems: 'center', justifyContent: 'center',
+      backgroundColor: colors.accent
+    },
+    demoBannerButtonText: { color: '#17130B', fontSize: 13, fontWeight: '800' },
+    fab: {
+      position: 'absolute', right: 18, bottom: 94, width: 58, height: 58, borderRadius: 29,
+      backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center', zIndex: 20,
+      shadowColor: colors.accent, shadowOpacity: 0.42, shadowRadius: 14, shadowOffset: { width: 0, height: 6 },
+      elevation: 8
+    },
+    fabPressed: { transform: [{ scale: 0.94 }], shadowOpacity: 0.24 },
     eyebrow: { color: colors.accent, fontSize: 10, fontWeight: '800', letterSpacing: 1.4 },
     title: { color: colors.text, fontSize: 26, lineHeight: 32, fontWeight: '800', letterSpacing: -0.4 },
     copy: { color: colors.dim, fontSize: 14, lineHeight: 21 },
@@ -2266,6 +2413,7 @@ function createStyles(colors: Palette) {
     kicker: { color: colors.dim, fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
     sectionLabel: { color: colors.dim, fontSize: 11, fontWeight: '800', letterSpacing: 1, marginTop: 4 },
     statValue: { color: colors.text, fontSize: 22, fontWeight: '800', marginTop: 8 },
+    statValueWide: { fontSize: 19, lineHeight: 24 },
     panel: {
       backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: 18,
       padding: 18, gap: 14, marginTop: 4,
