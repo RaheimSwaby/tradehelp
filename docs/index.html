@@ -400,6 +400,7 @@
                 : 'Thanks — check your inbox to confirm.';
               msg.className = 'note sub-msg ok'; form.reset();
               if (window.goatcounter && window.goatcounter.count) window.goatcounter.count({ path: eventName, title: 'Email signup: ' + eventName, event: true });
+              if (window.tradeHelpReddit) window.tradeHelpReddit.track('SignUp');
             } else {
               msg.textContent = (res.d && res.d.message) || 'Something went wrong — please try again.'; msg.className = 'note sub-msg err';
             }
@@ -514,6 +515,7 @@
   })();
 </script>
 <script src="matrix.js"></script>
+<script src="site-preferences.js"></script>
 <script data-goatcounter="https://kingdd69.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
 </body>
 </html>

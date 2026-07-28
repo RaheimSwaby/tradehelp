@@ -1,0 +1,30 @@
+<!--
+  Gumroad: Settings > Advanced > Third-party analytics > Add snippet
+  Location: Receipt
+
+  Pixel ID: a2_jea6edb1lg55
+-->
+<script>
+  !function(w,d){
+    if(!w.rdt){
+      var p=w.rdt=function(){p.sendEvent?p.sendEvent.apply(p,arguments):p.callQueue.push(arguments)};
+      p.callQueue=[];
+      var t=d.createElement("script");
+      t.src="https://www.redditstatic.com/ads/pixel.js";
+      t.async=true;
+      var s=d.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(t,s);
+    }
+  }(window,document);
+
+  rdt('init', 'a2_jea6edb1lg55', {
+    optOut: false,
+    useDecimalCurrencyValues: true
+  });
+  rdt('track', 'Purchase', {
+    currency: '$CURRENCY',
+    transactionId: '$ORDER',
+    value: Number('$VALUE'),
+    products: [{ id: 'oyftvr', name: 'TradeHelp', category: 'Trading journal' }]
+  });
+</script>
