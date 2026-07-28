@@ -1,4 +1,5 @@
 import type { SQLiteDatabase } from 'expo-sqlite'
+import { normalizeTradeDate, toLocalStamp } from './dates'
 
 async function ensureColumn(db: SQLiteDatabase, table: string, name: string, declaration: string) {
   const columns = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(${table})`)
@@ -68,6 +69,20 @@ export async function initializeDatabase(db: SQLiteDatabase) {
   // seeded ids are fixed and local ids are generated with a 'trade' prefix, so
   // this can't catch a real trade.
   await db.runAsync("UPDATE mobile_trades SET is_demo = 1 WHERE id LIKE 'demo-%' AND is_demo = 0")
+
+  // Rows synced before trade dates were normalised are still stored in whatever
+  // shape their source used. They have to be rewritten rather than handled at
+  // read time, because the mixed formats sort wrongly against each other — see
+  // ./dates. Only touches rows that aren't already canonical.
+  const legacyDates = await db.getAllAsync<{ id: string; trade_date: string }>(
+    "SELECT id, trade_date FROM mobile_trades WHERE trade_date NOT GLOB '____-__-__T__:__:__'"
+  )
+  for (const row of legacyDates) {
+    const normalized = normalizeTradeDate(row.trade_date)
+    if (normalized !== row.trade_date) {
+      await db.runAsync('UPDATE mobile_trades SET trade_date = ? WHERE id = ?', [normalized, row.id])
+    }
+  }
 
   // Seed sample trades so a brand-new install has something to show. They are
   // flagged is_demo and cleared the moment real data arrives — see

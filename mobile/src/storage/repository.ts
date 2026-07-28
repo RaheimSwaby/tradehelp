@@ -1,4 +1,5 @@
 import type { SQLiteDatabase } from 'expo-sqlite'
+import { normalizeTradeDate } from './dates'
 
 export type RuleCheck = { rule: string; followed: boolean }
 
@@ -253,7 +254,7 @@ export async function applySyncResult(
         if (linked.origin === 'desktop') {
           await db.runAsync(`UPDATE mobile_trades SET updated_at=?,trade_date=?,symbol=?,direction=?,
             pnl=?,fees=?,timeframe=?,setup=?,notes=?,rule_summary=? WHERE id=?`,
-            new Date().toISOString(), String(item.tradeDate || ''), String(item.symbol || ''),
+            new Date().toISOString(), normalizeTradeDate(item.tradeDate), String(item.symbol || ''),
             item.direction === 'Short' ? 'Short' : 'Long', Number(item.pnl) || 0, Number(item.fees) || 0,
             String(item.timeframe || ''), String(item.setup || ''), String(item.notes || ''),
             String(item.ruleSummary || ''), linked.id)
@@ -266,7 +267,9 @@ export async function applySyncResult(
         (id,created_at,updated_at,trade_date,symbol,direction,pnl,fees,timeframe,setup,notes,
          screenshot_uri,rule_checks,rule_summary,origin,desktop_id,sync_state)
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        id, now, now, String(item.tradeDate || now), String(item.symbol || ''),
+        // The fallback was `now` as a UTC ISO string, which put a trade with a
+        // missing timestamp on the wrong day for anyone behind UTC.
+        id, now, now, normalizeTradeDate(item.tradeDate), String(item.symbol || ''),
         item.direction === 'Short' ? 'Short' : 'Long', Number(item.pnl) || 0, Number(item.fees) || 0,
         String(item.timeframe || ''), String(item.setup || ''), String(item.notes || ''),
         null, '[]', String(item.ruleSummary || ''), 'desktop', desktopId, 'synced')
