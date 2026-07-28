@@ -11,11 +11,15 @@ import { initUpdater } from './updater.js'
 import * as license from './license.js'
 import { testKey } from './keytest.js'
 import { createImportWatcher, readInboxFile } from './importWatcher.js'
+import { createBrokerSync } from './brokerSync.js'
+import { createMobileSyncServer } from './mobileSync.js'
 
 let win
 let settingsCache = null
 let videoPickCleanupTimer = null
 let importWatcher = null
+let brokerSync = null
+let mobileSync = null
 const VIDEO_SCHEME = 'tradehelp-media'
 const VIDEO_PICK_TTL_MS = 15 * 60 * 1000
 const MAX_VIDEO_PICKS = 10
@@ -128,6 +132,14 @@ function createWindow() {
 app.whenReady().then(() => {
   app.setAppUserModelId('com.tradehelp.app') // so Windows notifications show "TradeHelp", not "electron.app"
   db.initDb()
+  brokerSync = createBrokerSync(db, { allowDevelopment: !app.isPackaged })
+  mobileSync = createMobileSyncServer(db, {
+    allow: true,
+    onSync: (result) => {
+      settingsCache = db.getSettings()
+      try { win?.webContents?.send('imports:changed', { type: 'mobile-sync', ...result }) } catch {}
+    }
+  })
   registerVideoProtocol()
   videoPickCleanupTimer = setInterval(purgeExpiredVideoPicks, 60_000)
   videoPickCleanupTimer.unref?.()
@@ -153,6 +165,7 @@ app.whenReady().then(() => {
 app.on('before-quit', () => {
   if (videoPickCleanupTimer) clearInterval(videoPickCleanupTimer)
   importWatcher?.stop()
+  mobileSync?.stop().catch(() => {})
   pendingVideoPicks.clear()
   for (const [sessionId, recording] of activeSessionRecordings) {
     try { recording.stream.destroy() } catch {}
@@ -202,6 +215,27 @@ function registerIpc() {
     const result = await importWatcher.scanSource(source, true)
     return { ...result, inbox: db.listImportInbox('active') }
   })
+  ipcMain.handle('broker-sync:capabilities', () => brokerSync.capabilities())
+  ipcMain.handle('broker-sync:list', () => brokerSync.list())
+  ipcMain.handle('broker-sync:connect', (_e, input = {}) => brokerSync.connect(input))
+  ipcMain.handle('broker-sync:disconnect', (_e, id) => brokerSync.disconnect(id))
+  ipcMain.handle('broker-sync:reset', (_e, id) => brokerSync.reset(id))
+  ipcMain.handle('broker-sync:run', async (_e, id) => {
+    const result = await brokerSync.sync(id)
+    try {
+      win?.webContents?.send('imports:changed', {
+        type: 'broker-sync',
+        importedCount: result.importedCount,
+        duplicateCount: result.duplicateCount,
+        batch: result.batch
+      })
+    } catch {}
+    return result
+  })
+  ipcMain.handle('mobile-sync:status', () => mobileSync.status())
+  ipcMain.handle('mobile-sync:start', () => mobileSync.start())
+  ipcMain.handle('mobile-sync:stop', () => mobileSync.stop())
+  ipcMain.handle('mobile-sync:rotate', () => mobileSync.rotate())
   ipcMain.handle('fills:list', (_e, tradeId) => db.listTradeFills(tradeId))
   ipcMain.handle('fills:replace', (_e, tradeId, fills) => db.replaceTradeFills(tradeId, fills))
 

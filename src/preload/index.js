@@ -16,6 +16,16 @@ const api = {
   saveImportSource: (source) => ipcRenderer.invoke('imports:source:save', source),
   deleteImportSource: (id) => ipcRenderer.invoke('imports:source:delete', id),
   scanImportSource: (id) => ipcRenderer.invoke('imports:source:scan', id),
+  brokerSyncCapabilities: () => ipcRenderer.invoke('broker-sync:capabilities'),
+  listBrokerConnections: () => ipcRenderer.invoke('broker-sync:list'),
+  connectBroker: (input) => ipcRenderer.invoke('broker-sync:connect', input),
+  disconnectBroker: (id) => ipcRenderer.invoke('broker-sync:disconnect', id),
+  resetBrokerSync: (id) => ipcRenderer.invoke('broker-sync:reset', id),
+  syncBroker: (id) => ipcRenderer.invoke('broker-sync:run', id),
+  mobileSyncStatus: () => ipcRenderer.invoke('mobile-sync:status'),
+  startMobileSync: () => ipcRenderer.invoke('mobile-sync:start'),
+  stopMobileSync: () => ipcRenderer.invoke('mobile-sync:stop'),
+  rotateMobileSyncCode: () => ipcRenderer.invoke('mobile-sync:rotate'),
   onImportsChanged: (callback) => {
     const listener = (_event, info) => callback(info)
     ipcRenderer.on('imports:changed', listener)

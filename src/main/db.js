@@ -83,6 +83,17 @@ export function initDb() {
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY, value TEXT
     );
+    CREATE TABLE IF NOT EXISTS mobile_sync_receipts (
+      deviceId TEXT NOT NULL,
+      mobileTradeId TEXT NOT NULL,
+      desktopTradeId TEXT NOT NULL,
+      syncedAt TEXT NOT NULL,
+      PRIMARY KEY (deviceId, mobileTradeId)
+    );
+    CREATE TABLE IF NOT EXISTS mobile_sync_state (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS trade_images (
       id TEXT PRIMARY KEY,
       tradeId TEXT,
@@ -281,6 +292,28 @@ export function initDb() {
       importedAt TEXT DEFAULT ''
     );
     CREATE INDEX IF NOT EXISTS idx_import_inbox_state ON import_inbox(state, detectedAt);
+    CREATE TABLE IF NOT EXISTS broker_connections (
+      id TEXT PRIMARY KEY,
+      provider TEXT NOT NULL,
+      label TEXT NOT NULL,
+      account TEXT DEFAULT '',
+      enabled INTEGER DEFAULT 1,
+      status TEXT NOT NULL DEFAULT 'connected',
+      lastCursor TEXT DEFAULT '',
+      lastSyncAt TEXT DEFAULT '',
+      lastError TEXT DEFAULT '',
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_broker_connections_provider ON broker_connections(provider, createdAt);
+    CREATE TABLE IF NOT EXISTS broker_sync_items (
+      connectionId TEXT NOT NULL,
+      externalId TEXT NOT NULL,
+      tradeId TEXT NOT NULL,
+      importedAt TEXT NOT NULL,
+      PRIMARY KEY (connectionId, externalId)
+    );
+    CREATE INDEX IF NOT EXISTS idx_broker_sync_items_trade ON broker_sync_items(tradeId);
   `)
 
   // Migrate older DBs that predate columns added above.
@@ -621,6 +654,147 @@ export function addTrade(t) {
   return listTrades()
 }
 
+function mobileChecklistNotes(trade = {}) {
+  const checks = Array.isArray(trade.ruleChecks) ? trade.ruleChecks : []
+  if (!checks.length) return String(trade.notes || '')
+  const checklist = checks.map((check) => `${check.followed ? '[x]' : '[ ]'} ${String(check.rule || '').trim()}`).join('\n')
+  return [String(trade.notes || '').trim(), `Mobile post-trade checklist:\n${checklist}`].filter(Boolean).join('\n\n')
+}
+
+export function applyMobileTradeChanges(deviceId, changes = []) {
+  const device = String(deviceId || '').trim().slice(0, 100)
+  if (!device) throw new Error('Mobile device ID is required')
+  const list = Array.isArray(changes) ? changes.slice(0, 100) : []
+  const accepted = []
+  let importedCount = 0
+  let updatedCount = 0
+  let deletedCount = 0
+  let duplicateCount = 0
+  const receipt = db.prepare('SELECT desktopTradeId FROM mobile_sync_receipts WHERE deviceId = ? AND mobileTradeId = ?')
+  const saveReceipt = db.prepare(`INSERT INTO mobile_sync_receipts
+    (deviceId,mobileTradeId,desktopTradeId,syncedAt) VALUES (?,?,?,?)`)
+  const touchReceipt = db.prepare(`UPDATE mobile_sync_receipts SET syncedAt = ?
+    WHERE deviceId = ? AND mobileTradeId = ?`)
+  const updateFromMobile = db.prepare(`UPDATE trades SET
+    symbol=?,direction=?,pnl=?,fees=?,setup=?,notes=?,timestamp=?,reason=?,entryTimeframe=?
+    WHERE id=?`)
+  let changed = false
+
+  for (const change of list) {
+    const operation = ['create', 'update', 'delete'].includes(change?.operation) ? change.operation : 'create'
+    const trade = change?.payload && typeof change.payload === 'object' ? change.payload : change
+    const mobileTradeId = String(change?.entityId || trade?.id || '').trim().slice(0, 140)
+    if (!mobileTradeId) continue
+    const previous = receipt.get(device, mobileTradeId)
+    const linkedDesktopId = String(trade?.desktopId || previous?.desktopTradeId || '').trim()
+
+    if (operation === 'delete') {
+      if (linkedDesktopId && db.prepare('SELECT 1 FROM trades WHERE id = ?').get(linkedDesktopId)) {
+        deleteTrade(linkedDesktopId)
+        deletedCount += 1
+        changed = true
+      }
+      accepted.push({ mobileId: mobileTradeId, desktopId: linkedDesktopId, operation })
+      continue
+    }
+
+    if (operation === 'update') {
+      if (!linkedDesktopId) continue
+      const current = db.prepare('SELECT timestamp FROM trades WHERE id = ?').get(linkedDesktopId)
+      if (!current) continue
+      updateFromMobile.run(
+        String(trade.symbol || '').trim().toUpperCase().slice(0, 30),
+        trade.direction === 'Short' ? 'Short' : 'Long',
+        num(trade.pnl),
+        num(trade.fees),
+        String(trade.setup || '').slice(0, 120),
+        mobileChecklistNotes(trade).slice(0, 20_000),
+        String(trade.tradeDate || current.timestamp || new Date().toISOString()),
+        String(trade.ruleSummary || '').slice(0, 240),
+        String(trade.timeframe || '').slice(0, 40),
+        linkedDesktopId
+      )
+      touchReceipt.run(new Date().toISOString(), device, mobileTradeId)
+      updatedCount += 1
+      changed = true
+      accepted.push({ mobileId: mobileTradeId, desktopId: linkedDesktopId, operation })
+      continue
+    }
+
+    if (previous) {
+      duplicateCount += 1
+      accepted.push({ mobileId: mobileTradeId, desktopId: previous.desktopTradeId, operation: 'create' })
+      continue
+    }
+
+    db.transaction(() => {
+      const desktopId = randomUUID()
+      const row = buildRow({
+        id: desktopId,
+        symbol: String(trade.symbol || '').trim().toUpperCase().slice(0, 30),
+        direction: trade.direction === 'Short' ? 'Short' : 'Long',
+        pnl: trade.pnl,
+        fees: trade.fees,
+        setup: String(trade.setup || '').slice(0, 120),
+        notes: mobileChecklistNotes(trade).slice(0, 20_000),
+        timestamp: String(trade.tradeDate || trade.createdAt || new Date().toISOString()),
+        reason: String(trade.ruleSummary || '').slice(0, 240),
+        source: 'mobile',
+        entryTimeframe: String(trade.timeframe || '').slice(0, 40)
+      })
+      db.prepare(INSERT_TRADE).run(row)
+      linkTradeToActiveSession(desktopId)
+      saveReceipt.run(device, mobileTradeId, desktopId, new Date().toISOString())
+      accepted.push({ mobileId: mobileTradeId, desktopId, operation: 'create' })
+      importedCount += 1
+      changed = true
+    })()
+  }
+
+  if (changed) refreshCommitmentResults()
+  return { importedCount, updatedCount, deletedCount, duplicateCount, accepted }
+}
+
+export function importMobileTrades(deviceId, trades = []) {
+  const changes = (Array.isArray(trades) ? trades : []).map((trade) => ({
+    entityId: String(trade?.id || ''),
+    operation: 'create',
+    payload: trade
+  }))
+  return applyMobileTradeChanges(deviceId, changes)
+}
+
+export function mobileTradeSnapshot(limit = 100) {
+  const count = Math.max(1, Math.min(250, Math.trunc(Number(limit) || 100)))
+  return db.prepare(`SELECT id,symbol,direction,pnl,fees,setup,notes,timestamp,reason,source,entryTimeframe
+    FROM trades ORDER BY timestamp DESC, rowid DESC LIMIT ?`).all(count).map((trade) => ({
+    id: String(trade.id),
+    symbol: String(trade.symbol || ''),
+    direction: trade.direction === 'Short' ? 'Short' : 'Long',
+    pnl: num(trade.pnl),
+    fees: num(trade.fees),
+    setup: String(trade.setup || ''),
+    notes: String(trade.notes || ''),
+    tradeDate: String(trade.timestamp || ''),
+    ruleSummary: String(trade.reason || ''),
+    timeframe: String(trade.entryTimeframe || ''),
+    source: String(trade.source || 'manual')
+  }))
+}
+
+export function getMobileSyncToken() {
+  const current = db.prepare("SELECT value FROM mobile_sync_state WHERE key = 'pairingToken'").get()?.value
+  if (current) return current
+  return rotateMobileSyncToken()
+}
+
+export function rotateMobileSyncToken() {
+  const token = randomUUID().replaceAll('-', '') + randomUUID().replaceAll('-', '')
+  db.prepare(`INSERT INTO mobile_sync_state (key,value) VALUES ('pairingToken', ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value`).run(token)
+  return token
+}
+
 function publicTradingSession(row) {
   if (!row) return null
   return {
@@ -817,11 +991,12 @@ export function rollbackImportBatch(id) {
     const delFills = db.prepare('DELETE FROM trade_fills WHERE tradeId = ?')
     const delResults = db.prepare('DELETE FROM commitment_results WHERE tradeId = ?')
     const delSessionLinks = db.prepare('DELETE FROM trading_session_trades WHERE tradeId = ?')
+    const delBrokerSyncItem = db.prepare('DELETE FROM broker_sync_items WHERE tradeId = ?')
     const detachPlans = db.prepare("UPDATE trade_plans SET status = CASE WHEN status = 'executed' THEN 'locked' ELSE status END, linkedTradeId = '', resolvedAt = '', updatedAt = ? WHERE linkedTradeId = ?")
     const delTrade = db.prepare('DELETE FROM trades WHERE id = ?')
     for (const tradeId of new Set(tradeIds)) {
       delImages.run(tradeId); delVideos.run(tradeId); delFills.run(tradeId); delResults.run(tradeId); delSessionLinks.run(tradeId)
-      detachPlans.run(now, tradeId); delTrade.run(tradeId)
+      delBrokerSyncItem.run(tradeId); detachPlans.run(now, tradeId); delTrade.run(tradeId)
     }
     db.prepare("UPDATE import_batches SET status = 'rolled_back', rolledBackAt = ? WHERE id = ?").run(now, key)
   })()
@@ -912,6 +1087,132 @@ export function setImportInboxState(id, state, error = '') {
   return listImportInbox('active')
 }
 
+function publicBrokerConnection(row) {
+  return row ? { ...row, enabled: Boolean(row.enabled) } : null
+}
+
+export function listBrokerConnections() {
+  return db.prepare('SELECT * FROM broker_connections ORDER BY createdAt ASC, rowid ASC').all().map(publicBrokerConnection)
+}
+
+export function getBrokerConnection(id) {
+  return publicBrokerConnection(db.prepare('SELECT * FROM broker_connections WHERE id = ?').get(String(id)))
+}
+
+export function saveBrokerConnection(connection = {}) {
+  const now = new Date().toISOString()
+  const current = connection.id ? db.prepare('SELECT * FROM broker_connections WHERE id = ?').get(String(connection.id)) : null
+  const provider = String(connection.provider || current?.provider || '').trim().toLowerCase()
+  if (!/^[a-z0-9-]+$/.test(provider)) throw new Error('Choose a supported broker provider')
+  const row = {
+    id: String(connection.id || randomUUID()),
+    provider,
+    label: String(connection.label || current?.label || 'Broker connection').trim().slice(0, 80) || 'Broker connection',
+    account: String(connection.account ?? current?.account ?? ''),
+    enabled: 1,
+    status: 'connected',
+    lastCursor: String(current?.lastCursor || ''),
+    lastSyncAt: String(current?.lastSyncAt || ''),
+    lastError: '',
+    createdAt: String(current?.createdAt || now),
+    updatedAt: now
+  }
+  db.prepare(`INSERT INTO broker_connections
+    (id,provider,label,account,enabled,status,lastCursor,lastSyncAt,lastError,createdAt,updatedAt)
+    VALUES (@id,@provider,@label,@account,@enabled,@status,@lastCursor,@lastSyncAt,@lastError,@createdAt,@updatedAt)
+    ON CONFLICT(id) DO UPDATE SET provider=excluded.provider,label=excluded.label,account=excluded.account,
+      enabled=1,status='connected',lastError='',updatedAt=excluded.updatedAt`).run(row)
+  return listBrokerConnections()
+}
+
+export function disconnectBrokerConnection(id) {
+  const key = String(id)
+  if (!db.prepare('SELECT 1 FROM broker_connections WHERE id = ?').get(key)) throw new Error('Broker connection not found')
+  db.prepare("UPDATE broker_connections SET enabled = 0, status = 'disconnected', lastError = '', updatedAt = ? WHERE id = ?")
+    .run(new Date().toISOString(), key)
+  return listBrokerConnections()
+}
+
+export function failBrokerConnectionSync(id, error) {
+  db.prepare("UPDATE broker_connections SET status = 'error', lastError = ?, updatedAt = ? WHERE id = ?")
+    .run(String(error || 'Broker sync failed').slice(0, 500), new Date().toISOString(), String(id))
+  return listBrokerConnections()
+}
+
+export function resetBrokerConnectionData(id) {
+  const connection = getBrokerConnection(id)
+  if (!connection) throw new Error('Broker connection not found')
+  const batches = db.prepare("SELECT id FROM import_batches WHERE sourceId = ? AND status = 'completed' ORDER BY createdAt DESC")
+    .all(connection.id)
+  for (const batch of batches) rollbackImportBatch(batch.id)
+  db.prepare(`UPDATE broker_connections SET status = 'connected', enabled = 1, lastCursor = '',
+    lastSyncAt = '', lastError = '', updatedAt = ? WHERE id = ?`).run(new Date().toISOString(), connection.id)
+  return {
+    trades: listTrades(),
+    connections: listBrokerConnections(),
+    rolledBackCount: batches.length
+  }
+}
+
+export function importBrokerSyncItems(connectionId, items = [], cursor = '') {
+  const connection = getBrokerConnection(connectionId)
+  if (!connection) throw new Error('Broker connection not found')
+  if (!connection.enabled || connection.status === 'disconnected') throw new Error('Reconnect this broker before syncing')
+
+  const seen = db.prepare('SELECT 1 FROM broker_sync_items WHERE connectionId = ? AND externalId = ?')
+  const unique = new Set()
+  const pending = []
+  for (const item of Array.isArray(items) ? items : []) {
+    const externalId = String(item?.externalId || '').trim().slice(0, 180)
+    if (!externalId || unique.has(externalId)) continue
+    unique.add(externalId)
+    if (!seen.get(connection.id, externalId)) pending.push({ externalId, trade: item.trade || {} })
+  }
+
+  const now = new Date().toISOString()
+  const batchId = pending.length ? randomUUID() : ''
+  const insertTrade = db.prepare(INSERT_TRADE)
+  const insertLink = db.prepare('INSERT INTO import_batch_trades (batchId,tradeId,sourceRow) VALUES (?,?,?)')
+  const insertSyncItem = db.prepare('INSERT INTO broker_sync_items (connectionId,externalId,tradeId,importedAt) VALUES (?,?,?,?)')
+  const imported = []
+
+  db.transaction(() => {
+    if (pending.length) {
+      db.prepare(`INSERT INTO import_batches
+        (id,sourceId,fileName,brokerKey,brokerLabel,account,timezone,status,rowCount,importedCount,duplicateCount,skippedCount,warningCount,warnings,createdAt,rolledBackAt)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+        batchId, connection.id, `${connection.label} sync`, `sync-${connection.provider}`,
+        connection.label, connection.account, '', 'completed', unique.size, pending.length,
+        Math.max(0, unique.size - pending.length), 0, 0, '[]', now, ''
+      )
+      pending.forEach((item, index) => {
+        const row = buildRow({
+          ...item.trade,
+          id: String(item.trade?.id || randomUUID()),
+          source: 'import',
+          account: connection.account
+        })
+        insertTrade.run(row)
+        insertLink.run(batchId, row.id, index + 1)
+        insertSyncItem.run(connection.id, item.externalId, row.id, now)
+        imported.push({ externalId: item.externalId, tradeId: row.id })
+      })
+    }
+    db.prepare(`UPDATE broker_connections SET status = 'connected', lastCursor = ?, lastSyncAt = ?,
+      lastError = '', updatedAt = ? WHERE id = ?`).run(String(cursor || connection.lastCursor || ''), now, now, connection.id)
+  })()
+
+  refreshCommitmentResults()
+  return {
+    trades: listTrades(),
+    connections: listBrokerConnections(),
+    batch: batchId ? listImportBatches().find((batch) => batch.id === batchId) || null : null,
+    importedCount: imported.length,
+    duplicateCount: Math.max(0, unique.size - imported.length),
+    imported
+  }
+}
+
 export function updateTrade(t) {
   const row = buildRow(t)
   const now = new Date().toISOString()
@@ -985,6 +1286,7 @@ const SETTINGS_DEFAULTS = Object.freeze({
     'No high-impact news about to drop',
     'Not revenge trading or chasing'
   ]),
+  tradeRulesUpdatedAt: '',
   // Ticker tape: keyless by default (Stooq/Binance). Add a Finnhub key for real-time stocks.
   tickerEnabled: 'true',
   tickerSymbols: 'SPY,QQQ,BTC,ETH',
@@ -1057,8 +1359,30 @@ function normalizeManualClockWindows(value) {
   return JSON.stringify(windows)
 }
 
+function normalizeTradeRules(value) {
+  let parsed
+  try { parsed = Array.isArray(value) ? value : JSON.parse(String(value)) } catch { parsed = [] }
+  if (!Array.isArray(parsed)) return '[]'
+  return JSON.stringify(parsed
+    .map((rule) => String(rule ?? '').trim().slice(0, 240))
+    .filter(Boolean)
+    .slice(0, 20))
+}
+
+function normalizeRuleRevision(value) {
+  const timestamp = Date.parse(String(value || ''))
+  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : ''
+}
+
+function nextRuleRevision(current = '') {
+  const previous = Date.parse(String(current || ''))
+  return new Date(Math.max(Date.now(), Number.isFinite(previous) ? previous + 1 : 0)).toISOString()
+}
+
 function normalizeSettingValue(key, value) {
   const stringValue = String(value)
+  if (key === 'tradeRules') return normalizeTradeRules(value)
+  if (key === 'tradeRulesUpdatedAt') return normalizeRuleRevision(value)
   if (key === 'coachVoice') return COACH_VOICES.has(stringValue) ? stringValue : SETTINGS_DEFAULTS.coachVoice
   if (key === 'personalClockSource') return PERSONAL_CLOCK_SOURCES.has(stringValue) ? stringValue : SETTINGS_DEFAULTS.personalClockSource
   if (PERSONAL_CLOCK_BOOLEAN_KEYS.has(key)) return stringValue === 'true' || stringValue === 'false' ? stringValue : SETTINGS_DEFAULTS[key]
@@ -1080,12 +1404,49 @@ export function setSettings(s) {
     'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
   )
   const tx = db.transaction((obj) => {
+    const currentRules = normalizeTradeRules(
+      db.prepare("SELECT value FROM settings WHERE key = 'tradeRules'").get()?.value ?? SETTINGS_DEFAULTS.tradeRules
+    )
+    const currentRevision = db.prepare("SELECT value FROM settings WHERE key = 'tradeRulesUpdatedAt'").get()?.value || ''
     for (const [key, value] of Object.entries(obj)) {
-      if (SETTINGS_KEYS.has(key)) up.run(key, normalizeSettingValue(key, value))
+      if (!SETTINGS_KEYS.has(key) || key === 'tradeRulesUpdatedAt') continue
+      const normalized = normalizeSettingValue(key, value)
+      up.run(key, normalized)
+      if (key === 'tradeRules' && normalized !== currentRules) {
+        up.run('tradeRulesUpdatedAt', nextRuleRevision(currentRevision))
+      }
     }
   })
-  tx(s)
+  tx(s || {})
   return getSettings()
+}
+
+export function getTradeRuleState() {
+  const settings = getSettings()
+  return {
+    rules: JSON.parse(normalizeTradeRules(settings.tradeRules)),
+    updatedAt: normalizeRuleRevision(settings.tradeRulesUpdatedAt)
+  }
+}
+
+export function mergeMobileTradeRules(rules, updatedAt) {
+  const desktop = getTradeRuleState()
+  const mobileUpdatedAt = normalizeRuleRevision(updatedAt)
+  const desktopTimestamp = Date.parse(desktop.updatedAt)
+  if (!mobileUpdatedAt || Date.parse(mobileUpdatedAt) <= (Number.isFinite(desktopTimestamp) ? desktopTimestamp : 0)) {
+    return { ...desktop, changed: false }
+  }
+
+  const normalized = normalizeTradeRules(rules)
+  const changed = normalized !== JSON.stringify(desktop.rules)
+  const up = db.prepare(
+    'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
+  )
+  db.transaction(() => {
+    up.run('tradeRules', normalized)
+    up.run('tradeRulesUpdatedAt', mobileUpdatedAt)
+  })()
+  return { rules: JSON.parse(normalized), updatedAt: mobileUpdatedAt, changed }
 }
 
 /* ───────── trade screenshots (files on disk; DB only holds the filename) ───────── */
@@ -1680,19 +2041,33 @@ function preparePortableData(input, existingTrades = []) {
         commitmentResults: uniqueMappedRows(source.commitmentResults.map((result) => ({
           ...result,
           tradeId: remapTradeId(result?.tradeId)
-        })), (result) => `${result.commitmentId}|${result.tradeId}`)
+        })),
+        (result) => `${result.commitmentId}|${result.tradeId}`
+        )
       } : {}),
       ...(Array.isArray(source.importBatchTrades) ? {
         importBatchTrades: uniqueMappedRows(source.importBatchTrades.map((link) => ({
           ...link,
           tradeId: remapTradeId(link?.tradeId)
-        })), (link) => `${link.batchId}|${link.tradeId}`)
+        })),
+        (link) => `${link.batchId}|${link.tradeId}`
+        )
+      } : {}),
+      ...(Array.isArray(source.brokerSyncItems) ? {
+        brokerSyncItems: uniqueMappedRows(source.brokerSyncItems.map((item) => ({
+          ...item,
+          tradeId: remapTradeId(item?.tradeId)
+        })),
+        (item) => `${item.connectionId}|${item.externalId}`
+        )
       } : {}),
       ...(Array.isArray(source.tradingSessionTrades) ? {
         tradingSessionTrades: uniqueMappedRows(source.tradingSessionTrades.map((link) => ({
           ...link,
           tradeId: remapTradeId(link?.tradeId)
-        })), (link) => `${link.sessionId}|${link.tradeId}`)
+        })),
+        (link) => `${link.sessionId}|${link.tradeId}`
+        )
       } : {})
     }
   }
@@ -1703,7 +2078,7 @@ export function getAllData() {
   const settings = getSettings()
   for (const k of SECRET_KEYS) delete settings[k]
   const snapshot = {
-    app: 'tradehelp', version: 7, exportedAt: new Date().toISOString(),
+    app: 'tradehelp', version: 8, exportedAt: new Date().toISOString(),
     trades: db.prepare('SELECT * FROM trades').all(),
     tradeFills: db.prepare(`SELECT id,tradeId,kind,side,quantity,price,fee,filledAt,sequence,sourceRef
       FROM trade_fills ORDER BY tradeId,sequence,filledAt,rowid`).all(),
@@ -1721,6 +2096,8 @@ export function getAllData() {
     propExpenses: listPropExpenses(),
     importBatches: listImportBatches(),
     importBatchTrades: db.prepare('SELECT batchId,tradeId,sourceRow FROM import_batch_trades ORDER BY batchId,sourceRow').all(),
+    brokerConnections: db.prepare('SELECT * FROM broker_connections ORDER BY createdAt,rowid').all(),
+    brokerSyncItems: db.prepare('SELECT connectionId,externalId,tradeId,importedAt FROM broker_sync_items ORDER BY importedAt,rowid').all(),
     tradingSessions: db.prepare(`SELECT id,startedAt,endedAt,status,sourceLabel,
       CASE WHEN recordingStatus = 'ready' THEN 1 ELSE 0 END AS hadRecording,
       notes,createdAt,updatedAt FROM trading_sessions ORDER BY startedAt`).all(),
@@ -1738,7 +2115,7 @@ export function getAllData() {
 
 export function restoreData(data) {
   const version = Number(data?.version || 3)
-  if (![3, 4, 5, 6, 7].includes(version)) throw new Error('Unsupported backup version')
+  if (![3, 4, 5, 6, 7, 8].includes(version)) throw new Error('Unsupported backup version')
   const prepared = preparePortableData(data || {}, db.prepare('SELECT * FROM trades').all())
   const portableData = prepared.data
   const tx = db.transaction((d) => {
@@ -1938,6 +2315,27 @@ export function restoreData(data) {
         })
       }
     }
+    if (Array.isArray(d.brokerConnections)) {
+      const insert = db.prepare(`INSERT OR REPLACE INTO broker_connections
+        (id,provider,label,account,enabled,status,lastCursor,lastSyncAt,lastError,createdAt,updatedAt)
+        VALUES (@id,@provider,@label,@account,@enabled,@status,@lastCursor,@lastSyncAt,@lastError,@createdAt,@updatedAt)`)
+      for (const connection of d.brokerConnections) {
+        const now = new Date().toISOString()
+        insert.run({
+          id: String(connection.id || randomUUID()),
+          provider: String(connection.provider || 'development'),
+          label: String(connection.label || 'Broker connection'),
+          account: String(connection.account || ''),
+          enabled: Number(Boolean(connection.enabled)),
+          status: ['connected', 'disconnected', 'error'].includes(connection.status) ? connection.status : 'disconnected',
+          lastCursor: String(connection.lastCursor || ''),
+          lastSyncAt: String(connection.lastSyncAt || ''),
+          lastError: String(connection.lastError || ''),
+          createdAt: String(connection.createdAt || now),
+          updatedAt: String(connection.updatedAt || now)
+        })
+      }
+    }
     if (Array.isArray(d.importBatchTrades)) {
       const batchExists = db.prepare('SELECT 1 FROM import_batches WHERE id = ?')
       const tradeExists = db.prepare('SELECT 1 FROM trades WHERE id = ?')
@@ -1945,6 +2343,18 @@ export function restoreData(data) {
       for (const link of d.importBatchTrades) {
         const batchId = String(link.batchId || ''), tradeId = String(link.tradeId || '')
         if (batchExists.get(batchId) && tradeExists.get(tradeId)) insert.run(batchId, tradeId, Math.max(0, Number(link.sourceRow) || 0))
+      }
+    }
+    if (Array.isArray(d.brokerSyncItems)) {
+      const connectionExists = db.prepare('SELECT 1 FROM broker_connections WHERE id = ?')
+      const tradeExists = db.prepare('SELECT 1 FROM trades WHERE id = ?')
+      const insert = db.prepare('INSERT OR REPLACE INTO broker_sync_items (connectionId,externalId,tradeId,importedAt) VALUES (?,?,?,?)')
+      for (const item of d.brokerSyncItems) {
+        const connectionId = String(item.connectionId || ''), tradeId = String(item.tradeId || '')
+        const externalId = String(item.externalId || '')
+        if (externalId && connectionExists.get(connectionId) && tradeExists.get(tradeId)) {
+          insert.run(connectionId, externalId, tradeId, String(item.importedAt || new Date().toISOString()))
+        }
       }
     }
     if (Array.isArray(d.tradingSessions)) {
@@ -1993,6 +2403,7 @@ export function restoreData(data) {
     instrumentProfiles: listInstrumentProfiles(), savedSearches: listSavedSearches(), tradePlans: listTradePlans(),
     commitments: listCoachCommitments(), commitmentResults: db.prepare('SELECT * FROM commitment_results').all(),
     playbook: listPlaybook(), dayLogs: listDayLogs(), payouts: listPayouts(), propExpenses: listPropExpenses(), importBatches: listImportBatches(),
+    brokerConnections: listBrokerConnections(),
     tradingSessions: listTradingSessions(100),
     goals: getGoals(), reviews: getReviews(), settings: getSettings(),
     restoreSummary: {

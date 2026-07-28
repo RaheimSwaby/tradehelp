@@ -3,6 +3,8 @@ import { T, mono, inputStyle, ACCENT_OPTIONS, THEME_PRESETS, GO_TIME_OPTIONS, PN
 import { CHECKOUT_URL } from '../utils.js'
 import { Panel, Field } from '../components/Shared.jsx'
 import { BACKDROP_OPTIONS } from '../components/Backdrop.jsx'
+import { BrokerSyncPanel } from '../widgets/BrokerSyncPanel.jsx'
+import { MobileSyncPanel } from '../widgets/MobileSyncPanel.jsx'
 import { Instagram, MessagesSquare, Plus, Pencil, Trash2, X } from 'lucide-react'
 
 const COACH_VOICE_VALUES = new Set(['supportive', 'balanced', 'tough-love'])
@@ -327,7 +329,7 @@ function ThemePreview({ preset, active, onClick }) {
   )
 }
 
-export function SettingsTab({ settings, onSave, license, onLicenseChange, onReload, profiles = [], onAddProfile, onUpdateProfile, onDeleteProfile }) {
+export function SettingsTab({ settings, onSave, license, onLicenseChange, onReload, accounts = [], profiles = [], onAddProfile, onUpdateProfile, onDeleteProfile }) {
   const [s, setS] = useState(() => normalizeSettingsForDisplay(settings))
   const [manualWindows, setManualWindows] = useState(() => parsePersonalClockWindows(settings?.personalClockManualWindows))
   const [test, setTest] = useState(null)
@@ -404,6 +406,8 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <LicensePanel license={license} onChange={onLicenseChange} />
       <DataPanel onReload={onReload} />
+      <BrokerSyncPanel accounts={accounts} onReload={onReload} />
+      <MobileSyncPanel />
       <InstrumentProfilesPanel profiles={profiles} onAdd={onAddProfile} onUpdate={onUpdateProfile} onDelete={onDeleteProfile} />
       <Panel title="Appearance 2.0">
         <Field label="Theme presets">

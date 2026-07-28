@@ -28,8 +28,11 @@ import {
   addTrade, listTrades, updateTrade, deleteTrade, importTrades, importTradeBatch,
   listImportBatches, rollbackImportBatch, saveImportSource, listImportSources,
   deleteImportSource, recordImportInbox, listImportInbox, setImportInboxState,
+  saveBrokerConnection, listBrokerConnections, getBrokerConnection,
+  disconnectBrokerConnection, importBrokerSyncItems, resetBrokerConnectionData,
+  applyMobileTradeChanges, importMobileTrades, mobileTradeSnapshot, getMobileSyncToken, rotateMobileSyncToken,
   getGoals, setGoals,
-  getSettings, setSettings,
+  getSettings, setSettings, getTradeRuleState, mergeMobileTradeRules,
   addImage, listImages, getImage, deleteImage,
   createTradingSession, getActiveTradingSession, getTradingSession, listTradingSessions,
   beginTradingSessionRecording, completeTradingSessionRecording, discardTradingSessionRecording,
@@ -225,6 +228,53 @@ describe('trades — import', () => {
 
 // ── goals ─────────────────────────────────────────────────────────────────────
 
+describe('broker sync persistence', () => {
+  it('maps executions to a journal account, dedupes them, and preserves rollback semantics', () => {
+    const connections = saveBrokerConnection({
+      provider: 'development',
+      label: 'Development broker',
+      account: 'prop-demo'
+    })
+    const connection = connections.find((item) => item.provider === 'development')
+    expect(connection).toMatchObject({ status: 'connected', enabled: true, account: 'prop-demo' })
+
+    const item = (externalId, pnl) => ({
+      externalId,
+      trade: makeTrade({ id: undefined, symbol: 'MES', pnl })
+    })
+    const first = importBrokerSyncItems(connection.id, [item('sync-1', 25), item('sync-2', -10)], '2')
+    expect(first).toMatchObject({ importedCount: 2, duplicateCount: 0 })
+    expect(first.trades.filter((trade) => trade.account === 'prop-demo' && trade.symbol === 'MES').slice(-2))
+      .toEqual(expect.arrayContaining([
+        expect.objectContaining({ source: 'import', account: 'prop-demo', pnl: 25 }),
+        expect.objectContaining({ source: 'import', account: 'prop-demo', pnl: -10 })
+      ]))
+
+    const second = importBrokerSyncItems(connection.id, [
+      item('sync-1', 25), item('sync-2', -10), item('sync-3', 40)
+    ], '3')
+    expect(second).toMatchObject({ importedCount: 1, duplicateCount: 2 })
+    expect(getBrokerConnection(connection.id)).toMatchObject({ lastCursor: '3', status: 'connected' })
+
+    rollbackImportBatch(second.batch.id)
+    const restored = importBrokerSyncItems(connection.id, [
+      item('sync-1', 25), item('sync-2', -10), item('sync-3', 40)
+    ], '3')
+    expect(restored).toMatchObject({ importedCount: 1, duplicateCount: 2 })
+
+    const reset = resetBrokerConnectionData(connection.id)
+    expect(reset.rolledBackCount).toBe(2)
+    expect(getBrokerConnection(connection.id)).toMatchObject({ lastCursor: '', lastSyncAt: '' })
+
+    const disconnected = disconnectBrokerConnection(connection.id)
+    expect(disconnected.find((entry) => entry.id === connection.id)).toMatchObject({
+      enabled: false,
+      status: 'disconnected'
+    })
+    expect(listBrokerConnections().some((entry) => entry.id === connection.id)).toBe(true)
+  })
+})
+
 describe('goals', () => {
   it('returns numeric defaults', () => {
     const g = getGoals()
@@ -354,6 +404,109 @@ describe('prop expenses — add / list / delete', () => {
 
 // ── export / import ───────────────────────────────────────────────────────────
 
+describe('mobile sync - import and dedupe', () => {
+  it('imports a mobile trade once and preserves its checklist evidence', () => {
+    const deviceId = `ios-${Date.now()}`
+    const mobileTrade = {
+      id: 'mobile-trade-1',
+      symbol: 'mes',
+      direction: 'Short',
+      pnl: -45,
+      fees: 3.2,
+      setup: 'Failed breakout',
+      timeframe: '1m',
+      notes: 'Waited for confirmation.',
+      tradeDate: '2026-07-26T10:15:00',
+      ruleSummary: '1/2 post-trade rules followed',
+      ruleChecks: [
+        { rule: 'Wait for confirmation', followed: true },
+        { rule: 'Respect max risk', followed: false }
+      ]
+    }
+
+    const first = importMobileTrades(deviceId, [mobileTrade])
+    const second = importMobileTrades(deviceId, [mobileTrade])
+    const imported = listTrades().find((trade) => trade.id === first.accepted[0].desktopId)
+
+    expect(first).toMatchObject({ importedCount: 1, duplicateCount: 0 })
+    expect(second).toMatchObject({ importedCount: 0, duplicateCount: 1 })
+    expect(imported).toMatchObject({
+      symbol: 'MES',
+      direction: 'Short',
+      pnl: -45,
+      fees: 3.2,
+      source: 'mobile',
+      reason: '1/2 post-trade rules followed',
+      entryTimeframe: '1m'
+    })
+    expect(imported.notes).toContain('[x] Wait for confirmation')
+    expect(imported.notes).toContain('[ ] Respect max risk')
+    expect(mobileTradeSnapshot().some((trade) => trade.id === imported.id)).toBe(true)
+  })
+
+  it('persists and rotates the desktop pairing token', () => {
+    const first = getMobileSyncToken()
+    expect(getMobileSyncToken()).toBe(first)
+    expect(rotateMobileSyncToken()).not.toBe(first)
+  })
+
+  it('applies mobile edits and deletions to their linked desktop trade', () => {
+    const deviceId = `ios-crud-${Date.now()}`
+    const mobileId = 'mobile-crud-1'
+    const created = applyMobileTradeChanges(deviceId, [{
+      entityId: mobileId,
+      operation: 'create',
+      payload: {
+        id: mobileId,
+        symbol: 'MES',
+        direction: 'Long',
+        pnl: 25,
+        fees: 2,
+        setup: 'Pullback',
+        notes: 'Initial note',
+        tradeDate: '2026-07-27T09:45:00',
+        timeframe: '1m'
+      }
+    }])
+    const desktopId = created.accepted[0].desktopId
+
+    const updated = applyMobileTradeChanges(deviceId, [{
+      entityId: mobileId,
+      operation: 'update',
+      payload: {
+        id: mobileId,
+        desktopId,
+        symbol: 'MNQ',
+        direction: 'Short',
+        pnl: -40,
+        fees: 3.5,
+        setup: 'Failed breakout',
+        notes: 'Edited on mobile',
+        tradeDate: '2026-07-27T10:05:00',
+        timeframe: '30s'
+      }
+    }])
+    expect(updated).toMatchObject({ updatedCount: 1, deletedCount: 0 })
+    expect(listTrades().find((trade) => trade.id === desktopId)).toMatchObject({
+      symbol: 'MNQ',
+      direction: 'Short',
+      pnl: -40,
+      fees: 3.5,
+      setup: 'Failed breakout',
+      notes: 'Edited on mobile',
+      entryTimeframe: '30s'
+    })
+
+    const deleted = applyMobileTradeChanges(deviceId, [{
+      entityId: mobileId,
+      operation: 'delete',
+      payload: { id: mobileId, desktopId }
+    }])
+    expect(deleted).toMatchObject({ updatedCount: 0, deletedCount: 1 })
+    expect(listTrades().some((trade) => trade.id === desktopId)).toBe(false)
+  })
+})
+
 describe('getAllData — export', () => {
   it('strips all secret API keys', () => {
     setSettings({ cloudKey: 'sk-secret', finnhubKey: 'fh-key', fmpKey: 'fmp-key' })
@@ -402,7 +555,7 @@ describe('getAllData — export', () => {
     })
     const backup = {
       app: 'tradehelp',
-      version: 7,
+      version: 8,
       trades: [imported, { ...imported, id: 'restore-import-duplicate-b' }]
     }
 
@@ -442,5 +595,36 @@ describe('getAllData — export', () => {
       amount: 129,
       category: 'activation'
     })
+  })
+
+  it('syncs the most recently changed trade rules without refreshing unchanged revisions', () => {
+    const desktopSettings = setSettings({ tradeRules: JSON.stringify(['Desktop rule']) })
+    const desktopRevision = desktopSettings.tradeRulesUpdatedAt
+    expect(desktopRevision).toBeTruthy()
+
+    const unchanged = setSettings({
+      tradeRules: JSON.stringify(['Desktop rule']),
+      accentColor: 'sky'
+    })
+    expect(unchanged.tradeRulesUpdatedAt).toBe(desktopRevision)
+
+    const older = new Date(Date.parse(desktopRevision) - 1_000).toISOString()
+    expect(mergeMobileTradeRules(['Old phone rule'], older)).toMatchObject({
+      rules: ['Desktop rule'],
+      updatedAt: desktopRevision,
+      changed: false
+    })
+
+    const newer = new Date(Date.parse(desktopRevision) + 1_000).toISOString()
+    expect(mergeMobileTradeRules(['Phone rule'], newer)).toEqual({
+      rules: ['Phone rule'],
+      updatedAt: newer,
+      changed: true
+    })
+    expect(getTradeRuleState()).toEqual({ rules: ['Phone rule'], updatedAt: newer })
+
+    const desktopWinsAgain = setSettings({ tradeRules: JSON.stringify(['Newest desktop rule']) })
+    expect(JSON.parse(desktopWinsAgain.tradeRules)).toEqual(['Newest desktop rule'])
+    expect(Date.parse(desktopWinsAgain.tradeRulesUpdatedAt)).toBeGreaterThan(Date.parse(newer))
   })
 })

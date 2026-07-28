@@ -236,7 +236,8 @@ export default function App() {
   useEffect(() => {
     if (!hasApi || !window.api.onImportsChanged) return undefined
     return window.api.onImportsChanged((event) => {
-      if (event?.type === 'auto-imported' || event?.type === 'rolled-back') refreshWorkflow()
+      if (event?.type === 'auto-imported' || event?.type === 'rolled-back' || event?.type === 'mobile-sync') refreshWorkflow()
+      if (event?.type === 'mobile-sync') window.api.getSettings().then(setSettings)
     })
   }, [hasApi]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -863,7 +864,7 @@ export default function App() {
             {tab === 'coach' && <Coach trades={trades} stats={stats} settings={settings} reviews={reviews} playbook={playbook} dayLogs={dayLogs} goals={goals} payouts={payouts} events={events} now={now} />}
             {tab === 'patterns' && <Patterns trades={trades} onOpenTrade={setNotesView} />}
             {tab === 'playbook' && <PlaybookTab entries={playbook} trades={trades} onAdd={addPlaybookEntry} onUpdate={updatePlaybookEntry} onDelete={deletePlaybookEntry} onPlan={planFromPlaybook} />}
-            {tab === 'settings' && <SettingsTab settings={settings} onSave={saveSettings} license={license} onLicenseChange={refreshLicense} onReload={reloadAll} profiles={instrumentProfiles} onAddProfile={addInstrumentProfile} onUpdateProfile={updateInstrumentProfile} onDeleteProfile={deleteInstrumentProfile} />}
+            {tab === 'settings' && <SettingsTab settings={settings} onSave={saveSettings} license={license} onLicenseChange={refreshLicense} onReload={reloadAll} accounts={propFirmAccounts} profiles={instrumentProfiles} onAddProfile={addInstrumentProfile} onUpdateProfile={updateInstrumentProfile} onDeleteProfile={deleteInstrumentProfile} />}
           </div>
           </PageAnimationContext.Provider>
         )}

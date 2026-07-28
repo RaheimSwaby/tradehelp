@@ -1,0 +1,55 @@
+{
+  "expo": {
+    "name": "TradeHelp",
+    "slug": "kingdd69",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "scheme": "tradehelp",
+    "icon": "./assets/icon.png",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "app.tradehelp.mobile",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocalNetworkUsageDescription": "TradeHelp connects directly to TradeHelp Desktop on your private network to synchronize journal entries.",
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        }
+      }
+    },
+    "android": {
+      "package": "app.tradehelp.mobile"
+    },
+    "plugins": [
+      "expo-sqlite",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "TradeHelp uses your camera only to scan the pairing code shown by TradeHelp Desktop.",
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "TradeHelp uses your photos to attach chart screenshots to journal entries.",
+          "cameraPermission": "TradeHelp uses your camera to capture chart screenshots.",
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "defaultChannel": "tradehelp-reminders"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "b301fe1d-b348-4743-9e08-a9b4fae7b84a"
+      }
+    },
+    "owner": "kingdd69s-team"
+  }
+}

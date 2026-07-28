@@ -22,8 +22,6 @@ const V036_NOTES = `- Cosmetic Refresh - each theme preset now has its own restr
 - Dashboard quotes rotate daily and AI Coach quick prompts adapt to your journal`
 
 export const RELEASE_NOTES = {
-  '0.41.1': `- Backup export and restore now skip exact duplicate CSV-imported trades
-- Linked fills, plans, commitments, import batches, and sessions stay attached to the retained trade`,
   '0.40.1': `- The macOS build now runs natively on both Intel and Apple Silicon Macs`,
   '0.40.0': `- macOS builds are now signed and notarised by Apple — no more Terminal command to open the app
 - macOS updates now install themselves in the background, the same as Windows
