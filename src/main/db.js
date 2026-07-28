@@ -20,7 +20,12 @@ const TRADE_VIDEO_MIME = {
 
 export function initDb() {
   // Stored in the per-user app data dir so it survives app updates.
-  db = new Database(join(app.getPath('userData'), 'tradehelp.db'))
+  const dbPath = join(app.getPath('userData'), 'tradehelp.db')
+  // Checked before the file is opened, because opening creates it. This is the
+  // only reliable "has this person ever run TradeHelp" signal, and sample
+  // trades must never appear in an existing trader's journal.
+  const isFirstRun = !existsSync(dbPath)
+  db = new Database(dbPath)
   db.pragma('journal_mode = WAL')
 
   imagesDir = join(app.getPath('userData'), 'screenshots')
@@ -366,6 +371,79 @@ export function initDb() {
 
   const ins = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)')
   for (const [k, v] of Object.entries(SETTINGS_DEFAULTS)) ins.run(k, String(v))
+
+  if (isFirstRun) seedDemoTrades()
+}
+
+// Sample trades are tagged rather than tracked in a separate table so they
+// behave like real ones everywhere — the point is to show what a filled-in
+// journal looks like. 'demo' is only ever compared against, never parsed, and
+// existing code only tests source === 'import'.
+export const DEMO_SOURCE = 'demo'
+
+/**
+ * A first-run journal that has something to say. The emotion and reason tags
+ * matter more than the P&L: the Leak Finder is the feature that separates
+ * TradeHelp from a spreadsheet, and it can only show something once trades
+ * carry tags. These describe a trader who is net profitable but gives a chunk
+ * of it back revenge trading after a loss — which is the pattern the tool
+ * exists to surface.
+ */
+function seedDemoTrades() {
+  if (db.prepare('SELECT COUNT(*) AS count FROM trades').get().count > 0) return
+
+  const day = 86_400_000
+  const at = (daysAgo, time) => `${localStamp(new Date(Date.now() - daysAgo * day)).slice(0, 10)} ${time}`
+  const demo = [
+    { d: 12, t: '09:42', symbol: 'NQ', dir: 'Long', pnl: 420, emotion: 'Disciplined', reason: 'Patient — waited for setup', setup: 'VWAP reclaim', notes: 'Waited for the retest instead of chasing the first push.' },
+    { d: 12, t: '11:15', symbol: 'NQ', dir: 'Short', pnl: -180, emotion: 'Neutral', reason: 'Just variance — good trade', setup: 'Range fade', notes: 'Good setup, it just did not work. Stop respected.' },
+    { d: 11, t: '10:05', symbol: 'ES', dir: 'Long', pnl: 310, emotion: 'Confident', reason: 'Followed my plan', setup: 'Break & retest', notes: 'Textbook. Sized properly, took the first target.' },
+    { d: 9, t: '09:35', symbol: 'NQ', dir: 'Long', pnl: -240, emotion: 'Anxious', reason: 'Just variance — good trade', setup: 'Opening drive', notes: 'Stopped out on the open. Fine trade, wrong day.' },
+    { d: 9, t: '09:58', symbol: 'NQ', dir: 'Long', pnl: -560, emotion: 'Revenge', reason: 'Revenge trade', setup: 'None', notes: 'Straight back in after the stop. No setup, just wanted it back.' },
+    { d: 9, t: '10:20', symbol: 'NQ', dir: 'Long', pnl: -390, emotion: 'Revenge', reason: 'Revenge trade', setup: 'None', notes: 'Doubled down. Should have shut the platform after the first one.' },
+    { d: 8, t: '10:47', symbol: 'ES', dir: 'Short', pnl: 265, emotion: 'Disciplined', reason: 'Proper risk & sizing', setup: 'Failed breakout', notes: 'Back to the plan. Half size after yesterday.' },
+    { d: 5, t: '11:30', symbol: 'MES', dir: 'Long', pnl: -150, emotion: 'FOMO', reason: 'FOMO / chased', setup: 'None', notes: 'Chased an extended move because it was running without me.' },
+    { d: 4, t: '09:40', symbol: 'NQ', dir: 'Long', pnl: 480, emotion: 'Disciplined', reason: 'Let my winner run', setup: 'VWAP reclaim', notes: 'Held to the second target for once.' },
+    { d: 3, t: '10:12', symbol: 'ES', dir: 'Long', pnl: 195, emotion: 'Confident', reason: 'Clean setup / good read', setup: 'Break & retest', notes: 'Clean read on the reclaim.' },
+    { d: 2, t: '13:05', symbol: 'NQ', dir: 'Short', pnl: -210, emotion: 'Greedy', reason: 'Greed — overstayed/oversized', setup: 'Range fade', notes: 'Was green, held for a home run, gave it all back.' },
+    { d: 1, t: '09:48', symbol: 'NQ', dir: 'Long', pnl: 355, emotion: 'Disciplined', reason: 'Followed my plan', setup: 'VWAP reclaim', notes: 'Stuck to the checklist. Boring and profitable.' }
+  ]
+
+  const insert = db.prepare(INSERT_TRADE)
+  db.transaction(() => {
+    for (const trade of demo) {
+      insert.run(buildRow({
+        id: randomUUID(),
+        symbol: trade.symbol,
+        direction: trade.dir,
+        pnl: trade.pnl,
+        fees: trade.symbol === 'MES' ? 1.5 : 4.5,
+        emotion: trade.emotion,
+        reason: trade.reason,
+        setup: trade.setup,
+        notes: trade.notes,
+        timestamp: at(trade.d, trade.t),
+        entryTime: trade.t,
+        source: DEMO_SOURCE,
+        account: ''
+      }))
+    }
+  })()
+}
+
+export function countDemoTrades() {
+  return db.prepare('SELECT COUNT(*) AS count FROM trades WHERE source = ?').get(DEMO_SOURCE).count
+}
+
+/**
+ * Called whenever real trades arrive, so sample P&L can never blend into a
+ * trader's own numbers. Returns how many were removed so callers can tell
+ * whether anything actually changed.
+ */
+export function clearDemoTrades() {
+  const removed = db.prepare('DELETE FROM trades WHERE source = ?').run(DEMO_SOURCE).changes
+  if (removed) refreshCommitmentResults()
+  return removed
 }
 
 const num = (v) => {
@@ -644,6 +722,9 @@ function linkTradeToActiveSession(tradeId) {
 }
 
 export function addTrade(t) {
+  // A real trade means the journal is in use, so the samples stop being a demo
+  // and start being fake numbers inside someone's actual statistics.
+  if (String(t?.source || '') !== DEMO_SOURCE) clearDemoTrades()
   db.transaction(() => {
     const row = buildRow(t)
     db.prepare(INSERT_TRADE).run(row)
@@ -665,6 +746,8 @@ export function applyMobileTradeChanges(deviceId, changes = []) {
   const device = String(deviceId || '').trim().slice(0, 100)
   if (!device) throw new Error('Mobile device ID is required')
   const list = Array.isArray(changes) ? changes.slice(0, 100) : []
+  // Trades arriving from a paired phone are real trades, same as a CSV import.
+  if (list.some((change) => change?.operation === 'create')) clearDemoTrades()
   const accepted = []
   let importedCount = 0
   let updatedCount = 0
@@ -935,6 +1018,8 @@ export function listImportBatches() {
 
 export function importTradeBatch(list, meta = {}) {
   const rows = Array.isArray(list) ? list : []
+  // Importing real history is the other way a journal stops being empty.
+  if (rows.length) clearDemoTrades()
   const now = new Date().toISOString()
   const batchId = String(meta.batchId || randomUUID())
   const warnings = Array.isArray(meta.warnings) ? meta.warnings.map(String).filter(Boolean).slice(0, 30) : []

@@ -248,8 +248,11 @@ export function TimingPerformance({ stats, onDrilldown }) {
 }
 
 /* ───────── dashboard ───────── */
-export function Dashboard({ stats, trades, accounts = [], settings, journalData, onSaveSettings, onOpenCoach, payouts = [], plans = [], commitments = [], pnlFeedback = null, onAddCommitment, onUpdateCommitment, onDeleteCommitment, onOpenTrade, onTimingDrilldown, personalClock = null, personalSchedule = null, now = Date.now() }) {
+export function Dashboard({ stats, trades, accounts = [], settings, journalData, onSaveSettings, onOpenCoach, payouts = [], plans = [], commitments = [], pnlFeedback = null, onAddCommitment, onUpdateCommitment, onDeleteCommitment, onOpenTrade, onTimingDrilldown, onClearDemo, personalClock = null, personalSchedule = null, now = Date.now() }) {
   const [view, setView] = useState('all') // all | live | prop
+  // Derived from the trades already in hand rather than a separate count, so
+  // the banner can never disagree with what is actually on screen.
+  const demoCount = useMemo(() => trades.filter((trade) => trade.source === 'demo').length, [trades])
   const [shareOpen, setShareOpen] = useState(false)
   const [selectedDay, setSelectedDay] = useState(null)
   const [compareOpen, setCompareOpen] = useState(false)
@@ -296,6 +299,23 @@ export function Dashboard({ stats, trades, accounts = [], settings, journalData,
 
   return (
     <div className="space-y-4">
+      {demoCount > 0 && (
+        <div className="rounded-xl px-4 py-3 flex items-center gap-3" style={{ background: T.surface, border: `1px solid ${T.accent}` }}>
+          <div className="flex-1">
+            <div className="text-sm font-semibold" style={{ color: T.accent }}>Sample trades</div>
+            <div className="text-xs mt-1" style={{ color: T.dim }}>
+              These {demoCount} trades are examples so you can see how the dashboard, leak finder and coach look with a filled-in journal. They disappear the moment you log a real trade or import a CSV.
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClearDemo}
+            className="text-xs font-semibold px-3 py-2 rounded-md whitespace-nowrap"
+            style={{ background: T.accent, color: '#1A1306' }}
+          >Clear samples</button>
+        </div>
+      )}
+
       <div className="rounded-xl px-4 py-3" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
         <div className="text-sm font-semibold" style={{ color: T.text }}>{greeting}</div>
         {windowSummary && (
