@@ -849,7 +849,7 @@ function CalendarView({
   }
 
   return (
-    <View style={styles.calendarCard}>
+    <LinearGradient colors={colors.panelGradient} style={styles.calendarCard}>
       <View style={[styles.actionRow, styles.centeredRow]}>
         <Pressable style={styles.compactButton} onPress={prevMonth}>
           <ChevronLeft color={colors.text} size={18} strokeWidth={2} />
@@ -894,7 +894,7 @@ function CalendarView({
           )
         })}
       </View>
-    </View>
+    </LinearGradient>
   )
 }
 
@@ -1423,6 +1423,24 @@ function TimePickerModal({
   )
 }
 
+const WIN_REASONS = [
+  'Followed Plan',
+  'Key Level Bounce',
+  'Patient Entry',
+  'Great R:R',
+  'Volume Confirmation'
+]
+
+const LOSS_REASONS = [
+  'FOMO / Chased',
+  'Oversizing / Over-Leveraged',
+  'Early / Forced Entry',
+  'Revenge Trade',
+  'Moved Stop Loss',
+  'News Volatility',
+  'Slippage'
+]
+
 function QuickLog({
   rules,
   onSaved,
@@ -1439,6 +1457,7 @@ function QuickLog({
   const [form, setForm] = useState<Form>(blankForm)
   const [step, setStep] = useState<'details' | 'checklist'>('details')
   const [checks, setChecks] = useState<Array<boolean | null>>(() => rules.map(() => null))
+  const [selectedReasons, setSelectedReasons] = useState<string[]>([])
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const scrollRef = useRef<ScrollView>(null)
@@ -1447,6 +1466,16 @@ function QuickLog({
   const [pickerTarget, setPickerTarget] = useState<'entryTime' | 'exitTime' | null>(null)
 
   useEffect(() => setChecks(rules.map(() => null)), [rules])
+
+  const pnlVal = Number(form.pnl) || 0
+  const reasonOptions = pnlVal >= 0 ? WIN_REASONS : LOSS_REASONS
+
+  function toggleReason(reason: string) {
+    triggerHaptic('light')
+    setSelectedReasons((curr) =>
+      curr.includes(reason) ? curr.filter((r) => r !== reason) : [...curr, reason]
+    )
+  }
 
   function update(key: keyof Form, value: string) {
     setForm((current) => ({ ...current, [key]: value }))
@@ -1495,6 +1524,7 @@ function QuickLog({
         screenshotUri: form.screenshotUri,
         ruleChecks,
         ruleSummary: `${followed}/${rules.length} post-trade rules followed`,
+        reasons: selectedReasons,
         origin: 'mobile',
         desktopId: '',
         syncState: 'pending'
@@ -1659,6 +1689,26 @@ function QuickLog({
             <ChevronDown color={colors.faint} size={15} strokeWidth={2} />
           </Pressable>
         </View>
+      </View>
+
+      <Text style={styles.label}>{pnlVal >= 0 ? 'Why did this trade win?' : 'Why did this trade lose?'}</Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+        {reasonOptions.map((reason) => {
+          const active = selectedReasons.includes(reason)
+          const activeColor = pnlVal >= 0 ? colors.up : colors.down
+          return (
+            <Pressable
+              key={reason}
+              onPress={() => toggleReason(reason)}
+              style={[
+                styles.presetPill,
+                active ? { backgroundColor: pnlVal >= 0 ? colors.upSoft : colors.downSoft, borderColor: activeColor } : null
+              ]}
+            >
+              <Text style={[styles.presetText, active ? { color: activeColor } : null]}>{reason}</Text>
+            </Pressable>
+          )
+        })}
       </View>
 
       <Text style={styles.label}>Fast note</Text>
