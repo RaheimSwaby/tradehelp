@@ -81,6 +81,7 @@ import {
   updateLocalTrade,
   WatchlistItem
 } from './src/storage/repository'
+import { localNow } from './src/storage/dates'
 import { syncDesktop } from './src/sync/client'
 import {
   EconomicEvent,
@@ -153,11 +154,9 @@ const blankForm = (): Form => {
   }
 }
 
-function localTimestamp() {
-  const date = new Date()
-  const pad = (value: number) => String(value).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
-}
+// Single definition lives in src/storage/dates — two implementations of "what
+// time is it here" is exactly how the formats drifted apart to begin with.
+const localTimestamp = localNow
 
 function money(value: number) {
   return `${value < 0 ? '-' : ''}$${Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`

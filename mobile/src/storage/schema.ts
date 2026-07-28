@@ -101,14 +101,9 @@ export async function initializeDatabase(db: SQLiteDatabase) {
   const countResult = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM mobile_trades')
   if (countResult && countResult.count === 0) {
     const day = 86_400_000
-    // Written in the same local, suffix-free shape as real trades
-    // (localTimestamp in App.tsx). Storing these as UTC made the same trade
-    // land on different days in Home and the Vault.
-    const localStamp = (offsetDays: number) => {
-      const date = new Date(Date.now() - offsetDays * day)
-      const pad = (value: number) => String(value).padStart(2, '0')
-      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
-    }
+    // Same canonical local shape as real trades — storing these as UTC put the
+    // same trade on different days in Home and the Vault.
+    const localStamp = (offsetDays: number) => toLocalStamp(new Date(Date.now() - offsetDays * day))
     const demoTrades = [
       {
         id: 'demo-1',
