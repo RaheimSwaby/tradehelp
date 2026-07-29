@@ -1,5 +1,14 @@
 import type { SQLiteDatabase } from 'expo-sqlite'
-import { applyRuleState, applySyncResult, getDeviceId, getRuleState, pendingTradeChanges, setSetting } from '../storage/repository'
+import {
+  applyAccountState,
+  applyRuleState,
+  applySyncResult,
+  getAccountState,
+  getDeviceId,
+  getRuleState,
+  pendingTradeChanges,
+  setSetting
+} from '../storage/repository'
 
 const ENDPOINT_PATTERN = /^http:\/\/(?:\d{1,3}\.){3}\d{1,3}:\d+$/
 // The desktop is on the same LAN, so a reachable host answers fast. Keep this
@@ -58,10 +67,13 @@ export async function syncDesktop(db: SQLiteDatabase, pairingCode: string) {
   const deviceId = await getDeviceId(db)
   const queued = await pendingTradeChanges(db)
   const ruleState = await getRuleState(db)
+  const accountState = await getAccountState(db)
   const payload = {
     deviceId,
     rules: ruleState.rules,
     rulesUpdatedAt: ruleState.updatedAt,
+    accountState,
+    accountStateUpdatedAt: accountState.updatedAt,
     changes: queued,
     trades: queued.filter((change) => change.operation === 'create').map((change) => change.payload)
   }
@@ -94,6 +106,11 @@ export async function syncDesktop(db: SQLiteDatabase, pairingCode: string) {
     Array.isArray(body.rules) ? body.rules : ruleState.rules,
     String(body.rulesUpdatedAt || ruleState.updatedAt)
   )
+  const mergedAccounts = await applyAccountState(
+    db,
+    body.accountState || accountState,
+    String(body.accountState?.updatedAt || accountState.updatedAt)
+  )
 
   // Remember every address the desktop currently advertises, with the one that
   // just worked first, so the next sync starts with the address most likely to
@@ -114,6 +131,7 @@ export async function syncDesktop(db: SQLiteDatabase, pairingCode: string) {
     duplicateCount: Number(body.duplicateCount) || 0,
     rules: mergedRules.rules,
     rulesUpdatedAt: mergedRules.updatedAt,
+    accountState: mergedAccounts,
     syncedAt: String(body.syncedAt || ''),
     pairingCode: buildPairingCode(ordered, token)
   }

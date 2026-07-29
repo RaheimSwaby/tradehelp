@@ -23,6 +23,9 @@ export async function initializeDatabase(db: SQLiteDatabase) {
       pnl REAL NOT NULL DEFAULT 0,
       fees REAL NOT NULL DEFAULT 0,
       timeframe TEXT NOT NULL DEFAULT '',
+      entry_time TEXT NOT NULL DEFAULT '',
+      exit_time TEXT NOT NULL DEFAULT '',
+      account TEXT NOT NULL DEFAULT '',
       setup TEXT NOT NULL DEFAULT '',
       notes TEXT NOT NULL DEFAULT '',
       screenshot_uri TEXT,
@@ -64,6 +67,9 @@ export async function initializeDatabase(db: SQLiteDatabase) {
   `)
 
   await ensureColumn(db, 'mobile_trades', 'direction', "TEXT NOT NULL DEFAULT 'Long'")
+  await ensureColumn(db, 'mobile_trades', 'entry_time', "TEXT NOT NULL DEFAULT ''")
+  await ensureColumn(db, 'mobile_trades', 'exit_time', "TEXT NOT NULL DEFAULT ''")
+  await ensureColumn(db, 'mobile_trades', 'account', "TEXT NOT NULL DEFAULT ''")
   await ensureColumn(db, 'mobile_trades', 'rule_checks', "TEXT NOT NULL DEFAULT '[]'")
   await ensureColumn(db, 'mobile_trades', 'rule_summary', "TEXT NOT NULL DEFAULT ''")
   await ensureColumn(db, 'mobile_trades', 'reasons', "TEXT NOT NULL DEFAULT '[]'")
@@ -92,6 +98,29 @@ export async function initializeDatabase(db: SQLiteDatabase) {
     if (normalized !== row.trade_date) {
       await db.runAsync('UPDATE mobile_trades SET trade_date = ? WHERE id = ?', [normalized, row.id])
     }
+  }
+
+  // Older mobile builds stored "09:30 - 09:47" in timeframe. Recover those
+  // clocks once, then clear timeframe so duration and chart-timeframe
+  // analytics no longer compete for the same field.
+  const legacyClocks = await db.getAllAsync<{
+    id: string
+    timeframe: string
+    entry_time: string
+    exit_time: string
+  }>("SELECT id,timeframe,entry_time,exit_time FROM mobile_trades WHERE timeframe LIKE '% - %'")
+  for (const row of legacyClocks) {
+    if (row.entry_time || row.exit_time) continue
+    const match = row.timeframe.trim().match(
+      /^(\d{1,2}:\d{2}(?:\s*[AP]M)?|--)\s*-\s*(\d{1,2}:\d{2}(?:\s*[AP]M)?|--)$/i
+    )
+    if (!match) continue
+    await db.runAsync(
+      "UPDATE mobile_trades SET entry_time = ?, exit_time = ?, timeframe = '' WHERE id = ?",
+      match[1] === '--' ? '' : (match[1] || ''),
+      match[2] === '--' ? '' : (match[2] || ''),
+      row.id
+    )
   }
 
   // Seed sample trades so a brand-new install has something to show. They are

@@ -1,4 +1,4 @@
-import type { MobileTrade } from './storage/repository'
+import type { MobileTrade, PropAccount } from './storage/repository'
 
 export type MobileStats = {
   tradeCount: number
@@ -15,6 +15,112 @@ export type MobileStats = {
   expectancy: number
   streak: string
   topSetup: string
+  maxDrawdown: number
+}
+
+export type PropAccountStats = {
+  balance: number
+  netPnl: number
+  target: number
+  amountToTarget: number
+  drawdownBuffer: number
+  currentFloor: number
+  dailyRemaining: number
+  daysTraded: number
+  status: 'active' | 'passed' | 'failed'
+  floorBreached: boolean
+  dailyBreached: boolean
+}
+
+export type HoldStats = {
+  sampleSize: number
+  averageMinutes: number | null
+  winnerMinutes: number | null
+  loserMinutes: number | null
+  bestWindow: {
+    label: string
+    count: number
+    netPnl: number
+  } | null
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+function tradeMoment(value: string, tradeDate: string) {
+  const raw = String(value || '').trim()
+  if (!raw) return null
+
+  if (/^\d{4}-\d{2}-\d{2}[T ]\d{1,2}:\d{2}/.test(raw)) {
+    const parsed = new Date(raw.replace(' ', 'T')).getTime()
+    return Number.isFinite(parsed) ? { value: parsed, clockOnly: false } : null
+  }
+
+  const clock = raw.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s*([AP]M))?$/i)
+  const date = String(tradeDate || '').slice(0, 10)
+  if (!clock || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null
+  let hour = Number(clock[1])
+  const period = String(clock[4] || '').toUpperCase()
+  if (period === 'AM' && hour === 12) hour = 0
+  if (period === 'PM' && hour < 12) hour += 12
+  const parsed = new Date(
+    `${date}T${String(hour).padStart(2, '0')}:${clock[2]}:${clock[3] || '00'}`
+  ).getTime()
+  return Number.isFinite(parsed) ? { value: parsed, clockOnly: true } : null
+}
+
+export function tradeHoldMinutes(trade: MobileTrade) {
+  const entry = tradeMoment(trade.entryTime, trade.tradeDate)
+  const exit = tradeMoment(trade.exitTime, trade.tradeDate)
+  if (!entry || !exit) return null
+
+  let duration = exit.value - entry.value
+  if (duration < 0 && entry.clockOnly && exit.clockOnly) duration += DAY_MS
+  if (duration < 0 || duration > DAY_MS * 7) return null
+  return duration / 60_000
+}
+
+export function formatHoldDuration(minutes: number | null) {
+  if (minutes === null || !Number.isFinite(minutes)) return '--'
+  if (minutes < 1) return '<1m'
+  const rounded = Math.round(minutes)
+  if (rounded < 60) return `${rounded}m`
+  const hours = Math.floor(rounded / 60)
+  const remainder = rounded % 60
+  return remainder ? `${hours}h ${remainder}m` : `${hours}h`
+}
+
+export function computeHoldStats(trades: MobileTrade[]): HoldStats {
+  const measured = trades.flatMap((trade) => {
+    const minutes = tradeHoldMinutes(trade)
+    return minutes === null ? [] : [{ trade, minutes }]
+  })
+  const average = (rows: typeof measured) =>
+    rows.length ? rows.reduce((sum, row) => sum + row.minutes, 0) / rows.length : null
+
+  const buckets = [
+    { label: '<5m', test: (minutes: number) => minutes < 5 },
+    { label: '5-15m', test: (minutes: number) => minutes >= 5 && minutes <= 15 },
+    { label: '16-30m', test: (minutes: number) => minutes > 15 && minutes <= 30 },
+    { label: '31-60m', test: (minutes: number) => minutes > 30 && minutes <= 60 },
+    { label: '60m+', test: (minutes: number) => minutes > 60 }
+  ].map((bucket) => {
+    const rows = measured.filter((row) => bucket.test(row.minutes))
+    return {
+      label: bucket.label,
+      count: rows.length,
+      netPnl: rows.reduce((sum, row) => sum + row.trade.pnl, 0)
+    }
+  }).filter((bucket) => bucket.count > 0)
+
+  const bestWindow = buckets.sort((a, b) => b.netPnl - a.netPnl)[0] || null
+
+  return {
+    sampleSize: measured.length,
+    averageMinutes: average(measured),
+    winnerMinutes: average(measured.filter((row) => row.trade.pnl > 0)),
+    loserMinutes: average(measured.filter((row) => row.trade.pnl < 0)),
+    bestWindow
+  }
 }
 
 export function computeMobileStats(trades: MobileTrade[]): MobileStats {
@@ -26,6 +132,14 @@ export function computeMobileStats(trades: MobileTrade[]): MobileStats {
   const grossProfit = wins.reduce((sum, value) => sum + value, 0)
   const grossLoss = Math.abs(losses.reduce((sum, value) => sum + value, 0))
   const checks = trades.flatMap((trade) => trade.ruleChecks || [])
+  let running = 0
+  let peak = 0
+  let maxDrawdown = 0
+  for (const value of pnl) {
+    running += value
+    peak = Math.max(peak, running)
+    maxDrawdown = Math.max(maxDrawdown, peak - running)
+  }
 
   const bestWin = wins.length ? Math.max(...wins) : 0
   const worstLoss = losses.length ? Math.min(...losses) : 0
@@ -98,7 +212,55 @@ export function computeMobileStats(trades: MobileTrade[]): MobileStats {
     payoffRatio,
     expectancy,
     streak: streakText,
-    topSetup: topSetupText
+    topSetup: topSetupText,
+    maxDrawdown
+  }
+}
+
+export function computePropAccount(trades: MobileTrade[], account: PropAccount): PropAccountStats {
+  const start = Number(account.accountSize) || 0
+  const target = Number(account.target) || 0
+  const maxDaily = Number(account.maxDailyLoss) || 0
+  const maxDrawdown = Number(account.maxDrawdown) || 0
+  const scale = Number(account.sizeScale) || 1
+  const relevant = account.scope === 'shared'
+    ? trades
+    : trades.filter((trade) => trade.account === account.id)
+  const sorted = [...relevant].sort((a, b) => a.tradeDate.localeCompare(b.tradeDate))
+  const floorAt = (peak: number) =>
+    account.ddType === 'static' ? start - maxDrawdown : Math.min(peak - maxDrawdown, start)
+
+  let balance = start
+  let peak = start
+  let floorBreached = false
+  const dayPnl = new Map<string, number>()
+  for (const trade of sorted) {
+    const pnl = (Number(trade.pnl) || 0) * scale
+    balance += pnl
+    peak = Math.max(peak, balance)
+    if (maxDrawdown > 0 && balance <= floorAt(peak)) floorBreached = true
+    const date = String(trade.tradeDate || '').slice(0, 10)
+    if (date) dayPnl.set(date, (dayPnl.get(date) || 0) + pnl)
+  }
+
+  const dailyBreached = [...dayPnl.values()].some((pnl) => maxDaily > 0 && pnl <= -maxDaily)
+  const todayPnl = dayPnl.get(new Date().toISOString().slice(0, 10)) || 0
+  const netPnl = balance - start
+  const daysTraded = dayPnl.size
+  const passed = target > 0 && netPnl >= target && daysTraded >= account.minDays
+  const failed = floorBreached || dailyBreached
+  return {
+    balance,
+    netPnl,
+    target,
+    amountToTarget: Math.max(0, target - netPnl),
+    drawdownBuffer: balance - floorAt(peak),
+    currentFloor: floorAt(peak),
+    dailyRemaining: Math.max(0, maxDaily - Math.max(0, -todayPnl)),
+    daysTraded,
+    status: failed ? 'failed' : passed ? 'passed' : 'active',
+    floorBreached,
+    dailyBreached
   }
 }
 

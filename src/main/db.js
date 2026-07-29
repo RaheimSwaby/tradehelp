@@ -759,7 +759,7 @@ export function applyMobileTradeChanges(deviceId, changes = []) {
   const touchReceipt = db.prepare(`UPDATE mobile_sync_receipts SET syncedAt = ?
     WHERE deviceId = ? AND mobileTradeId = ?`)
   const updateFromMobile = db.prepare(`UPDATE trades SET
-    symbol=?,direction=?,pnl=?,fees=?,setup=?,notes=?,timestamp=?,reason=?,entryTimeframe=?
+    symbol=?,direction=?,pnl=?,fees=?,setup=?,notes=?,timestamp=?,entryTime=?,exitTime=?,reason=?,entryTimeframe=?,account=?
     WHERE id=?`)
   let changed = false
 
@@ -783,7 +783,7 @@ export function applyMobileTradeChanges(deviceId, changes = []) {
 
     if (operation === 'update') {
       if (!linkedDesktopId) continue
-      const current = db.prepare('SELECT timestamp FROM trades WHERE id = ?').get(linkedDesktopId)
+      const current = db.prepare('SELECT timestamp,entryTime,exitTime,account FROM trades WHERE id = ?').get(linkedDesktopId)
       if (!current) continue
       updateFromMobile.run(
         String(trade.symbol || '').trim().toUpperCase().slice(0, 30),
@@ -793,8 +793,11 @@ export function applyMobileTradeChanges(deviceId, changes = []) {
         String(trade.setup || '').slice(0, 120),
         mobileChecklistNotes(trade).slice(0, 20_000),
         String(trade.tradeDate || current.timestamp || new Date().toISOString()),
+        trade.entryTime === undefined ? String(current.entryTime || '') : String(trade.entryTime || ''),
+        trade.exitTime === undefined ? String(current.exitTime || '') : String(trade.exitTime || ''),
         String(trade.ruleSummary || '').slice(0, 240),
         String(trade.timeframe || '').slice(0, 40),
+        trade.account === undefined ? String(current.account || '') : String(trade.account || '').slice(0, 120),
         linkedDesktopId
       )
       touchReceipt.run(new Date().toISOString(), device, mobileTradeId)
@@ -821,9 +824,12 @@ export function applyMobileTradeChanges(deviceId, changes = []) {
         setup: String(trade.setup || '').slice(0, 120),
         notes: mobileChecklistNotes(trade).slice(0, 20_000),
         timestamp: String(trade.tradeDate || trade.createdAt || new Date().toISOString()),
+        entryTime: String(trade.entryTime || ''),
+        exitTime: String(trade.exitTime || ''),
         reason: String(trade.ruleSummary || '').slice(0, 240),
         source: 'mobile',
-        entryTimeframe: String(trade.timeframe || '').slice(0, 40)
+        entryTimeframe: String(trade.timeframe || '').slice(0, 40),
+        account: String(trade.account || '').slice(0, 120)
       })
       db.prepare(INSERT_TRADE).run(row)
       linkTradeToActiveSession(desktopId)
@@ -849,7 +855,7 @@ export function importMobileTrades(deviceId, trades = []) {
 
 export function mobileTradeSnapshot(limit = 100) {
   const count = Math.max(1, Math.min(250, Math.trunc(Number(limit) || 100)))
-  return db.prepare(`SELECT id,symbol,direction,pnl,fees,setup,notes,timestamp,reason,source,entryTimeframe
+  return db.prepare(`SELECT id,symbol,direction,pnl,fees,setup,notes,timestamp,entryTime,exitTime,reason,source,entryTimeframe,account
     FROM trades ORDER BY timestamp DESC, rowid DESC LIMIT ?`).all(count).map((trade) => ({
     id: String(trade.id),
     symbol: String(trade.symbol || ''),
@@ -859,8 +865,11 @@ export function mobileTradeSnapshot(limit = 100) {
     setup: String(trade.setup || ''),
     notes: String(trade.notes || ''),
     tradeDate: String(trade.timestamp || ''),
+    entryTime: String(trade.entryTime || ''),
+    exitTime: String(trade.exitTime || ''),
     ruleSummary: String(trade.reason || ''),
     timeframe: String(trade.entryTimeframe || ''),
+    account: String(trade.account || ''),
     source: String(trade.source || 'manual')
   }))
 }
@@ -1372,6 +1381,7 @@ const SETTINGS_DEFAULTS = Object.freeze({
     'Not revenge trading or chasing'
   ]),
   tradeRulesUpdatedAt: '',
+  accountStateUpdatedAt: '',
   // Ticker tape: keyless by default (Stooq/Binance). Add a Finnhub key for real-time stocks.
   tickerEnabled: 'true',
   tickerSymbols: 'SPY,QQQ,BTC,ETH',
@@ -1459,6 +1469,34 @@ function normalizeRuleRevision(value) {
   return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : ''
 }
 
+function normalizeMobilePropAccounts(value) {
+  let parsed
+  try { parsed = Array.isArray(value) ? value : JSON.parse(String(value || '[]')) } catch { parsed = [] }
+  if (!Array.isArray(parsed)) return []
+  return parsed.flatMap((account, index) => {
+    if (!account || typeof account !== 'object') return []
+    const id = String(account.id || `account-${index + 1}`).trim().slice(0, 120)
+    if (!id) return []
+    const numeric = (field, fallback = 0) => {
+      const value = Number(account[field])
+      return Number.isFinite(value) && value >= 0 ? value : fallback
+    }
+    return [{
+      id,
+      enabled: account.enabled !== false,
+      label: String(account.label || 'Account').trim().slice(0, 80) || 'Account',
+      accountSize: numeric('accountSize'),
+      target: numeric('target'),
+      maxDailyLoss: numeric('maxDailyLoss'),
+      maxDrawdown: numeric('maxDrawdown'),
+      minDays: Math.max(0, Math.trunc(numeric('minDays'))),
+      ddType: account.ddType === 'static' ? 'static' : 'trailing',
+      scope: account.scope === 'shared' ? 'shared' : 'own',
+      sizeScale: numeric('sizeScale', 1) || 1
+    }]
+  }).slice(0, 20)
+}
+
 function nextRuleRevision(current = '') {
   const previous = Date.parse(String(current || ''))
   return new Date(Math.max(Date.now(), Number.isFinite(previous) ? previous + 1 : 0)).toISOString()
@@ -1493,14 +1531,21 @@ export function setSettings(s) {
       db.prepare("SELECT value FROM settings WHERE key = 'tradeRules'").get()?.value ?? SETTINGS_DEFAULTS.tradeRules
     )
     const currentRevision = db.prepare("SELECT value FROM settings WHERE key = 'tradeRulesUpdatedAt'").get()?.value || ''
+    const currentAccountRevision = db.prepare("SELECT value FROM settings WHERE key = 'accountStateUpdatedAt'").get()?.value || ''
+    const currentLiveCapital = db.prepare("SELECT value FROM settings WHERE key = 'liveCapital'").get()?.value ?? SETTINGS_DEFAULTS.liveCapital
+    const currentPropAccounts = db.prepare("SELECT value FROM settings WHERE key = 'propFirmAccounts'").get()?.value ?? '[]'
+    let accountStateChanged = false
     for (const [key, value] of Object.entries(obj)) {
-      if (!SETTINGS_KEYS.has(key) || key === 'tradeRulesUpdatedAt') continue
+      if (!SETTINGS_KEYS.has(key) || key === 'tradeRulesUpdatedAt' || key === 'accountStateUpdatedAt') continue
       const normalized = normalizeSettingValue(key, value)
       up.run(key, normalized)
       if (key === 'tradeRules' && normalized !== currentRules) {
         up.run('tradeRulesUpdatedAt', nextRuleRevision(currentRevision))
       }
+      if (key === 'liveCapital' && normalized !== String(currentLiveCapital)) accountStateChanged = true
+      if (key === 'propFirmAccounts' && normalized !== String(currentPropAccounts)) accountStateChanged = true
     }
+    if (accountStateChanged) up.run('accountStateUpdatedAt', nextRuleRevision(currentAccountRevision))
   })
   tx(s || {})
   return getSettings()
@@ -1532,6 +1577,43 @@ export function mergeMobileTradeRules(rules, updatedAt) {
     up.run('tradeRulesUpdatedAt', mobileUpdatedAt)
   })()
   return { rules: JSON.parse(normalized), updatedAt: mobileUpdatedAt, changed }
+}
+
+export function getMobileAccountState() {
+  const settings = getSettings()
+  const capital = Number(settings.liveCapital)
+  return {
+    liveCapital: Number.isFinite(capital) && capital >= 0 ? capital : 0,
+    propAccounts: normalizeMobilePropAccounts(settings.propFirmAccounts || '[]'),
+    updatedAt: normalizeRuleRevision(settings.accountStateUpdatedAt)
+  }
+}
+
+export function mergeMobileAccountState(state, updatedAt) {
+  const desktop = getMobileAccountState()
+  const mobileUpdatedAt = normalizeRuleRevision(updatedAt)
+  const desktopTimestamp = Date.parse(desktop.updatedAt)
+  if (!mobileUpdatedAt || Date.parse(mobileUpdatedAt) <= (Number.isFinite(desktopTimestamp) ? desktopTimestamp : 0)) {
+    return { ...desktop, changed: false }
+  }
+
+  const liveCapital = Number(state?.liveCapital)
+  const next = {
+    liveCapital: Number.isFinite(liveCapital) && liveCapital >= 0 ? liveCapital : 0,
+    propAccounts: normalizeMobilePropAccounts(state?.propAccounts || []),
+    updatedAt: mobileUpdatedAt
+  }
+  const changed = next.liveCapital !== desktop.liveCapital ||
+    JSON.stringify(next.propAccounts) !== JSON.stringify(desktop.propAccounts)
+  const up = db.prepare(
+    'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
+  )
+  db.transaction(() => {
+    up.run('liveCapital', String(next.liveCapital))
+    up.run('propFirmAccounts', JSON.stringify(next.propAccounts))
+    up.run('accountStateUpdatedAt', next.updatedAt)
+  })()
+  return { ...next, changed }
 }
 
 /* ───────── trade screenshots (files on disk; DB only holds the filename) ───────── */

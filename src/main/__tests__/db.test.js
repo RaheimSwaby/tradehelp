@@ -33,6 +33,7 @@ import {
   applyMobileTradeChanges, importMobileTrades, mobileTradeSnapshot, getMobileSyncToken, rotateMobileSyncToken,
   getGoals, setGoals,
   getSettings, setSettings, getTradeRuleState, mergeMobileTradeRules,
+  getMobileAccountState, mergeMobileAccountState,
   addImage, listImages, getImage, deleteImage,
   createTradingSession, getActiveTradingSession, getTradingSession, listTradingSessions,
   beginTradingSessionRecording, completeTradingSessionRecording, discardTradingSessionRecording,
@@ -417,6 +418,8 @@ describe('mobile sync - import and dedupe', () => {
       timeframe: '1m',
       notes: 'Waited for confirmation.',
       tradeDate: '2026-07-26T10:15:00',
+      entryTime: '10:15',
+      exitTime: '10:22',
       ruleSummary: '1/2 post-trade rules followed',
       ruleChecks: [
         { rule: 'Wait for confirmation', followed: true },
@@ -437,11 +440,17 @@ describe('mobile sync - import and dedupe', () => {
       fees: 3.2,
       source: 'mobile',
       reason: '1/2 post-trade rules followed',
+      entryTime: '10:15',
+      exitTime: '10:22',
       entryTimeframe: '1m'
     })
     expect(imported.notes).toContain('[x] Wait for confirmation')
     expect(imported.notes).toContain('[ ] Respect max risk')
-    expect(mobileTradeSnapshot().some((trade) => trade.id === imported.id)).toBe(true)
+    expect(mobileTradeSnapshot().find((trade) => trade.id === imported.id)).toMatchObject({
+      entryTime: '10:15',
+      exitTime: '10:22',
+      timeframe: '1m'
+    })
   })
 
   it('persists and rotates the desktop pairing token', () => {
@@ -465,7 +474,10 @@ describe('mobile sync - import and dedupe', () => {
         setup: 'Pullback',
         notes: 'Initial note',
         tradeDate: '2026-07-27T09:45:00',
-        timeframe: '1m'
+        entryTime: '09:45',
+        exitTime: '09:54',
+        timeframe: '1m',
+        account: 'prop-mobile-1'
       }
     }])
     const desktopId = created.accepted[0].desktopId
@@ -483,6 +495,8 @@ describe('mobile sync - import and dedupe', () => {
         setup: 'Failed breakout',
         notes: 'Edited on mobile',
         tradeDate: '2026-07-27T10:05:00',
+        entryTime: '10:05',
+        exitTime: '10:13',
         timeframe: '30s'
       }
     }])
@@ -494,7 +508,10 @@ describe('mobile sync - import and dedupe', () => {
       fees: 3.5,
       setup: 'Failed breakout',
       notes: 'Edited on mobile',
-      entryTimeframe: '30s'
+      entryTime: '10:05',
+      exitTime: '10:13',
+      entryTimeframe: '30s',
+      account: 'prop-mobile-1'
     })
 
     const deleted = applyMobileTradeChanges(deviceId, [{
@@ -626,5 +643,51 @@ describe('getAllData — export', () => {
     const desktopWinsAgain = setSettings({ tradeRules: JSON.stringify(['Newest desktop rule']) })
     expect(JSON.parse(desktopWinsAgain.tradeRules)).toEqual(['Newest desktop rule'])
     expect(Date.parse(desktopWinsAgain.tradeRulesUpdatedAt)).toBeGreaterThan(Date.parse(newer))
+  })
+
+  it('syncs the most recently changed live and prop account configuration', () => {
+    const desktopSettings = setSettings({
+      liveCapital: '5000',
+      propFirmAccounts: JSON.stringify([{
+        id: 'prop-50',
+        label: 'Desktop 50K',
+        accountSize: 50000,
+        target: 3000,
+        maxDailyLoss: 1100,
+        maxDrawdown: 2000,
+        minDays: 5,
+        ddType: 'trailing',
+        scope: 'own',
+        sizeScale: 1
+      }])
+    })
+    const desktopRevision = desktopSettings.accountStateUpdatedAt
+    expect(getMobileAccountState()).toMatchObject({
+      liveCapital: 5000,
+      updatedAt: desktopRevision,
+      propAccounts: [{ id: 'prop-50', label: 'Desktop 50K' }]
+    })
+
+    const newer = new Date(Date.parse(desktopRevision) + 1_000).toISOString()
+    expect(mergeMobileAccountState({
+      liveCapital: 7500,
+      propAccounts: [{
+        id: 'prop-100',
+        label: 'Phone 100K',
+        accountSize: 100000,
+        target: 6000,
+        maxDailyLoss: 2200,
+        maxDrawdown: 3000,
+        minDays: 5,
+        ddType: 'static',
+        scope: 'own',
+        sizeScale: 1
+      }]
+    }, newer)).toMatchObject({
+      liveCapital: 7500,
+      updatedAt: newer,
+      changed: true,
+      propAccounts: [{ id: 'prop-100', label: 'Phone 100K', ddType: 'static' }]
+    })
   })
 })

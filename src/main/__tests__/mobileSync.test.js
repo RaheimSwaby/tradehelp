@@ -20,6 +20,17 @@ function fakeDb() {
       updatedAt: '2026-07-26T12:00:00.000Z',
       changed: false
     })),
+    getMobileAccountState: vi.fn(() => ({
+      liveCapital: 5000,
+      propAccounts: [],
+      updatedAt: '2026-07-26T12:00:00.000Z'
+    })),
+    mergeMobileAccountState: vi.fn(() => ({
+      liveCapital: 5000,
+      propAccounts: [],
+      updatedAt: '2026-07-26T12:00:00.000Z',
+      changed: false
+    })),
     applyMobileTradeChanges: vi.fn(() => ({
       importedCount: 1,
       updatedCount: 0,
@@ -63,6 +74,7 @@ describe('mobile sync server', () => {
     expect(response.status).toBe(200)
     expect(body.rules).toEqual(['Wait for setup', 'Respect risk'])
     expect(body.rulesUpdatedAt).toBe('2026-07-26T12:00:00.000Z')
+    expect(body.accountState.liveCapital).toBe(5000)
     expect(body.trades[0].symbol).toBe('MES')
     expect(db.mergeMobileTradeRules).toHaveBeenCalledWith(['Phone rule'], '2026-07-26T11:00:00.000Z')
     expect(db.applyMobileTradeChanges).toHaveBeenCalledWith('phone', [{

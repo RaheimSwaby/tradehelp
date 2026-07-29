@@ -93,12 +93,14 @@ export function createMobileSyncServer(db, options = {}) {
     }
     if (request.method === 'GET' && url.pathname === '/v1/status') {
       const ruleState = db.getTradeRuleState()
+      const accountState = db.getMobileAccountState()
       json(response, 200, {
         ok: true,
         name: 'TradeHelp Desktop',
         protocolVersion: 3,
         rules: ruleState.rules,
-        rulesUpdatedAt: ruleState.updatedAt
+        rulesUpdatedAt: ruleState.updatedAt,
+        accountState
       })
       return
     }
@@ -106,6 +108,7 @@ export function createMobileSyncServer(db, options = {}) {
       try {
         const body = await readJson(request)
         const ruleState = db.mergeMobileTradeRules(body.rules, body.rulesUpdatedAt)
+        const accountState = db.mergeMobileAccountState(body.accountState, body.accountStateUpdatedAt)
         const changes = Array.isArray(body.changes)
           ? body.changes
           : (Array.isArray(body.trades) ? body.trades : []).map((trade) => ({
@@ -114,12 +117,13 @@ export function createMobileSyncServer(db, options = {}) {
               payload: trade
             }))
         const result = db.applyMobileTradeChanges(body.deviceId, changes)
-        options.onSync?.({ ...result, rulesChanged: ruleState.changed })
+        options.onSync?.({ ...result, rulesChanged: ruleState.changed, accountsChanged: accountState.changed })
         json(response, 200, {
           ok: true,
           ...result,
           rules: ruleState.rules,
           rulesUpdatedAt: ruleState.updatedAt,
+          accountState,
           trades: db.mobileTradeSnapshot(100),
           // Re-advertise every address on each sync so the phone keeps an
           // up-to-date candidate list and survives this machine's LAN address

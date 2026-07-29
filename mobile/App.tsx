@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { ComponentProps } from 'react'
 import * as Haptics from 'expo-haptics'
 import * as ImagePicker from 'expo-image-picker'
 import * as Notifications from 'expo-notifications'
@@ -6,6 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { SQLiteProvider, useSQLiteContext } from 'expo-sqlite'
 import {
   Award,
+  BarChart3,
   BellRing,
   BookOpen,
   Calendar,
@@ -14,30 +16,43 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
+  CircleEllipsis,
   Clock,
+  Database,
   History as HistoryIcon,
   House,
   ImagePlus,
+  Info,
+  Landmark,
   List,
   Newspaper,
   Pencil,
   Plus,
   Quote,
   RefreshCw,
+  RotateCcw,
   Save,
   ScanLine,
+  Search,
   Settings as SettingsIcon,
   Share2,
+  ShieldCheck,
+  Sparkles,
+  Star,
   Smartphone,
   Target,
   Trash2,
   TrendingUp,
+  Vibrate,
+  Wallet,
   Wifi,
   XCircle
 } from 'lucide-react-native'
 import type { LucideIcon } from 'lucide-react-native'
 import {
   ActivityIndicator,
+  AccessibilityInfo,
   Alert,
   Animated,
   AppState,
@@ -46,9 +61,8 @@ import {
   KeyboardAvoidingView,
   Linking,
   Modal,
-  PanResponder,
   Platform,
-  Pressable,
+  Pressable as NativePressable,
   RefreshControl,
   SafeAreaView,
   ScrollView,
@@ -63,18 +77,24 @@ import {
 import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Line, Path, Stop, Text as SvgText } from 'react-native-svg'
 import { initializeDatabase } from './src/storage/schema'
 import {
+  clearAllLocalData,
   clearDemoTrades,
   countDemoTrades,
   createLocalId,
   deleteLocalTrade,
   deleteWatchlistItem,
   getRuleState,
+  getAccountState,
   getSetting,
   listTrades,
   listWatchlist,
+  loadDemoTrades,
   MobileTrade,
+  AccountState,
+  PropAccount,
   pendingTradeChanges,
   saveRules,
+  saveAccountState,
   saveTrade,
   saveWatchlistItem,
   setSetting,
@@ -90,7 +110,15 @@ import {
   scheduleNewsTestNotification,
   setNewsAlertsEnabled
 } from './src/news'
-import { computeEdgeStats, computeMobileStats, computeTradeGrade } from './src/stats'
+import {
+  computeEdgeStats,
+  computeHoldStats,
+  computeMobileStats,
+  computePropAccount,
+  computeTradeGrade,
+  formatHoldDuration,
+  tradeHoldMinutes
+} from './src/stats'
 import { getDailyQuote } from './src/quotes'
 import { palette, Palette, ThemeMode } from './src/theme'
 
@@ -108,26 +136,51 @@ try {
 }
 const CAMERA_AVAILABLE = Boolean(CameraViewComponent)
 
-type Tab = 'home' | 'history' | 'vault' | 'news' | 'settings'
+function Pressable({
+  accessibilityRole = 'button',
+  ...props
+}: ComponentProps<typeof NativePressable>) {
+  return <NativePressable accessibilityRole={accessibilityRole} {...props} />
+}
+
+type Tab = 'home' | 'history' | 'insights' | 'accounts' | 'vault' | 'news' | 'settings'
 type Form = {
   symbol: string
   direction: 'Long' | 'Short'
   pnl: string
   fees: string
+  timeframe: string
   entryTime: string
   exitTime: string
+  account: string
   setup: string
   notes: string
   screenshotUri: string
 }
 
-const tabs: Array<{ key: Tab; label: string; icon: LucideIcon }> = [
+type DailyReview = {
+  date: string
+  planQuality: 'Yes' | 'Mostly' | 'No'
+  mindset: 'Calm' | 'Mixed' | 'Emotional'
+  takeaway: string
+  completedAt: string
+}
+
+const primaryTabs: Array<{ key: Tab; label: string; icon: LucideIcon }> = [
   { key: 'home', label: 'Home', icon: House },
   { key: 'history', label: 'History', icon: HistoryIcon },
+  { key: 'insights', label: 'Insights', icon: BarChart3 }
+]
+
+const moreTabs: Array<{ key: Tab; label: string; icon: LucideIcon }> = [
+  { key: 'accounts', label: 'Accounts', icon: Landmark },
   { key: 'vault', label: 'Vault', icon: ImagePlus },
   { key: 'news', label: 'News', icon: Newspaper },
   { key: 'settings', label: 'Settings', icon: SettingsIcon }
 ]
+
+const APP_VERSION = '0.1.0'
+const EDGE_SAMPLE_THRESHOLD = 8
 
 const EMPTY_NEWS: NewsState = {
   events: [],
@@ -138,6 +191,21 @@ const EMPTY_NEWS: NewsState = {
   warning: ''
 }
 
+const PROP_TEMPLATES: Record<'50K' | '100K' | '150K', Omit<PropAccount, 'id' | 'label'>> = {
+  '50K': {
+    enabled: true, accountSize: 50000, target: 3000, maxDailyLoss: 1100,
+    maxDrawdown: 2000, minDays: 5, ddType: 'trailing', scope: 'own', sizeScale: 1
+  },
+  '100K': {
+    enabled: true, accountSize: 100000, target: 6000, maxDailyLoss: 2200,
+    maxDrawdown: 3000, minDays: 5, ddType: 'trailing', scope: 'own', sizeScale: 1
+  },
+  '150K': {
+    enabled: true, accountSize: 150000, target: 9000, maxDailyLoss: 3300,
+    maxDrawdown: 5000, minDays: 5, ddType: 'trailing', scope: 'own', sizeScale: 1
+  }
+}
+
 const blankForm = (): Form => {
   const now = new Date()
   const pad = (v: number) => String(v).padStart(2, '0')
@@ -146,8 +214,10 @@ const blankForm = (): Form => {
     direction: 'Long',
     pnl: '',
     fees: '',
+    timeframe: '',
     entryTime: `${pad(now.getHours())}:${pad(now.getMinutes())}`,
     exitTime: '',
+    account: '',
     setup: '',
     notes: '',
     screenshotUri: ''
@@ -185,7 +255,14 @@ function ratio(value: number | null) {
   return value === null ? '--' : value.toFixed(2)
 }
 
+let hapticsAllowed = true
+
+function setHapticsRuntime(enabled: boolean) {
+  hapticsAllowed = enabled
+}
+
 function triggerHaptic(type: 'light' | 'medium' | 'success' | 'selection' = 'light') {
+  if (!hapticsAllowed) return
   try {
     if (type === 'light') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {})
     else if (type === 'medium') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {})
@@ -194,102 +271,12 @@ function triggerHaptic(type: 'light' | 'medium' | 'success' | 'selection' = 'lig
   } catch {}
 }
 
-const FAB_SIZE = 58
-const FAB_MARGIN = 16
-
-/**
- * The capture button has to be reachable from every screen, which means it
- * inevitably covers something on some screen. Rather than pick a corner and
- * hope, it can be dragged and it remembers where it was left. Release snaps it
- * to the nearer side so it always sits flush instead of floating mid-screen.
- */
-function DraggableFab({
-  onPress,
-  saved,
-  onMove,
-  colors,
-  styles
-}: {
-  onPress: () => void
-  saved: { x: number; y: number } | null
-  onMove: (position: { x: number; y: number }) => void
-  colors: Palette
-  styles: ReturnType<typeof createStyles>
-}) {
-  const { width, height } = useWindowDimensions()
-  const bounds = useMemo(() => ({
-    minX: FAB_MARGIN,
-    maxX: Math.max(FAB_MARGIN, width - FAB_SIZE - FAB_MARGIN),
-    minY: 84,
-    maxY: Math.max(84, height - FAB_SIZE - 104)
-  }), [width, height])
-
-  const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value))
-  const start = saved
-    ? { x: clamp(saved.x, bounds.minX, bounds.maxX), y: clamp(saved.y, bounds.minY, bounds.maxY) }
-    : { x: bounds.maxX, y: bounds.maxY }
-
-  const pan = useRef(new Animated.ValueXY(start)).current
-  const position = useRef(start)
-  const dragging = useRef(false)
-
-  useEffect(() => {
-    const id = pan.addListener((value) => { position.current = value })
-    return () => pan.removeListener(id)
-  }, [pan])
-
-  const responder = useMemo(() => PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    // A press only becomes a drag past a few pixels, so tapping to log a trade
-    // still works without the button sliding out from under the finger.
-    onMoveShouldSetPanResponder: (_event, gesture) => Math.abs(gesture.dx) > 4 || Math.abs(gesture.dy) > 4,
-    onPanResponderGrant: () => {
-      dragging.current = false
-      pan.setOffset({ ...position.current })
-      pan.setValue({ x: 0, y: 0 })
-    },
-    onPanResponderMove: (_event, gesture) => {
-      if (!dragging.current && (Math.abs(gesture.dx) > 4 || Math.abs(gesture.dy) > 4)) {
-        dragging.current = true
-        triggerHaptic('selection')
-      }
-      pan.setValue({ x: gesture.dx, y: gesture.dy })
-    },
-    onPanResponderRelease: () => {
-      pan.flattenOffset()
-      if (!dragging.current) {
-        onPress()
-        return
-      }
-      const current = position.current
-      const settled = {
-        x: current.x + FAB_SIZE / 2 < width / 2 ? bounds.minX : bounds.maxX,
-        y: clamp(current.y, bounds.minY, bounds.maxY)
-      }
-      triggerHaptic('light')
-      Animated.spring(pan, { toValue: settled, useNativeDriver: false, friction: 7, tension: 70 }).start()
-      onMove(settled)
-    }
-  }), [pan, bounds, width, onPress, onMove])
-
-  return (
-    <Animated.View
-      {...responder.panHandlers}
-      accessibilityRole="button"
-      accessibilityLabel="Log a trade. Drag to move this button."
-      style={[styles.fab, { left: pan.x, top: pan.y }]}
-    >
-      <Plus color="#17130B" size={26} strokeWidth={2.8} />
-    </Animated.View>
-  )
-}
-
 function Stat({ label, value, numValue, tone, wide, styles }: { label: string; value: string; numValue?: number; tone?: string; wide?: boolean; styles: ReturnType<typeof createStyles> }) {
   return (
     <View style={styles.stat}>
       <Text style={styles.kicker}>{label}</Text>
       {numValue !== undefined && Number.isFinite(numValue) ? (
-        <ScrubAnimatedNumber value={numValue} animateOnMount={true} duration={420} style={[styles.statValue, tone ? { color: tone } : null]} />
+        <ScrubAnimatedNumber value={numValue} duration={420} style={[styles.statValue, tone ? { color: tone } : null]} />
       ) : (
         // Free-text values (setup names) get a full row and two lines to land in;
         // clipping a strategy name to "VWAP Re..." tells the trader nothing.
@@ -406,6 +393,7 @@ function PnlCurve({
 
   const selectedDays = PNL_RANGES.find((option) => option.key === range)?.days ?? 30
   const cutoff = selectedDays ? Date.now() - selectedDays * 86_400_000 : 0
+  const previousCutoff = selectedDays ? cutoff - selectedDays * 86_400_000 : 0
   const periodTrades = [...trades]
     .filter((trade) => {
       const ts = new Date(trade.tradeDate.replace(' ', 'T')).getTime()
@@ -417,6 +405,13 @@ function PnlCurve({
   for (const trade of periodTrades) values.push((values[values.length - 1] ?? 0) + trade.pnl)
 
   const periodNet = values[values.length - 1] ?? 0
+  const previousNet = selectedDays
+    ? trades.reduce((sum, trade) => {
+        const ts = new Date(trade.tradeDate.replace(' ', 'T')).getTime()
+        return Number.isFinite(ts) && ts >= previousCutoff && ts < cutoff ? sum + trade.pnl : sum
+      }, 0)
+    : null
+  const comparison = previousNet === null ? null : periodNet - previousNet
   const isScrubbing = scrubIndex !== null && scrubIndex >= 0 && scrubIndex < values.length
   const activeValue = (isScrubbing ? values[scrubIndex] : periodNet) ?? 0
   const lineColor = activeValue < 0 ? colors.down : colors.up
@@ -503,6 +498,11 @@ function PnlCurve({
           <Text style={styles.kicker}>{isScrubbing ? 'TOUCH SCRUB READOUT' : 'CUMULATIVE P&L'}</Text>
           <ScrubAnimatedNumber value={activeValue} style={[styles.chartValue, { color: lineColor }]} />
           <Text style={styles.muted}>{activeSubtext}</Text>
+          {!isScrubbing && comparison !== null ? (
+            <Text style={[styles.chartComparison, { color: comparison < 0 ? colors.down : colors.up }]}>
+              {comparison >= 0 ? 'Up ' : 'Down '}{money(Math.abs(comparison))} versus the previous {range}
+            </Text>
+          ) : null}
         </View>
         <View style={[styles.pill, { backgroundColor: isScrubbing ? colors.accentSoft : `${lineColor}22` }]}>
           <Text style={[styles.pillText, { color: isScrubbing ? colors.accent : lineColor }]}>
@@ -807,6 +807,8 @@ function CalendarView({
   styles: ReturnType<typeof createStyles>
 }) {
   const [activeMonth, setActiveMonth] = useState(() => new Date())
+  const [jumpOpen, setJumpOpen] = useState(false)
+  const [jumpYear, setJumpYear] = useState(() => String(new Date().getFullYear()))
 
   const year = activeMonth.getFullYear()
   const month = activeMonth.getMonth()
@@ -850,11 +852,22 @@ function CalendarView({
   return (
     <LinearGradient colors={colors.panelGradient} style={styles.calendarCard}>
       <View style={[styles.actionRow, styles.centeredRow]}>
-        <Pressable style={styles.compactButton} onPress={prevMonth}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Previous month" style={styles.compactButton} onPress={prevMonth}>
           <ChevronLeft color={colors.text} size={18} strokeWidth={2} />
         </Pressable>
-        <Text style={[styles.panelTitle, styles.flexOne, { textAlign: 'center' }]}>{monthName}</Text>
-        <Pressable style={styles.compactButton} onPress={nextMonth}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Jump from ${monthName} to another month`}
+          style={[styles.calendarMonthButton, styles.flexOne]}
+          onPress={() => {
+            setJumpYear(String(year))
+            setJumpOpen(true)
+          }}
+        >
+          <Text style={[styles.panelTitle, { textAlign: 'center' }]}>{monthName}</Text>
+          <Text style={styles.calendarJumpHint}>Jump to month</Text>
+        </Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Next month" style={styles.compactButton} onPress={nextMonth}>
           <ChevronRight color={colors.text} size={18} strokeWidth={2} />
         </Pressable>
       </View>
@@ -875,6 +888,10 @@ function CalendarView({
           return (
             <Pressable
               key={item.dateStr}
+              accessibilityRole="button"
+              accessibilityLabel={`${item.dateStr}${item.pnl !== null ? `, ${money(item.pnl)}` : ', no trades'}`}
+              accessibilityState={{ disabled: item.count === 0 }}
+              disabled={item.count === 0}
               style={[styles.calendarCell, { backgroundColor: bg }]}
               onPress={() => {
                 if (item.count > 0) {
@@ -893,6 +910,54 @@ function CalendarView({
           )
         })}
       </View>
+
+      <Modal visible={jumpOpen} transparent animationType="fade" onRequestClose={() => setJumpOpen(false)}>
+        <View style={styles.sheetOverlay}>
+          <Pressable accessibilityLabel="Close month picker" style={styles.sheetScrim} onPress={() => setJumpOpen(false)} />
+          <View style={styles.monthPickerSheet}>
+            <View style={[styles.actionRow, styles.centeredRow]}>
+              <View style={styles.flexOne}>
+                <Text style={styles.kicker}>HISTORY</Text>
+                <Text style={styles.sheetTitle}>Jump to a month</Text>
+              </View>
+              <Pressable accessibilityRole="button" accessibilityLabel="Close month picker" style={styles.iconButton} onPress={() => setJumpOpen(false)}>
+                <XCircle color={colors.text} size={20} strokeWidth={2} />
+              </Pressable>
+            </View>
+            <Text style={styles.label}>Year</Text>
+            <TextInput
+              accessibilityLabel="Year"
+              keyboardType="number-pad"
+              maxLength={4}
+              value={jumpYear}
+              onChangeText={setJumpYear}
+              style={styles.input}
+            />
+            <View style={styles.monthGrid}>
+              {Array.from({ length: 12 }, (_, index) => {
+                const label = new Date(2020, index, 1).toLocaleDateString(undefined, { month: 'short' })
+                const selected = Number(jumpYear) === year && index === month
+                return (
+                  <Pressable
+                    key={label}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${label} ${jumpYear}`}
+                    onPress={() => {
+                      const parsedYear = Number(jumpYear)
+                      if (!Number.isInteger(parsedYear) || parsedYear < 1990 || parsedYear > 2100) return
+                      setActiveMonth(new Date(parsedYear, index, 1))
+                      setJumpOpen(false)
+                    }}
+                    style={[styles.monthButton, selected ? styles.segmentActive : null]}
+                  >
+                    <Text style={[styles.segmentText, selected ? { color: colors.accent } : null]}>{label}</Text>
+                  </Pressable>
+                )
+              })}
+            </View>
+          </View>
+        </View>
+      </Modal>
     </LinearGradient>
   )
 }
@@ -909,7 +974,7 @@ function EdgeAnalyticsCard({ trades, colors, styles }: { trades: MobileTrade[]; 
       <View style={[styles.actionRow, styles.centeredRow]}>
         <View style={styles.flexOne}>
           <Text style={styles.kicker}>EDGE REFINING</Text>
-          <Text style={styles.panelTitle}>Setup Pattern Analytics</Text>
+          <Text style={styles.panelTitle}>Setup pattern signals</Text>
         </View>
         <Target color={colors.accent} size={18} strokeWidth={2} />
       </View>
@@ -919,12 +984,19 @@ function EdgeAnalyticsCard({ trades, colors, styles }: { trades: MobileTrade[]; 
           <View style={styles.edgeItem}>
             <View style={[styles.actionRow, styles.centeredRow]}>
               <Award color={colors.up} size={16} strokeWidth={2} />
-              <Text style={[styles.panelTitle, styles.flexOne]}>Top Edge: {topEdge.name}</Text>
+              <Text style={[styles.panelTitle, styles.flexOne]}>
+                {topEdge.count >= EDGE_SAMPLE_THRESHOLD ? 'Established edge' : 'Early signal'}: {topEdge.name}
+              </Text>
               <View style={[styles.pill, { backgroundColor: colors.upSoft }]}>
-                <Text style={[styles.pillText, { color: colors.up }]}>{topEdge.winRate}% WR</Text>
+                <Text style={[styles.pillText, { color: colors.up }]}>
+                  {topEdge.count} {topEdge.count === 1 ? 'TRADE' : 'TRADES'}
+                </Text>
               </View>
             </View>
-            <Text style={styles.muted}>Expectancy {money(topEdge.expectancy)}/trade across {topEdge.count} trades.</Text>
+            <Text style={styles.muted}>
+              {topEdge.winRate}% win rate and {money(topEdge.expectancy)} expectancy per trade.
+              {topEdge.count < EDGE_SAMPLE_THRESHOLD ? ` ${EDGE_SAMPLE_THRESHOLD - topEdge.count} more needed before this graduates to an edge.` : ''}
+            </Text>
           </View>
         ) : null}
 
@@ -932,16 +1004,189 @@ function EdgeAnalyticsCard({ trades, colors, styles }: { trades: MobileTrade[]; 
           <View style={styles.edgeItem}>
             <View style={[styles.actionRow, styles.centeredRow]}>
               <XCircle color={colors.down} size={16} strokeWidth={2} />
-              <Text style={[styles.panelTitle, styles.flexOne]}>Leak Setup: {leak.name}</Text>
+              <Text style={[styles.panelTitle, styles.flexOne]}>
+                {leak.count >= EDGE_SAMPLE_THRESHOLD ? 'Confirmed leak' : 'Possible leak'}: {leak.name}
+              </Text>
               <View style={[styles.pill, { backgroundColor: colors.downSoft }]}>
-                <Text style={[styles.pillText, { color: colors.down }]}>{leak.winRate}% WR</Text>
+                <Text style={[styles.pillText, { color: colors.down }]}>
+                  {leak.count} {leak.count === 1 ? 'TRADE' : 'TRADES'}
+                </Text>
               </View>
             </View>
-            <Text style={styles.muted}>Net loss {money(leak.netPnl)} — consider tightening rules for this setup.</Text>
+            <Text style={styles.muted}>
+              {leak.winRate}% win rate and {money(leak.netPnl)} net P&L.
+              {leak.count < EDGE_SAMPLE_THRESHOLD ? ' Treat this as a review prompt while the sample grows.' : ' Consider tightening rules for this setup.'}
+            </Text>
           </View>
         ) : null}
       </View>
     </View>
+  )
+}
+
+function actionableInsight(trades: MobileTrade[]) {
+  if (trades.length < 3) {
+    return {
+      title: 'Your edge is still forming',
+      body: `Log ${3 - trades.length} more trade${3 - trades.length === 1 ? '' : 's'} to unlock a meaningful pattern.`,
+      tone: 'neutral' as const
+    }
+  }
+
+  const timeframeMap = new Map<string, { wins: number; count: number; pnl: number }>()
+  for (const trade of trades) {
+    const timeframe = trade.timeframe.trim()
+    if (!timeframe) continue
+    const current = timeframeMap.get(timeframe) || { wins: 0, count: 0, pnl: 0 }
+    current.count += 1
+    current.pnl += trade.pnl
+    if (trade.pnl > 0) current.wins += 1
+    timeframeMap.set(timeframe, current)
+  }
+  const timeframeLeak = [...timeframeMap.entries()]
+    .filter(([, value]) => value.count >= 3 && value.pnl < 0)
+    .sort((a, b) => a[1].pnl - b[1].pnl)[0]
+
+  if (timeframeLeak) {
+    const [name, value] = timeframeLeak
+    return {
+      title: `${name} trades need attention`,
+      body: `${Math.round((value.wins / value.count) * 100)}% win rate and ${money(value.pnl)} across ${value.count} trades. Review execution before adding more size.`,
+      tone: 'warning' as const
+    }
+  }
+
+  const edges = computeEdgeStats(trades)
+  const top = edges.find((edge) => edge.isTopEdge) || edges[0]
+  if (top && top.netPnl > 0) {
+    if (top.count < EDGE_SAMPLE_THRESHOLD) {
+      return {
+        title: `${top.name} is an early signal`,
+        body: `${top.winRate}% win rate across ${top.count} trade${top.count === 1 ? '' : 's'}. Add ${EDGE_SAMPLE_THRESHOLD - top.count} more before treating it as an established edge.`,
+        tone: 'neutral' as const
+      }
+    }
+    return {
+      title: `${top.name} is leading your journal`,
+      body: `${top.winRate}% win rate with ${money(top.expectancy)} expectancy per trade across ${top.count} trades.`,
+      tone: 'positive' as const
+    }
+  }
+
+  return {
+    title: 'Protect the process',
+    body: 'No setup has separated itself yet. Keep risk consistent while the sample grows.',
+    tone: 'neutral' as const
+  }
+}
+
+function SessionReviewModal({
+  date,
+  review,
+  onSave,
+  onClose,
+  colors,
+  styles
+}: {
+  date: string
+  review: DailyReview | null
+  onSave: (review: DailyReview) => Promise<void>
+  onClose: () => void
+  colors: Palette
+  styles: ReturnType<typeof createStyles>
+}) {
+  const [planQuality, setPlanQuality] = useState<DailyReview['planQuality']>(review?.planQuality || 'Mostly')
+  const [mindset, setMindset] = useState<DailyReview['mindset']>(review?.mindset || 'Calm')
+  const [takeaway, setTakeaway] = useState(review?.takeaway || '')
+  const [saving, setSaving] = useState(false)
+
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        style={styles.lightboxOverlay}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <View style={styles.reviewModalCard}>
+          <View style={[styles.actionRow, styles.centeredRow]}>
+            <View style={styles.flexOne}>
+              <Text style={styles.eyebrow}>Session review</Text>
+              <Text style={styles.title}>Close the loop.</Text>
+            </View>
+            <Pressable style={styles.compactButton} onPress={onClose}>
+              <Text style={styles.compactButtonText}>Close</Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.reviewQuestion}>
+            <Text style={styles.panelTitle}>Did your decisions match the plan?</Text>
+            <View style={styles.segment}>
+              {(['Yes', 'Mostly', 'No'] as const).map((option) => (
+                <Pressable
+                  key={option}
+                  onPress={() => setPlanQuality(option)}
+                  style={[styles.segmentOption, planQuality === option ? styles.segmentActive : null]}
+                >
+                  <Text style={[styles.segmentText, planQuality === option ? { color: colors.accent } : null]}>{option}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.reviewQuestion}>
+            <Text style={styles.panelTitle}>How did the session feel?</Text>
+            <View style={styles.segment}>
+              {(['Calm', 'Mixed', 'Emotional'] as const).map((option) => (
+                <Pressable
+                  key={option}
+                  onPress={() => setMindset(option)}
+                  style={[styles.segmentOption, mindset === option ? styles.segmentActive : null]}
+                >
+                  <Text style={[styles.segmentText, mindset === option ? { color: colors.accent } : null]}>{option}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.reviewQuestion}>
+            <Text style={styles.panelTitle}>One takeaway for next time</Text>
+            <TextInput
+              value={takeaway}
+              onChangeText={setTakeaway}
+              placeholder="What should you repeat or change?"
+              placeholderTextColor={colors.faint}
+              style={[styles.input, styles.notes]}
+              multiline
+              maxLength={500}
+            />
+          </View>
+
+          <Pressable
+            style={[styles.primaryButton, saving ? styles.disabledButton : null]}
+            disabled={saving}
+            onPress={async () => {
+              setSaving(true)
+              try {
+                await onSave({
+                  date,
+                  planQuality,
+                  mindset,
+                  takeaway: takeaway.trim(),
+                  completedAt: new Date().toISOString()
+                })
+                triggerHaptic('success')
+                onClose()
+              } finally {
+                setSaving(false)
+              }
+            }}
+          >
+            {saving
+              ? <ActivityIndicator color="#17130B" />
+              : <Text style={styles.primaryButtonText}>Save session review</Text>}
+          </Pressable>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
   )
 }
 
@@ -951,12 +1196,18 @@ function Home({
   watchlist,
   onAddWatchlist,
   onDeleteWatchlist,
-  onLog,
   onSync,
   syncing,
   paired,
   demoCount,
+  onLoadDemo,
   onClearDemo,
+  rules,
+  news,
+  dailyReview,
+  onSaveReview,
+  onOpenHistory,
+  onOpenSettings,
   colors,
   styles
 }: {
@@ -965,22 +1216,31 @@ function Home({
   watchlist: WatchlistItem[]
   onAddWatchlist: (symbol: string, bias: 'Bullish' | 'Bearish' | 'Neutral', keyLevel: string, notes: string) => Promise<void>
   onDeleteWatchlist: (id: string) => Promise<void>
-  onLog: () => void
   onSync: () => void
   syncing: boolean
   paired: boolean
   demoCount: number
+  onLoadDemo: () => void
   onClearDemo: () => void
+  rules: string[]
+  news: NewsState
+  dailyReview: DailyReview | null
+  onSaveReview: (review: DailyReview) => Promise<void>
+  onOpenHistory: () => void
+  onOpenSettings: () => void
   colors: Palette
   styles: ReturnType<typeof createStyles>
 }) {
   const [sharing, setSharing] = useState(false)
+  const [reviewing, setReviewing] = useState(false)
   const today = localTimestamp().slice(0, 10)
   const todayTrades = trades.filter((trade) => trade.tradeDate.slice(0, 10) === today)
   const todayPnl = todayTrades.reduce((sum, trade) => sum + trade.pnl, 0)
   const todayWins = todayTrades.filter((trade) => trade.pnl > 0).length
   const todayWinRate = todayTrades.length ? todayWins / todayTrades.length : null
-  const performance = computeMobileStats(trades)
+  const nextHighImpact = news.events
+    .filter((event) => event.ts > Date.now() && event.impact.toLowerCase() === 'high')
+    .sort((a, b) => a.ts - b.ts)[0]
   const sessionDate = new Date().toLocaleDateString(undefined, {
     weekday: 'long',
     month: 'short',
@@ -994,11 +1254,9 @@ function Home({
         ? <RefreshControl refreshing={syncing} onRefresh={onSync} tintColor={colors.accent} colors={[colors.accent]} progressBackgroundColor={colors.surface} />
         : undefined}
     >
-      <TraderQuoteBanner colors={colors} styles={styles} />
-
       <View style={styles.pageIntro}>
         <View style={styles.flexOne}>
-          <Text style={styles.eyebrow}>TODAY'S SESSION</Text>
+          <Text style={styles.eyebrow}>Today's session</Text>
           <Text style={styles.title}>{sessionDate}</Text>
         </View>
         <Pressable style={styles.compactButton} onPress={() => { triggerHaptic('light'); setSharing(true) }}>
@@ -1013,12 +1271,26 @@ function Home({
         <View style={styles.demoBanner}>
           <View style={styles.flexOne}>
             <Text style={styles.demoBannerTitle}>Sample data</Text>
-            <Text style={styles.demoBannerCopy}>
-              These {demoCount} trades are examples so you can see the app with numbers in it. They disappear as soon as you log a real trade or pair with desktop.
-            </Text>
+            <Text style={styles.demoBannerCopy}>{demoCount} example trades are included in these totals.</Text>
           </View>
-          <Pressable style={styles.demoBannerButton} onPress={onClearDemo} accessibilityRole="button">
-            <Text style={styles.demoBannerButtonText}>Clear</Text>
+          <View style={styles.demoBannerActions}>
+            <Pressable style={styles.demoBannerButton} onPress={onLoadDemo} accessibilityRole="button">
+              <RefreshCw color={colors.accent} size={13} strokeWidth={2.2} />
+              <Text style={styles.demoBannerButtonText}>Reload</Text>
+            </Pressable>
+            <Pressable style={styles.demoBannerButton} onPress={onClearDemo} accessibilityRole="button">
+              <Text style={styles.demoBannerButtonText}>Clear</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : (__DEV__ || Platform.OS === 'web') ? (
+        <View style={styles.demoBanner}>
+          <View style={styles.flexOne}>
+            <Text style={styles.demoBannerTitle}>Development preview</Text>
+            <Text style={styles.demoBannerCopy}>Load a two-week journal to exercise every mobile view.</Text>
+          </View>
+          <Pressable style={styles.demoBannerButton} onPress={onLoadDemo} accessibilityRole="button">
+            <Text style={styles.demoBannerButtonText}>Load demo</Text>
           </Pressable>
         </View>
       ) : null}
@@ -1030,10 +1302,10 @@ function Home({
         style={styles.heroCard}
       >
         <View style={styles.heroTopline}>
-          <Text style={styles.heroLabel}>DAILY P&L</Text>
+          <Text style={styles.heroLabel}>Daily P&L</Text>
           <TrendingUp color={todayPnl < 0 ? colors.down : colors.accentBright} size={18} strokeWidth={2} />
         </View>
-        <ScrubAnimatedNumber value={todayPnl} animateOnMount={true} duration={480} style={[styles.heroValue, { color: todayPnl < 0 ? colors.down : colors.text }]} />
+        <ScrubAnimatedNumber value={todayPnl} duration={480} style={[styles.heroValue, { color: todayPnl < 0 ? colors.down : colors.text }]} />
         <Text style={styles.heroCaption}>
           {todayTrades.length
             ? `${todayTrades.length} trade${todayTrades.length === 1 ? '' : 's'} logged today`
@@ -1041,61 +1313,61 @@ function Home({
         </Text>
         <View style={styles.heroMetrics}>
           <View style={styles.heroMetric}>
-            <Text style={styles.heroMetricLabel}>TRADES</Text>
+            <Text style={styles.heroMetricLabel}>Trades</Text>
             <Text style={styles.heroMetricValue}>{todayTrades.length}</Text>
           </View>
           <View style={[styles.heroMetric, styles.heroMetricBorder]}>
-            <Text style={styles.heroMetricLabel}>WIN RATE</Text>
+            <Text style={styles.heroMetricLabel}>Win rate</Text>
             <Text style={styles.heroMetricValue}>{percent(todayWinRate)}</Text>
           </View>
           <View style={[styles.heroMetric, styles.heroMetricBorder]}>
-            <Text style={styles.heroMetricLabel}>QUEUED</Text>
+            <Text style={styles.heroMetricLabel}>Queued</Text>
             <Text style={styles.heroMetricValue}>{pending}</Text>
           </View>
         </View>
       </LinearGradient>
 
-      <View style={styles.sectionHeadingRow}>
-        <View>
-          <Text style={styles.sectionLabel}>ON-DEVICE PERFORMANCE</Text>
-          <Text style={styles.sectionTitle}>Your trading pulse</Text>
+      <LinearGradient colors={colors.panelGradient} style={styles.adaptiveCard}>
+        <View style={[styles.actionRow, styles.centeredRow]}>
+          <View style={[styles.featureIcon, { backgroundColor: todayTrades.length ? colors.upSoft : colors.accentSoft }]}>
+            {todayTrades.length
+              ? <BookOpen color={dailyReview ? colors.up : colors.accent} size={20} strokeWidth={2} />
+              : <Target color={colors.accent} size={20} strokeWidth={2} />}
+          </View>
+          <View style={styles.flexOne}>
+            <Text style={styles.panelTitle}>
+              {todayTrades.length
+                ? dailyReview ? 'Session reviewed' : 'Close the loop when you are done'
+                : 'Before the first entry'}
+            </Text>
+            <Text style={styles.muted}>
+              {todayTrades.length
+                ? dailyReview
+                  ? `${dailyReview.planQuality} on plan · ${dailyReview.mindset} mindset`
+                  : 'A short session-level reflection, separate from each trade checklist.'
+                : `${rules.length} trading rule${rules.length === 1 ? '' : 's'} ready${nextHighImpact ? ` · ${nextHighImpact.title} ${untilNews(nextHighImpact.ts, Date.now())}` : ''}.`}
+            </Text>
+          </View>
         </View>
-        <CalendarDays color={colors.faint} size={18} strokeWidth={1.8} />
-      </View>
-      <View style={styles.statsRow}>
-        <Stat label="NET P&L" value={money(performance.netPnl)} numValue={performance.netPnl} tone={performance.netPnl < 0 ? colors.down : colors.up} styles={styles} />
-        <Stat label="WIN RATE" value={percent(performance.winRate)} styles={styles} />
-      </View>
-      <View style={styles.statsRow}>
-        <Stat label="EXPECTANCY" value={money(performance.expectancy)} numValue={performance.expectancy} tone={performance.expectancy < 0 ? colors.down : colors.up} styles={styles} />
-        <Stat label="PAYOFF RATIO" value={performance.payoffRatio !== null ? `${performance.payoffRatio.toFixed(2)}x` : '--'} styles={styles} />
-      </View>
-      <View style={styles.statsRow}>
-        <Stat label="BEST WIN" value={money(performance.bestWin)} numValue={performance.bestWin} tone={colors.up} styles={styles} />
-        <Stat label="WORST LOSS" value={money(performance.worstLoss)} numValue={performance.worstLoss} tone={colors.down} styles={styles} />
-      </View>
-      <View style={styles.statsRow}>
-        <Stat label="STREAK" value={performance.streak} tone={performance.streak.includes('Win') ? colors.up : colors.accent} styles={styles} />
-      </View>
-      <View style={styles.statsRow}>
-        <Stat label="TOP SETUP" value={performance.topSetup} wide styles={styles} />
-      </View>
-      {performance.ruleRate !== null
-        ? <Text style={styles.muted}>Rule discipline {percent(performance.ruleRate)} across your mobile checklists.</Text>
-        : null}
-
-      <EdgeAnalyticsCard trades={trades} colors={colors} styles={styles} />
-
-      <PnlCurve trades={trades} colors={colors} styles={styles} />
-
-      <Pressable style={styles.primaryButton} onPress={onLog}>
-        <View style={styles.buttonContent}>
-          <Plus color="#17130B" size={18} strokeWidth={2.5} />
-          <Text style={styles.primaryButtonText}>Log a trade</Text>
-        </View>
-      </Pressable>
+        <Pressable
+          style={styles.secondaryButton}
+          onPress={todayTrades.length ? () => setReviewing(true) : onOpenSettings}
+        >
+          <Text style={styles.secondaryButtonText}>
+            {todayTrades.length ? dailyReview ? 'Update session review' : 'Review today’s session' : 'Review trading rules'}
+          </Text>
+        </Pressable>
+        {todayTrades.length ? (
+          <Pressable style={styles.textAction} onPress={onOpenHistory}>
+            <Text style={styles.textActionLabel}>Explore today’s trades</Text>
+            <ChevronRight color={colors.accent} size={16} strokeWidth={2} />
+          </Pressable>
+        ) : null}
+      </LinearGradient>
 
       <WatchlistSection watchlist={watchlist} onAdd={onAddWatchlist} onDelete={onDeleteWatchlist} colors={colors} styles={styles} />
+
+      <TraderQuoteBanner colors={colors} styles={styles} />
 
       <View style={styles.syncCard}>
         <View style={[styles.featureIcon, { backgroundColor: paired ? colors.upSoft : colors.accentSoft }]}>
@@ -1119,6 +1391,156 @@ function Home({
       </View>
 
       {sharing ? <ShareStatModal trades={trades} onClose={() => setSharing(false)} colors={colors} styles={styles} /> : null}
+      {reviewing ? (
+        <SessionReviewModal
+          date={today}
+          review={dailyReview}
+          onSave={onSaveReview}
+          onClose={() => setReviewing(false)}
+          colors={colors}
+          styles={styles}
+        />
+      ) : null}
+    </ScrollView>
+  )
+}
+
+function HoldTimeCard({
+  trades,
+  colors,
+  styles
+}: {
+  trades: MobileTrade[]
+  colors: Palette
+  styles: ReturnType<typeof createStyles>
+}) {
+  const hold = useMemo(() => computeHoldStats(trades), [trades])
+
+  return (
+    <View style={styles.panel}>
+      <View style={[styles.actionRow, styles.centeredRow]}>
+        <View style={[styles.featureIcon, { backgroundColor: colors.accentSoft }]}>
+          <Clock color={colors.accent} size={19} strokeWidth={2} />
+        </View>
+        <View style={styles.flexOne}>
+          <Text style={styles.kicker}>TIME IN TRADE</Text>
+          <Text style={styles.panelTitle}>How long your edge takes</Text>
+        </View>
+        <View style={styles.pill}>
+          <Text style={styles.pillText}>{hold.sampleSize} MEASURED</Text>
+        </View>
+      </View>
+
+      {hold.sampleSize ? (
+        <>
+          <View style={styles.holdGrid}>
+            <View style={styles.holdMetric}>
+              <Text style={styles.kicker}>AVERAGE HOLD</Text>
+              <Text style={styles.holdValue}>{formatHoldDuration(hold.averageMinutes)}</Text>
+            </View>
+            <View style={styles.holdMetric}>
+              <Text style={styles.kicker}>WINNERS</Text>
+              <Text style={[styles.holdValue, { color: colors.up }]}>{formatHoldDuration(hold.winnerMinutes)}</Text>
+            </View>
+            <View style={styles.holdMetric}>
+              <Text style={styles.kicker}>LOSERS</Text>
+              <Text style={[styles.holdValue, { color: colors.down }]}>{formatHoldDuration(hold.loserMinutes)}</Text>
+            </View>
+            <View style={styles.holdMetric}>
+              <Text style={styles.kicker}>BEST WINDOW</Text>
+              <Text style={[styles.holdValue, { color: colors.accent }]}>{hold.bestWindow?.label || '--'}</Text>
+            </View>
+          </View>
+          {hold.bestWindow ? (
+            <Text style={styles.muted}>
+              {hold.bestWindow.label} holds produced {money(hold.bestWindow.netPnl)} across {hold.bestWindow.count} measured trade{hold.bestWindow.count === 1 ? '' : 's'}.
+            </Text>
+          ) : null}
+        </>
+      ) : (
+        <Text style={styles.muted}>Add both entry and exit times to unlock hold-time performance.</Text>
+      )}
+    </View>
+  )
+}
+
+function Insights({
+  trades,
+  colors,
+  styles
+}: {
+  trades: MobileTrade[]
+  colors: Palette
+  styles: ReturnType<typeof createStyles>
+}) {
+  const performance = computeMobileStats(trades)
+  const insight = actionableInsight(trades)
+  const insightTone = insight.tone === 'positive' ? colors.up : insight.tone === 'warning' ? colors.down : colors.accent
+
+  return (
+    <ScrollView contentContainerStyle={styles.content}>
+      <View style={styles.pageTitleStack}>
+        <Text style={styles.eyebrow}>Performance intelligence</Text>
+        <Text style={styles.title}>Your edge, distilled.</Text>
+        <Text style={styles.copy}>Statistics stay here so the Home screen can focus on today.</Text>
+      </View>
+
+      <PnlCurve trades={trades} colors={colors} styles={styles} />
+
+      <HoldTimeCard trades={trades} colors={colors} styles={styles} />
+
+      <View style={[styles.insightCard, { borderColor: `${insightTone}66` }]}>
+        <View style={[styles.featureIcon, { backgroundColor: `${insightTone}1F` }]}>
+          <Sparkles color={insightTone} size={20} strokeWidth={2} />
+        </View>
+        <View style={styles.flexOne}>
+          <Text style={styles.kicker}>One thing to know</Text>
+          <Text style={styles.panelTitle}>{insight.title}</Text>
+          <Text style={styles.muted}>{insight.body}</Text>
+        </View>
+      </View>
+
+      <View style={styles.sectionHeadingRow}>
+        <View>
+          <Text style={styles.sectionLabel}>On-device performance</Text>
+          <Text style={styles.sectionTitle}>Trading pulse</Text>
+        </View>
+        <BarChart3 color={colors.faint} size={18} strokeWidth={1.8} />
+      </View>
+      <View style={styles.statsRow}>
+        <Stat label="NET P&L" value={money(performance.netPnl)} numValue={performance.netPnl} tone={performance.netPnl < 0 ? colors.down : colors.up} styles={styles} />
+        <Stat label="WIN RATE" value={percent(performance.winRate)} styles={styles} />
+      </View>
+      <View style={styles.statsRow}>
+        <Stat label="EXPECTANCY" value={money(performance.expectancy)} numValue={performance.expectancy} tone={performance.expectancy < 0 ? colors.down : colors.up} styles={styles} />
+        <Stat label="PAYOFF RATIO" value={performance.payoffRatio !== null ? `${performance.payoffRatio.toFixed(2)}x` : '--'} styles={styles} />
+      </View>
+
+      <View style={styles.snapshotPanel}>
+        <View style={styles.snapshotItem}>
+          <Text style={styles.kicker}>Best win</Text>
+          <Text style={[styles.snapshotValue, { color: colors.up }]}>{money(performance.bestWin)}</Text>
+        </View>
+        <View style={styles.snapshotDivider} />
+        <View style={styles.snapshotItem}>
+          <Text style={styles.kicker}>Worst loss</Text>
+          <Text style={[styles.snapshotValue, { color: colors.down }]}>{money(performance.worstLoss)}</Text>
+        </View>
+        <View style={styles.snapshotDivider} />
+        <View style={styles.snapshotItem}>
+          <Text style={styles.kicker}>Streak</Text>
+          <Text style={styles.snapshotValue} numberOfLines={1} adjustsFontSizeToFit>{performance.streak}</Text>
+        </View>
+      </View>
+      <View style={styles.topSetupRow}>
+        <Text style={styles.kicker}>Top setup</Text>
+        <Text style={styles.topSetupValue} numberOfLines={2}>{performance.topSetup}</Text>
+      </View>
+      {performance.ruleRate !== null
+        ? <Text style={styles.muted}>Rule discipline {percent(performance.ruleRate)} across your mobile checklists.</Text>
+        : null}
+
+      <EdgeAnalyticsCard trades={trades} colors={colors} styles={styles} />
     </ScrollView>
   )
 }
@@ -1152,6 +1574,7 @@ function News({
   const upcoming = state.events.filter((event) =>
     event.ts > now && (showAll || event.impact.toLowerCase() === 'high')
   )
+  const hasCachedEvents = state.events.length > 0
 
   function impactColor(event: EconomicEvent) {
     if (event.impact.toLowerCase() === 'high') return colors.down
@@ -1167,11 +1590,13 @@ function News({
           <Text style={styles.title}>Upcoming news.</Text>
           <Text style={styles.copy}>Know what is ahead before you enter a trade.</Text>
         </View>
-        <Pressable accessibilityLabel="Refresh economic calendar" style={styles.iconButton} onPress={onRefresh} disabled={loading}>
-          {loading
-            ? <ActivityIndicator color={colors.text} size="small" />
-            : <RefreshCw color={colors.text} size={18} strokeWidth={2} />}
-        </Pressable>
+        {!state.warning ? (
+          <Pressable accessibilityRole="button" accessibilityLabel="Refresh economic calendar" style={styles.iconButton} onPress={onRefresh} disabled={loading}>
+            {loading
+              ? <ActivityIndicator color={colors.text} size="small" />
+              : <RefreshCw color={colors.text} size={18} strokeWidth={2} />}
+          </Pressable>
+        ) : null}
       </View>
 
       <LinearGradient colors={colors.panelGradient} style={styles.panel}>
@@ -1192,13 +1617,15 @@ function News({
             accessibilityState={{ checked: state.enabled && state.permission === 'granted' }}
             accessibilityLabel="High-impact news alerts"
             onPress={() => onToggle(!state.enabled)}
-            style={[styles.toggle, state.enabled && state.permission === 'granted' ? styles.toggleOn : null]}
+            style={styles.toggleControl}
           >
-            <View style={[styles.toggleKnob, state.enabled && state.permission === 'granted' ? styles.toggleKnobOn : null]} />
+            <View style={[styles.toggle, state.enabled && state.permission === 'granted' ? styles.toggleOn : null]}>
+              <View style={[styles.toggleKnob, state.enabled && state.permission === 'granted' ? styles.toggleKnobOn : null]} />
+            </View>
           </Pressable>
         </View>
         {state.permission === 'denied' ? (
-          <Pressable style={styles.secondaryButton} onPress={() => Linking.openSettings()}>
+          <Pressable accessibilityRole="button" style={styles.secondaryButton} onPress={() => Linking.openSettings()}>
             <Text style={styles.secondaryButtonText}>Open notification settings</Text>
           </Pressable>
         ) : null}
@@ -1219,7 +1646,27 @@ function News({
           </Pressable>
         ) : null}
         {testMessage ? <Text style={styles.muted}>{testMessage}</Text> : null}
-        {state.warning ? <Text style={styles.warning}>{state.warning}</Text> : null}
+        {state.warning ? (
+          <View style={styles.newsStatusBlock}>
+            <View style={styles.newsStatusRow}>
+              <Wifi color={colors.down} size={16} strokeWidth={2} />
+              <View style={styles.flexOne}>
+                <Text style={styles.newsStatusTitle}>Calendar refresh unavailable</Text>
+                <Text style={styles.muted}>
+                  {hasCachedEvents ? 'Showing the most recent calendar saved on this device.' : 'Check your connection, then try again.'}
+                </Text>
+              </View>
+            </View>
+            <Pressable accessibilityRole="button" style={styles.secondaryButton} onPress={onRefresh} disabled={loading}>
+              {loading
+                ? <ActivityIndicator color={colors.text} size="small" />
+                : <View style={styles.buttonContent}>
+                    <RefreshCw color={colors.text} size={15} strokeWidth={2.2} />
+                    <Text style={styles.secondaryButtonText}>Try again</Text>
+                  </View>}
+            </Pressable>
+          </View>
+        ) : null}
         {state.refreshedAt
           ? <Text style={styles.muted}>Updated {new Date(state.refreshedAt).toLocaleString()}</Text>
           : null}
@@ -1232,6 +1679,8 @@ function News({
         ].map((option) => (
           <Pressable
             key={option.label}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: showAll === option.value }}
             onPress={() => setShowAll(option.value)}
             style={[styles.segmentOption, showAll === option.value ? styles.segmentActive : null]}
           >
@@ -1242,8 +1691,19 @@ function News({
 
       {!upcoming.length ? (
         <View style={styles.emptyNews}>
-          <Text style={styles.panelTitle}>No upcoming events</Text>
-          <Text style={styles.muted}>{loading ? 'Refreshing the calendar...' : "No matching events remain on this week's calendar."}</Text>
+          <View style={styles.emptyNewsIcon}>
+            <CalendarDays color={colors.accent} size={24} strokeWidth={1.8} />
+          </View>
+          <Text style={styles.panelTitle}>{state.warning && !hasCachedEvents ? 'Calendar unavailable' : 'Calendar is clear'}</Text>
+          <Text style={[styles.muted, styles.centerText]}>
+            {loading
+              ? 'Refreshing the calendar...'
+              : state.warning && !hasCachedEvents
+                ? 'Connect to the internet to load the upcoming economic calendar.'
+                : showAll
+                  ? "No upcoming events remain on this week's calendar."
+                  : 'No high-impact events are currently ahead.'}
+          </Text>
         </View>
       ) : upcoming.map((event) => (
         <View key={event.id} style={[styles.eventCard, { borderLeftColor: impactColor(event) }]}>
@@ -1343,7 +1803,7 @@ function TimePickerModal({
 
   return (
     <View style={styles.timePickerOverlay}>
-      <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+      <Pressable accessibilityLabel="Close time picker" style={StyleSheet.absoluteFill} onPress={onClose} />
       <View style={styles.timePickerCard}>
         <View style={[styles.actionRow, styles.centeredRow]}>
           <View style={styles.flexOne}>
@@ -1422,6 +1882,111 @@ function TimePickerModal({
   )
 }
 
+function SymbolPicker({
+  selected,
+  favorites,
+  suggested,
+  onSelect,
+  onToggleFavorite,
+  onClose,
+  colors,
+  styles
+}: {
+  selected: string
+  favorites: string[]
+  suggested: string[]
+  onSelect: (symbol: string) => void
+  onToggleFavorite: (symbol: string) => void
+  onClose: () => void
+  colors: Palette
+  styles: ReturnType<typeof createStyles>
+}) {
+  const [query, setQuery] = useState(selected)
+  const normalizedQuery = query.trim().toUpperCase().replace(/[^A-Z0-9./-]/g, '')
+  const allSymbols = [...new Set([...favorites, ...suggested].map((symbol) => symbol.trim().toUpperCase()).filter(Boolean))]
+  const matches = allSymbols.filter((symbol) => !normalizedQuery || symbol.includes(normalizedQuery)).slice(0, 12)
+  const canUseQuery = Boolean(normalizedQuery) && !matches.includes(normalizedQuery)
+
+  const symbolRow = (symbol: string) => {
+    const favorite = favorites.includes(symbol)
+    return (
+      <View key={symbol} style={styles.symbolRow}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Use ${symbol}`}
+          onPress={() => onSelect(symbol)}
+          style={styles.symbolSelect}
+        >
+          <Text style={styles.symbolName}>{symbol}</Text>
+          {symbol === selected.toUpperCase() ? <Text style={styles.symbolSelected}>SELECTED</Text> : null}
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${favorite ? 'Remove' : 'Add'} ${symbol} ${favorite ? 'from' : 'to'} usual symbols`}
+          onPress={() => onToggleFavorite(symbol)}
+          style={styles.symbolStar}
+        >
+          <Star color={favorite ? colors.accent : colors.dim} fill={favorite ? colors.accent : 'transparent'} size={19} strokeWidth={2} />
+        </Pressable>
+      </View>
+    )
+  }
+
+  return (
+    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView style={styles.sheetOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <Pressable accessibilityLabel="Close symbol picker" style={styles.sheetScrim} onPress={onClose} />
+        <View style={styles.symbolSheet}>
+          <View style={[styles.actionRow, styles.centeredRow]}>
+            <View style={styles.flexOne}>
+              <Text style={styles.kicker}>QUICK PICK</Text>
+              <Text style={styles.sheetTitle}>Choose a symbol</Text>
+            </View>
+            <Pressable accessibilityRole="button" accessibilityLabel="Close symbol picker" style={styles.iconButton} onPress={onClose}>
+              <XCircle color={colors.text} size={20} strokeWidth={2} />
+            </Pressable>
+          </View>
+
+          <View style={styles.searchBar}>
+            <Search color={colors.faint} size={17} strokeWidth={2} />
+            <TextInput
+              accessibilityLabel="Search or enter a symbol"
+              autoFocus
+              autoCapitalize="characters"
+              autoCorrect={false}
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Search or type a ticker"
+              placeholderTextColor={colors.faint}
+              style={styles.searchInput}
+            />
+          </View>
+
+          {canUseQuery ? (
+            <Pressable accessibilityRole="button" onPress={() => onSelect(normalizedQuery)} style={styles.useSymbolButton}>
+              <Plus color={colors.accent} size={17} strokeWidth={2.3} />
+              <Text style={styles.useSymbolText}>Use {normalizedQuery}</Text>
+            </Pressable>
+          ) : null}
+
+          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.symbolList}>
+            {favorites.length && !normalizedQuery ? (
+              <>
+                <Text style={styles.sectionLabel}>Your usuals</Text>
+                {favorites.map(symbolRow)}
+                <Text style={styles.sectionLabel}>Recent and watchlist</Text>
+              </>
+            ) : null}
+            {matches.length ? matches.filter((symbol) => !favorites.includes(symbol) || Boolean(normalizedQuery)).map(symbolRow) : (
+              <Text style={styles.muted}>Type a symbol above to add it to this trade.</Text>
+            )}
+          </ScrollView>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  )
+}
+
 const WIN_REASONS = [
   'Followed Plan',
   'Key Level Bounce',
@@ -1442,12 +2007,20 @@ const LOSS_REASONS = [
 
 function QuickLog({
   rules,
+  accounts,
+  favoriteSymbols,
+  suggestedSymbols,
+  onToggleFavoriteSymbol,
   onSaved,
   onClose,
   colors,
   styles
 }: {
   rules: string[]
+  accounts: PropAccount[]
+  favoriteSymbols: string[]
+  suggestedSymbols: string[]
+  onToggleFavoriteSymbol: (symbol: string) => void
   onSaved: (trade: MobileTrade) => Promise<void>
   onClose?: () => void
   colors: Palette
@@ -1459,6 +2032,8 @@ function QuickLog({
   const [selectedReasons, setSelectedReasons] = useState<string[]>([])
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [detailsExpanded, setDetailsExpanded] = useState(false)
+  const [symbolPickerOpen, setSymbolPickerOpen] = useState(false)
   const scrollRef = useRef<ScrollView>(null)
   const notesFocused = useRef(false)
 
@@ -1507,7 +2082,6 @@ function QuickLog({
     const now = new Date().toISOString()
     const followed = checks.filter(Boolean).length
     const ruleChecks = rules.map((rule, index) => ({ rule, followed: Boolean(checks[index]) }))
-      const timeStr = form.entryTime || form.exitTime ? `${form.entryTime || '--'} - ${form.exitTime || '--'}` : ''
       const trade: MobileTrade = {
         id: createLocalId(),
         createdAt: now,
@@ -1517,7 +2091,10 @@ function QuickLog({
         direction: form.direction,
         pnl: Number(form.pnl) || 0,
         fees: Number(form.fees) || 0,
-        timeframe: timeStr,
+        timeframe: form.timeframe.trim(),
+        entryTime: form.entryTime,
+        exitTime: form.exitTime,
+        account: form.account,
         setup: form.setup.trim(),
         notes: form.notes.trim(),
         screenshotUri: form.screenshotUri,
@@ -1548,7 +2125,7 @@ function QuickLog({
     return (
       <ScrollView contentContainerStyle={styles.content}>
         {onClose ? (
-          <Pressable style={styles.actionRow} onPress={onClose}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Close trade log" style={[styles.actionRow, styles.backAction]} onPress={onClose}>
             <ChevronLeft color={colors.accent} size={20} strokeWidth={2.4} />
             <Text style={[styles.compactButtonText, { color: colors.accent, fontSize: 14, fontWeight: '700' }]}>Close Log</Text>
           </Pressable>
@@ -1563,11 +2140,11 @@ function QuickLog({
           <View key={`${rule}-${index}`} style={styles.ruleCard}>
             <Text style={styles.rowText}>{rule}</Text>
             <View style={styles.answerRow}>
-              <Pressable onPress={() => { triggerHaptic('light'); setChecks((current) => current.map((value, itemIndex) => itemIndex === index ? true : value)) }}
+              <Pressable accessibilityRole="radio" accessibilityState={{ checked: checks[index] === true }} accessibilityLabel={`${rule}: followed`} onPress={() => { triggerHaptic('light'); setChecks((current) => current.map((value, itemIndex) => itemIndex === index ? true : value)) }}
                 style={[styles.answerButton, checks[index] === true ? styles.answerYes : null]}>
                 <Text style={[styles.answerText, checks[index] === true ? { color: colors.up } : null]}>Followed</Text>
               </Pressable>
-              <Pressable onPress={() => { triggerHaptic('light'); setChecks((current) => current.map((value, itemIndex) => itemIndex === index ? false : value)) }}
+              <Pressable accessibilityRole="radio" accessibilityState={{ checked: checks[index] === false }} accessibilityLabel={`${rule}: broke it`} onPress={() => { triggerHaptic('light'); setChecks((current) => current.map((value, itemIndex) => itemIndex === index ? false : value)) }}
                 style={[styles.answerButton, checks[index] === false ? styles.answerNo : null]}>
                 <Text style={[styles.answerText, checks[index] === false ? { color: colors.down } : null]}>Broke it</Text>
               </Pressable>
@@ -1581,10 +2158,10 @@ function QuickLog({
         </View>
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <View style={styles.actionRow}>
-          <Pressable style={[styles.secondaryButton, styles.flexOne]} onPress={() => { setStep('details'); setError('') }}>
+          <Pressable accessibilityRole="button" style={[styles.secondaryButton, styles.flexOne]} onPress={() => { setStep('details'); setError('') }}>
             <Text style={styles.secondaryButtonText}>Back</Text>
           </Pressable>
-          <Pressable style={[styles.primaryButton, styles.flexOne]} onPress={finish} disabled={saving}>
+          <Pressable accessibilityRole="button" style={[styles.primaryButton, styles.flexOne]} onPress={finish} disabled={saving}>
             {saving
               ? <ActivityIndicator color="#17130B" />
               : <View style={styles.buttonContent}>
@@ -1606,7 +2183,7 @@ function QuickLog({
       keyboardDismissMode="interactive"
     >
       {onClose ? (
-        <Pressable style={styles.actionRow} onPress={onClose}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Close trade log" style={[styles.actionRow, styles.backAction]} onPress={onClose}>
           <ChevronLeft color={colors.accent} size={20} strokeWidth={2.4} />
           <Text style={[styles.compactButtonText, { color: colors.accent, fontSize: 14, fontWeight: '700' }]}>Close Log</Text>
         </Pressable>
@@ -1622,7 +2199,14 @@ function QuickLog({
           const isSelected = form.direction === direction
           const gradient = direction === 'Long' ? colors.upGradient : colors.downGradient
           return (
-            <Pressable key={direction} onPress={() => update('direction', direction)} style={styles.segmentOption}>
+            <Pressable
+              key={direction}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: isSelected }}
+              accessibilityLabel={`${direction} trade`}
+              onPress={() => update('direction', direction)}
+              style={styles.segmentOption}
+            >
               {isSelected ? (
                 <LinearGradient
                   colors={gradient}
@@ -1641,107 +2225,183 @@ function QuickLog({
       </View>
 
       <Text style={styles.label}>Symbol</Text>
-      <TextInput autoCapitalize="characters" placeholder="MES" placeholderTextColor={colors.dim} style={styles.input}
-        value={form.symbol} onChangeText={(value) => update('symbol', value)} />
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={form.symbol ? `Change symbol, currently ${form.symbol}` : 'Choose a symbol'}
+        onPress={() => setSymbolPickerOpen(true)}
+        style={[styles.input, styles.symbolField]}
+      >
+        <View style={styles.symbolFieldCopy}>
+          <Text style={form.symbol ? styles.symbolFieldValue : styles.symbolFieldPlaceholder}>
+            {form.symbol || 'Choose or type a symbol'}
+          </Text>
+          {favoriteSymbols.includes(form.symbol.toUpperCase()) ? <Text style={styles.symbolUsual}>USUAL</Text> : null}
+        </View>
+        <ChevronDown color={colors.faint} size={17} strokeWidth={2} />
+      </Pressable>
 
       <View style={styles.fieldRow}>
         <View style={styles.field}>
           <Text style={styles.label}>P&L</Text>
-          <TextInput keyboardType="numbers-and-punctuation" placeholder="0.00" placeholderTextColor={colors.dim} style={styles.input}
+          <TextInput accessibilityLabel="Profit and loss" keyboardType="numbers-and-punctuation" placeholder="0.00" placeholderTextColor={colors.dim} style={styles.input}
             value={form.pnl} onChangeText={(value) => update('pnl', value)} />
         </View>
         <View style={styles.field}>
-          <Text style={styles.label}>Fees</Text>
-          <TextInput keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={colors.dim} style={styles.input}
-            value={form.fees} onChangeText={(value) => update('fees', value)} />
+          <Text style={styles.label}>Setup</Text>
+          <TextInput accessibilityLabel="Trade setup" placeholder="VWAP Reclaim" placeholderTextColor={colors.dim} style={styles.input}
+            value={form.setup} onChangeText={(value) => update('setup', value)} />
         </View>
       </View>
 
-      <Text style={styles.label}>Setup</Text>
-      <TextInput placeholder="VWAP Reclaim" placeholderTextColor={colors.dim} style={styles.input}
-        value={form.setup} onChangeText={(value) => update('setup', value)} />
-
-      <View style={styles.fieldRow}>
-        <View style={styles.field}>
-          <Text style={styles.label}>Entry Time</Text>
-          <Pressable
-            style={[styles.input, styles.actionRow, styles.centeredRow]}
-            onPress={() => setPickerTarget('entryTime')}
-          >
-            <Clock color={colors.accent} size={15} strokeWidth={2} />
-            <Text style={[styles.flexOne, { color: form.entryTime ? colors.text : colors.dim, fontSize: 13, fontWeight: '700' }]}>
-              {form.entryTime || 'Set Entry'}
-            </Text>
-            <ChevronDown color={colors.faint} size={15} strokeWidth={2} />
-          </Pressable>
-        </View>
-        <View style={styles.field}>
-          <Text style={styles.label}>Exit Time</Text>
-          <Pressable
-            style={[styles.input, styles.actionRow, styles.centeredRow]}
-            onPress={() => setPickerTarget('exitTime')}
-          >
-            <Clock color={colors.accent} size={15} strokeWidth={2} />
-            <Text style={[styles.flexOne, { color: form.exitTime ? colors.text : colors.dim, fontSize: 13, fontWeight: '700' }]}>
-              {form.exitTime || 'Set Exit'}
-            </Text>
-            <ChevronDown color={colors.faint} size={15} strokeWidth={2} />
-          </Pressable>
-        </View>
-      </View>
-
-      <Text style={styles.label}>{pnlVal >= 0 ? 'Why did this trade win?' : 'Why did this trade lose?'}</Text>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
-        {reasonOptions.map((reason) => {
-          const active = selectedReasons.includes(reason)
-          const activeColor = pnlVal >= 0 ? colors.up : colors.down
+      <Text style={styles.label}>Account</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.accountTagRow}>
+        {[{ id: '', label: 'Live' }, ...accounts].map((account) => {
+          const active = form.account === account.id
           return (
             <Pressable
-              key={reason}
-              onPress={() => toggleReason(reason)}
-              style={[
-                styles.presetPill,
-                active ? { backgroundColor: pnlVal >= 0 ? colors.upSoft : colors.downSoft, borderColor: activeColor } : null
-              ]}
+              key={account.id || 'live'}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: active }}
+              accessibilityLabel={`${account.label} account`}
+              style={[styles.accountTag, active ? styles.accountTagActive : null]}
+              onPress={() => update('account', account.id)}
             >
-              <Text style={[styles.presetText, active ? { color: activeColor } : null]}>{reason}</Text>
+              <Text style={[styles.accountTagText, active ? { color: colors.accent } : null]}>{account.label}</Text>
             </Pressable>
           )
         })}
-      </View>
+      </ScrollView>
 
-      <Text style={styles.label}>Fast note</Text>
-      <TextInput multiline placeholder="What happened?" placeholderTextColor={colors.dim} style={[styles.input, styles.notes]}
-        value={form.notes}
-        onChangeText={(value) => update('notes', value)}
-        onFocus={() => { notesFocused.current = true; revealFastNote() }}
-        onBlur={() => { notesFocused.current = false }}
-        onContentSizeChange={() => { if (notesFocused.current) revealFastNote() }}
-      />
-
-      {form.screenshotUri ? (
-        <View style={styles.imagePreview}>
-          <Image source={{ uri: form.screenshotUri }} style={styles.previewImage} />
-          <Pressable style={styles.compactButton} onPress={() => update('screenshotUri', '')}>
-            <Text style={styles.compactButtonText}>Remove</Text>
-          </Pressable>
-        </View>
-      ) : (
-        <Pressable style={styles.secondaryButton} onPress={chooseScreenshot}>
-          <View style={styles.buttonContent}>
-            <ImagePlus color={colors.text} size={17} strokeWidth={2} />
-            <Text style={styles.secondaryButtonText}>Attach chart screenshot</Text>
-          </View>
-        </Pressable>
-      )}
-
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      <Pressable style={styles.primaryButton} onPress={continueToChecklist}>
+      {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+      <Pressable accessibilityRole="button" style={styles.primaryButton} onPress={continueToChecklist}>
         <View style={styles.buttonContent}>
           <Text style={styles.primaryButtonText}>Continue to checklist</Text>
           <ChevronRight color="#17130B" size={18} strokeWidth={2.5} />
         </View>
       </Pressable>
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: detailsExpanded }}
+        style={styles.detailsToggle}
+        onPress={() => setDetailsExpanded((current) => !current)}
+      >
+        <View style={styles.flexOne}>
+          <Text style={styles.detailsToggleTitle}>{detailsExpanded ? 'Hide optional details' : 'Add optional details'}</Text>
+          <Text style={styles.muted}>Fees, times, reasons, notes, and chart</Text>
+        </View>
+        {detailsExpanded
+          ? <ChevronUp color={colors.accent} size={18} strokeWidth={2.2} />
+          : <ChevronDown color={colors.accent} size={18} strokeWidth={2.2} />}
+      </Pressable>
+
+      {detailsExpanded ? (
+        <View style={styles.optionalDetails}>
+          <View style={styles.fieldRow}>
+            <View style={styles.field}>
+              <Text style={styles.label}>Fees</Text>
+              <TextInput accessibilityLabel="Trade fees" keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={colors.dim} style={styles.input}
+                value={form.fees} onChangeText={(value) => update('fees', value)} />
+            </View>
+            <View style={styles.field}>
+              <Text style={styles.label}>Chart timeframe</Text>
+              <TextInput accessibilityLabel="Entry chart timeframe" placeholder="1m, 5m, 15m" placeholderTextColor={colors.dim} style={styles.input}
+                value={form.timeframe} onChangeText={(value) => update('timeframe', value)} />
+            </View>
+          </View>
+
+          <View style={styles.fieldRow}>
+            <View style={styles.field}>
+              <Text style={styles.label}>Entry Time</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Set entry time, currently ${form.entryTime || 'not set'}`}
+                style={[styles.input, styles.actionRow, styles.centeredRow]}
+                onPress={() => setPickerTarget('entryTime')}
+              >
+                <Clock color={colors.accent} size={15} strokeWidth={2} />
+                <Text style={[styles.flexOne, { color: form.entryTime ? colors.text : colors.dim, fontSize: 13, fontWeight: '700' }]}>
+                  {form.entryTime || 'Set Entry'}
+                </Text>
+                <ChevronDown color={colors.faint} size={15} strokeWidth={2} />
+              </Pressable>
+            </View>
+            <View style={styles.field}>
+              <Text style={styles.label}>Exit Time</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Set exit time, currently ${form.exitTime || 'not set'}`}
+                style={[styles.input, styles.actionRow, styles.centeredRow]}
+                onPress={() => setPickerTarget('exitTime')}
+              >
+                <Clock color={colors.accent} size={15} strokeWidth={2} />
+                <Text style={[styles.flexOne, { color: form.exitTime ? colors.text : colors.dim, fontSize: 13, fontWeight: '700' }]}>
+                  {form.exitTime || 'Set Exit'}
+                </Text>
+                <ChevronDown color={colors.faint} size={15} strokeWidth={2} />
+              </Pressable>
+            </View>
+          </View>
+
+          <Text style={styles.label}>{pnlVal >= 0 ? 'Why did this trade win?' : 'Why did this trade lose?'}</Text>
+          <View style={styles.reasonWrap}>
+            {reasonOptions.map((reason) => {
+              const active = selectedReasons.includes(reason)
+              const activeColor = pnlVal >= 0 ? colors.up : colors.down
+              return (
+                <Pressable
+                  key={reason}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: active }}
+                  onPress={() => toggleReason(reason)}
+                  style={[
+                    styles.presetPill,
+                    active ? { backgroundColor: pnlVal >= 0 ? colors.upSoft : colors.downSoft, borderColor: activeColor } : null
+                  ]}
+                >
+                  <Text style={[styles.presetText, active ? { color: activeColor } : null]}>{reason}</Text>
+                </Pressable>
+              )
+            })}
+          </View>
+
+          <Text style={styles.label}>Fast note</Text>
+          <TextInput accessibilityLabel="Fast trade note" multiline placeholder="What happened?" placeholderTextColor={colors.dim} style={[styles.input, styles.notes]}
+            value={form.notes}
+            onChangeText={(value) => update('notes', value)}
+            onFocus={() => { notesFocused.current = true; revealFastNote() }}
+            onBlur={() => { notesFocused.current = false }}
+            onContentSizeChange={() => { if (notesFocused.current) revealFastNote() }}
+          />
+
+          {form.screenshotUri ? (
+            <View style={styles.imagePreview}>
+              <Image source={{ uri: form.screenshotUri }} style={styles.previewImage} />
+              <Pressable accessibilityRole="button" style={styles.compactButton} onPress={() => update('screenshotUri', '')}>
+                <Text style={styles.compactButtonText}>Remove</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <Pressable accessibilityRole="button" style={styles.secondaryButton} onPress={chooseScreenshot}>
+              <View style={styles.buttonContent}>
+                <ImagePlus color={colors.text} size={17} strokeWidth={2} />
+                <Text style={styles.secondaryButtonText}>Attach chart screenshot</Text>
+              </View>
+            </Pressable>
+          )}
+
+          <Pressable
+            accessibilityRole="button"
+            style={styles.primaryButton}
+            onPress={continueToChecklist}
+          >
+            <View style={styles.buttonContent}>
+              <Text style={styles.primaryButtonText}>Continue to checklist</Text>
+              <ChevronRight color="#17130B" size={18} strokeWidth={2.5} />
+            </View>
+          </Pressable>
+        </View>
+      ) : null}
 
       {pickerTarget ? (
         <TimePickerModal
@@ -1753,6 +2413,21 @@ function QuickLog({
           styles={styles}
         />
       ) : null}
+      {symbolPickerOpen ? (
+        <SymbolPicker
+          selected={form.symbol}
+          favorites={favoriteSymbols}
+          suggested={suggestedSymbols}
+          onSelect={(symbol) => {
+            update('symbol', symbol)
+            setSymbolPickerOpen(false)
+          }}
+          onToggleFavorite={onToggleFavoriteSymbol}
+          onClose={() => setSymbolPickerOpen(false)}
+          colors={colors}
+          styles={styles}
+        />
+      ) : null}
     </ScrollView>
     </KeyboardAvoidingView>
   )
@@ -1760,25 +2435,28 @@ function QuickLog({
 
 function TradeEditor({
   trade,
+  accounts,
   onClose,
   onSave,
   colors,
   styles
 }: {
   trade: MobileTrade
+  accounts: PropAccount[]
   onClose: () => void
   onSave: (trade: MobileTrade) => Promise<void>
   colors: Palette
   styles: ReturnType<typeof createStyles>
 }) {
-  const times = (trade.timeframe || '').split('-').map((t) => t.trim())
   const [form, setForm] = useState<Form>(() => ({
     symbol: trade.symbol,
     direction: trade.direction,
     pnl: String(trade.pnl),
     fees: String(trade.fees),
-    entryTime: times[0] || trade.timeframe || '',
-    exitTime: times[1] || '',
+    timeframe: trade.timeframe,
+    entryTime: trade.entryTime,
+    exitTime: trade.exitTime,
+    account: trade.account,
     setup: trade.setup,
     notes: trade.notes,
     screenshotUri: trade.screenshotUri
@@ -1814,7 +2492,6 @@ function TradeEditor({
     }
     setSaving(true)
     try {
-      const timeStr = form.entryTime || form.exitTime ? `${form.entryTime || '--'} - ${form.exitTime || '--'}` : ''
       await onSave({
         ...trade,
         updatedAt: new Date().toISOString(),
@@ -1823,7 +2500,10 @@ function TradeEditor({
         direction: form.direction,
         pnl,
         fees,
-        timeframe: timeStr,
+        timeframe: form.timeframe.trim(),
+        entryTime: form.entryTime,
+        exitTime: form.exitTime,
+        account: form.account,
         setup: form.setup.trim(),
         notes: form.notes.trim(),
         screenshotUri: form.screenshotUri,
@@ -1870,6 +2550,22 @@ function TradeEditor({
               placeholder="2026-07-27T09:45:00" placeholderTextColor={colors.dim}
               onChangeText={(value) => { setTradeDate(value); setError('') }} />
 
+            <Text style={styles.label}>Account</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.accountTagRow}>
+              {[{ id: '', label: 'Live' }, ...accounts].map((account) => {
+                const active = form.account === account.id
+                return (
+                  <Pressable
+                    key={account.id || 'live'}
+                    style={[styles.accountTag, active ? styles.accountTagActive : null]}
+                    onPress={() => update('account', account.id)}
+                  >
+                    <Text style={[styles.accountTagText, active ? { color: colors.accent } : null]}>{account.label}</Text>
+                  </Pressable>
+                )
+              })}
+            </ScrollView>
+
             <View style={styles.fieldRow}>
               <View style={styles.field}>
                 <Text style={styles.label}>P&L</Text>
@@ -1886,6 +2582,15 @@ function TradeEditor({
             <Text style={styles.label}>Setup</Text>
             <TextInput style={styles.input} value={form.setup}
               onChangeText={(value) => update('setup', value)} />
+
+            <Text style={styles.label}>Entry chart timeframe</Text>
+            <TextInput
+              style={styles.input}
+              value={form.timeframe}
+              placeholder="1m, 5m, 15m"
+              placeholderTextColor={colors.dim}
+              onChangeText={(value) => update('timeframe', value)}
+            />
 
             <View style={styles.fieldRow}>
               <View style={styles.field}>
@@ -1966,12 +2671,14 @@ function TradeEditor({
 
 function History({
   trades,
+  accounts,
   onUpdate,
   onDelete,
   colors,
   styles
 }: {
   trades: MobileTrade[]
+  accounts: PropAccount[]
   onUpdate: (trade: MobileTrade) => Promise<void>
   onDelete: (trade: MobileTrade) => Promise<void>
   colors: Palette
@@ -1981,11 +2688,39 @@ function History({
   const [busyId, setBusyId] = useState('')
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list')
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
+  const [outcome, setOutcome] = useState<'all' | 'win' | 'loss'>('all')
+  const [visibleCount, setVisibleCount] = useState(50)
+  const accountNames = useMemo(
+    () => new Map(accounts.map((account) => [account.id, account.label])),
+    [accounts]
+  )
 
   const filteredTrades = useMemo(() => {
-    if (!selectedDate) return trades
-    return trades.filter((t) => t.tradeDate.slice(0, 10) === selectedDate)
-  }, [trades, selectedDate])
+    const needle = query.trim().toLowerCase()
+    return trades.filter((trade) => {
+      if (selectedDate && trade.tradeDate.slice(0, 10) !== selectedDate) return false
+      if (outcome === 'win' && trade.pnl <= 0) return false
+      if (outcome === 'loss' && trade.pnl >= 0) return false
+      if (!needle) return true
+      return [
+        trade.symbol,
+        trade.setup,
+        trade.timeframe,
+        trade.entryTime,
+        trade.exitTime,
+        trade.notes,
+        trade.direction,
+        trade.tradeDate,
+        shortDate(trade.tradeDate),
+        ...(trade.reasons || [])
+      ].some((value) => String(value || '').toLowerCase().includes(needle))
+    })
+  }, [trades, selectedDate, query, outcome])
+  const visibleTrades = filteredTrades.slice(0, visibleCount)
+
+  useEffect(() => setVisibleCount(50), [selectedDate, query, outcome])
 
   function confirmDelete(trade: MobileTrade) {
     Alert.alert(
@@ -2031,12 +2766,18 @@ function History({
           </View>
           <View style={styles.segment}>
             <Pressable
+              accessibilityRole="tab"
+              accessibilityLabel="List view"
+              accessibilityState={{ selected: viewMode === 'list' }}
               onPress={() => { triggerHaptic('light'); setViewMode('list') }}
               style={[styles.segmentOption, viewMode === 'list' ? styles.segmentActive : null]}
             >
               <List color={viewMode === 'list' ? colors.accent : colors.dim} size={16} strokeWidth={2} />
             </Pressable>
             <Pressable
+              accessibilityRole="tab"
+              accessibilityLabel="Calendar view"
+              accessibilityState={{ selected: viewMode === 'calendar' }}
               onPress={() => { triggerHaptic('light'); setViewMode('calendar') }}
               style={[styles.segmentOption, viewMode === 'calendar' ? styles.segmentActive : null]}
             >
@@ -2047,6 +2788,46 @@ function History({
         <Text style={styles.copy}>{trades.length} trade{trades.length === 1 ? '' : 's'} available on this device.</Text>
       </View>
 
+      <View style={styles.searchBar}>
+        <Search color={colors.faint} size={17} strokeWidth={2} />
+        <TextInput
+          accessibilityLabel="Search trade history"
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search symbol, setup, date, or note"
+          placeholderTextColor={colors.faint}
+          style={styles.searchInput}
+          autoCapitalize="none"
+          returnKeyType="search"
+        />
+        {query ? (
+          <Pressable accessibilityLabel="Clear trade search" onPress={() => setQuery('')}>
+            <XCircle color={colors.dim} size={17} strokeWidth={2} />
+          </Pressable>
+        ) : null}
+      </View>
+
+      <View style={styles.compactSegment}>
+        {([
+          { label: 'All', value: 'all' },
+          { label: 'Wins', value: 'win' },
+          { label: 'Losses', value: 'loss' }
+        ] as const).map((option) => (
+          <Pressable
+            key={option.value}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: outcome === option.value }}
+            onPress={() => setOutcome(option.value)}
+            style={[styles.compactSegmentOption, outcome === option.value ? styles.segmentActive : null]}
+          >
+            <Text style={[styles.segmentText, outcome === option.value ? { color: colors.accent } : null]}>{option.label}</Text>
+          </Pressable>
+        ))}
+        <Text style={styles.resultCount}>
+          {visibleTrades.length === filteredTrades.length ? `${filteredTrades.length} shown` : `${visibleTrades.length} of ${filteredTrades.length}`}
+        </Text>
+      </View>
+
       {viewMode === 'calendar' ? (
         <CalendarView trades={trades} onSelectDate={(d) => setSelectedDate(d)} colors={colors} styles={styles} />
       ) : null}
@@ -2054,17 +2835,42 @@ function History({
       {selectedDate ? (
         <View style={[styles.actionRow, styles.centeredRow, styles.panel]}>
           <Text style={[styles.panelTitle, styles.flexOne]}>Filter: {selectedDate}</Text>
-          <Pressable style={styles.compactButton} onPress={() => setSelectedDate(null)}>
+          <Pressable accessibilityRole="button" style={styles.compactButton} onPress={() => setSelectedDate(null)}>
             <Text style={styles.compactButtonText}>Clear Date Filter</Text>
           </Pressable>
         </View>
       ) : null}
 
-      {filteredTrades.map((trade) => {
+      {!filteredTrades.length ? (
+        <View style={styles.emptyNews}>
+          <View style={styles.emptyNewsIcon}>
+            <Search color={colors.accent} size={23} strokeWidth={1.8} />
+          </View>
+          <Text style={styles.panelTitle}>No matching trades</Text>
+          <Text style={[styles.muted, styles.centerText]}>Adjust the search, outcome, or selected date.</Text>
+        </View>
+      ) : visibleTrades.map((trade, index) => {
         const gradeInfo = computeTradeGrade(trade)
+        const heldMinutes = tradeHoldMinutes(trade)
+        const heldLabel = heldMinutes === null ? '' : `Held ${formatHoldDuration(heldMinutes)}`
+        const expanded = expandedId === trade.id
+        const monthKey = trade.tradeDate.slice(0, 7)
+        const previousMonthKey = index > 0 ? visibleTrades[index - 1]?.tradeDate.slice(0, 7) : ''
+        const monthLabel = new Date(`${monthKey}-01T12:00:00`).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
         return (
-          <View key={trade.id} style={styles.tradeCard}>
-            <View style={styles.tradeRow}>
+          <Fragment key={trade.id}>
+          {monthKey !== previousMonthKey ? <Text style={styles.historyMonthLabel}>{monthLabel}</Text> : null}
+          <View style={styles.tradeCard}>
+            <Pressable
+              style={styles.tradeRow}
+              accessibilityRole="button"
+              accessibilityState={{ expanded }}
+              accessibilityLabel={`${trade.symbol} ${money(trade.pnl)}. ${expanded ? 'Hide' : 'Show'} trade details`}
+              onPress={() => {
+                triggerHaptic('selection')
+                setExpandedId(expanded ? null : trade.id)
+              }}
+            >
               <View style={[styles.tradeOutcomeRail, { backgroundColor: trade.pnl < 0 ? colors.down : colors.up }]} />
               <View style={styles.flexOne}>
                 <View style={styles.tradeTitleRow}>
@@ -2074,8 +2880,8 @@ function History({
                   </View>
                   <Text style={styles.tradeMeta}>{trade.direction} · {shortDate(trade.tradeDate)}</Text>
                 </View>
-                <Text style={styles.muted} numberOfLines={1}>
-                  {[trade.setup, trade.timeframe, trade.ruleSummary].filter(Boolean).join(' · ') || 'No setup details'}
+                <Text style={[styles.muted, styles.tradeSummary]} numberOfLines={2}>
+                  {[accountNames.get(trade.account) || 'Live', trade.setup, trade.timeframe, heldLabel, trade.ruleSummary].filter(Boolean).join(' · ') || 'No setup details'}
                 </Text>
                 {trade.reasons && trade.reasons.length ? (
                   <Text style={[styles.muted, { color: colors.accent, marginTop: 2 }]} numberOfLines={1}>
@@ -2083,6 +2889,7 @@ function History({
                   </Text>
                 ) : null}
               </View>
+              {trade.screenshotUri ? <Image source={{ uri: trade.screenshotUri }} style={styles.historyThumbnail} /> : null}
               <View style={styles.tradeRight}>
                 <View style={[styles.pnlPill, { backgroundColor: trade.pnl < 0 ? colors.downSoft : colors.upSoft }]}>
                   <Text style={[styles.tradePnl, { color: trade.pnl < 0 ? colors.down : colors.up }]}>{money(trade.pnl)}</Text>
@@ -2091,32 +2898,61 @@ function History({
                   {trade.origin === 'desktop' && trade.syncState === 'synced' ? 'DESKTOP' : trade.syncState.toUpperCase()}
                 </Text>
               </View>
-            </View>
-            <View style={styles.historyActions}>
-              <Pressable accessibilityLabel={`Edit ${trade.symbol} trade`} style={styles.historyAction}
-                onPress={() => setEditing(trade)}>
-                <View style={styles.buttonContent}>
-                  <Pencil color={colors.text} size={14} strokeWidth={2} />
-                  <Text style={styles.historyActionText}>Edit</Text>
+            </Pressable>
+            {expanded ? (
+              <View style={styles.historyDetails}>
+                {heldMinutes !== null ? (
+                  <View style={[styles.actionRow, styles.centeredRow]}>
+                    <Clock color={colors.accent} size={15} strokeWidth={2} />
+                    <Text style={styles.muted}>
+                      {trade.entryTime} to {trade.exitTime} · held {formatHoldDuration(heldMinutes)}
+                    </Text>
+                  </View>
+                ) : null}
+                {trade.notes ? <Text style={styles.muted}>{trade.notes}</Text> : null}
+                <View style={styles.historyActions}>
+                  <Pressable
+                    accessibilityLabel={`Edit ${trade.symbol} trade`}
+                    style={styles.historyAction}
+                    onPress={() => setEditing(trade)}
+                  >
+                    <Pencil color={colors.text} size={15} strokeWidth={2} />
+                    <Text style={styles.historyActionText}>Edit</Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityLabel={`Delete ${trade.symbol} trade`}
+                    style={[styles.historyAction, styles.dangerAction]}
+                    onPress={() => confirmDelete(trade)}
+                    disabled={busyId === trade.id}
+                  >
+                    {busyId === trade.id
+                      ? <ActivityIndicator color={colors.down} size="small" />
+                      : <Trash2 color={colors.down} size={15} strokeWidth={2} />}
+                    <Text style={[styles.historyActionText, { color: colors.down }]}>Delete</Text>
+                  </Pressable>
                 </View>
-              </Pressable>
-              <Pressable accessibilityLabel={`Delete ${trade.symbol} trade`}
-                style={[styles.historyAction, styles.dangerAction]} onPress={() => confirmDelete(trade)}
-                disabled={busyId === trade.id}>
-                {busyId === trade.id
-                  ? <ActivityIndicator color={colors.down} size="small" />
-                  : <View style={styles.buttonContent}>
-                      <Trash2 color={colors.down} size={14} strokeWidth={2} />
-                      <Text style={[styles.historyActionText, { color: colors.down }]}>Delete</Text>
-                    </View>}
-              </Pressable>
-            </View>
+              </View>
+            ) : null}
           </View>
+          </Fragment>
         )
       })}
+      {visibleCount < filteredTrades.length ? (
+        <Pressable
+          accessibilityRole="button"
+          style={styles.secondaryButton}
+          onPress={() => setVisibleCount((current) => current + 50)}
+        >
+          <View style={styles.buttonContent}>
+            <HistoryIcon color={colors.text} size={16} strokeWidth={2} />
+            <Text style={styles.secondaryButtonText}>Load older trades</Text>
+          </View>
+        </Pressable>
+      ) : null}
       {editing ? (
         <TradeEditor
           trade={editing}
+          accounts={accounts}
           onClose={() => setEditing(null)}
           onSave={onUpdate}
           colors={colors}
@@ -2127,32 +2963,425 @@ function History({
   )
 }
 
+function PropAccountEditor({
+  account,
+  onSave,
+  onClose,
+  colors,
+  styles
+}: {
+  account: PropAccount
+  onSave: (account: PropAccount) => void
+  onClose: () => void
+  colors: Palette
+  styles: ReturnType<typeof createStyles>
+}) {
+  const [label, setLabel] = useState(account.label)
+  const [target, setTarget] = useState(String(account.target))
+  const [dailyLoss, setDailyLoss] = useState(String(account.maxDailyLoss))
+  const [drawdown, setDrawdown] = useState(String(account.maxDrawdown))
+  const [minDays, setMinDays] = useState(String(account.minDays))
+
+  function commit() {
+    onSave({
+      ...account,
+      label: label.trim() || `${Math.round(account.accountSize / 1000)}K account`,
+      target: Math.max(0, Number(target) || 0),
+      maxDailyLoss: Math.max(0, Number(dailyLoss) || 0),
+      maxDrawdown: Math.max(0, Number(drawdown) || 0),
+      minDays: Math.max(0, Math.trunc(Number(minDays) || 0))
+    })
+  }
+
+  return (
+    <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <SafeAreaView style={styles.modalScreen}>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <View style={[styles.actionRow, styles.centeredRow]}>
+            <View style={styles.flexOne}>
+              <Text style={styles.eyebrow}>PROP ACCOUNT</Text>
+              <Text style={styles.title}>{Math.round(account.accountSize / 1000)}K template</Text>
+            </View>
+            <Pressable style={styles.compactButton} onPress={onClose}>
+              <Text style={styles.compactButtonText}>Close</Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.panel}>
+            <Text style={styles.panelTitle}>Match your firm’s rules</Text>
+            <Text style={styles.muted}>Templates are starting points. Confirm every limit against the account you purchased.</Text>
+            <Text style={styles.label}>Account name</Text>
+            <TextInput style={styles.input} value={label} onChangeText={setLabel} placeholder="Topstep 50K #1" placeholderTextColor={colors.dim} />
+            <View style={styles.fieldRow}>
+              <View style={styles.field}>
+                <Text style={styles.label}>Pass target</Text>
+                <TextInput style={styles.input} keyboardType="decimal-pad" value={target} onChangeText={setTarget} />
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.label}>Daily loss</Text>
+                <TextInput style={styles.input} keyboardType="decimal-pad" value={dailyLoss} onChangeText={setDailyLoss} />
+              </View>
+            </View>
+            <View style={styles.fieldRow}>
+              <View style={styles.field}>
+                <Text style={styles.label}>Max drawdown</Text>
+                <TextInput style={styles.input} keyboardType="decimal-pad" value={drawdown} onChangeText={setDrawdown} />
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.label}>Minimum days</Text>
+                <TextInput style={styles.input} keyboardType="number-pad" value={minDays} onChangeText={setMinDays} />
+              </View>
+            </View>
+          </View>
+
+          <Pressable style={styles.primaryButton} onPress={commit}>
+            <View style={styles.buttonContent}>
+              <Save color="#17130B" size={17} strokeWidth={2.3} />
+              <Text style={styles.primaryButtonText}>Save account</Text>
+            </View>
+          </Pressable>
+        </ScrollView>
+      </SafeAreaView>
+    </Modal>
+  )
+}
+
+function Accounts({
+  trades,
+  accountState,
+  onSave,
+  colors,
+  styles
+}: {
+  trades: MobileTrade[]
+  accountState: AccountState
+  onSave: (state: AccountState) => Promise<void>
+  colors: Palette
+  styles: ReturnType<typeof createStyles>
+}) {
+  const [mode, setMode] = useState<'live' | 'prop'>('live')
+  const [selectedId, setSelectedId] = useState(accountState.propAccounts[0]?.id || '')
+  const [editing, setEditing] = useState<PropAccount | null>(null)
+  const [capitalAction, setCapitalAction] = useState<'set' | 'edit' | 'add' | null>(null)
+  const [capitalAmount, setCapitalAmount] = useState('')
+  const propIds = useMemo(() => new Set(accountState.propAccounts.map((account) => account.id)), [accountState.propAccounts])
+  const liveTrades = useMemo(() => trades.filter((trade) => !propIds.has(trade.account)), [trades, propIds])
+  const liveStats = useMemo(() => computeMobileStats(liveTrades), [liveTrades])
+  const liveBalance = accountState.liveCapital + liveStats.netPnl
+  const selected = accountState.propAccounts.find((account) => account.id === selectedId) || accountState.propAccounts[0]
+  const propStats = selected ? computePropAccount(trades, selected) : null
+
+  useEffect(() => {
+    if (!selected && selectedId) setSelectedId('')
+    else if (selected && selected.id !== selectedId) setSelectedId(selected.id)
+  }, [selected, selectedId])
+
+  function startTemplate(key: keyof typeof PROP_TEMPLATES) {
+    setEditing({
+      id: createLocalId('prop'),
+      label: `${key} prop account`,
+      ...PROP_TEMPLATES[key]
+    })
+  }
+
+  async function saveProp(account: PropAccount) {
+    const next = accountState.propAccounts.some((item) => item.id === account.id)
+      ? accountState.propAccounts.map((item) => item.id === account.id ? account : item)
+      : [...accountState.propAccounts, account]
+    await onSave({ ...accountState, propAccounts: next })
+    setSelectedId(account.id)
+    setEditing(null)
+    triggerHaptic('success')
+  }
+
+  function deleteProp(account: PropAccount) {
+    Alert.alert(
+      `Remove ${account.label}?`,
+      'Trades keep their history, but they will appear under Live until assigned to another prop account.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            await onSave({
+              ...accountState,
+              propAccounts: accountState.propAccounts.filter((item) => item.id !== account.id)
+            })
+            setSelectedId('')
+          }
+        }
+      ]
+    )
+  }
+
+  async function saveCapital() {
+    const amount = Number(capitalAmount)
+    if (!Number.isFinite(amount) || amount <= 0) return
+    const liveCapital = capitalAction === 'add' ? accountState.liveCapital + amount : amount
+    await onSave({ ...accountState, liveCapital })
+    setCapitalAction(null)
+    setCapitalAmount('')
+    triggerHaptic('success')
+  }
+
+  const statusColor = propStats?.status === 'passed'
+    ? colors.up
+    : propStats?.status === 'failed'
+      ? colors.down
+      : colors.accent
+  const targetProgress = propStats && propStats.target > 0
+    ? Math.max(0, Math.min(1, propStats.netPnl / propStats.target))
+    : 0
+
+  return (
+    <ScrollView contentContainerStyle={styles.content}>
+      <View style={styles.pageTitleStack}>
+        <Text style={styles.eyebrow}>ACCOUNT CONTROL</Text>
+        <Text style={styles.title}>Live money. Prop rules.</Text>
+        <Text style={styles.copy}>See the number that matters without rebuilding the full desktop dashboard.</Text>
+      </View>
+
+      <View style={styles.segment}>
+        {(['live', 'prop'] as const).map((item) => (
+          <Pressable key={item} style={[styles.segmentOption, mode === item ? styles.segmentActive : null]} onPress={() => setMode(item)}>
+            <Text style={[styles.segmentText, mode === item ? { color: colors.accent } : null]}>
+              {item === 'live' ? 'Live' : `Prop${accountState.propAccounts.length ? ` · ${accountState.propAccounts.length}` : ''}`}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
+      {mode === 'live' ? (
+        <>
+          <LinearGradient colors={[colors.surface2, colors.surface]} style={styles.accountHero}>
+            <View style={styles.heroTopline}>
+              <View>
+                <Text style={styles.heroLabel}>LIVE BALANCE</Text>
+                <Text style={[styles.accountBalance, { color: liveBalance >= accountState.liveCapital ? colors.up : colors.down }]}>
+                  {money(liveBalance)}
+                </Text>
+              </View>
+              <View style={styles.accountIcon}>
+                <Wallet color={colors.accent} size={22} strokeWidth={2} />
+              </View>
+            </View>
+            <Text style={styles.heroCaption}>
+              {accountState.liveCapital > 0 ? `${money(accountState.liveCapital)} saved capital` : 'Set starting capital to anchor your balance.'}
+            </Text>
+            <View style={styles.accountMetricGrid}>
+              <View style={styles.accountMetric}>
+                <Text style={styles.kicker}>NET P&L</Text>
+                <Text style={[styles.accountMetricValue, { color: liveStats.netPnl >= 0 ? colors.up : colors.down }]}>{money(liveStats.netPnl)}</Text>
+              </View>
+              <View style={styles.accountMetric}>
+                <Text style={styles.kicker}>WIN RATE</Text>
+                <Text style={styles.accountMetricValue}>{percent(liveStats.winRate)}</Text>
+              </View>
+              <View style={styles.accountMetric}>
+                <Text style={styles.kicker}>MAX DD</Text>
+                <Text style={[styles.accountMetricValue, { color: colors.down }]}>{money(-liveStats.maxDrawdown)}</Text>
+              </View>
+            </View>
+          </LinearGradient>
+
+          <View style={styles.panel}>
+            <View style={styles.sectionHeadingRow}>
+              <Text style={styles.panelTitle}>Saved capital</Text>
+              {accountState.liveCapital > 0 ? (
+                <Pressable style={styles.compactButton} onPress={() => { setCapitalAction('add'); setCapitalAmount('') }}>
+                  <Text style={[styles.compactButtonText, { color: colors.accent }]}>+ Add funds</Text>
+                </Pressable>
+              ) : null}
+            </View>
+            {capitalAction ? (
+              <>
+                <Text style={styles.muted}>
+                  {capitalAction === 'add' ? 'Enter only the new funds being added.' : 'Set the capital currently assigned to this account.'}
+                </Text>
+                <TextInput
+                  autoFocus
+                  style={styles.input}
+                  keyboardType="decimal-pad"
+                  value={capitalAmount}
+                  onChangeText={setCapitalAmount}
+                  placeholder={capitalAction === 'add' ? '500' : '5000'}
+                  placeholderTextColor={colors.dim}
+                />
+                <View style={styles.actionRow}>
+                  <Pressable style={[styles.secondaryButton, styles.flexOne]} onPress={() => setCapitalAction(null)}>
+                    <Text style={styles.secondaryButtonText}>Cancel</Text>
+                  </Pressable>
+                  <Pressable style={[styles.primaryButton, styles.flexOne]} onPress={saveCapital}>
+                    <Text style={styles.primaryButtonText}>{capitalAction === 'add' ? 'Add funds' : 'Save capital'}</Text>
+                  </Pressable>
+                </View>
+              </>
+            ) : accountState.liveCapital > 0 ? (
+              <View style={[styles.actionRow, styles.centeredRow]}>
+                <Text style={[styles.accountSavedCapital, styles.flexOne]}>{money(accountState.liveCapital)}</Text>
+                <Pressable style={styles.compactButton} onPress={() => { setCapitalAction('edit'); setCapitalAmount(String(accountState.liveCapital)) }}>
+                  <Text style={styles.compactButtonText}>Adjust</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <Pressable style={styles.primaryButton} onPress={() => { setCapitalAction('set'); setCapitalAmount('') }}>
+                <Text style={styles.primaryButtonText}>Set starting capital</Text>
+              </Pressable>
+            )}
+          </View>
+        </>
+      ) : (
+        <>
+          <View style={styles.sectionHeadingRow}>
+            <Text style={styles.sectionTitle}>Prop challenges</Text>
+            <Text style={styles.resultCount}>{accountState.propAccounts.length} tracked</Text>
+          </View>
+
+          {accountState.propAccounts.length ? (
+            <>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.accountPicker}>
+                {accountState.propAccounts.map((account) => (
+                  <Pressable
+                    key={account.id}
+                    style={[styles.accountPickerPill, selected?.id === account.id ? styles.accountPickerPillActive : null]}
+                    onPress={() => setSelectedId(account.id)}
+                  >
+                    <Text style={[styles.accountPickerText, selected?.id === account.id ? { color: colors.accent } : null]} numberOfLines={1}>
+                      {account.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+              <View style={styles.accountTemplateBar}>
+                <Text style={styles.kicker}>ADD</Text>
+                {(Object.keys(PROP_TEMPLATES) as Array<keyof typeof PROP_TEMPLATES>).map((key) => (
+                  <Pressable key={key} style={styles.accountTemplateMini} onPress={() => startTemplate(key)}>
+                    <Plus color={colors.accent} size={13} strokeWidth={2.5} />
+                    <Text style={styles.accountTemplateMiniText}>{key}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </>
+          ) : (
+            <View style={styles.panel}>
+              <Text style={styles.panelTitle}>Start with an account template</Text>
+              <Text style={styles.muted}>Choose the nominal size, then match the limits to your firm before saving.</Text>
+              <View style={styles.templateRow}>
+                {(Object.keys(PROP_TEMPLATES) as Array<keyof typeof PROP_TEMPLATES>).map((key) => (
+                  <Pressable key={key} style={styles.templateButton} onPress={() => startTemplate(key)}>
+                    <Text style={styles.templateSize}>{key}</Text>
+                    <Text style={styles.templateCaption}>{money(PROP_TEMPLATES[key].target)} target</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {selected && propStats ? (
+            <View style={styles.accountChallenge}>
+              <View style={styles.heroTopline}>
+                <View style={styles.flexOne}>
+                  <Text style={styles.heroLabel}>{Math.round(selected.accountSize / 1000)}K CHALLENGE</Text>
+                  <Text style={styles.accountChallengeTitle} numberOfLines={1}>{selected.label}</Text>
+                </View>
+                <View style={[styles.accountStatus, { borderColor: statusColor, backgroundColor: statusColor + '18' }]}>
+                  <Text style={[styles.accountStatusText, { color: statusColor }]}>{propStats.status.toUpperCase()}</Text>
+                </View>
+              </View>
+
+              <View style={styles.accountPnlRow}>
+                <View>
+                  <Text style={styles.kicker}>ACCOUNT P&L</Text>
+                  <Text style={[styles.accountBalance, { color: propStats.netPnl >= 0 ? colors.up : colors.down }]}>{money(propStats.netPnl)}</Text>
+                </View>
+                <Text style={styles.accountTargetText}>{money(propStats.amountToTarget)} to pass</Text>
+              </View>
+              <View style={styles.accountProgressTrack}>
+                <View style={[styles.accountProgressFill, { width: `${targetProgress * 100}%`, backgroundColor: statusColor }]} />
+              </View>
+
+              <View style={styles.accountMetricGrid}>
+                <View style={styles.accountMetric}>
+                  <Text style={styles.kicker}>DRAWDOWN LEFT</Text>
+                  <Text style={[styles.accountMetricValue, { color: propStats.drawdownBuffer <= selected.maxDrawdown * 0.2 ? colors.down : colors.text }]}>
+                    {money(propStats.drawdownBuffer)}
+                  </Text>
+                </View>
+                <View style={styles.accountMetric}>
+                  <Text style={styles.kicker}>DAILY LOSS LEFT</Text>
+                  <Text style={styles.accountMetricValue}>{money(propStats.dailyRemaining)}</Text>
+                </View>
+                <View style={styles.accountMetric}>
+                  <Text style={styles.kicker}>DAYS</Text>
+                  <Text style={styles.accountMetricValue}>{propStats.daysTraded}/{selected.minDays}</Text>
+                </View>
+              </View>
+
+              {propStats.status === 'failed' ? (
+                <Text style={styles.warning}>
+                  Rule breached: {[propStats.floorBreached ? 'drawdown' : '', propStats.dailyBreached ? 'daily loss' : ''].filter(Boolean).join(' and ')}.
+                </Text>
+              ) : null}
+              <View style={styles.historyActions}>
+                <Pressable style={styles.historyAction} onPress={() => setEditing(selected)}>
+                  <Pencil color={colors.text} size={15} strokeWidth={2} />
+                  <Text style={styles.historyActionText}>Edit rules</Text>
+                </Pressable>
+                <Pressable style={[styles.historyAction, styles.dangerAction]} onPress={() => deleteProp(selected)}>
+                  <Trash2 color={colors.down} size={15} strokeWidth={2} />
+                  <Text style={[styles.historyActionText, { color: colors.down }]}>Remove</Text>
+                </Pressable>
+              </View>
+              <Text style={styles.muted}>Only trades tagged to this account are counted. Intraday unrealized swings are not available from journal entries.</Text>
+            </View>
+          ) : null}
+        </>
+      )}
+
+      {editing ? (
+        <PropAccountEditor account={editing} onSave={saveProp} onClose={() => setEditing(null)} colors={colors} styles={styles} />
+      ) : null}
+    </ScrollView>
+  )
+}
+
 function Settings({
   mode,
   onMode,
+  hapticsEnabled,
+  onHaptics,
   pairingCode,
   onPairingCode,
   onSync,
   syncing,
   syncMessage,
+  pending,
   rules,
   rulesUpdatedAt,
   onSaveRules,
   lastSyncedAt,
+  onReplayOnboarding,
+  onClearPhone,
   colors,
   styles
 }: {
   mode: ThemeMode
   onMode: (mode: ThemeMode) => void
+  hapticsEnabled: boolean
+  onHaptics: (enabled: boolean) => void
   pairingCode: string
   onPairingCode: (value: string) => void
   onSync: () => void
   syncing: boolean
   syncMessage: string
+  pending: number
   rules: string[]
   rulesUpdatedAt: string
   onSaveRules: (rules: string[]) => Promise<void>
   lastSyncedAt: string
+  onReplayOnboarding: () => void
+  onClearPhone: () => void
   colors: Palette
   styles: ReturnType<typeof createStyles>
 }) {
@@ -2160,6 +3389,7 @@ function Settings({
   const [ruleDraft, setRuleDraft] = useState(rules)
   const [rulesSaving, setRulesSaving] = useState(false)
   const [rulesSaved, setRulesSaved] = useState(false)
+  const [showManualPairing, setShowManualPairing] = useState(false)
   const rulesKey = JSON.stringify(rules)
 
   useEffect(() => {
@@ -2222,6 +3452,28 @@ function Settings({
             )
           })}
         </View>
+        <Pressable
+          accessibilityRole="switch"
+          accessibilityState={{ checked: hapticsEnabled }}
+          accessibilityLabel="Haptic feedback"
+          onPress={() => onHaptics(!hapticsEnabled)}
+          style={styles.preferenceRow}
+        >
+          <View style={[styles.featureIcon, { backgroundColor: hapticsEnabled ? colors.accentSoft : colors.surface2 }]}>
+            <Vibrate color={hapticsEnabled ? colors.accent : colors.dim} size={20} strokeWidth={2} />
+          </View>
+          <View style={styles.flexOne}>
+            <Text style={styles.panelTitle}>Haptic feedback</Text>
+            <Text style={styles.muted}>
+              {hapticsEnabled
+                ? 'On · Vibrates for navigation, selections, and confirmations.'
+                : 'Off · TradeHelp will not vibrate.'}
+            </Text>
+          </View>
+          <View style={[styles.toggle, hapticsEnabled ? styles.toggleOn : null]}>
+            <View style={[styles.toggleKnob, hapticsEnabled ? styles.toggleKnobOn : null]} />
+          </View>
+        </Pressable>
       </View>
 
       <LinearGradient colors={colors.panelGradient} style={styles.panel}>
@@ -2231,8 +3483,20 @@ function Settings({
           </View>
           <Text style={[styles.panelTitle, styles.flexOne]}>Pair with TradeHelp Desktop</Text>
         </View>
+        <View style={styles.syncStatusPanel}>
+          <View style={[styles.statusDot, { backgroundColor: syncing ? colors.accent : pairingCode ? colors.up : colors.faint }]} />
+          <View style={styles.flexOne}>
+            <Text style={styles.newsStatusTitle}>{syncing ? 'Syncing now' : pairingCode ? 'Desktop pairing saved' : 'Not paired'}</Text>
+            <Text style={styles.muted}>
+              {pairingCode
+                ? `${pending} queued change${pending === 1 ? '' : 's'}${lastSyncedAt ? ` · Last sync ${new Date(lastSyncedAt).toLocaleString()}` : ''}`
+                : 'Pairing is optional. Your journal remains useful on this phone.'}
+            </Text>
+          </View>
+        </View>
         <Text style={styles.muted}>On desktop, open Settings → TradeHelp Mobile sync lab, start sync, then scan its pairing QR.</Text>
         <Pressable
+          accessibilityRole="button"
           style={[styles.secondaryButton, !CAMERA_AVAILABLE ? styles.disabledButton : null]}
           onPress={() => setScannerOpen(true)}
           disabled={!CAMERA_AVAILABLE}
@@ -2244,26 +3508,53 @@ function Settings({
             </Text>
           </View>
         </Pressable>
-        <Text style={styles.label}>Manual code fallback</Text>
-        <TextInput
-          autoCapitalize="none"
-          autoCorrect={false}
-          multiline
-          placeholder="http://192.168.x.x:47831|pairing-token"
-          placeholderTextColor={colors.dim}
-          style={[styles.input, styles.pairingInput]}
-          value={pairingCode}
-          onChangeText={onPairingCode}
-        />
-        <Pressable style={styles.primaryButton} onPress={onSync} disabled={syncing || !pairingCode.trim()}>
+        {pairingCode && !showManualPairing ? (
+          <Pressable accessibilityRole="button" style={styles.primaryButton} onPress={onSync} disabled={syncing}>
+            {syncing
+              ? <ActivityIndicator color="#17130B" />
+              : <View style={styles.buttonContent}>
+                  <Wifi color="#17130B" size={18} strokeWidth={2.3} />
+                  <Text style={styles.primaryButtonText}>Sync now</Text>
+                </View>}
+          </Pressable>
+        ) : null}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ expanded: showManualPairing }}
+          style={styles.textAction}
+          onPress={() => setShowManualPairing((current) => !current)}
+        >
+          <Text style={styles.textActionLabel}>Advanced pairing options</Text>
+          {showManualPairing
+            ? <ChevronUp color={colors.accent} size={16} strokeWidth={2} />
+            : <ChevronDown color={colors.accent} size={16} strokeWidth={2} />}
+        </Pressable>
+        {showManualPairing ? (
+          <>
+            <Text style={styles.label}>Manual pairing code</Text>
+            <TextInput
+              accessibilityLabel="Manual desktop pairing code"
+              autoCapitalize="none"
+              autoCorrect={false}
+              multiline
+              placeholder="http://192.168.x.x:47831|pairing-token"
+              placeholderTextColor={colors.dim}
+              style={[styles.input, styles.pairingInput]}
+              value={pairingCode}
+              onChangeText={onPairingCode}
+            />
+          </>
+        ) : null}
+        {showManualPairing ? (
+          <Pressable accessibilityRole="button" style={styles.primaryButton} onPress={onSync} disabled={syncing || !pairingCode.trim()}>
           {syncing
             ? <ActivityIndicator color="#17130B" />
             : <View style={styles.buttonContent}>
                 <Wifi color="#17130B" size={18} strokeWidth={2.3} />
                 <Text style={styles.primaryButtonText}>Pair and sync now</Text>
               </View>}
-        </Pressable>
-        {lastSyncedAt ? <Text style={styles.muted}>Last synced {new Date(lastSyncedAt).toLocaleString()}</Text> : null}
+          </Pressable>
+        ) : null}
         {syncMessage ? <Text style={[styles.muted, { color: syncMessage.startsWith('Sync failed') ? colors.down : colors.up }]}>{syncMessage}</Text> : null}
         <Text style={styles.warning}>Pairing is authenticated but not encrypted. Use only on a trusted private network.</Text>
       </LinearGradient>
@@ -2279,6 +3570,7 @@ function Settings({
         <View style={[styles.actionRow, styles.centeredRow]}>
           <Text style={[styles.panelTitle, styles.flexOne]}>Post-trade rules</Text>
           <Pressable
+            accessibilityRole="button"
             accessibilityLabel="Add rule"
             style={styles.compactButton}
             onPress={() => setRuleDraft((current) => current.length < 20 ? [...current, ''] : current)}
@@ -2301,6 +3593,7 @@ function Settings({
               onChangeText={(value) => setRuleDraft((current) => current.map((item, itemIndex) => itemIndex === index ? value : item))}
             />
             <Pressable
+              accessibilityRole="button"
               accessibilityLabel={`Remove rule ${index + 1}`}
               style={styles.removeRuleButton}
               onPress={() => setRuleDraft((current) => current.filter((_, itemIndex) => itemIndex !== index))}
@@ -2310,7 +3603,7 @@ function Settings({
           </View>
         ))}
         {!ruleDraft.length ? <Text style={styles.muted}>No rules yet.</Text> : null}
-        <Pressable style={styles.secondaryButton} onPress={commitRules} disabled={rulesSaving}>
+        <Pressable accessibilityRole="button" style={styles.secondaryButton} onPress={commitRules} disabled={rulesSaving}>
           {rulesSaving
             ? <ActivityIndicator color={colors.accent} />
             : <View style={styles.buttonContent}>
@@ -2321,7 +3614,63 @@ function Settings({
         {rulesUpdatedAt ? <Text style={styles.muted}>Last changed {new Date(rulesUpdatedAt).toLocaleString()}</Text> : null}
       </View>
 
+      <View style={styles.settingsSection}>
+        <Text style={styles.sectionLabel}>APP & DATA</Text>
+        <View style={styles.panel}>
+          <View style={[styles.actionRow, styles.centeredRow]}>
+            <View style={styles.featureIcon}>
+              <Info color={colors.accent} size={20} strokeWidth={2} />
+            </View>
+            <View style={styles.flexOne}>
+              <Text style={styles.panelTitle}>TradeHelp Mobile</Text>
+              <Text style={styles.muted}>Version {APP_VERSION} · Educational trading journal</Text>
+            </View>
+          </View>
+          <Pressable accessibilityRole="button" style={styles.secondaryButton} onPress={onReplayOnboarding}>
+            <View style={styles.buttonContent}>
+              <RotateCcw color={colors.text} size={17} strokeWidth={2} />
+              <Text style={styles.secondaryButtonText}>Replay welcome walkthrough</Text>
+            </View>
+          </Pressable>
+          <View style={styles.fieldRow}>
+            <Pressable
+              accessibilityRole="link"
+              style={[styles.secondaryButton, styles.flexOne]}
+              onPress={() => Linking.openURL('https://trade-help.app/privacy.html').catch(() => {})}
+            >
+              <Text style={styles.secondaryButtonText}>Privacy</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="link"
+              style={[styles.secondaryButton, styles.flexOne]}
+              onPress={() => Linking.openURL('https://trade-help.app/support.html').catch(() => {})}
+            >
+              <Text style={styles.secondaryButtonText}>Support</Text>
+            </Pressable>
+          </View>
+        </View>
+
+        <View style={styles.panel}>
+          <View style={[styles.actionRow, styles.centeredRow]}>
+            <View style={[styles.featureIcon, { backgroundColor: colors.downSoft }]}>
+              <Database color={colors.down} size={20} strokeWidth={2} />
+            </View>
+            <View style={styles.flexOne}>
+              <Text style={styles.panelTitle}>Clear this phone's data</Text>
+              <Text style={styles.muted}>Removes local journal data and pairing settings. Desktop data is not deleted.</Text>
+            </View>
+          </View>
+          <Pressable accessibilityRole="button" style={[styles.secondaryButton, styles.dangerButton]} onPress={onClearPhone}>
+            <View style={styles.buttonContent}>
+              <Trash2 color={colors.down} size={17} strokeWidth={2} />
+              <Text style={[styles.secondaryButtonText, { color: colors.down }]}>Clear this phone</Text>
+            </View>
+          </Pressable>
+        </View>
+      </View>
+
       <Pressable
+        accessibilityRole="link"
         style={styles.syncCard}
         onPress={() => Linking.openURL('https://tradehelp.app').catch(() => {})}
       >
@@ -2368,6 +3717,15 @@ function Vault({
     })
   }, [trades, filter, selectedSetup])
 
+  async function attachChart(trade: MobileTrade, openAfter = false) {
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.85 })
+    if (result.canceled || !result.assets[0]?.uri) return
+    const updated = { ...trade, screenshotUri: result.assets[0].uri }
+    await onUpdate(updated)
+    triggerHaptic('success')
+    if (openAfter) setActiveTrade(updated)
+  }
+
   return (
     <ScrollView contentContainerStyle={styles.content}>
       <View style={styles.pageTitleStack}>
@@ -2380,8 +3738,8 @@ function Vault({
       <View style={styles.segment}>
         {[
           { label: 'All Charts', value: 'all' },
-          { label: '🟢 Winners Only', value: 'win' },
-          { label: '🔴 Losers Only', value: 'loss' }
+          { label: 'Winners', value: 'win' },
+          { label: 'Losses', value: 'loss' }
         ].map((item) => (
           <Pressable
             key={item.value}
@@ -2417,9 +3775,12 @@ function Vault({
       {/* Vault Grid Feed */}
       <View style={styles.vaultGrid}>
         {filtered.length === 0 ? (
-          <View style={styles.emptyNews}>
+          <View style={[styles.emptyNews, styles.vaultEmpty]}>
+            <View style={styles.emptyNewsIcon}>
+              <ImagePlus color={colors.accent} size={24} strokeWidth={1.8} />
+            </View>
             <Text style={styles.panelTitle}>No matching charts in vault</Text>
-            <Text style={styles.muted}>Log trades with chart screenshots to build your visual setup library.</Text>
+            <Text style={[styles.muted, styles.centerText]}>Log trades with chart screenshots to build your visual setup library.</Text>
           </View>
         ) : (
           filtered.map((trade) => {
@@ -2429,7 +3790,15 @@ function Vault({
               <Pressable
                 key={trade.id}
                 style={styles.vaultCard}
-                onPress={() => { triggerHaptic('light'); setActiveTrade(trade) }}
+                accessibilityRole="button"
+                accessibilityLabel={trade.screenshotUri
+                  ? `Open ${trade.symbol} chart from ${shortDate(trade.tradeDate)}`
+                  : `Attach a chart to ${trade.symbol} from ${shortDate(trade.tradeDate)}`}
+                onPress={() => {
+                  triggerHaptic('light')
+                  if (trade.screenshotUri) setActiveTrade(trade)
+                  else void attachChart(trade, true)
+                }}
               >
                 {trade.screenshotUri ? (
                   <Image source={{ uri: trade.screenshotUri }} style={styles.vaultImage} />
@@ -2438,24 +3807,29 @@ function Vault({
                     colors={isWin ? [colors.upSoft, colors.surface2] : [colors.downSoft, colors.surface2]}
                     style={styles.vaultPlaceholder}
                   >
-                    <View style={styles.actionRow}>
-                      <View style={[styles.candle, { height: 18, backgroundColor: tone }]} />
-                      <View style={[styles.candle, { height: 26, backgroundColor: tone }]} />
+                    <View style={styles.vaultPlaceholderChart}>
                       <View style={[styles.candle, { height: 14, backgroundColor: tone }]} />
+                      <View style={[styles.candle, { height: 25, backgroundColor: tone }]} />
+                      <View style={[styles.candle, { height: 18, backgroundColor: tone }]} />
+                      <View style={[styles.candle, { height: 31, backgroundColor: tone }]} />
                     </View>
-                    <Text style={styles.vaultPlaceholderText}>{trade.symbol} · {trade.setup || 'Chart Record'}</Text>
+                    <Text style={styles.vaultPlaceholderText}>Tap to attach chart</Text>
                   </LinearGradient>
                 )}
                 
                 <View style={styles.vaultOverlayHeader}>
                   <View style={[styles.pill, { backgroundColor: isWin ? colors.upSoft : colors.downSoft }]}>
-                    <Text style={[styles.pillText, { color: tone }]}>{trade.direction.toUpperCase()} · {money(trade.pnl)}</Text>
+                    <Text style={[styles.pillText, { color: tone }]}>{isWin ? 'WIN' : 'LOSS'}</Text>
                   </View>
                 </View>
 
                 <View style={styles.vaultFooter}>
-                  <Text style={styles.vaultTitle}>{trade.symbol}</Text>
-                  <Text style={styles.muted}>{trade.setup || 'General'} · {shortDate(trade.tradeDate)}</Text>
+                  <View style={[styles.actionRow, styles.centeredRow]}>
+                    <Text style={[styles.vaultTitle, styles.flexOne]} numberOfLines={1}>{trade.symbol}</Text>
+                    <Text style={[styles.vaultPnl, { color: tone }]} numberOfLines={1} adjustsFontSizeToFit>{money(trade.pnl)}</Text>
+                  </View>
+                  <Text style={styles.vaultMeta} numberOfLines={1}>{trade.setup || 'General'}</Text>
+                  <Text style={styles.vaultDate}>{shortDate(trade.tradeDate)}</Text>
                 </View>
               </Pressable>
             )
@@ -2486,14 +3860,7 @@ function Vault({
                   <Text style={styles.panelTitle}>No Screenshot Attached</Text>
                   <Pressable
                     style={styles.secondaryButton}
-                    onPress={async () => {
-                      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.85 })
-                      if (!result.canceled && result.assets[0]?.uri) {
-                        const updated = { ...activeTrade, screenshotUri: result.assets[0].uri }
-                        await onUpdate(updated)
-                        setActiveTrade(updated)
-                      }
-                    }}
+                    onPress={() => { void attachChart(activeTrade, true) }}
                   >
                     <Text style={styles.secondaryButtonText}>Attach Chart Screenshot</Text>
                   </Pressable>
@@ -2574,6 +3941,287 @@ function PairingScanner({
   )
 }
 
+function CalmBackdrop({
+  dark,
+  colors,
+  styles
+}: {
+  dark: boolean
+  colors: Palette
+  styles: ReturnType<typeof createStyles>
+}) {
+  const { width } = useWindowDimensions()
+  const waveProgress = useRef(new Animated.Value(0)).current
+  const [reduceMotion, setReduceMotion] = useState(false)
+  const waveWidth = Math.max(420, Math.min(width * 1.15, 900))
+  const backdropBaseOpacity = dark ? 0.44 : 0.06
+  const backdropPeakOpacity = dark ? 0.57 : 0.13
+
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion).catch(() => {})
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion)
+    return () => subscription.remove()
+  }, [])
+
+  useEffect(() => {
+    if (reduceMotion) {
+      waveProgress.setValue(0.48)
+      return undefined
+    }
+
+    waveProgress.setValue(0)
+    const waveAnimation = Animated.loop(Animated.sequence([
+      Animated.timing(waveProgress, {
+        toValue: 1,
+        duration: 12_000,
+        easing: Easing.inOut(Easing.sin),
+        useNativeDriver: Platform.OS !== 'web'
+      }),
+      Animated.delay(2200)
+    ]))
+    waveAnimation.start()
+    return () => {
+      waveAnimation.stop()
+    }
+  }, [reduceMotion, waveProgress])
+
+  const waveTranslateX = waveProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-waveWidth - 80, width + 80]
+  })
+  const waveOpacity = waveProgress.interpolate({
+    inputRange: [0, 0.08, 0.2, 0.8, 0.92, 1],
+    outputRange: [0, 0.22, 0.48, 0.48, 0.22, 0]
+  })
+  const backdropGlowOpacity = waveProgress.interpolate({
+    inputRange: [0, 0.14, 0.5, 0.86, 1],
+    outputRange: [
+      backdropBaseOpacity,
+      backdropBaseOpacity + 0.02,
+      backdropPeakOpacity,
+      backdropBaseOpacity + 0.02,
+      backdropBaseOpacity
+    ]
+  })
+
+  return (
+    <View style={styles.calmBackdrop} accessible={false}>
+      <LinearGradient
+        colors={[colors.bgTop, colors.bg, colors.bgBottom]}
+        locations={[0, 0.45, 1]}
+        style={styles.backdrop}
+      />
+      <Animated.Image
+        source={require('./assets/calm-market-backdrop.png')}
+        resizeMode="cover"
+        style={[
+          styles.backdropImage,
+          { opacity: reduceMotion ? backdropBaseOpacity : backdropGlowOpacity }
+        ]}
+      />
+      <View style={[styles.glowLayer, { opacity: dark ? 1 : 0.56 }]}>
+        <Animated.View
+          testID="background-glow-wave"
+          style={[
+            styles.glowWave,
+            {
+              width: waveWidth,
+              opacity: reduceMotion ? 0.08 : waveOpacity,
+              transform: [{ translateX: waveTranslateX }, { rotate: '-3deg' }]
+            }
+          ]}
+        >
+          <LinearGradient
+            colors={[
+              'rgba(45, 212, 191, 0)',
+              'rgba(45, 212, 191, 0.07)',
+              'rgba(126, 224, 210, 0.1)',
+              'rgba(245, 158, 11, 0.075)',
+              'rgba(245, 158, 11, 0)'
+            ]}
+            locations={[0, 0.26, 0.5, 0.74, 1]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.glowWaveBand}
+          />
+        </Animated.View>
+      </View>
+    </View>
+  )
+}
+
+function OnboardingWizard({
+  visible,
+  rules,
+  canDismiss,
+  onDismiss,
+  onFinish,
+  colors,
+  styles
+}: {
+  visible: boolean
+  rules: string[]
+  canDismiss: boolean
+  onDismiss: () => void
+  onFinish: (mode: 'sample' | 'empty') => Promise<void>
+  colors: Palette
+  styles: ReturnType<typeof createStyles>
+}) {
+  const [step, setStep] = useState(0)
+  const [startMode, setStartMode] = useState<'sample' | 'empty'>('sample')
+  const [finishing, setFinishing] = useState(false)
+  const lastStep = step === 3
+
+  useEffect(() => {
+    if (visible) setStep(0)
+  }, [visible])
+
+  async function finish() {
+    setFinishing(true)
+    try {
+      await onFinish(startMode)
+    } finally {
+      setFinishing(false)
+    }
+  }
+
+  return (
+    <Modal visible={visible} animationType="fade" onRequestClose={canDismiss ? onDismiss : undefined}>
+      <SafeAreaView style={styles.onboardingScreen}>
+        <Image
+          source={require('./assets/calm-market-backdrop.png')}
+          resizeMode="cover"
+          style={styles.onboardingBackdrop}
+        />
+        <View style={styles.onboardingShade} />
+        <View style={styles.onboardingContent}>
+          <View style={[styles.actionRow, styles.centeredRow]}>
+            <View style={styles.onboardingLogo}>
+              <View style={[styles.candle, { height: 11, backgroundColor: colors.down }]} />
+              <View style={[styles.candle, { height: 18, backgroundColor: colors.accent }]} />
+              <View style={[styles.candle, { height: 14, backgroundColor: colors.up }]} />
+            </View>
+            <Text style={styles.onboardingBrand}>Trade<Text style={{ color: colors.accent }}>Help</Text></Text>
+            <View style={styles.flexOne} />
+            {canDismiss ? (
+              <Pressable accessibilityRole="button" accessibilityLabel="Close welcome walkthrough" style={styles.iconButton} onPress={onDismiss}>
+                <XCircle color={colors.text} size={20} strokeWidth={2} />
+              </Pressable>
+            ) : null}
+          </View>
+
+          <View style={styles.onboardingProgress} accessibilityLabel={`Step ${step + 1} of 4`}>
+            {[0, 1, 2, 3].map((item) => (
+              <View key={item} style={[styles.onboardingProgressBar, item <= step ? styles.onboardingProgressActive : null]} />
+            ))}
+          </View>
+
+          <View style={styles.onboardingBody}>
+            {step === 0 ? (
+              <>
+                <View style={styles.onboardingIcon}><Sparkles color={colors.accent} size={28} strokeWidth={2} /></View>
+                <Text style={styles.onboardingEyebrow}>WELCOME</Text>
+                <Text style={styles.onboardingTitle}>A calmer place to review the trade.</Text>
+                <Text style={styles.onboardingCopy}>
+                  Capture decisions while they are fresh, then study your process without the noise of an execution platform.
+                </Text>
+                <View style={styles.onboardingNote}>
+                  <ShieldCheck color={colors.up} size={19} strokeWidth={2} />
+                  <Text style={styles.onboardingNoteText}>TradeHelp is an educational journal. It does not place trades or hold funds.</Text>
+                </View>
+              </>
+            ) : null}
+
+            {step === 1 ? (
+              <>
+                <View style={styles.onboardingIcon}><BookOpen color={colors.accent} size={28} strokeWidth={2} /></View>
+                <Text style={styles.onboardingEyebrow}>CHOOSE YOUR START</Text>
+                <Text style={styles.onboardingTitle}>Begin with context or a clean page.</Text>
+                <Text style={styles.onboardingCopy}>Sample trades make every screen useful immediately. You can clear them at any time.</Text>
+                <Pressable
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: startMode === 'sample' }}
+                  onPress={() => setStartMode('sample')}
+                  style={[styles.onboardingChoice, startMode === 'sample' ? styles.onboardingChoiceActive : null]}
+                >
+                  <Text style={styles.panelTitle}>Explore sample journal</Text>
+                  <Text style={styles.muted}>See history, insights, accounts, and the chart vault with example data.</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: startMode === 'empty' }}
+                  onPress={() => setStartMode('empty')}
+                  style={[styles.onboardingChoice, startMode === 'empty' ? styles.onboardingChoiceActive : null]}
+                >
+                  <Text style={styles.panelTitle}>Start with an empty journal</Text>
+                  <Text style={styles.muted}>Open directly into today with no example trades.</Text>
+                </Pressable>
+              </>
+            ) : null}
+
+            {step === 2 ? (
+              <>
+                <View style={styles.onboardingIcon}><Target color={colors.accent} size={28} strokeWidth={2} /></View>
+                <Text style={styles.onboardingEyebrow}>YOUR PROCESS</Text>
+                <Text style={styles.onboardingTitle}>Review execution, not just outcome.</Text>
+                <Text style={styles.onboardingCopy}>After every trade, TradeHelp asks whether you followed the rules you chose.</Text>
+                <View style={styles.onboardingRules}>
+                  {rules.slice(0, 3).map((rule, index) => (
+                    <View key={`${rule}-${index}`} style={styles.onboardingRule}>
+                      <Text style={styles.ruleNumber}>{index + 1}</Text>
+                      <Text style={[styles.rowText, styles.flexOne]}>{rule}</Text>
+                    </View>
+                  ))}
+                </View>
+                <Text style={styles.muted}>You can edit these later in Settings.</Text>
+              </>
+            ) : null}
+
+            {step === 3 ? (
+              <>
+                <View style={styles.onboardingIcon}><Smartphone color={colors.accent} size={28} strokeWidth={2} /></View>
+                <Text style={styles.onboardingEyebrow}>LOCAL BY DEFAULT</Text>
+                <Text style={styles.onboardingTitle}>Your journal starts on this phone.</Text>
+                <Text style={styles.onboardingCopy}>
+                  Desktop pairing is optional. When you pair, queued phone changes and desktop trades meet on your private network.
+                </Text>
+                <View style={styles.onboardingNote}>
+                  <Database color={colors.accent} size={19} strokeWidth={2} />
+                  <Text style={styles.onboardingNoteText}>Camera and notification access are requested only when you use those features.</Text>
+                </View>
+              </>
+            ) : null}
+          </View>
+
+          <View style={styles.onboardingActions}>
+            {step > 0 ? (
+              <Pressable accessibilityRole="button" style={[styles.secondaryButton, styles.flexOne]} onPress={() => setStep((current) => current - 1)}>
+                <Text style={styles.secondaryButtonText}>Back</Text>
+              </Pressable>
+            ) : null}
+            <Pressable
+              accessibilityRole="button"
+              style={[styles.primaryButton, styles.flexOne]}
+              disabled={finishing}
+              onPress={() => {
+                if (lastStep) void finish()
+                else setStep((current) => current + 1)
+              }}
+            >
+              {finishing
+                ? <ActivityIndicator color="#17130B" />
+                : <View style={styles.buttonContent}>
+                    <Text style={styles.primaryButtonText}>{lastStep ? 'Open journal' : 'Continue'}</Text>
+                    <ChevronRight color="#17130B" size={18} strokeWidth={2.4} />
+                  </View>}
+            </Pressable>
+          </View>
+        </View>
+      </SafeAreaView>
+    </Modal>
+  )
+}
+
 function MobileApp() {
   const db = useSQLiteContext()
   const systemScheme = useColorScheme()
@@ -2582,7 +4230,9 @@ function MobileApp() {
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([])
   const [rules, setRules] = useState<string[]>([])
   const [rulesUpdatedAt, setRulesUpdatedAt] = useState('')
+  const [accountState, setAccountState] = useState<AccountState>({ liveCapital: 0, propAccounts: [], updatedAt: '' })
   const [themeMode, setThemeMode] = useState<ThemeMode>('system')
+  const [hapticsEnabled, setHapticsEnabled] = useState(true)
   const [pairingCode, setPairingCode] = useState('')
   const [lastSyncedAt, setLastSyncedAt] = useState('')
   const [syncing, setSyncing] = useState(false)
@@ -2592,17 +4242,23 @@ function MobileApp() {
   const [newsLoading, setNewsLoading] = useState(false)
   const [ready, setReady] = useState(false)
   const [demoCount, setDemoCount] = useState(0)
-  const [fabPosition, setFabPosition] = useState<{ x: number; y: number } | null>(null)
+  const [dailyReview, setDailyReview] = useState<DailyReview | null>(null)
+  const [moreOpen, setMoreOpen] = useState(false)
+  const moreItemAnimations = useRef(moreTabs.map(() => new Animated.Value(0))).current
+  const [favoriteSymbols, setFavoriteSymbols] = useState<string[]>([])
+  const [onboardingComplete, setOnboardingComplete] = useState(false)
+  const [showOnboarding, setShowOnboarding] = useState(false)
   const syncInFlight = useRef(false)
   const autoSync = useRef<() => void>(() => {})
   const colors = palette(themeMode, systemScheme)
   const styles = useMemo(() => createStyles(colors), [colors])
 
   const refresh = useCallback(async () => {
-    const [nextTrades, nextWatch, nextRuleState, nextChanges, nextDemoCount] = await Promise.all([
+    const [nextTrades, nextWatch, nextRuleState, nextAccountState, nextChanges, nextDemoCount] = await Promise.all([
       listTrades(db),
       listWatchlist(db),
       getRuleState(db),
+      getAccountState(db),
       pendingTradeChanges(db),
       countDemoTrades(db)
     ])
@@ -2610,6 +4266,7 @@ function MobileApp() {
     setWatchlist(nextWatch)
     setRules(nextRuleState.rules)
     setRulesUpdatedAt(nextRuleState.updatedAt)
+    setAccountState(nextAccountState)
     setPendingChangeCount(nextChanges.length)
     setDemoCount(nextDemoCount)
   }, [db])
@@ -2618,19 +4275,29 @@ function MobileApp() {
     Promise.all([
       refresh(),
       getSetting(db, 'themeMode', 'system'),
+      getSetting(db, 'hapticsEnabled', 'true'),
       getSetting(db, 'pairingCode'),
       getSetting(db, 'lastSyncedAt'),
-      getSetting(db, 'fabPosition')
-    ]).then(([, storedTheme, storedCode, storedSync, storedFab]) => {
+      getSetting(db, 'favoriteSymbols', '[]'),
+      getSetting(db, 'onboardingComplete', 'false')
+    ]).then(([, storedTheme, storedHaptics, storedCode, storedSync, storedFavorites, storedOnboarding]) => {
       setThemeMode(['system', 'dark', 'light'].includes(storedTheme) ? storedTheme as ThemeMode : 'system')
+      const nextHaptics = storedHaptics !== 'false'
+      setHapticsEnabled(nextHaptics)
+      setHapticsRuntime(nextHaptics)
       setPairingCode(storedCode)
       setLastSyncedAt(storedSync)
       try {
-        const parsed = storedFab ? JSON.parse(storedFab) : null
-        if (parsed && Number.isFinite(parsed.x) && Number.isFinite(parsed.y)) setFabPosition(parsed)
+        const parsedFavorites = JSON.parse(storedFavorites)
+        setFavoriteSymbols(Array.isArray(parsedFavorites)
+          ? [...new Set(parsedFavorites.map((value) => String(value).trim().toUpperCase()).filter(Boolean))].slice(0, 20)
+          : [])
       } catch {
-        // A corrupt value just means the button starts in its default corner.
+        setFavoriteSymbols([])
       }
+      const completed = storedOnboarding === 'true'
+      setOnboardingComplete(completed)
+      setShowOnboarding(!completed)
       setReady(true)
 
       Notifications.scheduleNotificationAsync({
@@ -2650,7 +4317,23 @@ function MobileApp() {
     })
   }, [db, refresh])
 
+  const todayKey = localTimestamp().slice(0, 10)
+  useEffect(() => {
+    getSetting(db, `dailyReview:${todayKey}`).then((stored) => {
+      try {
+        const parsed = stored ? JSON.parse(stored) as DailyReview : null
+        setDailyReview(parsed?.date === todayKey ? parsed : null)
+      } catch {
+        setDailyReview(null)
+      }
+    }).catch(() => setDailyReview(null))
+  }, [db, todayKey])
+
   const [isLogging, setIsLogging] = useState(false)
+  const suggestedSymbols = useMemo(
+    () => [...new Set([...watchlist.map((item) => item.symbol), ...trades.map((trade) => trade.symbol)].map((symbol) => symbol.trim().toUpperCase()).filter(Boolean))].slice(0, 20),
+    [trades, watchlist]
+  )
 
   async function addWatchlist(symbol: string, bias: 'Bullish' | 'Bearish' | 'Neutral', keyLevel: string, notes: string) {
     await saveWatchlistItem(db, { symbol, bias, keyLevel, planNotes: notes })
@@ -2667,10 +4350,13 @@ function MobileApp() {
     await refresh()
   }
 
-  const saveFabPosition = useCallback((next: { x: number; y: number }) => {
-    setFabPosition(next)
-    void setSetting(db, 'fabPosition', JSON.stringify(next))
-  }, [db])
+  async function reloadDemoTrades() {
+    await loadDemoTrades(db)
+    await setSetting(db, `dailyReview:${todayKey}`, '')
+    setDailyReview(null)
+    await refresh()
+    triggerHaptic('success')
+  }
 
   async function saveNextTrade(trade: MobileTrade) {
     await clearDemoTrades(db)
@@ -2679,6 +4365,62 @@ function MobileApp() {
     setIsLogging(false)
     setTab('history')
     autoSync.current()
+  }
+
+  async function toggleFavoriteSymbol(symbol: string) {
+    const normalized = symbol.trim().toUpperCase()
+    if (!normalized) return
+    const next = favoriteSymbols.includes(normalized)
+      ? favoriteSymbols.filter((item) => item !== normalized)
+      : [normalized, ...favoriteSymbols].slice(0, 20)
+    setFavoriteSymbols(next)
+    await setSetting(db, 'favoriteSymbols', JSON.stringify(next))
+  }
+
+  async function completeOnboarding(mode: 'sample' | 'empty') {
+    if (mode === 'empty') await clearDemoTrades(db)
+    else await loadDemoTrades(db)
+    await setSetting(db, 'onboardingComplete', 'true')
+    setOnboardingComplete(true)
+    setShowOnboarding(false)
+    await refresh()
+    triggerHaptic('success')
+  }
+
+  function clearPhoneData() {
+    Alert.alert(
+      'Clear this phone?',
+      'This removes trades, watchlist items, rules, pairing details, and settings from this phone. It does not delete data already stored on TradeHelp Desktop.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear phone',
+          style: 'destructive',
+          onPress: async () => {
+            await clearAllLocalData(db)
+            const freshRuleState = await getRuleState(db)
+            setTrades([])
+            setWatchlist([])
+            setRules(freshRuleState.rules)
+            setRulesUpdatedAt(freshRuleState.updatedAt)
+            setAccountState({ liveCapital: 0, propAccounts: [], updatedAt: '' })
+            setThemeMode('system')
+            setHapticsEnabled(true)
+            setHapticsRuntime(true)
+            setPairingCode('')
+            setLastSyncedAt('')
+            setPendingChangeCount(0)
+            setFavoriteSymbols([])
+            setDemoCount(0)
+            setDailyReview(null)
+            setOnboardingComplete(false)
+            setShowOnboarding(true)
+            setTab('home')
+            triggerHaptic('success')
+          }
+        }
+      ]
+    )
   }
 
   async function saveTradeChanges(trade: MobileTrade) {
@@ -2698,10 +4440,28 @@ function MobileApp() {
     await setSetting(db, 'themeMode', mode)
   }
 
+  async function chooseHaptics(enabled: boolean) {
+    setHapticsEnabled(enabled)
+    setHapticsRuntime(enabled)
+    await setSetting(db, 'hapticsEnabled', String(enabled))
+    if (enabled) triggerHaptic('success')
+  }
+
   async function saveRuleChanges(nextRules: string[]) {
     const state = await saveRules(db, nextRules)
     setRules(state.rules)
     setRulesUpdatedAt(state.updatedAt)
+  }
+
+  async function saveAccountChanges(nextState: AccountState) {
+    const saved = await saveAccountState(db, nextState)
+    setAccountState(saved)
+    autoSync.current()
+  }
+
+  async function saveDailyReview(review: DailyReview) {
+    await setSetting(db, `dailyReview:${review.date}`, JSON.stringify(review))
+    setDailyReview(review)
   }
 
   const refreshMobileNews = useCallback(async (requestPermission = false) => {
@@ -2764,6 +4524,7 @@ function MobileApp() {
       setLastSyncedAt(result.syncedAt)
       setRules(result.rules)
       setRulesUpdatedAt(result.rulesUpdatedAt)
+      setAccountState(result.accountState)
       if (result.pairingCode && result.pairingCode !== pairingCode) setPairingCode(result.pairingCode)
       await clearDemoTrades(db)
       await refresh()
@@ -2785,10 +4546,12 @@ function MobileApp() {
   useEffect(() => { autoSync.current = () => { void syncNow({ silent: true }) } }, [syncNow])
 
   const pending = pendingChangeCount
+  const darkBackdrop = colors.statusBar === 'light-content'
   const fadeAnim = useRef(new Animated.Value(1)).current
   const slideAnim = useRef(new Animated.Value(0)).current
 
   const changeTab = useCallback((nextTab: Tab) => {
+    setMoreOpen(false)
     if (nextTab === tab) return
     Animated.timing(fadeAnim, {
       toValue: 0.15,
@@ -2815,6 +4578,72 @@ function MobileApp() {
     })
   }, [tab, fadeAnim, slideAnim])
 
+  useEffect(() => {
+    let cancelled = false
+
+    if (!moreOpen) {
+      moreItemAnimations.forEach((animation) => {
+        animation.stopAnimation()
+        animation.setValue(0)
+      })
+      return undefined
+    }
+
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((reduceMotion) => {
+        if (cancelled) return
+        if (reduceMotion) {
+          moreItemAnimations.forEach((animation) => animation.setValue(1))
+          return
+        }
+
+        Animated.stagger(
+          55,
+          moreItemAnimations.map((animation) =>
+            Animated.spring(animation, {
+              toValue: 1,
+              stiffness: 260,
+              damping: 23,
+              mass: 0.65,
+              useNativeDriver: true
+            })
+          )
+        ).start()
+      })
+      .catch(() => {
+        if (!cancelled) moreItemAnimations.forEach((animation) => animation.setValue(1))
+      })
+
+    return () => {
+      cancelled = true
+      moreItemAnimations.forEach((animation) => animation.stopAnimation())
+    }
+  }, [moreItemAnimations, moreOpen])
+
+  const renderNavTab = (item: (typeof primaryTabs)[number]) => {
+    const active = tab === item.key
+    const Icon = item.icon
+    return (
+      <Pressable
+        key={item.key}
+        accessibilityRole="tab"
+        accessibilityState={{ selected: active }}
+        onPress={() => changeTab(item.key)}
+        style={styles.tab}
+      >
+        {active ? <View style={styles.tabActiveLine} /> : null}
+        <View style={[styles.tabGlyph, active ? styles.tabGlyphActive : null]}>
+          <Icon
+            color={active ? colors.accent : colors.dim}
+            size={19}
+            strokeWidth={active ? 2.35 : 1.9}
+          />
+        </View>
+        <Text style={[styles.tabLabel, active ? styles.tabActiveText : null]}>{item.label}</Text>
+      </Pressable>
+    )
+  }
+
   if (!ready) {
     return <View style={[styles.app, styles.loading]}><ActivityIndicator color={colors.accent} /></View>
   }
@@ -2822,14 +4651,7 @@ function MobileApp() {
   return (
     <SafeAreaView style={styles.app}>
       <StatusBar barStyle={colors.statusBar} backgroundColor={colors.header} />
-      <LinearGradient
-        pointerEvents="none"
-        colors={[colors.bgTop, colors.bg, colors.bgBottom]}
-        locations={[0, 0.45, 1]}
-        style={styles.backdrop}
-      />
-      <View style={styles.auroraOrbTop} pointerEvents="none" />
-      <View style={styles.auroraOrbBottom} pointerEvents="none" />
+      <CalmBackdrop dark={darkBackdrop} colors={colors} styles={styles} />
       <View style={styles.header}>
         <LinearGradient colors={[colors.accentSoft, colors.surface2]} style={styles.logo}>
           <View style={[styles.candle, { height: 12, backgroundColor: colors.down }]} />
@@ -2838,33 +4660,64 @@ function MobileApp() {
         </LinearGradient>
         <Text style={styles.brand}>Trade<Text style={{ color: colors.accent }}>Help</Text></Text>
         <View style={styles.offline}>
-          <View style={[styles.statusDot, { backgroundColor: syncing ? colors.accent : colors.up }]} />
-          <Text style={styles.offlineText}>{syncing ? 'SYNCING' : 'LOCAL'}</Text>
+          <View style={[styles.statusDot, { backgroundColor: syncing || pending ? colors.accent : colors.up }]} />
+          <Text style={styles.offlineText}>{syncing ? 'SYNCING' : pending ? `${pending} QUEUED` : pairingCode ? 'PAIRED' : 'LOCAL'}</Text>
         </View>
       </View>
 
       <Animated.View style={[styles.screen, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-        {tab === 'home' && <Home trades={trades} pending={pending} watchlist={watchlist} onAddWatchlist={addWatchlist} onDeleteWatchlist={removeWatchlist} onLog={() => setIsLogging(true)} onSync={syncNow} syncing={syncing} paired={Boolean(pairingCode)} demoCount={demoCount} onClearDemo={dropDemoTrades} colors={colors} styles={styles} />}
-        {tab === 'history' && <History trades={trades} onUpdate={saveTradeChanges} onDelete={removeTrade} colors={colors} styles={styles} />}
+        {tab === 'home' && (
+          <Home
+            trades={trades}
+            pending={pending}
+            watchlist={watchlist}
+            onAddWatchlist={addWatchlist}
+            onDeleteWatchlist={removeWatchlist}
+            onSync={syncNow}
+            syncing={syncing}
+            paired={Boolean(pairingCode)}
+            demoCount={demoCount}
+            onLoadDemo={reloadDemoTrades}
+            onClearDemo={dropDemoTrades}
+            rules={rules}
+            news={news}
+            dailyReview={dailyReview}
+            onSaveReview={saveDailyReview}
+            onOpenHistory={() => changeTab('history')}
+            onOpenSettings={() => changeTab('settings')}
+            colors={colors}
+            styles={styles}
+          />
+        )}
+        {tab === 'history' && <History trades={trades} accounts={accountState.propAccounts} onUpdate={saveTradeChanges} onDelete={removeTrade} colors={colors} styles={styles} />}
+        {tab === 'insights' && <Insights trades={trades} colors={colors} styles={styles} />}
+        {tab === 'accounts' && <Accounts trades={trades} accountState={accountState} onSave={saveAccountChanges} colors={colors} styles={styles} />}
         {tab === 'vault' && <Vault trades={trades} onUpdate={saveTradeChanges} colors={colors} styles={styles} />}
         {tab === 'news' && <News state={news} loading={newsLoading} onRefresh={() => refreshMobileNews(false)} onToggle={toggleNewsAlerts} onTest={scheduleNewsTestNotification} colors={colors} styles={styles} />}
-        {tab === 'settings' && <Settings mode={themeMode} onMode={chooseTheme} pairingCode={pairingCode} onPairingCode={setPairingCode} onSync={syncNow} syncing={syncing} syncMessage={syncMessage} rules={rules} rulesUpdatedAt={rulesUpdatedAt} onSaveRules={saveRuleChanges} lastSyncedAt={lastSyncedAt} colors={colors} styles={styles} />}
+        {tab === 'settings' && <Settings mode={themeMode} onMode={chooseTheme} hapticsEnabled={hapticsEnabled} onHaptics={chooseHaptics} pairingCode={pairingCode} onPairingCode={setPairingCode} onSync={syncNow} syncing={syncing} syncMessage={syncMessage} pending={pending} rules={rules} rulesUpdatedAt={rulesUpdatedAt} onSaveRules={saveRuleChanges} lastSyncedAt={lastSyncedAt} onReplayOnboarding={() => setShowOnboarding(true)} onClearPhone={clearPhoneData} colors={colors} styles={styles} />}
       </Animated.View>
+
+      <OnboardingWizard
+        visible={showOnboarding}
+        rules={rules}
+        canDismiss={onboardingComplete}
+        onDismiss={() => setShowOnboarding(false)}
+        onFinish={completeOnboarding}
+        colors={colors}
+        styles={styles}
+      />
 
       <Modal visible={isLogging} animationType="slide" onRequestClose={() => setIsLogging(false)}>
         <SafeAreaView style={styles.app}>
           <StatusBar barStyle={colors.statusBar} backgroundColor={colors.header} />
-          <LinearGradient
-            pointerEvents="none"
-            colors={[colors.bgTop, colors.bg, colors.bgBottom]}
-            locations={[0, 0.45, 1]}
-            style={styles.backdrop}
-          />
-          <View style={styles.auroraOrbTop} pointerEvents="none" />
-          <View style={styles.auroraOrbBottom} pointerEvents="none" />
+          <CalmBackdrop dark={darkBackdrop} colors={colors} styles={styles} />
           <QuickLog
             key={rules.join('|')}
             rules={rules}
+            accounts={accountState.propAccounts}
+            favoriteSymbols={favoriteSymbols}
+            suggestedSymbols={suggestedSymbols}
+            onToggleFavoriteSymbol={(symbol) => { void toggleFavoriteSymbol(symbol) }}
             onSaved={saveNextTrade}
             onClose={() => setIsLogging(false)}
             colors={colors}
@@ -2873,41 +4726,94 @@ function MobileApp() {
         </SafeAreaView>
       </Modal>
 
-      {/* Logging a trade is the whole point of the phone app, so it can't live
-          buried below the fold on one screen — it needs to be one tap from
-          anywhere. */}
-      <DraggableFab
-        onPress={() => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setIsLogging(true) }}
-        saved={fabPosition}
-        onMove={saveFabPosition}
-        colors={colors}
-        styles={styles}
-      />
+      <Modal visible={moreOpen} transparent animationType="fade" onRequestClose={() => setMoreOpen(false)}>
+        <View style={styles.moreOverlay}>
+          <Pressable
+            accessibilityLabel="Close more menu"
+            style={styles.moreScrim}
+            onPress={() => setMoreOpen(false)}
+          />
+          <View accessibilityRole="menu" style={styles.moreList}>
+            {[...moreTabs].reverse().map((item, index) => {
+              const Icon = item.icon
+              const active = tab === item.key
+              const animation = moreItemAnimations[moreTabs.length - 1 - index]!
+              return (
+                <Animated.View
+                  key={item.key}
+                  testID={`more-step-${item.key}`}
+                  style={[
+                    styles.moreStep,
+                    {
+                      opacity: animation,
+                      transform: [
+                        { translateY: animation.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) },
+                        { scale: animation.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1] }) }
+                      ]
+                    }
+                  ]}
+                >
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Open ${item.label}`}
+                    accessibilityState={{ selected: active }}
+                    style={[styles.moreOption, active ? styles.moreOptionActive : null]}
+                    onPress={() => {
+                      triggerHaptic('selection')
+                      changeTab(item.key)
+                    }}
+                  >
+                    <Text style={[styles.moreOptionLabel, active ? { color: colors.accent } : null]}>{item.label}</Text>
+                    <View style={[styles.moreOptionIcon, active ? styles.moreOptionIconActive : null]}>
+                      <Icon color={active ? colors.accent : colors.text} size={19} strokeWidth={2} />
+                    </View>
+                  </Pressable>
+                </Animated.View>
+              )
+            })}
+          </View>
+        </View>
+      </Modal>
 
       <LinearGradient colors={[colors.nav, colors.header]} style={styles.tabBar}>
-        {tabs.map((item) => {
-          const active = tab === item.key
-          const Icon = item.icon
-          return (
-            <Pressable
-              key={item.key}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: active }}
-              onPress={() => changeTab(item.key)}
-              style={styles.tab}
-            >
-              {active ? <View style={styles.tabActiveLine} /> : null}
-              <View style={[styles.tabGlyph, active ? styles.tabGlyphActive : null]}>
-                <Icon
-                  color={active ? colors.accent : colors.dim}
-                  size={19}
-                  strokeWidth={active ? 2.35 : 1.9}
-                />
-              </View>
-              <Text style={[styles.tabLabel, active ? styles.tabActiveText : null]}>{item.label}</Text>
-            </Pressable>
-          )
-        })}
+        <View style={styles.tabGroup}>{primaryTabs.slice(0, 2).map(renderNavTab)}</View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Log a trade"
+          onPress={() => {
+            triggerHaptic('medium')
+            setIsLogging(true)
+          }}
+          style={styles.captureTab}
+        >
+          <View style={styles.captureTabButton}>
+            <Plus color="#17130B" size={21} strokeWidth={2.7} />
+          </View>
+          <Text style={styles.captureTabLabel}>Log</Text>
+        </Pressable>
+        <View style={styles.tabGroup}>
+          {primaryTabs.slice(2).map(renderNavTab)}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ expanded: moreOpen }}
+            accessibilityLabel="More screens"
+            onPress={() => {
+              triggerHaptic('selection')
+              setMoreOpen((current) => !current)
+            }}
+            style={styles.tab}
+          >
+            {moreTabs.some((item) => item.key === tab) ? <View style={styles.tabActiveLine} /> : null}
+            <View style={[styles.tabGlyph, moreTabs.some((item) => item.key === tab) ? styles.tabGlyphActive : null]}>
+              <CircleEllipsis
+                color={moreTabs.some((item) => item.key === tab) ? colors.accent : colors.dim}
+                size={20}
+                strokeWidth={moreTabs.some((item) => item.key === tab) ? 2.35 : 1.9}
+              />
+            </View>
+            <Text style={[styles.tabLabel, moreTabs.some((item) => item.key === tab) ? styles.tabActiveText : null]}>More</Text>
+          </Pressable>
+        </View>
       </LinearGradient>
     </SafeAreaView>
   )
@@ -2925,28 +4831,25 @@ function createStyles(colors: Palette) {
   return StyleSheet.create({
     app: { flex: 1, backgroundColor: colors.bg, paddingTop: StatusBar.currentHeight ?? 0, overflow: 'hidden' },
     backdrop: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
-    auroraOrbTop: {
-      position: 'absolute', top: -60, right: -40, width: 240, height: 240, borderRadius: 120,
-      backgroundColor: colors.accent, opacity: 0.08, filter: 'blur(40px)' as any
-    },
-    auroraOrbBottom: {
-      position: 'absolute', bottom: 100, left: -60, width: 280, height: 280, borderRadius: 140,
-      backgroundColor: colors.up, opacity: 0.06, filter: 'blur(50px)' as any
-    },
+    calmBackdrop: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, overflow: 'hidden' },
+    backdropImage: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, width: '100%', height: '100%' },
+    glowLayer: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, overflow: 'hidden' },
+    glowWave: { position: 'absolute', top: '-9%', height: '118%' },
+    glowWaveBand: { flex: 1 },
     loading: { alignItems: 'center', justifyContent: 'center' },
     screen: { flex: 1 },
     flexOne: { flex: 1 },
     header: {
-      height: 64, paddingHorizontal: 20, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.line,
+      height: 56, paddingHorizontal: 18, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.line,
       flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.header
     },
     logo: {
-      width: 34, height: 34, borderRadius: 10, borderWidth: 1, borderColor: colors.lineStrong,
+      width: 32, height: 32, borderRadius: 8, borderWidth: 1, borderColor: colors.lineStrong,
       flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 2.5,
       shadowColor: colors.accent, shadowOpacity: 0.2, shadowRadius: 10, shadowOffset: { width: 0, height: 3 }
     },
     candle: { width: 3.5, borderRadius: 2 },
-    brand: { color: colors.text, fontSize: 20, fontWeight: '800', flex: 1, letterSpacing: -0.3 },
+    brand: { color: colors.text, fontSize: 19, fontWeight: '800', flex: 1 },
     offline: {
       minHeight: 28, borderWidth: 1, borderColor: colors.lineStrong, borderRadius: 20,
       paddingHorizontal: 11, flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: colors.surface2
@@ -2957,7 +4860,7 @@ function createStyles(colors: Palette) {
     // large phone in landscape. Left to stretch, the stat grid becomes two very
     // wide boxes and body copy runs to unreadable line lengths.
     content: {
-      paddingHorizontal: 18, paddingTop: 18, paddingBottom: 40, gap: 16,
+      paddingHorizontal: 18, paddingTop: 16, paddingBottom: 28, gap: 14,
       width: '100%', maxWidth: 640, alignSelf: 'center'
     },
     keyboardContent: { paddingBottom: 140 },
@@ -2965,26 +4868,20 @@ function createStyles(colors: Palette) {
     pageTitleStack: { gap: 4, marginBottom: 2 },
     demoBanner: {
       flexDirection: 'row', alignItems: 'center', gap: 12,
-      backgroundColor: colors.accentSoft, borderWidth: 1, borderColor: colors.accent,
-      borderRadius: 12, paddingVertical: 12, paddingHorizontal: 14
+      backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.lineStrong,
+      borderRadius: 8, paddingVertical: 9, paddingHorizontal: 12
     },
-    demoBannerTitle: { color: colors.accent, fontSize: 12, fontWeight: '800', letterSpacing: 0.6, marginBottom: 3 },
-    demoBannerCopy: { color: colors.dim, fontSize: 12, lineHeight: 17 },
+    demoBannerTitle: { color: colors.accent, fontSize: 11, fontWeight: '800', marginBottom: 2 },
+    demoBannerCopy: { color: colors.dim, fontSize: 11, lineHeight: 15 },
+    demoBannerActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     demoBannerButton: {
-      minHeight: 36, paddingHorizontal: 14, borderRadius: 8, alignItems: 'center', justifyContent: 'center',
-      backgroundColor: colors.accent
+      minHeight: 44, paddingHorizontal: 9, borderRadius: 8, alignItems: 'center', justifyContent: 'center',
+      flexDirection: 'row', gap: 5,
+      backgroundColor: colors.accentSoft, borderWidth: 1, borderColor: colors.accent
     },
-    demoBannerButtonText: { color: '#17130B', fontSize: 13, fontWeight: '800' },
-    // Placed with left/top because the position is animated and persisted;
-    // pairing those with right/bottom would fight over the same axis.
-    fab: {
-      position: 'absolute', width: FAB_SIZE, height: FAB_SIZE, borderRadius: FAB_SIZE / 2,
-      backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center', zIndex: 20,
-      shadowColor: colors.accent, shadowOpacity: 0.42, shadowRadius: 14, shadowOffset: { width: 0, height: 6 },
-      elevation: 8
-    },
-    eyebrow: { color: colors.accent, fontSize: 10, fontWeight: '800', letterSpacing: 1.4 },
-    title: { color: colors.text, fontSize: 26, lineHeight: 32, fontWeight: '800', letterSpacing: -0.4 },
+    demoBannerButtonText: { color: colors.accent, fontSize: 12, fontWeight: '800' },
+    eyebrow: { color: colors.accent, fontSize: 11, fontWeight: '800' },
+    title: { color: colors.text, fontSize: 26, lineHeight: 32, fontWeight: '800' },
     copy: { color: colors.dim, fontSize: 14, lineHeight: 21 },
     sessionBadge: {
       minHeight: 28, borderRadius: 14, paddingHorizontal: 10,
@@ -2992,14 +4889,14 @@ function createStyles(colors: Palette) {
     },
     sessionBadgeText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.6 },
     heroCard: {
-      minHeight: 240, borderWidth: 1, borderColor: colors.lineStrong, borderRadius: 20,
-      padding: 22, overflow: 'hidden',
+      minHeight: 222, borderWidth: 1, borderColor: colors.lineStrong, borderRadius: 8,
+      padding: 20, overflow: 'hidden',
       shadowColor: colors.shadow, shadowOpacity: 0.28, shadowRadius: 20,
       shadowOffset: { width: 0, height: 10 }, elevation: 6
     },
     heroTopline: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-    heroLabel: { color: colors.dim, fontSize: 11, fontWeight: '800', letterSpacing: 1.2 },
-    heroValue: { fontSize: 42, lineHeight: 50, fontWeight: '800', marginTop: 14, letterSpacing: -0.5 },
+    heroLabel: { color: colors.dim, fontSize: 12, fontWeight: '800' },
+    heroValue: { fontSize: 42, lineHeight: 50, fontWeight: '800', marginTop: 12 },
     heroCaption: { color: colors.dim, fontSize: 13, lineHeight: 19, marginTop: 3 },
     heroMetrics: {
       minHeight: 64, flexDirection: 'row', alignItems: 'stretch', marginTop: 22,
@@ -3007,33 +4904,108 @@ function createStyles(colors: Palette) {
     },
     heroMetric: { flex: 1, justifyContent: 'center' },
     heroMetricBorder: { borderLeftWidth: 1, borderLeftColor: colors.line, paddingLeft: 16 },
-    heroMetricLabel: { color: colors.faint, fontSize: 10, fontWeight: '800', letterSpacing: 0.8 },
+    heroMetricLabel: { color: colors.faint, fontSize: 10, fontWeight: '800' },
     heroMetricValue: { color: colors.text, fontSize: 19, fontWeight: '800', marginTop: 5 },
+    accountHero: {
+      minHeight: 238, borderWidth: 1, borderColor: colors.lineStrong, borderRadius: 8,
+      padding: 18, gap: 8, overflow: 'hidden',
+      shadowColor: colors.shadow, shadowOpacity: 0.2, shadowRadius: 18,
+      shadowOffset: { width: 0, height: 8 }
+    },
+    accountIcon: {
+      width: 44, height: 44, borderRadius: 12, backgroundColor: colors.accentSoft,
+      borderWidth: 1, borderColor: colors.lineStrong, alignItems: 'center', justifyContent: 'center'
+    },
+    accountBalance: { fontSize: 32, lineHeight: 39, fontWeight: '800', marginTop: 5 },
+    accountMetricGrid: {
+      flexDirection: 'row', borderTopWidth: 1, borderTopColor: colors.line,
+      paddingTop: 15, marginTop: 12, gap: 8
+    },
+    accountMetric: { flex: 1, minWidth: 0 },
+    accountMetricValue: { color: colors.text, fontSize: 17, lineHeight: 23, fontWeight: '800', marginTop: 5 },
+    accountSavedCapital: { color: colors.text, fontSize: 24, lineHeight: 30, fontWeight: '800' },
+    accountPicker: { gap: 8, paddingVertical: 2, paddingRight: 4 },
+    accountPickerPill: {
+      maxWidth: 180, minHeight: 40, justifyContent: 'center',
+      backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line,
+      borderRadius: 10, paddingHorizontal: 13
+    },
+    accountPickerPillActive: { backgroundColor: colors.accentSoft, borderColor: colors.accent },
+    accountPickerText: { color: colors.dim, fontSize: 12, fontWeight: '800' },
+    accountTemplateBar: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+    accountTemplateMini: {
+      minHeight: 32, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 3,
+      backgroundColor: colors.accentSoft, borderWidth: 1, borderColor: colors.lineStrong, paddingHorizontal: 9
+    },
+    accountTemplateMiniText: { color: colors.accent, fontSize: 10, fontWeight: '800' },
+    accountChallenge: {
+      backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.lineStrong,
+      borderRadius: 8, padding: 18, gap: 14,
+      shadowColor: colors.shadow, shadowOpacity: 0.12, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }
+    },
+    accountChallengeTitle: { color: colors.text, fontSize: 20, lineHeight: 26, fontWeight: '800', marginTop: 4 },
+    accountStatus: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 5 },
+    accountStatusText: { fontSize: 10, fontWeight: '800' },
+    accountPnlRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 },
+    accountTargetText: { color: colors.dim, fontSize: 12, lineHeight: 18, fontWeight: '700', paddingBottom: 4 },
+    accountProgressTrack: {
+      height: 8, borderRadius: 4, backgroundColor: colors.surface2, overflow: 'hidden'
+    },
+    accountProgressFill: { height: '100%', borderRadius: 4 },
+    templateRow: { flexDirection: 'row', gap: 8 },
+    templateButton: {
+      flex: 1, minWidth: 0, minHeight: 76, borderRadius: 8, alignItems: 'center', justifyContent: 'center',
+      backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 4
+    },
+    templateSize: { color: colors.accent, fontSize: 18, fontWeight: '800' },
+    templateCaption: { color: colors.dim, fontSize: 9, lineHeight: 13, fontWeight: '700', marginTop: 4, textAlign: 'center' },
     sectionHeadingRow: {
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8
     },
-    sectionTitle: { color: colors.text, fontSize: 19, fontWeight: '800', letterSpacing: -0.2 },
+    sectionTitle: { color: colors.text, fontSize: 19, fontWeight: '800' },
     statsRow: { flexDirection: 'row', gap: 12 },
+    holdGrid: {
+      flexDirection: 'row', flexWrap: 'wrap', columnGap: 12, rowGap: 14,
+      paddingTop: 2
+    },
+    holdMetric: {
+      width: '47%', minWidth: 0, borderLeftWidth: 2, borderLeftColor: colors.lineStrong,
+      paddingLeft: 10, paddingVertical: 2
+    },
+    holdValue: { color: colors.text, fontSize: 21, lineHeight: 26, fontWeight: '800', marginTop: 5 },
     stat: {
-      flex: 1, minWidth: 0, minHeight: 92, padding: 16, backgroundColor: colors.surface,
-      borderWidth: 1, borderColor: colors.line, borderRadius: 16,
+      flex: 1, minWidth: 0, minHeight: 84, padding: 14, backgroundColor: colors.surface,
+      borderWidth: 1, borderColor: colors.line, borderRadius: 8,
       shadowColor: colors.shadow, shadowOpacity: 0.08, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }
     },
-    kicker: { color: colors.dim, fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
-    sectionLabel: { color: colors.dim, fontSize: 11, fontWeight: '800', letterSpacing: 1, marginTop: 4 },
+    kicker: { color: colors.dim, fontSize: 10, fontWeight: '800' },
+    sectionLabel: { color: colors.dim, fontSize: 11, fontWeight: '800', marginTop: 4 },
     statValue: { color: colors.text, fontSize: 22, fontWeight: '800', marginTop: 8 },
     statValueWide: { fontSize: 19, lineHeight: 24 },
+    snapshotPanel: {
+      minHeight: 74, flexDirection: 'row', alignItems: 'stretch', backgroundColor: colors.surface,
+      borderWidth: 1, borderColor: colors.line, borderRadius: 8, paddingVertical: 13
+    },
+    snapshotItem: { flex: 1, minWidth: 0, justifyContent: 'center', paddingHorizontal: 11 },
+    snapshotDivider: { width: 1, backgroundColor: colors.line },
+    snapshotValue: { color: colors.text, fontSize: 15, lineHeight: 20, fontWeight: '800', marginTop: 5 },
+    topSetupRow: {
+      minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      gap: 12, paddingHorizontal: 4
+    },
+    topSetupValue: { color: colors.text, flex: 1, textAlign: 'right', fontSize: 14, lineHeight: 19, fontWeight: '700' },
     panel: {
-      backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: 18,
+      backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: 8,
       padding: 18, gap: 14, marginTop: 4,
       shadowColor: colors.shadow, shadowOpacity: 0.08, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }
     },
     chartPanel: {
       backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line,
-      borderRadius: 18, padding: 16, paddingHorizontal: 12, gap: 10, marginTop: 4, overflow: 'hidden',
+      borderRadius: 8, padding: 16, paddingHorizontal: 12, gap: 10, marginTop: 4, overflow: 'hidden',
       shadowColor: colors.shadow, shadowOpacity: 0.1, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }
     },
     chartValue: { fontSize: 28, lineHeight: 34, fontWeight: '800', marginTop: 4 },
+    chartComparison: { fontSize: 11, lineHeight: 16, fontWeight: '700', marginTop: 2 },
     chart: { width: '100%', height: 175, overflow: 'hidden', marginVertical: 2 },
     chartRanges: {
       minHeight: 38, flexDirection: 'row', alignItems: 'center', gap: 6,
@@ -3046,8 +5018,21 @@ function createStyles(colors: Palette) {
     chartRangeText: { color: colors.dim, fontSize: 11, fontWeight: '800' },
     panelTitle: { color: colors.text, fontSize: 16, lineHeight: 22, fontWeight: '700' },
     rowText: { color: colors.text, fontSize: 14, lineHeight: 20 },
+    adaptiveCard: {
+      backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: 8,
+      padding: 16, gap: 12
+    },
+    textAction: {
+      minHeight: 36, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      paddingHorizontal: 2
+    },
+    textActionLabel: { color: colors.accent, fontSize: 13, fontWeight: '700' },
+    insightCard: {
+      minHeight: 112, flexDirection: 'row', alignItems: 'flex-start', gap: 13,
+      backgroundColor: colors.surface, borderWidth: 1, borderRadius: 8, padding: 16
+    },
     syncCard: {
-      backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: 16,
+      backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: 8,
       padding: 16, marginTop: 2, flexDirection: 'row', alignItems: 'center', gap: 14
     },
     featureIcon: {
@@ -3068,10 +5053,36 @@ function createStyles(colors: Palette) {
       minHeight: 50, backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.line,
       borderRadius: 14, color: colors.text, paddingHorizontal: 15, fontSize: 15
     },
+    symbolField: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    symbolFieldCopy: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 8 },
+    symbolFieldValue: { color: colors.text, fontSize: 16, fontWeight: '800' },
+    symbolFieldPlaceholder: { color: colors.dim, fontSize: 14 },
+    symbolUsual: { color: colors.accent, fontSize: 9, fontWeight: '800', letterSpacing: 0.7 },
+    searchBar: {
+      minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 10,
+      backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line,
+      borderRadius: 8, paddingHorizontal: 13
+    },
+    searchInput: { flex: 1, minWidth: 0, color: colors.text, fontSize: 14, paddingVertical: 10 },
     pairingInput: { minHeight: 88, paddingTop: 12, textAlignVertical: 'top', fontSize: 12 },
     fieldRow: { flexDirection: 'row', gap: 12 },
     field: { flex: 1, gap: 8 },
+    accountTagRow: { gap: 7, paddingVertical: 2, paddingRight: 4 },
+    accountTag: {
+      minHeight: 44, maxWidth: 190, borderRadius: 10, alignItems: 'center', justifyContent: 'center',
+      backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 12
+    },
+    accountTagActive: { backgroundColor: colors.accentSoft, borderColor: colors.accent },
+    accountTagText: { color: colors.dim, fontSize: 12, fontWeight: '800' },
     notes: { minHeight: 96, paddingTop: 14, textAlignVertical: 'top' },
+    detailsToggle: {
+      minHeight: 62, flexDirection: 'row', alignItems: 'center', gap: 12,
+      borderWidth: 1, borderColor: colors.line, borderRadius: 14,
+      backgroundColor: colors.surface, paddingHorizontal: 15, paddingVertical: 10
+    },
+    detailsToggleTitle: { color: colors.text, fontSize: 14, fontWeight: '800' },
+    optionalDetails: { gap: 14, paddingTop: 2 },
+    reasonWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginBottom: 2 },
     primaryButton: {
       minHeight: 54, borderRadius: 14, backgroundColor: colors.accent,
       alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18, marginTop: 4,
@@ -3085,8 +5096,9 @@ function createStyles(colors: Palette) {
     },
     disabledButton: { opacity: 0.5 },
     secondaryButtonText: { color: colors.text, fontSize: 15, fontWeight: '700' },
+    dangerButton: { borderColor: colors.downSoft },
     compactButton: {
-      minWidth: 40, minHeight: 38, borderRadius: 10, borderWidth: 1, borderColor: colors.line,
+      minWidth: 44, minHeight: 44, borderRadius: 10, borderWidth: 1, borderColor: colors.line,
       backgroundColor: colors.surface2, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12
     },
     iconButton: {
@@ -3096,7 +5108,9 @@ function createStyles(colors: Palette) {
     compactButtonText: { color: colors.text, fontSize: 12, fontWeight: '700' },
     buttonContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
     actionRow: { flexDirection: 'row', gap: 10 },
+    backAction: { minHeight: 44, alignItems: 'center', alignSelf: 'flex-start' },
     centeredRow: { alignItems: 'center' },
+    toggleControl: { width: 52, height: 44, alignItems: 'center', justifyContent: 'center' },
     toggle: {
       width: 52, height: 30, borderRadius: 15, padding: 3, justifyContent: 'center',
       backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.line
@@ -3106,16 +5120,24 @@ function createStyles(colors: Palette) {
     toggleKnobOn: { alignSelf: 'flex-end', backgroundColor: colors.accent },
     error: { color: colors.down, fontSize: 13, lineHeight: 19 },
     segment: {
-      minHeight: 48, borderWidth: 1, borderColor: colors.line, borderRadius: 14,
+      minHeight: 54, borderWidth: 1, borderColor: colors.line, borderRadius: 14,
       padding: 4, flexDirection: 'row', backgroundColor: colors.surface
     },
     segmentOption: { flex: 1, minWidth: 0, borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
     segmentActive: { backgroundColor: colors.accentSoft, borderWidth: 1, borderColor: colors.accent },
     segmentText: { color: colors.dim, fontSize: 13, fontWeight: '700' },
+    compactSegment: {
+      minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 5
+    },
+    compactSegmentOption: {
+      minWidth: 62, minHeight: 44, borderRadius: 8, alignItems: 'center', justifyContent: 'center',
+      paddingHorizontal: 10
+    },
+    resultCount: { color: colors.faint, flex: 1, textAlign: 'right', fontSize: 11, fontWeight: '700' },
     ruleCard: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: 16, padding: 16, gap: 12 },
     answerRow: { flexDirection: 'row', gap: 10 },
     answerButton: {
-      flex: 1, minHeight: 42, borderRadius: 10, borderWidth: 1, borderColor: colors.line,
+      flex: 1, minHeight: 44, borderRadius: 10, borderWidth: 1, borderColor: colors.line,
       backgroundColor: colors.surface2, alignItems: 'center', justifyContent: 'center'
     },
     answerYes: { borderColor: colors.up, backgroundColor: colors.upSoft },
@@ -3137,31 +5159,54 @@ function createStyles(colors: Palette) {
     },
     tradeCard: {
       backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line,
-      borderRadius: 16, overflow: 'hidden',
+      borderRadius: 8, overflow: 'hidden',
       shadowColor: colors.shadow, shadowOpacity: 0.08, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }
     },
-    tradeRow: { minHeight: 88, flexDirection: 'row', alignItems: 'center', gap: 14, padding: 15 },
+    tradeRow: { minHeight: 92, flexDirection: 'row', alignItems: 'center', gap: 10, padding: 13 },
     tradeOutcomeRail: { width: 4, height: 48, borderRadius: 2 },
     tradeTitleRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginBottom: 5 },
     tradeSymbol: { color: colors.text, fontSize: 17, fontWeight: '800' },
     tradeMeta: { color: colors.dim, fontSize: 12 },
+    tradeSummary: { lineHeight: 17 },
     tradeRight: { alignItems: 'flex-end', gap: 6 },
     tradePnl: { fontSize: 16, fontWeight: '800' },
     pnlPill: { borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 },
     syncLabel: { fontSize: 9, fontWeight: '800', letterSpacing: 0.8 },
+    historyThumbnail: { width: 44, height: 44, borderRadius: 6, backgroundColor: colors.surface2 },
+    historyDetails: {
+      gap: 10, borderTopWidth: 1, borderTopColor: colors.line,
+      paddingHorizontal: 13, paddingTop: 11, paddingBottom: 12
+    },
     historyActions: {
-      minHeight: 44, flexDirection: 'row', borderTopWidth: 1, borderTopColor: colors.line
+      flexDirection: 'row', justifyContent: 'flex-end', gap: 8
     },
-    historyAction: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-    dangerAction: { borderLeftWidth: 1, borderLeftColor: colors.line },
+    historyAction: {
+      minWidth: 92, minHeight: 44, flexDirection: 'row', gap: 7, alignItems: 'center', justifyContent: 'center',
+      borderWidth: 1, borderColor: colors.line, borderRadius: 8, backgroundColor: colors.surface2,
+      paddingHorizontal: 12
+    },
+    dangerAction: { borderColor: colors.downSoft },
     historyActionText: { color: colors.text, fontSize: 13, fontWeight: '700' },
-    emptyNews: {
-      minHeight: 150, alignItems: 'center', justifyContent: 'center', gap: 8,
-      borderWidth: 1, borderColor: colors.line, borderRadius: 16, padding: 22
+    historyMonthLabel: {
+      color: colors.faint, fontSize: 11, fontWeight: '800', letterSpacing: 0.7,
+      marginTop: 5, marginBottom: -4
     },
+    emptyNews: {
+      minHeight: 190, alignItems: 'center', justifyContent: 'center', gap: 10,
+      borderWidth: 1, borderColor: colors.line, borderRadius: 8, padding: 24,
+      backgroundColor: colors.surface
+    },
+    emptyNewsIcon: {
+      width: 48, height: 48, borderRadius: 8, alignItems: 'center', justifyContent: 'center',
+      backgroundColor: colors.accentSoft, borderWidth: 1, borderColor: colors.lineStrong
+    },
+    centerText: { textAlign: 'center' },
+    newsStatusBlock: { gap: 10, borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 12 },
+    newsStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    newsStatusTitle: { color: colors.text, fontSize: 13, lineHeight: 18, fontWeight: '700' },
     eventCard: {
       backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line,
-      borderLeftWidth: 4, borderRadius: 16, padding: 16, gap: 10,
+      borderLeftWidth: 4, borderRadius: 8, padding: 16, gap: 10,
       shadowColor: colors.shadow, shadowOpacity: 0.08, shadowRadius: 10, shadowOffset: { width: 0, height: 3 }
     },
     impactBadge: {
@@ -3173,6 +5218,16 @@ function createStyles(colors: Palette) {
     eventNumbers: { flexDirection: 'row', gap: 14, flexWrap: 'wrap' },
     eventNumber: { color: colors.dim, fontSize: 11, fontWeight: '600' },
     settingsSection: { gap: 12, marginTop: 4, marginBottom: 2 },
+    syncStatusPanel: {
+      minHeight: 62, flexDirection: 'row', alignItems: 'center', gap: 10,
+      borderWidth: 1, borderColor: colors.line, borderRadius: 8,
+      backgroundColor: colors.surface2, paddingHorizontal: 12, paddingVertical: 10
+    },
+    preferenceRow: {
+      minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: 12,
+      backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line,
+      borderRadius: 8, paddingHorizontal: 13, paddingVertical: 10
+    },
     themeGrid: { flexDirection: 'row', gap: 10 },
     themeChoice: {
       flex: 1, minWidth: 0, borderWidth: 1, borderColor: colors.line,
@@ -3203,12 +5258,54 @@ function createStyles(colors: Palette) {
       color: colors.accent, backgroundColor: colors.accentSoft, fontSize: 11, fontWeight: '800'
     },
     removeRuleButton: {
-      width: 36, height: 36, borderRadius: 8, borderWidth: 1, borderColor: colors.line,
+      width: 44, height: 44, borderRadius: 8, borderWidth: 1, borderColor: colors.line,
       backgroundColor: colors.surface2, alignItems: 'center', justifyContent: 'center'
     },
     removeRuleText: { color: colors.down, fontSize: 12, fontWeight: '800' },
     scannerScreen: { flex: 1, backgroundColor: colors.bg },
     modalScreen: { flex: 1, backgroundColor: colors.bg },
+    onboardingScreen: { flex: 1, backgroundColor: '#080D13' },
+    onboardingBackdrop: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, width: '100%', height: '100%' },
+    onboardingShade: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(5, 9, 14, 0.58)' },
+    onboardingContent: {
+      flex: 1, width: '100%', maxWidth: 640, alignSelf: 'center',
+      paddingHorizontal: 20, paddingTop: 18, paddingBottom: 22, gap: 18
+    },
+    onboardingLogo: {
+      width: 36, height: 36, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)',
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 2.5,
+      backgroundColor: 'rgba(14,20,32,0.82)'
+    },
+    onboardingBrand: { color: '#F5F7FA', fontSize: 20, fontWeight: '800' },
+    onboardingProgress: { flexDirection: 'row', gap: 7 },
+    onboardingProgressBar: { flex: 1, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.16)' },
+    onboardingProgressActive: { backgroundColor: colors.accent },
+    onboardingBody: { flex: 1, justifyContent: 'center', gap: 14 },
+    onboardingIcon: {
+      width: 58, height: 58, borderRadius: 16, alignItems: 'center', justifyContent: 'center',
+      backgroundColor: 'rgba(245,158,11,0.14)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.30)'
+    },
+    onboardingEyebrow: { color: colors.accent, fontSize: 11, fontWeight: '800', letterSpacing: 0.8 },
+    onboardingTitle: { color: '#F5F7FA', fontSize: 30, lineHeight: 37, fontWeight: '800', maxWidth: 520 },
+    onboardingCopy: { color: '#B4BECE', fontSize: 15, lineHeight: 23, maxWidth: 540 },
+    onboardingNote: {
+      minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 12,
+      borderWidth: 1, borderColor: 'rgba(255,255,255,0.13)', borderRadius: 8,
+      backgroundColor: 'rgba(13,20,30,0.78)', paddingHorizontal: 14, paddingVertical: 11
+    },
+    onboardingNoteText: { flex: 1, color: '#D3DAE5', fontSize: 13, lineHeight: 19 },
+    onboardingChoice: {
+      minHeight: 82, borderWidth: 1, borderColor: colors.lineStrong, borderRadius: 8,
+      backgroundColor: colors.surface, padding: 14, gap: 4
+    },
+    onboardingChoiceActive: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
+    onboardingRules: { gap: 8 },
+    onboardingRule: {
+      minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 10,
+      borderWidth: 1, borderColor: colors.line, borderRadius: 8,
+      backgroundColor: colors.surface, paddingHorizontal: 12, paddingVertical: 9
+    },
+    onboardingActions: { flexDirection: 'row', gap: 10 },
     scannerHeader: {
       minHeight: 78, paddingHorizontal: 18, paddingVertical: 12, flexDirection: 'row',
       alignItems: 'center', gap: 12, borderBottomWidth: 1, borderBottomColor: colors.line
@@ -3220,20 +5317,88 @@ function createStyles(colors: Palette) {
     },
     scannerFooter: { minHeight: 64, padding: 16, alignItems: 'center', justifyContent: 'center' },
     tabBar: {
-      minHeight: 74, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.lineStrong,
-      backgroundColor: colors.nav, flexDirection: 'row', paddingBottom: 6,
+      minHeight: 76, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.lineStrong,
+      backgroundColor: colors.nav, flexDirection: 'row', paddingBottom: 5,
       shadowColor: colors.shadow, shadowOpacity: 0.22, shadowRadius: 16, shadowOffset: { width: 0, height: -5 }
     },
+    tabGroup: { flex: 1, minWidth: 0, flexDirection: 'row' },
     tab: { flex: 1, minWidth: 0, alignItems: 'center', justifyContent: 'center', gap: 4, position: 'relative' },
     tabActiveLine: {
       position: 'absolute', top: 0, width: 32, height: 3, borderRadius: 1.5,
       backgroundColor: colors.accent
     },
-    tabGlyph: { width: 36, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 10 },
+    tabGlyph: { width: 34, height: 30, alignItems: 'center', justifyContent: 'center', borderRadius: 8 },
     tabGlyphActive: { backgroundColor: colors.accentSoft },
     tabGlyphText: { color: colors.dim, fontSize: 13, fontWeight: '800' },
-    tabLabel: { color: colors.dim, fontSize: 11, fontWeight: '700' },
+    tabLabel: { color: colors.dim, fontSize: 9.5, fontWeight: '700' },
     tabActiveText: { color: colors.accent },
+    captureTab: {
+      width: 62, alignItems: 'center', justifyContent: 'center', gap: 3,
+      transform: [{ translateY: -7 }]
+    },
+    captureTabButton: {
+      width: 38, height: 38, borderRadius: 8, backgroundColor: colors.accent,
+      alignItems: 'center', justifyContent: 'center',
+      shadowColor: colors.accent, shadowOpacity: 0.28, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }
+    },
+    captureTabLabel: { color: colors.accent, fontSize: 9.5, fontWeight: '800' },
+    moreOverlay: { flex: 1 },
+    moreScrim: {
+      position: 'absolute', top: 0, right: 0, bottom: 0, left: 0,
+      backgroundColor: 'rgba(5, 8, 14, 0.12)'
+    },
+    sheetOverlay: { flex: 1, justifyContent: 'flex-end' },
+    sheetScrim: {
+      position: 'absolute', top: 0, right: 0, bottom: 0, left: 0,
+      backgroundColor: 'rgba(5, 8, 14, 0.62)'
+    },
+    sheetTitle: { color: colors.text, fontSize: 21, lineHeight: 27, fontWeight: '800' },
+    moreList: {
+      position: 'absolute', right: 10, bottom: 82, alignItems: 'flex-end', gap: 9
+    },
+    moreStep: { alignSelf: 'flex-end' },
+    moreOption: {
+      height: 46, minWidth: 132, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 10,
+      borderWidth: 1, borderColor: colors.lineStrong, borderRadius: 23,
+      backgroundColor: colors.surfaceElevated, paddingLeft: 16, paddingRight: 5,
+      shadowColor: colors.shadow, shadowOpacity: 0.22, shadowRadius: 12,
+      shadowOffset: { width: 0, height: 5 }, elevation: 5
+    },
+    moreOptionActive: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
+    moreOptionLabel: { color: colors.text, fontSize: 13, fontWeight: '800' },
+    moreOptionIcon: {
+      width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center',
+      backgroundColor: colors.surface2
+    },
+    moreOptionIconActive: { backgroundColor: colors.surface },
+    symbolSheet: {
+      maxHeight: '82%', backgroundColor: colors.surfaceElevated, borderTopWidth: 1,
+      borderTopColor: colors.lineStrong, borderTopLeftRadius: 20, borderTopRightRadius: 20,
+      paddingHorizontal: 18, paddingTop: 18, paddingBottom: 24, gap: 14
+    },
+    symbolList: { gap: 8, paddingBottom: 20 },
+    symbolRow: {
+      minHeight: 54, flexDirection: 'row', alignItems: 'center',
+      borderWidth: 1, borderColor: colors.line, borderRadius: 8, backgroundColor: colors.surface
+    },
+    symbolSelect: { flex: 1, minHeight: 54, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14 },
+    symbolName: { color: colors.text, fontSize: 16, fontWeight: '800' },
+    symbolSelected: { color: colors.accent, fontSize: 9, fontWeight: '800', letterSpacing: 0.7 },
+    symbolStar: { width: 50, height: 50, alignItems: 'center', justifyContent: 'center' },
+    useSymbolButton: {
+      minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+      borderWidth: 1, borderColor: colors.accent, borderRadius: 8, backgroundColor: colors.accentSoft
+    },
+    useSymbolText: { color: colors.accent, fontSize: 14, fontWeight: '800' },
+    monthPickerSheet: {
+      backgroundColor: colors.surfaceElevated, borderTopWidth: 1, borderTopColor: colors.lineStrong,
+      borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 18, gap: 14
+    },
+    monthGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    monthButton: {
+      width: '22.5%', minHeight: 46, alignItems: 'center', justifyContent: 'center',
+      borderWidth: 1, borderColor: colors.line, borderRadius: 8, backgroundColor: colors.surface
+    },
     timePickerOverlay: {
       position: 'absolute', top: 0, bottom: 0, left: 0, right: 0,
       backgroundColor: 'rgba(8, 12, 20, 0.85)', justifyContent: 'flex-end',
@@ -3251,7 +5416,8 @@ function createStyles(colors: Palette) {
     },
     presetRow: { gap: 8, paddingVertical: 2 },
     presetPill: {
-      backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.line, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8
+      minHeight: 44, backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.line, borderRadius: 12,
+      paddingHorizontal: 12, paddingVertical: 8, justifyContent: 'center'
     },
     presetText: { color: colors.text, fontSize: 12, fontWeight: '700' },
     pickerColumnsRow: { flexDirection: 'row', gap: 10, height: 170 },
@@ -3262,18 +5428,31 @@ function createStyles(colors: Palette) {
     pickerItemActive: { backgroundColor: colors.accentSoft },
     pickerItemText: { color: colors.dim, fontSize: 14, fontWeight: '700' },
     pickerItemTextActive: { color: colors.accent, fontWeight: '800' },
-    vaultGrid: { gap: 14, marginTop: 10 },
+    vaultGrid: {
+      flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 6, alignItems: 'flex-start'
+    },
     vaultCard: {
-      backgroundColor: colors.surface, borderRadius: 18, borderWidth: 1, borderColor: colors.line,
+      width: '48.5%', backgroundColor: colors.surface, borderRadius: 8, borderWidth: 1, borderColor: colors.line,
       overflow: 'hidden', position: 'relative',
       shadowColor: colors.shadow, shadowOpacity: 0.16, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }
     },
-    vaultImage: { width: '100%', height: 185, backgroundColor: colors.surface2 },
-    vaultPlaceholder: { width: '100%', height: 140, justifyContent: 'center', alignItems: 'center', gap: 8, padding: 16 },
-    vaultPlaceholderText: { color: colors.text, fontSize: 13, fontWeight: '700' },
-    vaultOverlayHeader: { position: 'absolute', top: 12, left: 12 },
-    vaultFooter: { padding: 14, borderTopWidth: 1, borderTopColor: colors.line, gap: 2 },
-    vaultTitle: { color: colors.text, fontSize: 16, fontWeight: '800' },
+    vaultImage: { width: '100%', height: 118, backgroundColor: colors.surface2 },
+    vaultPlaceholder: { width: '100%', height: 118, justifyContent: 'center', alignItems: 'center', gap: 10, padding: 12 },
+    vaultPlaceholderChart: { height: 36, flexDirection: 'row', alignItems: 'flex-end', gap: 5 },
+    vaultPlaceholderText: { color: colors.dim, fontSize: 11, fontWeight: '700' },
+    vaultOverlayHeader: { position: 'absolute', top: 8, left: 8 },
+    vaultFooter: { padding: 11, borderTopWidth: 1, borderTopColor: colors.line, gap: 3 },
+    vaultTitle: { color: colors.text, fontSize: 15, fontWeight: '800' },
+    vaultPnl: { maxWidth: '58%', fontSize: 13, fontWeight: '800' },
+    vaultMeta: { color: colors.dim, fontSize: 11, lineHeight: 15, fontWeight: '600' },
+    vaultDate: { color: colors.faint, fontSize: 10, lineHeight: 14 },
+    vaultEmpty: { width: '100%' },
+    reviewModalCard: {
+      width: '100%', maxWidth: 520, maxHeight: '92%', alignSelf: 'center',
+      backgroundColor: colors.surface, borderRadius: 8, borderWidth: 1, borderColor: colors.line,
+      padding: 18, gap: 18
+    },
+    reviewQuestion: { gap: 10 },
     lightboxOverlay: {
       flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', padding: 16
     },
@@ -3311,6 +5490,8 @@ function createStyles(colors: Palette) {
     calendarCard: {
       backgroundColor: colors.surface, borderRadius: 20, borderWidth: 1, borderColor: colors.line, padding: 16, gap: 12, marginTop: 4
     },
+    calendarMonthButton: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+    calendarJumpHint: { color: colors.accent, fontSize: 9, fontWeight: '800', marginTop: 2 },
     calendarWeekHeader: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: colors.line, paddingBottom: 8 },
     calendarWeekText: { flex: 1, color: colors.faint, fontSize: 11, fontWeight: '800', textAlign: 'center' },
     calendarGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
