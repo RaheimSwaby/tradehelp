@@ -58,6 +58,7 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
   const consumedDrilldownRef = useRef(null)
   const [dismissedSearchFilters, setDismissedSearchFilters] = useState([])
   const [outcome, setOutcome] = useState('all') // all | win | loss
+  const [accountFilter, setAccountFilter] = useState('all') // all | __live__ | <account id>
   const [selectedSearchId, setSelectedSearchId] = useState('')
   const [searchName, setSearchName] = useState('')
   const [searchError, setSearchError] = useState('')
@@ -167,6 +168,7 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
     setQuery('')
     setDismissedSearchFilters([])
     setOutcome('all')
+    setAccountFilter('all')
     setSelectedSearchId('')
     setTimingDrilldown(null)
   }
@@ -209,9 +211,13 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
       const pnl = Number(t.pnl) || 0
       if (outcome === 'win' && pnl <= 0) return false
       if (outcome === 'loss' && pnl >= 0) return false
+      if (accountFilter !== 'all') {
+        const acct = String(t.account || '')
+        if (accountFilter === '__live__' ? acct !== '' : acct !== accountFilter) return false
+      }
       return matchesJournalFilters(t, activeSearchFilters)
     })
-  }, [trades, activeSearchFilters, outcome, pendingDelete, timingDrilldown])
+  }, [trades, activeSearchFilters, outcome, accountFilter, pendingDelete, timingDrilldown])
 
   const [page, setPage] = useState(0)
   const [pageSize, setPageSize] = useState(20)
@@ -226,7 +232,7 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
   const pageCount = Math.max(1, Math.ceil(ordered.length / pageSize))
   const safePage = Math.min(page, pageCount - 1)
   const pageRows = ordered.slice(safePage * pageSize, safePage * pageSize + pageSize)
-  useEffect(() => { setPage(0) }, [query, outcome, pageSize, dismissedSearchFilters])
+  useEffect(() => { setPage(0) }, [query, outcome, accountFilter, pageSize, dismissedSearchFilters])
 
   function startEdit(t) {
     discardPendingVideos()
@@ -792,6 +798,15 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
               {[['all', 'All'], ['win', 'Wins'], ['loss', 'Losses']].map(([k, label]) => (
                 <button key={k} type="button" onClick={() => setOutcome(k)} className="text-xs px-2 py-1 rounded-md" style={{ background: outcome === k ? T.surface2 : 'transparent', color: outcome === k ? T.accent : T.dim, border: `1px solid ${outcome === k ? T.line : 'transparent'}` }}>{label}</button>
               ))}
+              {accounts.length > 0 && (
+                <select aria-label="Filter by account" style={inputStyle}
+                  className="rounded px-2 py-1 text-xs"
+                  value={accountFilter} onChange={(event) => setAccountFilter(event.target.value)}>
+                  <option value="all">All accounts</option>
+                  <option value="__live__">Live / personal</option>
+                  {accounts.map((a) => <option key={a.id} value={String(a.id)}>{a.label || 'Account'}</option>)}
+                </select>
+              )}
               <div className="basis-full flex flex-wrap items-center gap-2 mt-1 rounded-lg p-2" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
                 <Bookmark size={13} style={{ color: T.accent }} />
                 <select aria-label="Saved searches" style={inputStyle} className="min-w-[150px] flex-1 rounded px-2 py-1 text-xs" value={selectedSearchId} onChange={(event) => applySavedSearch(event.target.value)}>

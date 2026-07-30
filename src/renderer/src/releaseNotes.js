@@ -22,6 +22,7 @@ const V036_NOTES = `- Cosmetic Refresh - each theme preset now has its own restr
 - Dashboard quotes rotate daily and AI Coach quick prompts adapt to your journal`
 
 export const RELEASE_NOTES = {
+  '0.43.0': `- Filter your journal by account — a new dropdown in the trade history switches between all accounts, live/personal, and each prop account, and stacks with your search and win/loss filters`,
   // Nothing here is visible to an existing journal — the sample trades only
   // appear on a brand-new install — so there is nothing to announce to someone
   // updating.
