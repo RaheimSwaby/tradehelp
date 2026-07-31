@@ -47,16 +47,18 @@ export const parseRules = (s) => {
   catch { return [] }
 }
 
-// Streams an AI reply: calls onChunk(delta) as tokens arrive, resolves with the full text.
+// Streams an AI reply: calls onChunk(delta) as answer tokens arrive and optionally
+// onThinking(delta) for a local model's separate reasoning trace.
 // Pass a React ref as cancelRef to get a cancel() function stored on ref.current — call it
 // on component unmount to remove the IPC listeners if the stream is still in flight.
 // Falls back to the non-streaming call (firing onChunk once) if streaming isn't available.
-export function streamChat(payload, onChunk, cancelRef) {
+export function streamChat(payload, onChunk, cancelRef, onThinking) {
   return new Promise((resolve, reject) => {
     const api = typeof window !== 'undefined' && window.api
     if (api?.aiChatStream) {
       const cancel = api.aiChatStream(payload, {
         onChunk: (d) => { try { onChunk?.(d) } catch {} },
+        onThinking: (d) => { try { onThinking?.(d) } catch {} },
         onDone: (text) => { if (cancelRef) cancelRef.current = null; resolve(text || '') },
         onError: (err) => { if (cancelRef) cancelRef.current = null; reject(new Error(err || 'AI unavailable')) }
       })

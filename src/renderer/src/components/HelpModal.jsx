@@ -73,7 +73,7 @@ export function HelpModal({ onClose }) {
                         <span className="text-sm font-medium">{item.q}</span>
                       </button>
                       {isOpen && (
-                        <div className="px-3 pb-3 pl-8 text-xs leading-relaxed" style={{ color: T.dim }}>{item.a}</div>
+                        <div className="px-3 pb-3 pl-8 text-xs leading-relaxed whitespace-pre-line" style={{ color: T.dim }}>{item.a}</div>
                       )}
                     </div>
                   )

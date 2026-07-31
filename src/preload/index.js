@@ -113,17 +113,20 @@ const api = {
   clearBackground: (file) => ipcRenderer.invoke('appearance:background:clear', file),
 
   aiChat: (payload) => ipcRenderer.invoke('ai:chat', payload),
-  aiChatStream: (payload, { onChunk, onDone, onError }) => {
+  aiChatStream: (payload, { onChunk, onThinking, onDone, onError }) => {
     const id = globalThis.crypto.randomUUID()
     const onC = (_e, m) => { if (m.id === id) onChunk?.(m.delta) }
+    const onT = (_e, m) => { if (m.id === id) onThinking?.(m.delta) }
     const onE = (_e, m) => { if (m.id === id) { cleanup(); onDone?.(m.text) } }
     const onErr = (_e, m) => { if (m.id === id) { cleanup(); onError?.(m.error) } }
     function cleanup() {
       ipcRenderer.removeListener('ai:stream:chunk', onC)
+      ipcRenderer.removeListener('ai:stream:thinking', onT)
       ipcRenderer.removeListener('ai:stream:end', onE)
       ipcRenderer.removeListener('ai:stream:error', onErr)
     }
     ipcRenderer.on('ai:stream:chunk', onC)
+    ipcRenderer.on('ai:stream:thinking', onT)
     ipcRenderer.on('ai:stream:end', onE)
     ipcRenderer.on('ai:stream:error', onErr)
     ipcRenderer.send('ai:stream:start', { id, payload })

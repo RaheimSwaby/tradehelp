@@ -28,6 +28,19 @@ describe('help content', () => {
     expect(all).toMatch(/cannot place or close orders/i)
     expect(all).not.toMatch(/closes your (trades|positions)/i)
   })
+
+  it('includes actionable Ollama setup and reasoning compatibility guidance', () => {
+    const coach = HELP_SECTIONS.find((section) => section.id === 'coach')
+    const setup = coach.items.find((item) => /install Ollama/i.test(item.q))
+    const reasoning = coach.items.find((item) => /does not support thinking/i.test(item.q))
+
+    expect(setup.a.split('\n')).toHaveLength(7)
+    expect(setup.a).toMatch(/ollama pull qwen2\.5:7b/i)
+    expect(setup.a).toMatch(/Test model/i)
+    expect(reasoning.a).toMatch(/hermes3 does not support thinking/i)
+    expect(reasoning.a).toMatch(/turn off Show model reasoning/i)
+    expect(reasoning.a).toMatch(/Normal answer streaming still works/i)
+  })
 })
 
 describe('searchHelp', () => {
@@ -47,6 +60,7 @@ describe('searchHelp', () => {
   it('is case-insensitive and matches text in the answer body', () => {
     expect(helpItemCount(searchHelp('OLLAMA'))).toBeGreaterThan(0)
     expect(helpItemCount(searchHelp('sqlite'))).toBeGreaterThan(0)
+    expect(helpItemCount(searchHelp('hermes3 thinking'))).toBeGreaterThan(0)
   })
 
   it('requires every term to match, not just one', () => {

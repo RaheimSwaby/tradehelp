@@ -76,11 +76,13 @@ function minutesUntilWindow(now, window) {
 
 // Pure copy helper for dashboard/header integration. It describes only the user's
 // journal rhythm; it never labels a fixed exchange or market session.
-export function buildDataAwareGreeting({ now = new Date(), personalClock = null, nextWindow = null, cleanStreak = 0 } = {}) {
+export function buildDataAwareGreeting({ now = new Date(), personalClock = null, nextWindow = null, cleanStreak = 0, name = '' } = {}) {
   const date = now instanceof Date ? now : new Date(now)
   const validDate = Number.isFinite(date.getTime())
   const hour = validDate ? date.getHours() : 12
-  const salutation = hour < 12 ? 'Good morning.' : hour < 18 ? 'Good afternoon.' : 'Good evening.'
+  const preferredName = String(name || '').replace(/\s+/g, ' ').trim().slice(0, 40)
+  const timeOfDay = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
+  const salutation = `${timeOfDay}${preferredName ? `, ${preferredName}` : ''}.`
   const cues = []
   const clockLabel = nextWindowLabel(personalClock)
 

@@ -82,11 +82,31 @@ export const HELP_SECTIONS = [
     items: [
       {
         q: 'How do I set up the AI coach?',
-        a: 'Settings → Model provider. Ollama is the simplest local option; you can also point the OpenAI-compatible option at LM Studio or LocalAI on localhost and leave the API key blank to stay fully offline. A cloud key works too if you prefer.'
+        a: 'Settings → Model provider. Ollama is the simplest local option; the next answer walks through installing it and downloading a model. You can also point the OpenAI-compatible option at LM Studio or LocalAI on localhost and leave the API key blank to stay fully offline. A cloud key works too if you prefer.'
+      },
+      {
+        q: 'How do I install Ollama and download a model?',
+        a: [
+          '1. Download Ollama from ollama.com/download, install it, and open the Ollama app.',
+          '2. Open PowerShell or Command Prompt on Windows, or Terminal on macOS.',
+          '3. Download one text model. Run: ollama pull qwen2.5:7b for strong everyday coaching, ollama pull qwen3:8b if you want the optional reasoning panel, or ollama pull llama3.2 for lighter hardware.',
+          '4. Leave the terminal open until the download reaches 100%. Models are several gigabytes, so this can take a while.',
+          '5. In TradeHelp, open Settings → Model provider. Keep Ollama selected, click Browse beside Model, and choose the model you downloaded.',
+          '6. Click Test model. A successful test confirms the model can generate a reply and loads it into memory; the first load after restarting Ollama can be slower.',
+          '7. Optional: for chart screenshots, also run ollama pull llama3.2-vision and select it under Vision model.'
+        ].join('\n')
       },
       {
         q: 'Which model should I use?',
-        a: 'qwen2.5:7b or llama3.1:8b give reliable coaching. Below about 3B, models start misreading or inventing trades. For reading chart screenshots you need a vision model such as llama3.2-vision.'
+        a: 'qwen2.5:7b or llama3.1:8b give reliable everyday coaching. Use qwen3:8b if you specifically want the optional reasoning panel. Below about 3B, models start misreading or inventing trades. For reading chart screenshots you need a vision model such as llama3.2-vision.'
+      },
+      {
+        q: 'Why does Ollama say my model does not support thinking?',
+        a: 'Show model reasoning is optional and only works with thinking-capable Ollama models. If you see an Ollama 400 error such as "hermes3 does not support thinking," nothing is wrong with your journal or model installation. Open Settings → Coach & personal clock, turn off Show model reasoning, click Save coach & clock, and retry. Normal answer streaming still works. You can also switch to a thinking-capable model such as qwen3:8b; reasoning may make replies slower.'
+      },
+      {
+        q: 'Why is the first coach response slow?',
+        a: 'A local model has to load several gigabytes into memory after Ollama starts or when you switch models. Use Test model before opening the coach to verify and warm it. For faster everyday replies, choose Fast or Balanced response depth and leave Show model reasoning off; Deep mode and visible reasoning intentionally take longer.'
       },
       {
         q: 'What can the coach see?',

@@ -286,7 +286,7 @@ export function Dashboard({ stats, trades, accounts = [], settings, journalData,
   const empty = vStats.n === 0
   const currentDate = new Date(now)
   const dailyQuote = quoteOfTheDay(currentDate)
-  const greeting = buildDataAwareGreeting({ now: currentDate, personalClock, cleanStreak: vStats.nonTiltStreak })
+  const greeting = buildDataAwareGreeting({ now: currentDate, personalClock, cleanStreak: vStats.nonTiltStreak, name: settings?.traderName })
   const inferredWindows = personalSchedule?.windows || []
   const windowSummary = inferredWindows.map((window) => `${formatClockMinute(window.start)}–${formatClockMinute(window.end)}`).join(' · ')
   const scheduleSessions = personalSchedule?.metadata?.historySessionCount || personalSchedule?.metadata?.sessionCount || 0

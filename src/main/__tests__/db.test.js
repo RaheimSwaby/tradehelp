@@ -295,7 +295,10 @@ describe('settings', () => {
   it('returns persistent defaults for coach voice and the personal clock', () => {
     expect(getSettings()).toMatchObject({
       provider: 'ollama',
+      traderName: '',
       coachVoice: 'balanced',
+      coachContextMode: 'balanced',
+      coachShowThinking: 'false',
       personalClockSource: 'auto',
       personalClockAlerts: 'true',
       personalClockAmbience: 'true',
@@ -311,6 +314,9 @@ describe('settings', () => {
     ]
     const settings = setSettings({
       coachVoice: 'supportive',
+      traderName: '  Raheim   Swaby  ',
+      coachContextMode: 'deep',
+      coachShowThinking: true,
       personalClockSource: 'manual',
       personalClockAlerts: false,
       personalClockAmbience: 'true',
@@ -320,6 +326,9 @@ describe('settings', () => {
 
     expect(settings).toMatchObject({
       coachVoice: 'supportive',
+      traderName: 'Raheim Swaby',
+      coachContextMode: 'deep',
+      coachShowThinking: 'true',
       personalClockSource: 'manual',
       personalClockAlerts: 'false',
       personalClockAmbience: 'true'
@@ -334,6 +343,8 @@ describe('settings', () => {
   it('sanitizes invalid enumerations, flags, and manual-window JSON', () => {
     const settings = setSettings({
       coachVoice: 'hostile',
+      coachContextMode: 'turbo',
+      coachShowThinking: 'sometimes',
       personalClockSource: 'calendar',
       personalClockAlerts: 'sometimes',
       personalClockAmbience: '',
@@ -342,6 +353,8 @@ describe('settings', () => {
 
     expect(settings).toMatchObject({
       coachVoice: 'balanced',
+      coachContextMode: 'balanced',
+      coachShowThinking: 'false',
       personalClockSource: 'auto',
       personalClockAlerts: 'true',
       personalClockAmbience: 'true',

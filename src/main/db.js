@@ -1418,12 +1418,15 @@ const SETTINGS_DEFAULTS = Object.freeze({
   simpleJournal: 'false',
   customEmotions: '[]',
   customSetups: '[]',
+  traderName: '',
   proactiveCoachEnabled: 'true',
   coachBriefSnapshot: '',
   coachBriefAttempt: '',
   coachBriefText: '',
   cloudJournalAccess: 'true',
   coachVoice: 'balanced',
+  coachContextMode: 'balanced',
+  coachShowThinking: 'false',
   personalClockSource: 'auto',
   personalClockAlerts: 'true',
   personalClockAmbience: 'true',
@@ -1437,8 +1440,9 @@ const SETTINGS_KEYS = new Set([
 ])
 
 const COACH_VOICES = new Set(['supportive', 'balanced', 'tough-love'])
+const COACH_CONTEXT_MODES = new Set(['fast', 'balanced', 'deep'])
 const PERSONAL_CLOCK_SOURCES = new Set(['auto', 'manual'])
-const PERSONAL_CLOCK_BOOLEAN_KEYS = new Set(['personalClockAlerts', 'personalClockAmbience'])
+const COACH_CLOCK_BOOLEAN_KEYS = new Set(['coachShowThinking', 'personalClockAlerts', 'personalClockAmbience'])
 const CLOCK_TIME = /^(?:[01]\d|2[0-3]):[0-5]\d$/
 
 function normalizeManualClockWindows(value) {
@@ -1506,9 +1510,11 @@ function normalizeSettingValue(key, value) {
   const stringValue = String(value)
   if (key === 'tradeRules') return normalizeTradeRules(value)
   if (key === 'tradeRulesUpdatedAt') return normalizeRuleRevision(value)
+  if (key === 'traderName') return stringValue.replace(/\s+/g, ' ').trim().slice(0, 40)
   if (key === 'coachVoice') return COACH_VOICES.has(stringValue) ? stringValue : SETTINGS_DEFAULTS.coachVoice
+  if (key === 'coachContextMode') return COACH_CONTEXT_MODES.has(stringValue) ? stringValue : SETTINGS_DEFAULTS.coachContextMode
   if (key === 'personalClockSource') return PERSONAL_CLOCK_SOURCES.has(stringValue) ? stringValue : SETTINGS_DEFAULTS.personalClockSource
-  if (PERSONAL_CLOCK_BOOLEAN_KEYS.has(key)) return stringValue === 'true' || stringValue === 'false' ? stringValue : SETTINGS_DEFAULTS[key]
+  if (COACH_CLOCK_BOOLEAN_KEYS.has(key)) return stringValue === 'true' || stringValue === 'false' ? stringValue : SETTINGS_DEFAULTS[key]
   if (key === 'personalClockManualWindows') return normalizeManualClockWindows(value)
   return stringValue
 }

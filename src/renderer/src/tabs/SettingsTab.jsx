@@ -8,6 +8,7 @@ import { MobileSyncPanel } from '../widgets/MobileSyncPanel.jsx'
 import { Instagram, MessagesSquare, Plus, Pencil, Trash2, X } from 'lucide-react'
 
 const COACH_VOICE_VALUES = new Set(['supportive', 'balanced', 'tough-love'])
+const COACH_CONTEXT_MODES = new Set(['fast', 'balanced', 'deep'])
 const PERSONAL_CLOCK_SOURCES = new Set(['auto', 'manual'])
 const CLOCK_TIME = /^(?:[01]\d|2[0-3]):[0-5]\d$/
 
@@ -29,11 +30,16 @@ export function serializePersonalClockWindows(windows) {
 
 export function normalizeSettingsForDisplay(settings = {}) {
   const coachVoice = String(settings.coachVoice ?? '')
+  const coachContextMode = String(settings.coachContextMode ?? '')
   const personalClockSource = String(settings.personalClockSource ?? '')
   const flag = (value) => value === 'false' || value === false ? 'false' : 'true'
+  const optInFlag = (value) => value === 'true' || value === true ? 'true' : 'false'
   return {
     ...settings,
+    traderName: String(settings.traderName ?? '').replace(/\s+/g, ' ').trim().slice(0, 40),
     coachVoice: COACH_VOICE_VALUES.has(coachVoice) ? coachVoice : 'balanced',
+    coachContextMode: COACH_CONTEXT_MODES.has(coachContextMode) ? coachContextMode : 'balanced',
+    coachShowThinking: optInFlag(settings.coachShowThinking),
     personalClockSource: PERSONAL_CLOCK_SOURCES.has(personalClockSource) ? personalClockSource : 'auto',
     personalClockAlerts: flag(settings.personalClockAlerts),
     personalClockAmbience: flag(settings.personalClockAmbience),
@@ -396,10 +402,22 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
   }
 
   async function testConn() {
-    setTest('Testing…')
-    const res = await window.api.aiModels()
-    if (res.ok) setTest(`Connected. Models: ${res.models.join(', ') || '(none — run: ollama pull llama3.2)'}`)
-    else setTest(`Failed: ${res.error}`)
+    setTest('Testing selected model…')
+    try {
+      await onSave(s)
+      const res = await window.api.aiChat({
+        system: 'This is a connection test. Follow the user instruction exactly.',
+        messages: [{ role: 'user', content: 'Reply with exactly: Model ready.' }],
+        contextWindow: 2048,
+        think: false
+      })
+      if (res?.ok && res.text && res.text !== '(no response)') {
+        const model = (s.provider || 'ollama') === 'cloud' ? s.cloudModel : s.ollamaModel
+        setTest(`Connected. ${model || 'Selected model'} responded successfully.`)
+      } else setTest(`Failed: ${res?.error || 'The selected model returned no response.'}`)
+    } catch (error) {
+      setTest(`Failed: ${error?.message || 'Could not test the selected model.'}`)
+    }
   }
 
   return (
@@ -575,6 +593,18 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
       </Panel>
       )}
       <Panel title="Coach &amp; personal clock">
+        <Field label="Preferred name">
+          <input
+            style={inputStyle}
+            className={inp}
+            maxLength={40}
+            value={s.traderName || ''}
+            onChange={set('traderName')}
+            placeholder="Optional — e.g. Raheim"
+          />
+        </Field>
+        <p className="text-xs mt-1.5 mb-4" style={{ color: T.faint }}>Used for your local dashboard greeting. Leave it blank to keep the current neutral greeting.</p>
+
         <Field label="Coach voice">
           <select style={inputStyle} className={inp} value={s.coachVoice} onChange={set('coachVoice')}>
             <option value="supportive">Supportive — encouraging and gentle</option>
@@ -583,6 +613,21 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
           </select>
         </Field>
         <p className="text-xs mt-1.5" style={{ color: T.faint }}>Changes how the coach delivers the same evidence-based feedback.</p>
+
+        <div className="mt-4">
+          <Field label="Coach response depth">
+            <select style={inputStyle} className={inp} value={s.coachContextMode} onChange={set('coachContextMode')}>
+              <option value="fast">Fast — smallest recent evidence window</option>
+              <option value="balanced">Balanced — recommended for everyday coaching</option>
+              <option value="deep">Deep — most journal detail, slowest locally</option>
+            </select>
+          </Field>
+          <p className="text-xs mt-1.5" style={{ color: T.faint }}>Every mode keeps full-journal totals. Deeper modes include more individual trade notes and a longer conversation history.</p>
+          <label className="flex items-start gap-2 rounded-lg p-3 text-sm mt-3 cursor-pointer" style={{ background: T.surface2, border: `1px solid ${T.line}`, color: T.text, opacity: (s.provider || 'ollama') === 'ollama' ? 1 : 0.55 }}>
+            <input type="checkbox" className="mt-0.5" disabled={(s.provider || 'ollama') !== 'ollama'} checked={s.coachShowThinking === 'true'} onChange={(event) => setS((current) => ({ ...current, coachShowThinking: String(event.target.checked) }))} />
+            <span>Show model reasoning<span className="block text-xs mt-0.5" style={{ color: T.faint }}>Streams a collapsible reasoning trace when the selected Ollama model supports it. This can make replies slower, and the scratch work may be rough.</span></span>
+          </label>
+        </div>
 
         <div className="mt-4">
           <Field label="Personal trading windows">
@@ -685,7 +730,7 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
         </label>
         <div className="flex gap-2 mt-4">
           <button type="button" onClick={() => onSave(s)} className="rounded-md px-3 py-2 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306' }}>Save</button>
-          <button type="button" onClick={testConn} className="rounded-md px-3 py-2 text-sm" style={{ background: T.surface2, color: T.text, border: `1px solid ${T.line}` }}>Test Ollama</button>
+          <button type="button" onClick={testConn} className="rounded-md px-3 py-2 text-sm" style={{ background: T.surface2, color: T.text, border: `1px solid ${T.line}` }}>Test model</button>
         </div>
         {test && <div className="mt-3 text-xs" style={{ color: T.dim, ...mono }}>{test}</div>}
       </Panel>
@@ -695,7 +740,7 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
           <li>2. In a terminal: <span style={{ color: T.accent, ...mono }}>ollama pull llama3.2</span></li>
           <li>3. For chart analysis: <span style={{ color: T.accent, ...mono }}>ollama pull llama3.2-vision</span></li>
           <li>4. Ollama serves on localhost:11434 automatically</li>
-          <li>5. Hit "Test Ollama" to confirm, then use the AI Coach tab</li>
+          <li>5. Hit "Test model" to load it once and confirm, then use the AI Coach tab</li>
         </ol>
         <p className="mt-3 text-xs" style={{ color: T.faint }}>Everything stays on your machine. Your key and trades never leave this app.</p>
       </Panel>

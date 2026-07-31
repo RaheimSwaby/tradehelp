@@ -4,6 +4,15 @@
 // Ollama defaults its context window to ~2-4k tokens regardless of how much we send,
 // which silently truncates the journal we feed the coach. Give it room to read all of it.
 const OLLAMA_NUM_CTX = 16384
+const contextWindow = (value) => Math.max(2048, Math.min(OLLAMA_NUM_CTX, Math.floor(Number(value) || OLLAMA_NUM_CTX)))
+const ollamaOptions = (payload = {}) => {
+  return {
+    num_ctx: contextWindow(payload.contextWindow)
+  }
+}
+const ollamaThinking = (think) => (
+  think === true || think === false ? { think } : {}
+)
 
 const trim = (u) => String(u || '').replace(/\/+$/, '')
 const stripDataPrefix = (u) => String(u || '').replace(/^data:image\/[\w+.-]+;base64,/, '')
@@ -27,7 +36,7 @@ function ollamaMessages(system, messages) {
 }
 const ollamaModelFor = (s, messages) => (hasImgs(messages) ? (s.ollamaVisionModel || s.ollamaModel) : s.ollamaModel)
 
-export async function chat(settings, { system, messages }) {
+export async function chat(settings, { system, messages, contextWindow: requestedContextWindow, think }) {
   if (settings.provider === 'cloud') {
     const res = await fetch(`${trim(settings.cloudUrl)}/chat/completions`, {
       method: 'POST', headers: cloudHeaders(settings),
@@ -39,15 +48,16 @@ export async function chat(settings, { system, messages }) {
   }
   const res = await fetch(`${trim(settings.ollamaUrl)}/api/chat`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: ollamaModelFor(settings, messages), stream: false, messages: ollamaMessages(system, messages), options: { num_ctx: OLLAMA_NUM_CTX } })
+    body: JSON.stringify({ model: ollamaModelFor(settings, messages), stream: false, messages: ollamaMessages(system, messages), options: ollamaOptions({ contextWindow: requestedContextWindow }), ...ollamaThinking(think) })
   }).catch(() => { throw new Error('Cannot reach Ollama. Is it running? Try: ollama serve') })
   if (!res.ok) throw new Error(`Ollama ${res.status}: ${await res.text().catch(() => '')}`.slice(0, 200))
   const d = await res.json()
   return d.message?.content ?? '(no response)'
 }
 
-// Streaming: calls onChunk(deltaText) as tokens arrive, resolves with the full text.
-export async function chatStream(settings, { system, messages }, onChunk) {
+// Keep the polished answer and Ollama's optional reasoning trace on separate channels.
+// Reasoning is intentionally never folded into the returned coach response.
+export async function chatStream(settings, { system, messages, contextWindow: requestedContextWindow, think }, onChunk, onThinking) {
   if (settings.provider === 'cloud') {
     const res = await fetch(`${trim(settings.cloudUrl)}/chat/completions`, {
       method: 'POST', headers: cloudHeaders(settings),
@@ -61,17 +71,21 @@ export async function chatStream(settings, { system, messages }, onChunk) {
   }
   const res = await fetch(`${trim(settings.ollamaUrl)}/api/chat`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: ollamaModelFor(settings, messages), stream: true, messages: ollamaMessages(system, messages), options: { num_ctx: OLLAMA_NUM_CTX } })
+    body: JSON.stringify({ model: ollamaModelFor(settings, messages), stream: true, messages: ollamaMessages(system, messages), options: ollamaOptions({ contextWindow: requestedContextWindow }), ...ollamaThinking(think) })
   }).catch(() => { throw new Error('Cannot reach Ollama. Is it running? Try: ollama serve') })
   if (!res.ok) throw new Error(`Ollama ${res.status}: ${await res.text().catch(() => '')}`.slice(0, 200))
   return readStream(res, onChunk, false, (line) => {
-    try { return JSON.parse(line).message?.content || '' } catch { return '' }
-  })
+    try {
+      const message = JSON.parse(line).message || {}
+      return { content: message.content || '', thinking: message.thinking || '' }
+    } catch { return '' }
+  }, onThinking)
 }
 
 // Reads a streaming body line-by-line. sse=true strips "data:" (cloud SSE); otherwise each
-// line is a JSON object (Ollama NDJSON). extract() pulls the text delta from a line.
-async function readStream(res, onChunk, sse, extract) {
+// line is a JSON object (Ollama NDJSON). extract() may return a text delta or separate
+// { content, thinking } deltas.
+async function readStream(res, onChunk, sse, extract, onThinking) {
   const reader = res.body.getReader()
   const dec = new TextDecoder()
   let buf = '', full = ''
@@ -79,8 +93,11 @@ async function readStream(res, onChunk, sse, extract) {
     let line = raw.trim()
     if (!line) return
     if (sse) { if (!line.startsWith('data:')) return; line = line.slice(5).trim() }
-    const piece = extract(line)
-    if (piece) { full += piece; try { onChunk(piece) } catch {} }
+    const extracted = extract(line)
+    const content = typeof extracted === 'string' ? extracted : extracted?.content || ''
+    const thinking = typeof extracted === 'object' ? extracted?.thinking || '' : ''
+    if (thinking) { try { onThinking?.(thinking) } catch {} }
+    if (content) { full += content; try { onChunk(content) } catch {} }
   }
   while (true) {
     const { done, value } = await reader.read()

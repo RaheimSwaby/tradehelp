@@ -12,13 +12,19 @@ describe('SettingsTab setting normalization', () => {
       personalClockSource: 'calendar',
       personalClockAlerts: 'sometimes',
       personalClockAmbience: 'false',
-      personalClockManualWindows: 'not json'
+      personalClockManualWindows: 'not json',
+      traderName: '  Raheim   Swaby  ',
+      coachContextMode: 'turbo',
+      coachShowThinking: 'sometimes'
     })).toMatchObject({
       coachVoice: 'balanced',
       personalClockSource: 'auto',
       personalClockAlerts: 'true',
       personalClockAmbience: 'false',
-      personalClockManualWindows: '[]'
+      personalClockManualWindows: '[]',
+      traderName: 'Raheim Swaby',
+      coachContextMode: 'balanced',
+      coachShowThinking: 'false'
     })
   })
 
@@ -26,6 +32,10 @@ describe('SettingsTab setting normalization', () => {
     for (const coachVoice of ['supportive', 'balanced', 'tough-love']) {
       expect(normalizeSettingsForDisplay({ coachVoice }).coachVoice).toBe(coachVoice)
     }
+    for (const coachContextMode of ['fast', 'balanced', 'deep']) {
+      expect(normalizeSettingsForDisplay({ coachContextMode }).coachContextMode).toBe(coachContextMode)
+    }
+    expect(normalizeSettingsForDisplay({ coachShowThinking: true }).coachShowThinking).toBe('true')
     for (const personalClockSource of ['auto', 'manual']) {
       expect(normalizeSettingsForDisplay({ personalClockSource }).personalClockSource).toBe(personalClockSource)
     }

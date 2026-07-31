@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
-import { Bot, Sparkles, Send, Search } from 'lucide-react'
+import { Bot, Brain, Sparkles, Send, Search } from 'lucide-react'
 import { T, mono, inputStyle } from '../theme.js'
 import { fmt$, fmtN, streamChat } from '../utils.js'
 import { fullJournalContext, computeLeaks } from '../stats.js'
 import { buildCoachPrompts, lastTradingDay, buildDailyReport, coachVoiceInstruction, localDayKey, shouldIncludeWrittenJournal } from '../coachInsights.js'
+import { coachRequestProfile } from '../coachRequest.js'
 import { Panel } from '../components/Shared.jsx'
+import { CompactMarkdown } from '../components/CompactMarkdown.jsx'
 import { EventsPanel } from '../widgets/EventBanner.jsx'
 
 /* ───────── AI coach ───────── */
@@ -15,7 +17,23 @@ CRITICAL: Use ONLY the data provided below. Never invent or assume trades, symbo
 Each trade shows the account it was on (the "account" field); "Live" means their personal, non-prop account. When the trader asks about a specific account (their Live account, or a prop account by name), use ONLY the trades whose account matches — refer to accounts by that name, never by an internal id — and if no trades match, say so plainly instead of inventing them.
 Many trades are logged without an emotion, setup, or reason — these show as "(none)". Treat "(none)" strictly as untagged: never infer, guess, or attribute an emotion/setup/reason to a trade that shows "(none)". Only count and cite tags that are literally present in the data, and count only the trades actually listed — do not estimate totals.
 For account-level totals (net P&L, win rate, trade count), use the numbers in the PER-ACCOUNT SUMMARY directly — they are already computed. Do not re-derive them from the trade list.
-Do NOT give buy/sell signals, price predictions, or personalized investment advice. Keep it tight (under ~180 words) and direct. If data is thin, say so honestly.`
+Do NOT give buy/sell signals, price predictions, or personalized investment advice. Keep it tight (under ~180 words) and direct. If data is thin, say so honestly.
+Format the response as clean, compact Markdown. Prefer one short opening sentence and no more than three bullets. Use bold only for short labels, never for an entire paragraph or bullet. Do not use tables or repeat the question.`
+
+function ThinkingTrace({ text, live = false }) {
+  if (!text && !live) return null
+  return (
+    <details open={live} className="mb-2 rounded-md overflow-hidden" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
+      <summary className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs cursor-pointer select-none" style={{ color: live ? T.accent : T.faint }}>
+        <Brain size={13} />
+        <span>{live ? 'Model reasoning · live' : 'Model reasoning'}</span>
+      </summary>
+      <div className="px-2.5 pb-2 text-xs whitespace-pre-wrap overflow-y-auto max-h-40" style={{ color: T.faint, ...mono }}>
+        {text || 'Waiting for the model to begin its reasoning trace…'}
+      </div>
+    </details>
+  )
+}
 
 export function Coach({ trades, stats, settings, reviews = {}, playbook = [], dayLogs = [], goals = {}, payouts = [], events, now }) {
   // Local Ollama always gets the full written record; cloud users can gate free-form text.
@@ -25,13 +43,20 @@ export function Coach({ trades, stats, settings, reviews = {}, playbook = [], da
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [streamText, setStreamText] = useState(null)
+  const [thinkingText, setThinkingText] = useState(null)
   const [price, setPrice] = useState({ sym: '', out: null, loading: false })
   const scrollRef = useRef(null)
   const cancelStreamRef = useRef(null)
-  useEffect(() => { scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight) }, [msgs, busy, streamText])
+  useEffect(() => { scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight) }, [msgs, busy, streamText, thinkingText])
   useEffect(() => () => cancelStreamRef.current?.(), [])
 
   const modelLabel = settings?.provider === 'cloud' ? settings?.cloudModel : settings?.ollamaModel
+  const showThinking = settings?.provider !== 'cloud' && (settings?.coachShowThinking === 'true' || settings?.coachShowThinking === true)
+  const requestProfile = useMemo(() => coachRequestProfile(settings), [settings?.coachContextMode])
+  const journalContext = useMemo(() => fullJournalContext(
+    { trades, stats, settings, reviews, playbook, dayLogs, goals, payouts },
+    { includeWritten, maxChars: requestProfile.maxChars }
+  ), [trades, stats, settings, reviews, playbook, dayLogs, goals, payouts, includeWritten, requestProfile.maxChars])
   // Sub-2B models can't reliably read structured journal data and tend to fabricate trades.
   const tinyModel = settings?.provider !== 'cloud' && [':0.5b', ':1b', ':1.5b', ':135m', ':360m', ':500m'].some((t) => String(modelLabel || '').toLowerCase().includes(t))
 
@@ -39,19 +64,29 @@ export function Coach({ trades, stats, settings, reviews = {}, playbook = [], da
     if (busy) return
     const next = [...msgs, { role: 'user', content: userText }]
     setMsgs(next); setInput(''); setBusy(true); setStreamText('')
+    setThinkingText(showThinking ? '' : null)
+    let fullThinking = ''
     const apiMsgs = [
-      { role: 'user', content: `Here is my current journal data:\n\n${fullJournalContext({ trades, stats, settings, reviews, playbook, dayLogs, goals, payouts }, { includeWritten })}` },
+      { role: 'user', content: `Here is my current journal data:\n\n${journalContext}` },
       { role: 'assistant', content: includeWritten
         ? 'Got it — I have your full journal in front of me: trades, notes, reviews, playbook, goals and rules.'
         : 'Got it — I have your structured journal data. Written notes and reviews are excluded by your cloud privacy setting.' },
-      ...next
+      ...next.slice(-requestProfile.historyMessages)
     ]
     try {
-      const full = await streamChat({ system: coachSystem, messages: apiMsgs }, (d) => setStreamText((s) => (s || '') + d), cancelStreamRef)
-      setMsgs((m) => [...m, { role: 'assistant', content: full }])
+      const full = await streamChat({
+        system: coachSystem,
+        messages: apiMsgs,
+        contextWindow: requestProfile.contextWindow,
+        ...(showThinking ? { think: true } : requestProfile.think === false ? { think: false } : {})
+      }, (d) => setStreamText((s) => (s || '') + d), cancelStreamRef, (d) => {
+        fullThinking += d
+        setThinkingText(fullThinking)
+      })
+      setMsgs((m) => [...m, { role: 'assistant', content: full, ...(fullThinking ? { thinking: fullThinking } : {}) }])
     } catch (e) {
       setMsgs((m) => [...m, { role: 'assistant', content: `⚠︎ ${e?.message || 'Could not reach the model. Check Settings.'}` }])
-    } finally { setStreamText(null); setBusy(false) }
+    } finally { setStreamText(null); setThinkingText(null); setBusy(false) }
   }
 
   async function checkPrice() {
@@ -93,13 +128,25 @@ export function Coach({ trades, stats, settings, reviews = {}, playbook = [], da
           )}
           {msgs.map((m, i) => (
             <div key={i} className="flex" style={{ justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
-              <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap" style={{ background: m.role === 'user' ? T.surface2 : T.accentSoft, color: m.role === 'user' ? T.text : '#F3D9A0', border: `1px solid ${T.line}` }}>{m.content}</div>
+              <div className={`max-w-[85%] rounded-lg px-3 py-2 text-sm${m.role === 'user' ? ' whitespace-pre-wrap' : ''}`} style={{ background: m.role === 'user' ? T.surface2 : T.accentSoft, color: m.role === 'user' ? T.text : T.dim, border: `1px solid ${T.line}` }}>
+                {m.role === 'assistant' ? (
+                  <>
+                    <ThinkingTrace text={m.thinking} />
+                    <CompactMarkdown>{m.content}</CompactMarkdown>
+                  </>
+                ) : m.content}
+              </div>
             </div>
           ))}
           {streamText !== null && (
             <div className="flex" style={{ justifyContent: 'flex-start' }}>
-              <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap" style={{ background: T.accentSoft, color: '#F3D9A0', border: `1px solid ${T.line}` }}>
-                {streamText || 'Coach is thinking…'}
+              <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm" style={{ background: T.accentSoft, color: T.dim, border: `1px solid ${T.line}` }}>
+                {thinkingText !== null && <ThinkingTrace text={thinkingText} live />}
+                {streamText
+                  ? <CompactMarkdown>{streamText}</CompactMarkdown>
+                  : thinkingText
+                    ? <span className="text-xs" style={{ color: T.faint }}>Drafting the final coaching response…</span>
+                    : `Coach is reading your ${requestProfile.mode} journal snapshot…`}
               </div>
             </div>
           )}

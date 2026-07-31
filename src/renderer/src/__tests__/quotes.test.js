@@ -98,8 +98,11 @@ describe('buildDataAwareGreeting', () => {
     const greeting = buildDataAwareGreeting({ now: new Date(2026, 6, 15, 19), nextWindow: '7:00 AM–8:30 AM' })
     expect(greeting).toContain('next usual trading window is 7:00 AM–8:30 AM')
   })
+  it('uses an optional preferred name without changing the neutral default', () => {
+    expect(buildDataAwareGreeting({ now: new Date(2026, 6, 15, 8), name: '  Raheim  ' })).toBe('Good morning, Raheim.')
+    expect(buildDataAwareGreeting({ now: new Date(2026, 6, 15, 8) })).toBe('Good morning.')
+  })
 })
-
 
 describe('data-aware greeting countdown', () => {
   it('uses a precise countdown for a nearby journal-based window', () => {

@@ -548,6 +548,8 @@ function registerIpc() {
     try {
       const text = await chatStream(cachedSettings(), payload, (delta) => {
         try { e.sender.send('ai:stream:chunk', { id, delta }) } catch {}
+      }, (delta) => {
+        try { e.sender.send('ai:stream:thinking', { id, delta }) } catch {}
       })
       try { e.sender.send('ai:stream:end', { id, text }) } catch {}
     } catch (err) {

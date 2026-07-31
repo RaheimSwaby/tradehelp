@@ -3,6 +3,7 @@ import { Bot, RefreshCw, Sparkles } from 'lucide-react'
 import { T } from '../theme.js'
 import { buildCoachBrief, coachSnapshotKey, proactiveCoachPayload, shouldIncludeWrittenJournal } from '../coachInsights.js'
 import { fullJournalContext } from '../stats.js'
+import { CompactMarkdown } from './CompactMarkdown.jsx'
 
 function aiConfigured(settings) {
   if (settings?.provider === 'cloud') {
@@ -59,7 +60,9 @@ export function CoachBriefCard({ trades, stats, settings, journalData = {}, onSa
       <div className="p-4 grid grid-cols-1 lg:grid-cols-[1.2fr_1fr] gap-4">
         <div>
           <div className="text-base font-semibold" style={{ color: T.text }}>{brief.headline}</div>
-          <p className="text-sm mt-1 leading-relaxed" style={{ color: T.dim }}>{aiText || brief.summary}</p>
+          {aiText
+            ? <CompactMarkdown className="mt-2">{aiText}</CompactMarkdown>
+            : <p className="text-sm mt-1 leading-relaxed" style={{ color: T.dim }}>{brief.summary}</p>}
           <div className="flex flex-wrap gap-2 mt-3">
             {aiConfigured(settings) && (
               <button type="button" onClick={() => enhance(true)} disabled={loading} className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md" style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}` }}>
