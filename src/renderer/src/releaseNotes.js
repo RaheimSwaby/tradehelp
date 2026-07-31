@@ -22,6 +22,12 @@ const V036_NOTES = `- Cosmetic Refresh - each theme preset now has its own restr
 - Dashboard quotes rotate daily and AI Coach quick prompts adapt to your journal`
 
 export const RELEASE_NOTES = {
+  '0.44.0': `- Faster, controllable AI coaching — choose Fast, Balanced, or Deep response depth depending on how much journal detail you want
+- Cleaner coach output — headings, lists, bold labels, and dashboard briefs now render as polished Markdown instead of showing raw formatting marks
+- Optional model reasoning — compatible Ollama models can stream a live reasoning trace in a separate, collapsible panel
+- Better model setup — Test model now verifies the selected model with a real response and warms it for the first coaching question
+- Personal touch — add an optional preferred name for your dashboard greeting
+- Expanded Help & FAQ — includes a step-by-step Ollama model setup guide, speed tips, and troubleshooting for models that do not support reasoning`,
   '0.43.0': `- Filter your journal by account — a new dropdown in the trade history switches between all accounts, live/personal, and each prop account, and stacks with your search and win/loss filters`,
   // Nothing here is visible to an existing journal — the sample trades only
   // appear on a brand-new install — so there is nothing to announce to someone
