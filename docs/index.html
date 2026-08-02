@@ -192,12 +192,13 @@
 
 <div class="wrap">
   <figure class="shot hero-shot">
-    <div class="bar"><i></i><i></i><i></i><span class="t">TradeHelp — Full tour</span></div>
+    <div class="bar"><i></i><i></i><i></i><span class="t">TradeHelp — Promo video</span></div>
     <div class="frame">
-      <video id="tourVideo" controls preload="metadata" playsinline poster="shots/dashboard.png"
-             aria-label="TradeHelp full product tour">
+      <!-- Autoplay only works muted; controls stay so anyone can unmute or pause it. -->
+      <video id="tourVideo" controls autoplay muted loop playsinline preload="metadata" poster="shots/dashboard.png"
+             aria-label="TradeHelp promo video">
         <source src="tour.mp4" type="video/mp4" />
-        <a href="tour.mp4">Watch the TradeHelp tour</a> (your browser can't play the embedded video).
+        <a href="tour.mp4">Watch the TradeHelp promo video</a> (your browser can't play the embedded video).
       </video>
     </div>
   </figure>
@@ -433,16 +434,36 @@
     });
   })();
 
-  // Count the first play of the tour video as a GoatCounter event.
+  // Count deliberate engagement with the promo video as a GoatCounter event.
+  // A plain 'play' fires for muted autoplay, so count an actual player interaction.
+  // Keep the unmute path too in case a future promo includes an audio track.
   (function () {
     var v = document.getElementById('tourVideo');
     if (!v) return;
     var counted = false;
-    v.addEventListener('play', function () {
+    function mark() {
       if (counted) return;
       counted = true;
       if (window.goatcounter && window.goatcounter.count) window.goatcounter.count({ path: 'video-play', title: 'Promo video play', event: true });
+    }
+    v.addEventListener('pointerdown', mark);
+    v.addEventListener('keydown', function (event) {
+      if (event.key === 'Enter' || event.key === ' ') mark();
     });
+    v.addEventListener('volumechange', function () {
+      if (!v.muted) mark();
+    });
+  })();
+
+  // Honour reduced motion: a silently looping video is exactly the motion someone with
+  // that preference asked not to get. They still have the controls to play it.
+  (function () {
+    var v = document.getElementById('tourVideo');
+    if (!v || !window.matchMedia) return;
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    v.autoplay = false;
+    v.loop = false;
+    v.pause();
   })();
 
   // Progressive scroll-reveal: gate on a .js class so the page is fully visible if this never runs.
