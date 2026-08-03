@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { T, mono, inputStyle, ACCENT_OPTIONS, THEME_PRESETS, GO_TIME_OPTIONS, PNL_STYLE_OPTIONS, FONT_OPTIONS } from '../theme.js'
-import { CHECKOUT_URL } from '../utils.js'
+import { CHECKOUT_URL, SITE_URL } from '../utils.js'
 import { Panel, Field } from '../components/Shared.jsx'
 import { BACKDROP_OPTIONS } from '../components/Backdrop.jsx'
 import { BrokerSyncPanel } from '../widgets/BrokerSyncPanel.jsx'
 import { MobileSyncPanel } from '../widgets/MobileSyncPanel.jsx'
-import { Instagram, MessagesSquare, Plus, Pencil, Trash2, X } from 'lucide-react'
+import { Instagram, MessagesSquare, Plus, Pencil, Trash2, X, Globe } from 'lucide-react'
 
 const COACH_VOICE_VALUES = new Set(['supportive', 'balanced', 'tough-love'])
 const COACH_CONTEXT_MODES = new Set(['fast', 'balanced', 'deep'])
@@ -794,11 +794,16 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
         <p className="text-sm" style={{ color: T.dim }}>
           Hit a bug or have an idea? TradeHelp is built by one trader — your feedback genuinely shapes what ships next.
         </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-3">
           <button type="button" onClick={() => window.api.openExternal('https://discord.gg/ATfcXSD4j')}
             className="rounded-md px-3 py-2.5 text-sm font-semibold flex items-center justify-center gap-2"
             style={{ background: T.accent, color: '#1A1306' }}>
             <MessagesSquare size={16} /> Join our Discord
+          </button>
+          <button type="button" onClick={() => window.api.openExternal(SITE_URL)}
+            className="rounded-md px-3 py-2.5 text-sm font-semibold flex items-center justify-center gap-2"
+            style={{ background: T.surface2, color: T.text, border: `1px solid ${T.line}` }}>
+            <Globe size={16} style={{ color: T.accent }} /> Website
           </button>
           <button type="button" onClick={() => window.api.openExternal('https://instagram.com/tradehelp.app')}
             className="rounded-md px-3 py-2.5 text-sm font-semibold flex items-center justify-center gap-2"
@@ -807,7 +812,7 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
           </button>
         </div>
         <p className="mt-3 text-xs" style={{ color: T.faint }}>
-          Join the <span style={{ color: T.accent }}>Discord</span> to report bugs, request features and talk trades — or DM <span style={{ color: T.accent }}>@tradehelp.app</span> on Instagram. A quick feedback form is coming soon.
+          Join the <span style={{ color: T.accent }}>Discord</span> to report bugs, request features and talk trades — or DM <span style={{ color: T.accent }}>@tradehelp.app</span> on Instagram. <span style={{ color: T.accent }}>trade-help.app</span> has the install and broker-import guides, plus the latest download.
         </p>
       </Panel>
     </div>

@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { HelpCircle, X, Search, ChevronDown, ChevronRight, MessagesSquare } from 'lucide-react'
+import { HelpCircle, X, Search, ChevronDown, ChevronRight, MessagesSquare, Globe } from 'lucide-react'
 import { T, inputStyle } from '../theme.js'
 import { HELP_SECTIONS, searchHelp, helpItemCount } from '../helpContent.js'
+import { SITE_URL } from '../utils.js'
 
 // Bundled help panel. Portalled to the body so it centres over the tab content
 // (the .th-fade tab wrapper is a containing block for fixed positioning).
@@ -87,8 +88,14 @@ export function HelpModal({ onClose }) {
             <span className="text-xs" style={{ color: T.dim }}>Still stuck, or think something is missing here?</span>
             <button
               type="button"
+              onClick={() => window.api?.openExternal?.(SITE_URL)}
+              className="ml-auto text-xs px-2.5 py-1 rounded-md whitespace-nowrap flex items-center gap-1.5"
+              style={{ background: 'transparent', color: T.text, border: `1px solid ${T.line}` }}
+            ><Globe size={13} style={{ color: T.accent }} /> Guides</button>
+            <button
+              type="button"
               onClick={() => window.api?.openExternal?.('https://discord.gg/ATfcXSD4j')}
-              className="ml-auto text-xs font-semibold px-2.5 py-1 rounded-md whitespace-nowrap"
+              className="text-xs font-semibold px-2.5 py-1 rounded-md whitespace-nowrap"
               style={{ background: T.accent, color: '#1A1306' }}
             >Ask in Discord</button>
           </div>

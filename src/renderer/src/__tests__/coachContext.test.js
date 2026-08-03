@@ -133,3 +133,61 @@ describe('coach journal context — structured period retrospective privacy', ()
     expect(out).not.toContain('"type":"period-retrospective"')
   })
 })
+describe('coach journal context — commitments and goal progress', () => {
+  const now = new Date('2026-07-15T12:00:00')
+  // Monday of that week is 2026-07-13, so only the last two trades count week-to-date.
+  const weekTrades = [
+    { id: 'a', symbol: 'MNQ', pnl: 500, entryTime: '2026-07-02 10:00' },
+    { id: 'b', symbol: 'MNQ', pnl: 200, entryTime: '2026-07-14 10:00' },
+    { id: 'c', symbol: 'MNQ', pnl: -80, entryTime: '2026-07-15 09:30' }
+  ]
+  const commitment = {
+    id: 'c1', title: 'Set a stop before every entry', ruleType: 'require_stop', ruleValue: 'required',
+    targetCount: 10, status: 'active', startAt: '2026-07-13 08:00',
+    evaluatedCount: 8, adheredCount: 6, adherenceRate: 75
+  }
+  const build = (extra = {}) => fullJournalContext(
+    { trades: weekTrades, stats: computeStats(weekTrades), settings: { dailyGoal: 250 }, goals: { weekly: 400, monthly: 2000 }, ...extra },
+    { now }
+  )
+
+  it('reports the active commitment with its adherence', () => {
+    const ctx = build({ commitments: [commitment] })
+    expect(ctx).toContain('PROCESS COMMITMENTS')
+    expect(ctx).toContain('Set a stop before every entry')
+    expect(ctx).toContain('kept 6/8 measured trades (75%)')
+    expect(ctx).toContain('ACTIVE')
+  })
+
+  it('tells the coach to treat an active commitment as a constraint', () => {
+    expect(build({ commitments: [commitment] })).toContain('standing constraint')
+  })
+
+  it('omits the section entirely when there are no commitments', () => {
+    expect(build()).not.toContain('PROCESS COMMITMENTS')
+  })
+
+  it('pairs each goal with progress, not just the target', () => {
+    const ctx = build()
+    // Week starts Monday 2026-07-13: 200 + -80 = 120 against a 400 target.
+    expect(ctx).toContain('This week so far: target 400.00 | actual 120.00 | 280.00 to go')
+    // Month-to-date picks up all three trades: 500 + 200 - 80 = 620.
+    expect(ctx).toContain('This month so far: target 2,000.00 | actual 620.00')
+  })
+
+  it('says a goal is met once it is beaten', () => {
+    const ctx = fullJournalContext(
+      { trades: weekTrades, stats: computeStats(weekTrades), settings: {}, goals: { weekly: 100 } },
+      { now }
+    )
+    expect(ctx).toContain('This week so far: target 100.00 | actual 120.00 | met, 20.00 above')
+  })
+
+  it('does not pretend a missing target exists', () => {
+    const ctx = fullJournalContext(
+      { trades: weekTrades, stats: computeStats(weekTrades), settings: {}, goals: {} },
+      { now }
+    )
+    expect(ctx).toContain('This week so far: no target set')
+  })
+})

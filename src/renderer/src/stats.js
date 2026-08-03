@@ -574,7 +574,12 @@ export function computePropFirm(trades, cfg) {
   const daysHit = daysTraded >= minDays
   const breached = floorBreached || dailyBreached
   const status = breached ? 'failed' : (targetHit && daysHit ? 'passed' : 'active')
-  return { start, bal, netProfit, peak, curFloor, ddBuffer, maxDD, target, maxDaily, todayPnl, dailyRemaining, daysTraded, minDays, targetHit, daysHit, breached, floorBreached, dailyBreached, status, curve }
+  // Trading performance over the same trades the evaluation is scored on. The size
+  // scale is positive, so it never changes whether a trade counts as a win.
+  const n = sorted.length
+  const wins = sorted.filter((t) => (Number(t.pnl) || 0) > 0).length
+  const winRate = n ? (wins / n) * 100 : 0
+  return { start, bal, netProfit, peak, curFloor, ddBuffer, maxDD, target, maxDaily, todayPnl, dailyRemaining, daysTraded, minDays, targetHit, daysHit, breached, floorBreached, dailyBreached, status, curve, n, wins, winRate }
 }
 
 const promptText = (value, max = 1200) => String(value || '').replace(/\s+/g, ' ').trim().slice(0, max)
@@ -636,7 +641,7 @@ TRADE ENTRIES (newest first). Field notes: account = which account the trade was
   return `${header}\n${kept.join('\n') || '(none)'}${coverage}`
 }
 
-export function fullJournalContext({ trades = [], stats, reviews = {}, playbook = [], dayLogs = [], goals = {}, settings = {}, payouts = [] }, { includeWritten = true, maxChars = 44000 } = {}) {
+export function fullJournalContext({ trades = [], stats, reviews = {}, playbook = [], dayLogs = [], goals = {}, settings = {}, payouts = [], commitments = [] }, { includeWritten = true, maxChars = 44000, now = new Date() } = {}) {
   let accounts = []
   try { const parsed = JSON.parse(settings.propFirmAccounts || '[]'); if (Array.isArray(parsed)) accounts = parsed } catch {}
   const accById = {}
@@ -682,9 +687,51 @@ export function fullJournalContext({ trades = [], stats, reviews = {}, playbook 
     ])
   }
 
+  // Targets alone let the coach recite a number back. Pairing each with progress so far
+  // is what lets it say "you are $180 short with two days left" instead.
+  const reference = new Date(now)
+  const midnight = new Date(reference.getFullYear(), reference.getMonth(), reference.getDate())
+  const weekStart = new Date(midnight)
+  weekStart.setDate(weekStart.getDate() - ((midnight.getDay() + 6) % 7)) // Monday
+  const monthStart = new Date(reference.getFullYear(), reference.getMonth(), 1)
+  const netSince = (from) => trades.reduce((sum, trade) => {
+    const raw = String(trade.entryTime || trade.timestamp || '')
+    const iso = raw.includes('T') || raw.includes(' ') ? raw.replace(' ', 'T') : `${raw}T00:00`
+    const at = new Date(iso).getTime()
+    return Number.isFinite(at) && at >= from.getTime() ? sum + (Number(trade.pnl) || 0) : sum
+  }, 0)
+  const progressLine = (label, target, actual) => {
+    const goal = Number(target)
+    if (!Number.isFinite(goal) || goal === 0) return `${label}: no target set (actual ${fmtN(actual)})`
+    const remaining = goal - actual
+    return `${label}: target ${fmtN(goal)} | actual ${fmtN(actual)} | ${remaining > 0 ? `${fmtN(remaining)} to go` : `met, ${fmtN(-remaining)} above`}`
+  }
   append('GOALS AND RISK LIMITS', [
-    `weeklyGoal=${promptNum(goals.weekly)} monthlyGoal=${promptNum(goals.monthly)} dailyGoal=${promptNum(settings.dailyGoal)} maxDailyLoss=${promptNum(settings.maxDailyLoss)}`
+    `weeklyGoal=${promptNum(goals.weekly)} monthlyGoal=${promptNum(goals.monthly)} dailyGoal=${promptNum(settings.dailyGoal)} maxDailyLoss=${promptNum(settings.maxDailyLoss)}`,
+    progressLine('This week so far', goals.weekly, netSince(weekStart)),
+    progressLine('This month so far', goals.monthly, netSince(monthStart)),
+    progressLine('Today so far', settings.dailyGoal, netSince(midnight))
   ])
+
+  // Commitments are the user's own stated process focus. Without them the coach cannot
+  // tell whether advice it is about to give contradicts a rule they already committed to.
+  const commitmentList = Array.isArray(commitments) ? commitments : []
+  if (commitmentList.length) {
+    const describe = (c) => {
+      const measured = Number(c.evaluatedCount) || 0
+      const kept = Number(c.adheredCount) || 0
+      const target = Number(c.targetCount) || 0
+      const rate = measured ? `${fmtN(Number(c.adherenceRate) || 0, 0)}%` : 'not yet measured'
+      return `${c.status === 'active' ? 'ACTIVE' : String(c.status || '').toUpperCase()} | "${promptText(c.title, 120)}" | rule=${promptText(c.ruleType, 40)}${c.ruleValue ? `(${promptText(c.ruleValue, 20)})` : ''} | kept ${kept}/${measured} measured trades (${rate}) | target ${target} | started ${promptText(c.startAt, 20)}`
+    }
+    const active = commitmentList.filter((c) => c.status === 'active')
+    const past = commitmentList.filter((c) => c.status !== 'active').slice(0, 5)
+    append('PROCESS COMMITMENTS (the user chose these rules for themselves)', [
+      ...active.map(describe),
+      ...past.map(describe),
+      active.length ? 'Treat the active commitment as a standing constraint: do not suggest anything that breaks it, and note it when recent trades did.' : null
+    ])
+  }
 
   const reviewContext = journalReviewContext(reviews, includeWritten)
   append('PERIOD RETROSPECTIVES (structured facts; reflections are listed separately)', reviewContext.structured)

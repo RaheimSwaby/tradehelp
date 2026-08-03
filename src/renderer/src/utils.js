@@ -13,6 +13,10 @@ export function isNewerVersion(a, b) {
   return false
 }
 
+// Where install guides, broker-import walkthroughs and downloads live — the place to
+// send someone when the app itself can't help them (a build that won't open, say).
+export const SITE_URL = 'https://trade-help.app'
+
 export const EMOTIONS = ['Disciplined', 'Confident', 'Neutral', 'Hesitant', 'Anxious', 'FOMO', 'Greedy', 'Revenge', 'Bored']
 export const SELF_GRADES = ['A+', 'A', 'B', 'C', 'D', 'F']
 export const SETUPS = ['Opening Range Breakout', 'VWAP Reclaim', 'Pullback', 'Trend Continuation', 'Reversal', 'Liquidity Sweep']

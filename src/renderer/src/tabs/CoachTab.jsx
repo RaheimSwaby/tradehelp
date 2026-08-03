@@ -35,7 +35,7 @@ function ThinkingTrace({ text, live = false }) {
   )
 }
 
-export function Coach({ trades, stats, settings, reviews = {}, playbook = [], dayLogs = [], goals = {}, payouts = [], events, now }) {
+export function Coach({ trades, stats, settings, reviews = {}, playbook = [], dayLogs = [], goals = {}, payouts = [], commitments = [], events, now }) {
   // Local Ollama always gets the full written record; cloud users can gate free-form text.
   const includeWritten = shouldIncludeWrittenJournal(settings)
   const coachSystem = `${COACH_SYSTEM}\n${coachVoiceInstruction(settings?.coachVoice)}`
@@ -54,9 +54,9 @@ export function Coach({ trades, stats, settings, reviews = {}, playbook = [], da
   const showThinking = settings?.provider !== 'cloud' && (settings?.coachShowThinking === 'true' || settings?.coachShowThinking === true)
   const requestProfile = useMemo(() => coachRequestProfile(settings), [settings?.coachContextMode])
   const journalContext = useMemo(() => fullJournalContext(
-    { trades, stats, settings, reviews, playbook, dayLogs, goals, payouts },
+    { trades, stats, settings, reviews, playbook, dayLogs, goals, payouts, commitments },
     { includeWritten, maxChars: requestProfile.maxChars }
-  ), [trades, stats, settings, reviews, playbook, dayLogs, goals, payouts, includeWritten, requestProfile.maxChars])
+  ), [trades, stats, settings, reviews, playbook, dayLogs, goals, payouts, commitments, includeWritten, requestProfile.maxChars])
   // Sub-2B models can't reliably read structured journal data and tend to fabricate trades.
   const tinyModel = settings?.provider !== 'cloud' && [':0.5b', ':1b', ':1.5b', ':135m', ':360m', ':500m'].some((t) => String(modelLabel || '').toLowerCase().includes(t))
 

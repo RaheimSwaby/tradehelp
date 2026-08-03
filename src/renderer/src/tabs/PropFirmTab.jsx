@@ -153,8 +153,9 @@ export function AccountCard({ acc, r, tight, cash, onClick }) {
         <span className="text-xs px-1.5 py-0.5 rounded" style={{ color: status.color, border: `1px solid ${status.color}` }}>{status.label}</span>
       </div>
       <div className="text-xs mt-0.5" style={{ color: T.faint }}>{fmt$(r.start)} · {acc.scope === 'own' ? 'tagged trades' : 'copy-trade'}{Number(acc.sizeScale) !== 1 ? ` · ${acc.sizeScale}×` : ''}</div>
-      <div className="grid grid-cols-2 gap-2 mt-3 text-xs">
+      <div className="grid grid-cols-3 gap-2 mt-3 text-xs">
         <div><div style={{ color: T.faint }}>Net P&L</div><div style={{ ...mono, color: r.netProfit >= 0 ? T.up : T.down }}>{fmt$(r.netProfit)} / {fmt$(r.target)}</div></div>
+        <div><div style={{ color: T.faint }}>Win rate</div><div style={{ ...mono, color: T.text }}>{r.n ? `${fmtN(r.winRate, 1)}%` : '—'}</div></div>
         <div><div style={{ color: T.faint }}>DD cushion</div><div style={{ ...mono, color: ddColor }}>{fmt$(r.ddBuffer)}</div></div>
       </div>
       <div className="mt-2.5 space-y-2">
@@ -198,9 +199,10 @@ export function PropFirmDetail({ trades, acc, onBack, onEdit, onDelete, payouts 
         </div>
       </div>
       <Panel title={acc.label || 'Account'} right={<span className="text-xs px-2 py-0.5 rounded font-semibold" style={{ color: status.color, border: `1px solid ${status.color}` }}>{status.label}</span>}>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
           <Stat label="Balance" value={fmt$(r.bal)} sub={`start ${fmt$(r.start)}`} />
           <Stat label="Net P&L" value={fmt$(r.netProfit)} tone={r.netProfit >= 0 ? 'up' : 'down'} sub={`target ${fmt$(r.target)}`} />
+          <Stat label="Win rate" value={r.n ? `${fmtN(r.winRate, 1)}%` : '—'} sub={`${r.n} trade${r.n === 1 ? '' : 's'}`} />
           <Stat label="DD cushion" value={fmt$(r.ddBuffer)} tone={r.floorBreached ? 'down' : 'none'} sub={`floor ${fmt$(r.curFloor)}`} />
           <Stat label="Days traded" value={`${r.daysTraded} / ${r.minDays}`} tone={r.daysHit ? 'up' : 'none'} />
         </div>
