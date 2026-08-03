@@ -22,6 +22,15 @@ const V036_NOTES = `- Cosmetic Refresh - each theme preset now has its own restr
 - Dashboard quotes rotate daily and AI Coach quick prompts adapt to your journal`
 
 export const RELEASE_NOTES = {
+  '0.45.0': `- New News tab — the economic calendar inside the app, with a month view that puts upcoming releases next to your own P&L for that day
+- See how you actually trade the news — your win rate and P&L within 30 minutes of a high-impact release, compared against quiet markets and broken down per event
+- Playbook setups now hold up to four example charts, each with its own label
+- Share a setup — save it as an image to post, or send the file to another TradeHelp user to import straight into their playbook
+- Prop accounts now show win rate, on both the account card and the detail view
+- Pre-flight status is visible on the Dashboard and in Trade Mode, not only once you are live
+- Commitments now live in Goals, as one compact row with archive, delete and a see-more view
+- The AI coach can now see your active commitment and how far along your daily, weekly and monthly goals are
+- Website and guide links added to Settings and the Help panel`,
   '0.44.0': `- Faster, controllable AI coaching — choose Fast, Balanced, or Deep response depth depending on how much journal detail you want
 - Cleaner coach output — headings, lists, bold labels, and dashboard briefs now render as polished Markdown instead of showing raw formatting marks
 - Optional model reasoning — compatible Ollama models can stream a live reasoning trace in a separate, collapsible panel
