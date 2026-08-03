@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react'
 import {
   LayoutDashboard, Brain, Target, Settings as SettingsIcon, Gauge, Play,
-  Feather, Landmark, ScrollText, Radar, CalendarClock, AlertTriangle, X, Clock3, TrendingUp, HelpCircle
+  Feather, Landmark, ScrollText, Radar, CalendarClock, AlertTriangle, X, Clock3, TrendingUp, HelpCircle,
+  Newspaper
 } from 'lucide-react'
 import { Whistle, PlayDiagram, CrosshairCandle } from './components/Icons.jsx'
 import { applyTheme, T, mono } from './theme.js'
@@ -21,6 +22,7 @@ import { Reviews } from './tabs/ReviewsTab.jsx'
 import { Coach } from './tabs/CoachTab.jsx'
 import { Patterns } from './tabs/PatternsTab.jsx'
 import { PlaybookTab } from './tabs/PlaybookTab.jsx'
+import { NewsTab } from './tabs/NewsTab.jsx'
 import { PropFirm } from './tabs/PropFirmTab.jsx'
 import { TradeModeTab, Preflight, LiveBanner, SessionEndReview, Lockout } from './tabs/TradeModeTab.jsx'
 import { TrialBanner, Paywall, SettingsTab } from './tabs/SettingsTab.jsx'
@@ -504,7 +506,6 @@ export default function App() {
 
   // ── Trade Mode derived state ──
   const rules = useMemo(() => parseRules(settings), [settings])
-  const activeCommitment = useMemo(() => commitments.find((commitment) => commitment.status === 'active') || null, [commitments])
   const today = localDateKey(new Date(now))
   const todayTrades = useMemo(() => trades.filter((t) => tradeDateKey(t) === today), [trades, today])
   const todayNet = todayTrades.reduce((a, t) => a + (Number(t.pnl) || 0), 0)
@@ -773,6 +774,7 @@ export default function App() {
     ['coach', 'AI Coach', Whistle],
     ['patterns', 'Patterns', Radar],
     ['playbook', 'Playbook', PlayDiagram],
+    ['news', 'News', Newspaper],
     ['settings', 'Settings', SettingsIcon]
   ]
 
@@ -856,16 +858,17 @@ export default function App() {
           <PageAnimationContext.Provider value={`${tab}-${pageAnimationReplay}`}>
           <div key={tab} className="th-cinematic">
             {tab === 'journal' && <Journal trades={trades} onAdd={addTrade} onUpdate={updateTrade} onRemove={removeTrade} onNotes={setNotesView} onImport={importTrades} onRollbackImport={rollbackImport} accounts={propFirmAccounts} profiles={instrumentProfiles} savedSearches={savedSearches} onAddSavedSearch={addSavedSearch} onUpdateSavedSearch={updateSavedSearch} onDeleteSavedSearch={deleteSavedSearch} onRefreshSavedSearches={refreshSavedSearches} settings={settings} onSaveSettings={saveSettings} dayLogs={dayLogs} onAddDayLog={addDayLog} onDeleteDayLog={deleteDayLog} drilldown={journalDrilldown} onConsumeDrilldown={() => setJournalDrilldown(null)} />}
-            {tab === 'trade' && <TradeModeTab settings={settings} onSave={saveSettings} rules={rules} live={tradeMode} arming={goTransition === 'arming'} todayNet={todayNet} todayCount={todayTrades.length} weekNet={weekNet} goal={dailyGoal} maxLoss={maxLoss} onStart={startDay} onEnd={endSession} session={activeSession} recordingState={recordingState} elapsed={sessionElapsed} sessions={tradingSessions} plans={tradePlans} trades={trades} accounts={propFirmAccounts} playbook={playbook} profiles={instrumentProfiles} planPrefill={planPrefill} onConsumePlanPrefill={() => setPlanPrefill(null)} commitment={activeCommitment} onAddPlan={addTradePlan} onUpdatePlan={updateTradePlan} onDeletePlan={deleteTradePlan} />}
+            {tab === 'trade' && <TradeModeTab settings={settings} onSave={saveSettings} rules={rules} live={tradeMode} arming={goTransition === 'arming'} todayNet={todayNet} todayCount={todayTrades.length} weekNet={weekNet} goal={dailyGoal} maxLoss={maxLoss} onStart={startDay} onEnd={endSession} session={activeSession} recordingState={recordingState} elapsed={sessionElapsed} sessions={tradingSessions} plans={tradePlans} trades={trades} accounts={propFirmAccounts} playbook={playbook} profiles={instrumentProfiles} planPrefill={planPrefill} onConsumePlanPrefill={() => setPlanPrefill(null)} onAddPlan={addTradePlan} onUpdatePlan={updateTradePlan} onDeletePlan={deleteTradePlan} />}
             {tab === 'propfirm' && <PropFirm trades={trades} accounts={propFirmAccounts} onSave={savePropFirmAccounts} settings={settings} onSaveSettings={saveSettings} payouts={payouts} onAddPayout={addPayout} onDeletePayout={deletePayout} expenses={propExpenses} onAddExpense={addPropExpense} onDeleteExpense={deletePropExpense} />}
-            {tab === 'dashboard' && <Dashboard stats={stats} trades={trades} accounts={propFirmAccounts} settings={settings} journalData={{ reviews, playbook, dayLogs, goals, payouts }} payouts={payouts} plans={tradePlans} commitments={commitments} pnlFeedback={pnlFeedback} onAddCommitment={addCommitment} onUpdateCommitment={updateCommitment} onDeleteCommitment={deleteCommitment} onSaveSettings={saveSettings} onOpenCoach={() => setTab('coach')} onOpenTrade={setNotesView} onTimingDrilldown={openTimingJournal} onClearDemo={clearDemoTrades} personalClock={sessionClock} personalSchedule={personalSchedule} now={now} />}
+            {tab === 'dashboard' && <Dashboard stats={stats} trades={trades} accounts={propFirmAccounts} settings={settings} journalData={{ reviews, playbook, dayLogs, goals, payouts, commitments }} payouts={payouts} plans={tradePlans} commitments={commitments} rules={rules} todayNet={todayNet} maxLoss={maxLoss} live={tradeMode} pnlFeedback={pnlFeedback} onSaveSettings={saveSettings} onOpenCoach={() => setTab('coach')} onOpenTradeMode={() => setTab('trade')} onOpenTrade={setNotesView} onTimingDrilldown={openTimingJournal} onClearDemo={clearDemoTrades} personalClock={sessionClock} personalSchedule={personalSchedule} now={now} />}
             {tab === 'psych' && <Psychology stats={stats} />}
             {tab === 'rating' && <Rating trades={trades} stats={stats} achievements={achievements} unlockedAt={unlockedAt} settings={settings} onSave={saveSettings} payouts={payouts} />}
-            {tab === 'goals' && <Goals goals={goals} onSave={saveGoals} trades={trades} now={now} />}
-            {tab === 'reviews' && <Reviews trades={trades} reviews={reviews} goals={goals} commitments={commitments} settings={settings} onSave={saveReview} activeCommitment={activeCommitment} onAddCommitment={addCommitment} now={now} />}
-            {tab === 'coach' && <Coach trades={trades} stats={stats} settings={settings} reviews={reviews} playbook={playbook} dayLogs={dayLogs} goals={goals} payouts={payouts} events={events} now={now} />}
+            {tab === 'goals' && <Goals goals={goals} onSave={saveGoals} trades={trades} now={now} commitments={commitments} onAddCommitment={addCommitment} onUpdateCommitment={updateCommitment} onDeleteCommitment={deleteCommitment} onOpenCoach={() => setTab('coach')} />}
+            {tab === 'reviews' && <Reviews trades={trades} reviews={reviews} goals={goals} settings={settings} onSave={saveReview} now={now} />}
+            {tab === 'coach' && <Coach trades={trades} stats={stats} settings={settings} reviews={reviews} playbook={playbook} dayLogs={dayLogs} goals={goals} payouts={payouts} commitments={commitments} events={events} now={now} />}
             {tab === 'patterns' && <Patterns trades={trades} onOpenTrade={setNotesView} />}
             {tab === 'playbook' && <PlaybookTab entries={playbook} trades={trades} onAdd={addPlaybookEntry} onUpdate={updatePlaybookEntry} onDelete={deletePlaybookEntry} onPlan={planFromPlaybook} />}
+            {tab === 'news' && <NewsTab trades={trades} settings={settings} events={events} />}
             {tab === 'settings' && <SettingsTab settings={settings} onSave={saveSettings} license={license} onLicenseChange={refreshLicense} onReload={reloadAll} accounts={propFirmAccounts} profiles={instrumentProfiles} onAddProfile={addInstrumentProfile} onUpdateProfile={updateInstrumentProfile} onDeleteProfile={deleteInstrumentProfile} />}
           </div>
           </PageAnimationContext.Provider>
@@ -876,7 +879,7 @@ export default function App() {
       {preflight && (
         <Preflight rules={rules} checks={checks} setChecks={setChecks}
           snapshot={{ todayNet, todayCount: todayTrades.length, weekNet }}
-          goal={dailyGoal} maxLoss={maxLoss} imminent={imminentEvent} now={now} commitment={activeCommitment}
+          goal={dailyGoal} maxLoss={maxLoss} imminent={imminentEvent} now={now}
           launching={goTransition === 'launching'} recordingEnabled={recordingEnabled} setRecordingEnabled={setRecordingEnabled}
           captureSources={captureSources} selectedSource={selectedCaptureSource} setSelectedSource={setSelectedCaptureSource}
           captureLoading={captureLoading} captureError={captureError} onRefreshSources={loadCaptureSources}
