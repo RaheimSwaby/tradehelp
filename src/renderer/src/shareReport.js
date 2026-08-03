@@ -77,14 +77,14 @@ export function buildShareReport(trades = [], range = '30', accountLabel = 'All 
   }
 }
 
-function rounded(ctx, x, y, w, h, r, fill, stroke) {
+export function rounded(ctx, x, y, w, h, r, fill, stroke) {
   ctx.beginPath()
   ctx.roundRect(x, y, w, h, r)
   if (fill) { ctx.fillStyle = fill; ctx.fill() }
   if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke() }
 }
 
-function fitText(ctx, text, maxWidth) {
+export function fitText(ctx, text, maxWidth) {
   const value = String(text)
   if (ctx.measureText(value).width <= maxWidth) return value
   let out = value

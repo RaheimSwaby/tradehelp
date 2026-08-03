@@ -216,6 +216,29 @@ export function initDb() {
       createdAt TEXT,
       updatedAt TEXT
     );
+    CREATE TABLE IF NOT EXISTS playbook_images (
+      id TEXT PRIMARY KEY,
+      entryId TEXT NOT NULL,
+      file TEXT NOT NULL,
+      tag TEXT DEFAULT '',
+      sortOrder INTEGER DEFAULT 0,
+      createdAt TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_playbook_images_entryId ON playbook_images(entryId);
+    -- The calendar feed only ever returns the current week, so events are archived here
+    -- as they are seen. Without this there is no history to correlate trades against.
+    CREATE TABLE IF NOT EXISTS economic_events (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      country TEXT DEFAULT '',
+      impact TEXT DEFAULT '',
+      ts INTEGER NOT NULL,
+      actual TEXT DEFAULT '',
+      forecast TEXT DEFAULT '',
+      previous TEXT DEFAULT '',
+      createdAt TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_economic_events_ts ON economic_events(ts);
     CREATE TABLE IF NOT EXISTS day_logs (
       id TEXT PRIMARY KEY,
       date TEXT NOT NULL,
@@ -346,6 +369,8 @@ export function initDb() {
   }
   const commitmentCols = new Set(db.prepare('PRAGMA table_info(coach_commitments)').all().map((c) => c.name))
   if (!commitmentCols.has('baselineTradeIds')) db.exec("ALTER TABLE coach_commitments ADD COLUMN baselineTradeIds TEXT DEFAULT '[]'")
+  const eventCols = new Set(db.prepare('PRAGMA table_info(economic_events)').all().map((c) => c.name))
+  if (!eventCols.has('actual')) db.exec("ALTER TABLE economic_events ADD COLUMN actual TEXT DEFAULT ''")
   const restartedAt = new Date().toISOString()
   db.prepare("UPDATE trading_sessions SET status = 'interrupted', endedAt = ?, updatedAt = ? WHERE status = 'active'")
     .run(restartedAt, restartedAt)
@@ -1775,12 +1800,12 @@ function localStamp(date = new Date()) {
   return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16).replace('T', ' ')
 }
 
-function storePlanScreenshot(dataUrl) {
+function storePlanScreenshot(dataUrl, prefix = 'plan') {
   const m = String(dataUrl || '').match(/^data:(image\/[\w+.-]+);base64,(.+)$/s)
   if (!m) throw new Error('Bad plan screenshot data')
   const ext = WRITE_MIME[m[1]]
   if (!ext) throw new Error('Unsupported plan screenshot type')
-  const file = `plan-${randomUUID()}.${ext}`
+  const file = `${prefix}-${randomUUID()}.${ext}`
   writeFileSync(join(imagesDir, file), Buffer.from(m[2], 'base64'))
   return file
 }
@@ -2264,6 +2289,9 @@ export function getAllData() {
     commitments: db.prepare('SELECT * FROM coach_commitments').all(),
     commitmentResults: db.prepare('SELECT * FROM commitment_results').all(),
     playbook: listPlaybook(),
+    // The archive can't be re-fetched without an API key — it only accumulates a week
+    // at a time — so losing it on restore would blank every news correlation for months.
+    economicEvents: listEconomicEvents(),
     dayLogs: listDayLogs(),
     payouts: listPayouts(),
     propExpenses: listPropExpenses(),
@@ -2423,6 +2451,9 @@ export function restoreData(data) {
         ins.run(commitmentId, tradeId, String(result.day || '').slice(0, 10), result.adhered ? 1 : 0, String(result.detail || ''), String(result.evaluatedAt || new Date().toISOString()))
       }
     }
+    // Reuses the normal recorder so a restored archive gets the same key derivation and
+    // the same "never blank out a recorded actual" protection as a live fetch.
+    if (Array.isArray(d.economicEvents)) recordEconomicEvents(d.economicEvents)
     if (Array.isArray(d.playbook)) {
       const ins = db.prepare(`INSERT OR REPLACE INTO playbook
         (id,name,description,criteria,invalidation,targets,notes,createdAt,updatedAt)
@@ -2575,7 +2606,7 @@ export function restoreData(data) {
     trades: listTrades(), tradeFills: db.prepare('SELECT * FROM trade_fills ORDER BY tradeId,sequence,filledAt,rowid').all(),
     instrumentProfiles: listInstrumentProfiles(), savedSearches: listSavedSearches(), tradePlans: listTradePlans(),
     commitments: listCoachCommitments(), commitmentResults: db.prepare('SELECT * FROM commitment_results').all(),
-    playbook: listPlaybook(), dayLogs: listDayLogs(), payouts: listPayouts(), propExpenses: listPropExpenses(), importBatches: listImportBatches(),
+    playbook: listPlaybook(), economicEvents: listEconomicEvents(), dayLogs: listDayLogs(), payouts: listPayouts(), propExpenses: listPropExpenses(), importBatches: listImportBatches(),
     brokerConnections: listBrokerConnections(),
     tradingSessions: listTradingSessions(100),
     goals: getGoals(), reviews: getReviews(), settings: getSettings(),
@@ -2588,48 +2619,173 @@ export function restoreData(data) {
 
 // ───── Playbook ─────
 
+// A setup is documented with a handful of example charts. The cap keeps one entry from
+// turning into an unbounded image dump; the renderer enforces the same number.
+export const MAX_PLAYBOOK_IMAGES = 4
+
+// Filenames stay inside the main process — the renderer gets ids and tags, and pulls
+// each image on demand through getPlaybookImage.
+function playbookImageRows(entryId) {
+  return db
+    .prepare('SELECT id,tag,sortOrder FROM playbook_images WHERE entryId = ? ORDER BY sortOrder ASC, rowid ASC')
+    .all(String(entryId))
+}
+
+function removePlaybookImageFile(file) {
+  if (file) { try { unlinkSync(join(imagesDir, file)) } catch {} }
+}
+
 export function listPlaybook() {
   return db.prepare('SELECT * FROM playbook ORDER BY name ASC').all()
+    .map((entry) => ({ ...entry, images: playbookImageRows(entry.id) }))
+}
+
+export function getPlaybookImage(id) {
+  const row = db.prepare('SELECT id,entryId,file,tag FROM playbook_images WHERE id = ?').get(String(id))
+  if (!row) return null
+  try {
+    const mime = EXT_MIME[(row.file.split('.').pop() || 'png').toLowerCase()] || 'image/png'
+    return { id: row.id, entryId: row.entryId, tag: row.tag, dataUrl: `data:${mime};base64,${readFileSync(join(imagesDir, row.file)).toString('base64')}` }
+  } catch {
+    return null
+  }
+}
+
+function insertPlaybookImage(entryId, image, sortOrder) {
+  const file = storePlanScreenshot(image.dataUrl, 'playbook')
+  try {
+    db.prepare(`INSERT INTO playbook_images (id,entryId,file,tag,sortOrder,createdAt)
+      VALUES (@id,@entryId,@file,@tag,@sortOrder,@createdAt)`).run({
+      id: randomUUID(),
+      entryId: String(entryId),
+      file,
+      tag: String(image.tag || ''),
+      sortOrder,
+      createdAt: new Date().toISOString()
+    })
+  } catch (error) {
+    removePlaybookImageFile(file) // never leave an image on disk without its row
+    throw error
+  }
+}
+
+function playbookFields(e) {
+  return {
+    name: String(e.name || '').trim(),
+    description: String(e.description || ''),
+    criteria: String(e.criteria || ''),
+    invalidation: String(e.invalidation || ''),
+    targets: String(e.targets || ''),
+    notes: String(e.notes || ''),
+  }
 }
 
 export function addPlaybookEntry(e) {
-  const row = {
-    id: randomUUID(),
-    name: String(e.name || '').trim(),
-    description: String(e.description || ''),
-    criteria: String(e.criteria || ''),
-    invalidation: String(e.invalidation || ''),
-    targets: String(e.targets || ''),
-    notes: String(e.notes || ''),
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  }
+  const id = randomUUID()
+  const now = new Date().toISOString()
   db.prepare(`INSERT INTO playbook
     (id, name, description, criteria, invalidation, targets, notes, createdAt, updatedAt)
     VALUES (@id,@name,@description,@criteria,@invalidation,@targets,@notes,@createdAt,@updatedAt)
-  `).run(row)
+  `).run({ id, ...playbookFields(e), createdAt: now, updatedAt: now })
+  const images = Array.isArray(e.images) ? e.images.slice(0, MAX_PLAYBOOK_IMAGES) : []
+  images.forEach((image, index) => { if (image?.dataUrl) insertPlaybookImage(id, image, index) })
   return listPlaybook()
 }
 
+/**
+ * `e.images` is the full desired list for the entry: entries with an `id` are kept
+ * (and reordered), entries with a `dataUrl` are added, and anything previously stored
+ * but absent from the list is deleted. Omitting `images` leaves the gallery untouched.
+ */
 export function updatePlaybookEntry(e) {
+  const id = String(e.id)
   db.prepare(`UPDATE playbook SET
     name=@name, description=@description, criteria=@criteria,
     invalidation=@invalidation, targets=@targets, notes=@notes, updatedAt=@updatedAt
-    WHERE id=@id`).run({
-    id: String(e.id),
-    name: String(e.name || '').trim(),
-    description: String(e.description || ''),
-    criteria: String(e.criteria || ''),
-    invalidation: String(e.invalidation || ''),
-    targets: String(e.targets || ''),
-    notes: String(e.notes || ''),
-    updatedAt: new Date().toISOString(),
-  })
+    WHERE id=@id`).run({ id, ...playbookFields(e), updatedAt: new Date().toISOString() })
+
+  if (Array.isArray(e.images)) {
+    const desired = e.images.slice(0, MAX_PLAYBOOK_IMAGES)
+    const existing = db.prepare('SELECT id,file FROM playbook_images WHERE entryId = ?').all(id)
+    const kept = new Set(desired.map((image) => String(image?.id || '')).filter(Boolean))
+    for (const row of existing) {
+      if (kept.has(String(row.id))) continue
+      db.prepare('DELETE FROM playbook_images WHERE id = ?').run(row.id)
+      removePlaybookImageFile(row.file)
+    }
+    desired.forEach((image, index) => {
+      if (image?.id && kept.has(String(image.id))) {
+        db.prepare('UPDATE playbook_images SET tag=?, sortOrder=? WHERE id = ?').run(String(image.tag || ''), index, String(image.id))
+      } else if (image?.dataUrl) {
+        insertPlaybookImage(id, image, index)
+      }
+    })
+  }
   return listPlaybook()
 }
 
+// ───── Economic events ─────
+
+// The feed has no stable ids, so identity is the thing that actually makes an event
+// unique: when it happened, whose currency it is, and what it was called. Re-seeing the
+// same event updates it in place, which is how an event scheduled with only a forecast
+// later gains its actual printed value.
+function economicEventKey(event) {
+  return `${Number(event.ts)}|${String(event.country || '').toUpperCase()}|${String(event.title || '').trim().toLowerCase()}`
+}
+
+export function recordEconomicEvents(events = []) {
+  const rows = (Array.isArray(events) ? events : [])
+    .filter((event) => event && String(event.title || '').trim() && Number.isFinite(Number(event.ts)))
+  if (!rows.length) return 0
+  // An empty actual must never overwrite one already recorded: a later fetch of a past
+  // week can come back blank, and that would erase the print we captured at the time.
+  const insert = db.prepare(`INSERT INTO economic_events (id,title,country,impact,ts,actual,forecast,previous,createdAt)
+    VALUES (@id,@title,@country,@impact,@ts,@actual,@forecast,@previous,@createdAt)
+    ON CONFLICT(id) DO UPDATE SET
+      impact=excluded.impact,
+      actual=CASE WHEN excluded.actual <> '' THEN excluded.actual ELSE economic_events.actual END,
+      forecast=excluded.forecast,
+      previous=excluded.previous`)
+  const now = new Date().toISOString()
+  const write = db.transaction((list) => {
+    for (const event of list) {
+      insert.run({
+        id: economicEventKey(event),
+        title: String(event.title || '').trim(),
+        country: String(event.country || ''),
+        impact: String(event.impact || ''),
+        ts: Number(event.ts),
+        actual: String(event.actual ?? ''),
+        forecast: String(event.forecast ?? ''),
+        previous: String(event.previous ?? ''),
+        createdAt: now
+      })
+    }
+  })
+  write(rows)
+  return rows.length
+}
+
+export function listEconomicEvents({ from, to } = {}) {
+  const clauses = []
+  const params = {}
+  if (Number.isFinite(Number(from))) { clauses.push('ts >= @from'); params.from = Number(from) }
+  if (Number.isFinite(Number(to))) { clauses.push('ts <= @to'); params.to = Number(to) }
+  const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : ''
+  return db.prepare(`SELECT id,title,country,impact,ts,actual,forecast,previous FROM economic_events ${where} ORDER BY ts ASC`).all(params)
+}
+
+export function economicEventCoverage() {
+  const row = db.prepare('SELECT COUNT(*) AS total, MIN(ts) AS earliest, MAX(ts) AS latest FROM economic_events').get()
+  return { total: Number(row?.total) || 0, earliest: row?.earliest ?? null, latest: row?.latest ?? null }
+}
+
 export function deletePlaybookEntry(id) {
+  const rows = db.prepare('SELECT file FROM playbook_images WHERE entryId = ?').all(String(id))
+  db.prepare('DELETE FROM playbook_images WHERE entryId = ?').run(String(id))
   db.prepare('DELETE FROM playbook WHERE id = ?').run(String(id))
+  for (const row of rows) removePlaybookImageFile(row.file)
   return listPlaybook()
 }
 

@@ -7,7 +7,9 @@ function normFF(arr) {
     country: String(e.country || ''), // currency code, e.g. USD
     impact: String(e.impact || ''),
     ts: Date.parse(e.date), // ForexFactory date includes a tz offset
-    forecast: e.forecast || '', previous: e.previous || ''
+    // `actual` is empty until the print lands, then fills in — that is what turns a
+    // scheduled event into a beat or a miss.
+    actual: e.actual || '', forecast: e.forecast || '', previous: e.previous || ''
   }))
 }
 
@@ -17,8 +19,21 @@ function normFMP(arr) {
     country: String(e.currency || e.country || ''),
     impact: String(e.impact || ''),
     ts: Date.parse(String(e.date).replace(' ', 'T') + 'Z'), // FMP date is UTC, no offset
-    forecast: e.estimate ?? '', previous: e.previous ?? ''
+    actual: e.actual ?? '', forecast: e.estimate ?? '', previous: e.previous ?? ''
   }))
+}
+
+/**
+ * Fetches a historical date range so past trades can be matched against the news that
+ * was out at the time. Only FMP exposes a range — the keyless weekly feed cannot look
+ * backwards, which is why archiving happens on every ordinary fetch as well.
+ */
+export async function fetchEventRange(settings = {}, from, to) {
+  if (!settings.fmpKey) throw new Error('Backfilling past events needs a Financial Modeling Prep API key — add one in Settings.')
+  const res = await fetch(`https://financialmodelingprep.com/api/v3/economic_calendar?from=${from}&to=${to}&apikey=${settings.fmpKey}`)
+  if (!res.ok) throw new Error(`The economic calendar returned ${res.status}.`)
+  const events = normFMP(await res.json())
+  return events.filter((e) => e.title && Number.isFinite(e.ts)).sort((a, b) => a.ts - b.ts)
 }
 
 export async function fetchEvents(settings = {}) {

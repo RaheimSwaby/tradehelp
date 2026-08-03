@@ -39,6 +39,7 @@ import {
   beginTradingSessionRecording, completeTradingSessionRecording, discardTradingSessionRecording,
   finishTradingSession,
   addPropExpense, listPropExpenses, deletePropExpense,
+  recordEconomicEvents, listEconomicEvents, economicEventCoverage,
   getAllData, restoreData,
 } from '../db.js'
 
@@ -702,5 +703,56 @@ describe('getAllData — export', () => {
       changed: true,
       propAccounts: [{ id: 'prop-100', label: 'Phone 100K', ddType: 'static' }]
     })
+  })
+})
+
+describe('economic event archive', () => {
+  const at = (iso) => new Date(iso).getTime()
+  const cpi = (overrides = {}) => ({
+    title: 'CPI m/m', country: 'USD', impact: 'High', ts: at('2026-05-12T08:30:00Z'),
+    actual: '', forecast: '0.3%', previous: '0.2%', ...overrides
+  })
+
+  it('stores an event and reads it back', () => {
+    expect(recordEconomicEvents([cpi()])).toBe(1)
+    const stored = listEconomicEvents({})
+    expect(stored.some((e) => e.title === 'CPI m/m' && e.forecast === '0.3%')).toBe(true)
+  })
+
+  it('updates the same event in place rather than duplicating it', () => {
+    recordEconomicEvents([cpi()])
+    recordEconomicEvents([cpi({ actual: '0.4%' })])
+    const matches = listEconomicEvents({}).filter((e) => e.title === 'CPI m/m')
+    expect(matches).toHaveLength(1)
+    expect(matches[0].actual).toBe('0.4%')
+  })
+
+  // A later fetch of a past week can come back with a blank actual; that must not
+  // erase the printed value captured at the time.
+  it('never blanks out an actual it has already recorded', () => {
+    recordEconomicEvents([cpi({ actual: '0.4%' })])
+    recordEconomicEvents([cpi({ actual: '' })])
+    expect(listEconomicEvents({}).find((e) => e.title === 'CPI m/m').actual).toBe('0.4%')
+  })
+
+  it('filters by time range and reports coverage', () => {
+    recordEconomicEvents([cpi(), cpi({ title: 'NFP', ts: at('2026-06-05T12:30:00Z') })])
+    const window = listEconomicEvents({ from: at('2026-06-01T00:00:00Z'), to: at('2026-06-30T00:00:00Z') })
+    expect(window.every((e) => e.title === 'NFP')).toBe(true)
+    const coverage = economicEventCoverage()
+    expect(coverage.total).toBeGreaterThan(0)
+    expect(coverage.latest).toBeGreaterThanOrEqual(coverage.earliest)
+  })
+
+  it('ignores junk rows without a title or a usable time', () => {
+    expect(recordEconomicEvents([{ title: '', ts: 1 }, { title: 'No time', ts: NaN }])).toBe(0)
+  })
+
+  it('survives a backup and restore', () => {
+    recordEconomicEvents([cpi({ actual: '0.4%' })])
+    const backup = getAllData()
+    expect(backup.economicEvents.some((e) => e.title === 'CPI m/m')).toBe(true)
+    restoreData(backup)
+    expect(listEconomicEvents({}).find((e) => e.title === 'CPI m/m').actual).toBe('0.4%')
   })
 })

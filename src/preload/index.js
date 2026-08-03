@@ -94,6 +94,7 @@ const api = {
   addPlaybookEntry: (e) => ipcRenderer.invoke('playbook:add', e),
   updatePlaybookEntry: (e) => ipcRenderer.invoke('playbook:update', e),
   deletePlaybookEntry: (id) => ipcRenderer.invoke('playbook:delete', id),
+  getPlaybookImage: (id) => ipcRenderer.invoke('playbook:image', id),
 
   listDayLogs: () => ipcRenderer.invoke('daylog:list'),
   addDayLog: (e) => ipcRenderer.invoke('daylog:add', e),
@@ -137,6 +138,9 @@ const api = {
   price: (sym) => ipcRenderer.invoke('price:get', sym),
   priceBatch: (symbols) => ipcRenderer.invoke('price:batch', symbols),
   events: () => ipcRenderer.invoke('events:list'),
+  eventHistory: (range) => ipcRenderer.invoke('events:history', range),
+  eventCoverage: () => ipcRenderer.invoke('events:coverage'),
+  backfillEvents: (range) => ipcRenderer.invoke('events:backfill', range),
 
   onUpdateAvailable: (cb) => ipcRenderer.on('update:available', (_e, info) => cb(info)),
   onUpdateProgress: (cb) => ipcRenderer.on('update:progress', (_e, info) => cb(info)),

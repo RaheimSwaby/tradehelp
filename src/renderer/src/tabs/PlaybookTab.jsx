@@ -1,9 +1,11 @@
-import React, { useState, useMemo } from 'react'
-import { Plus, Edit2, Trash2, X, BookMarked, ChevronDown, ChevronUp, ClipboardList } from 'lucide-react'
+import React, { useState, useMemo, useEffect, useRef } from 'react'
+import { Plus, Edit2, Trash2, X, BookMarked, ChevronDown, ChevronUp, ClipboardList, Share2, ImagePlus, Upload } from 'lucide-react'
 import { T, mono } from '../theme.js'
-import { fmt$, fmtN } from '../utils.js'
+import { fmt$, fmtN, downscale, fileToDataUrl } from '../utils.js'
+import { PlaybookShareModal } from '../components/PlaybookShareModal.jsx'
+import { parsePlaybookImport, MAX_SHARED_IMAGES } from '../playbookShare.js'
 
-const BLANK = { name: '', description: '', criteria: '', invalidation: '', targets: '', notes: '' }
+const BLANK = { name: '', description: '', criteria: '', invalidation: '', targets: '', notes: '', images: [] }
 
 const FIELDS = [
   { key: 'name',         label: 'Setup name *',    placeholder: 'e.g. VWAP Reclaim',               rows: 1 },
@@ -23,6 +25,81 @@ function wrColor(wr) {
 export function PlaybookTab({ entries, trades, onAdd, onUpdate, onDelete, onPlan }) {
   const [editing, setEditing] = useState(null)
   const [expanded, setExpanded] = useState(null)
+  // Example charts live on disk. They are cached by image id, which never changes for
+  // a stored image, so the cache can't go stale — a re-saved entry simply gets new ids.
+  const [shots, setShots] = useState({})
+  const [sharing, setSharing] = useState(null)
+  const [importNote, setImportNote] = useState('')
+  const fileRef = useRef(null)
+  const importRef = useRef(null)
+
+  async function ensureImage(id) {
+    if (!id) return ''
+    if (shots[id] !== undefined) return shots[id]
+    const result = await window.api?.getPlaybookImage?.(id).catch(() => null)
+    const dataUrl = result?.dataUrl || ''
+    setShots((current) => ({ ...current, [id]: dataUrl }))
+    return dataUrl
+  }
+
+  async function ensureEntryImages(entry) {
+    const list = Array.isArray(entry?.images) ? entry.images : []
+    return Promise.all(list.map(async (image) => ({ ...image, dataUrl: await ensureImage(image.id) })))
+  }
+
+  useEffect(() => {
+    const entry = entries.find((e) => e.id === expanded)
+    if (entry?.images?.length) ensureEntryImages(entry)
+  }, [expanded, entries]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // An image already saved carries only its id; a freshly picked one carries its data.
+  const previewOf = (image) => image?.dataUrl || shots[image?.id] || ''
+  const editImages = Array.isArray(editing?.images) ? editing.images : []
+
+  async function addCharts(files) {
+    for (const file of [...(files || [])]) {
+      if (!file?.type?.startsWith('image/')) continue
+      const dataUrl = await downscale(await fileToDataUrl(file))
+      // Re-check the cap inside the updater — several files can land in one drop.
+      setEditing((current) => {
+        const list = Array.isArray(current?.images) ? current.images : []
+        if (list.length >= MAX_SHARED_IMAGES) return current
+        return { ...current, images: [...list, { dataUrl, tag: '' }] }
+      })
+    }
+  }
+
+  function removeChart(index) {
+    setEditing((current) => ({ ...current, images: (current.images || []).filter((_, position) => position !== index) }))
+  }
+
+  function startEdit(entry) {
+    setEditing({ ...entry, images: (entry.images || []).map((image) => ({ id: image.id, tag: image.tag || '' })) })
+    ensureEntryImages(entry)
+  }
+
+  async function openShare(entry) {
+    const loaded = await ensureEntryImages(entry)
+    setSharing({ entry, images: loaded.filter((image) => image.dataUrl) })
+  }
+
+  async function importSetup(file) {
+    setImportNote('')
+    if (!file) return
+    const text = await file.text().catch(() => '')
+    const result = parsePlaybookImport(text)
+    if (!result.ok) { setImportNote(result.error); return }
+    // Charts arriving in a shared file get the same downscale as ones picked here —
+    // otherwise an import writes full-size images straight to disk while local picks
+    // are capped at 1600px webp.
+    const images = await Promise.all(
+      (result.entry.images || []).map(async (image) => ({ ...image, dataUrl: await downscale(image.dataUrl) }))
+    )
+    await onAdd({ ...result.entry, images })
+    setImportNote(result.droppedScreenshot
+      ? `Imported “${result.entry.name}” — some example charts were not a supported image type, so they were left out.`
+      : `Imported “${result.entry.name}”.`)
+  }
 
   const setupStats = useMemo(() => {
     const m = {}
@@ -64,14 +141,35 @@ export function PlaybookTab({ entries, trades, onAdd, onUpdate, onDelete, onPlan
             Document your setups — the app auto-links them to trades by the setup name.
           </p>
         </div>
-        <button
-          onClick={() => setEditing({ ...BLANK })}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold shrink-0"
-          style={{ background: T.accent, color: '#1A1306' }}
-        >
-          <Plus size={14} /> Add setup
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => importRef.current?.click()}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm"
+            style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}` }}
+            title="Import a setup file shared by another TradeHelp user"
+          >
+            <Upload size={14} /> Import
+          </button>
+          <button
+            onClick={() => setEditing({ ...BLANK })}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold"
+            style={{ background: T.accent, color: '#1A1306' }}
+          >
+            <Plus size={14} /> Add setup
+          </button>
+          <input
+            ref={importRef} type="file" accept="application/json,.json" className="hidden"
+            onChange={(ev) => { importSetup(ev.target.files?.[0]); ev.target.value = '' }}
+          />
+        </div>
       </div>
+
+      {importNote && (
+        <div className="flex items-start gap-2 rounded-lg px-3 py-2 text-xs" role="status" style={{ background: T.surface2, border: `1px solid ${T.line}`, color: T.dim }}>
+          <span className="flex-1">{importNote}</span>
+          <button onClick={() => setImportNote('')} style={{ color: T.faint }}><X size={13} /></button>
+        </div>
+      )}
 
       {/* Empty state */}
       {entries.length === 0 && (
@@ -126,7 +224,12 @@ export function PlaybookTab({ entries, trades, onAdd, onUpdate, onDelete, onPlan
                     title="Plan a trade from this setup"
                   ><ClipboardList size={13} /></button>
                   <button
-                    onClick={(ev) => { ev.stopPropagation(); setEditing({ ...e }) }}
+                    onClick={(ev) => { ev.stopPropagation(); openShare(e) }}
+                    className="p-1 rounded" style={{ color: T.dim }}
+                    title="Share this setup"
+                  ><Share2 size={13} /></button>
+                  <button
+                    onClick={(ev) => { ev.stopPropagation(); startEdit(e) }}
                     className="p-1 rounded" style={{ color: T.dim }}
                     title="Edit"
                   ><Edit2 size={13} /></button>
@@ -142,6 +245,23 @@ export function PlaybookTab({ entries, trades, onAdd, onUpdate, onDelete, onPlan
               {/* Expanded detail */}
               {open && (
                 <div style={{ borderTop: `1px solid ${T.line}` }}>
+                  {/* Example charts */}
+                  {e.images?.length > 0 && (
+                    <div className={`px-4 pt-3 grid gap-2 ${e.images.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
+                      {e.images.map((image, index) => (
+                        <figure key={image.id} className="m-0">
+                          <img
+                            src={shots[image.id] || ''}
+                            alt={image.tag || `${e.name} example ${index + 1}`}
+                            className="w-full rounded-lg"
+                            style={{ border: `1px solid ${T.line}`, maxHeight: e.images.length === 1 ? 320 : 200, objectFit: 'contain', background: T.surface2 }}
+                          />
+                          {image.tag && <figcaption className="text-[10px] mt-1" style={{ color: T.faint }}>{image.tag}</figcaption>}
+                        </figure>
+                      ))}
+                    </div>
+                  )}
+
                   {/* Setup rules */}
                   {(e.criteria || e.invalidation || e.targets || e.notes) && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 px-4 py-3">
@@ -223,6 +343,57 @@ export function PlaybookTab({ entries, trades, onAdd, onUpdate, onDelete, onPlan
                 />
               </div>
             ))}
+            <div>
+              <label className="block text-xs mb-1" style={{ color: T.dim }}>
+                Example charts <span style={{ color: T.faint }}>· {editImages.length}/{MAX_SHARED_IMAGES}</span>
+              </label>
+              {editImages.length > 0 && (
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                  {editImages.map((image, index) => (
+                    <div key={image.id || `new-${index}`} className="rounded-lg overflow-hidden" style={{ border: `1px solid ${T.line}` }}>
+                      <div className="relative">
+                        <img src={previewOf(image)} alt="" className="w-full h-20 object-cover" style={{ background: T.surface2 }} />
+                        <button
+                          onClick={() => removeChart(index)}
+                          className="absolute top-1 right-1 rounded p-0.5"
+                          style={{ background: 'rgba(0,0,0,0.65)', color: '#fff' }}
+                          title="Remove chart"
+                        ><X size={12} /></button>
+                      </div>
+                      <input
+                        value={image.tag || ''}
+                        onChange={(ev) => setEditing((ed) => ({
+                          ...ed,
+                          images: ed.images.map((item, position) => (position === index ? { ...item, tag: ev.target.value } : item))
+                        }))}
+                        placeholder="label (e.g. A+ example)"
+                        className="w-full px-2 py-1 text-xs outline-none"
+                        style={{ background: T.surface2, color: T.text, border: 'none' }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+              {editImages.length < MAX_SHARED_IMAGES && (
+                <button
+                  onClick={() => fileRef.current?.click()}
+                  onDrop={(ev) => { ev.preventDefault(); addCharts(ev.dataTransfer?.files) }}
+                  onDragOver={(ev) => ev.preventDefault()}
+                  className="w-full rounded-lg px-3 py-3 text-center"
+                  style={{ background: T.surface2, border: `1px dashed ${T.line}` }}
+                >
+                  <ImagePlus size={16} style={{ color: T.accent, display: 'inline', verticalAlign: 'middle' }} />
+                  <span className="text-xs ml-2" style={{ color: T.dim }}>
+                    {editImages.length ? 'Add another example' : 'Choose or drop chart screenshots'}
+                  </span>
+                </button>
+              )}
+              <input
+                ref={fileRef} type="file" accept="image/*" multiple className="hidden"
+                onChange={(ev) => { addCharts(ev.target.files); ev.target.value = '' }}
+              />
+            </div>
+
             <div className="flex gap-2 pt-1">
               <button
                 onClick={() => setEditing(null)}
@@ -238,6 +409,10 @@ export function PlaybookTab({ entries, trades, onAdd, onUpdate, onDelete, onPlan
             </div>
           </div>
         </div>
+      )}
+
+      {sharing && (
+        <PlaybookShareModal entry={sharing.entry} images={sharing.images} onClose={() => setSharing(null)} />
       )}
     </div>
   )

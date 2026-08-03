@@ -6,7 +6,7 @@ import { pathToFileURL } from 'url'
 import * as db from './db.js'
 import { chat, chatStream, models } from './ai.js'
 import { fetchPrice, fetchQuotes } from './price.js'
-import { fetchEvents } from './events.js'
+import { fetchEvents, fetchEventRange } from './events.js'
 import { initUpdater } from './updater.js'
 import * as license from './license.js'
 import { testKey } from './keytest.js'
@@ -441,6 +441,7 @@ function registerIpc() {
   ipcMain.handle('playbook:add', (_e, entry) => db.addPlaybookEntry(entry))
   ipcMain.handle('playbook:update', (_e, entry) => db.updatePlaybookEntry(entry))
   ipcMain.handle('playbook:delete', (_e, id) => db.deletePlaybookEntry(id))
+  ipcMain.handle('playbook:image', (_e, id) => db.getPlaybookImage(id))
 
   ipcMain.handle('daylog:list', () => db.listDayLogs())
   ipcMain.handle('daylog:add', (_e, entry) => db.addDayLog(entry))
@@ -583,9 +584,29 @@ function registerIpc() {
 
   ipcMain.handle('events:list', async () => {
     try {
-      return await fetchEvents(cachedSettings())
+      const events = await fetchEvents(cachedSettings())
+      // Archive whatever we just saw — this is the only way history accumulates for
+      // users without an API key, and it costs nothing on top of a fetch already made.
+      try { db.recordEconomicEvents(events) } catch {}
+      return events
     } catch {
       return []
+    }
+  })
+  ipcMain.handle('events:history', (_e, range) => db.listEconomicEvents(range || {}))
+  ipcMain.handle('events:coverage', () => db.economicEventCoverage())
+  ipcMain.handle('events:backfill', async (_e, range) => {
+    const from = String(range?.from || '').slice(0, 10)
+    const to = String(range?.to || '').slice(0, 10)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
+      return { ok: false, error: 'Pick a valid date range to backfill.' }
+    }
+    try {
+      const events = await fetchEventRange(cachedSettings(), from, to)
+      const stored = db.recordEconomicEvents(events)
+      return { ok: true, stored, coverage: db.economicEventCoverage() }
+    } catch (error) {
+      return { ok: false, error: error?.message || 'The economic calendar could not be reached.' }
     }
   })
 }
