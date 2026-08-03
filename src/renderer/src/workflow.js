@@ -252,32 +252,6 @@ export function averageCostFillPreview(trade = {}, sourceFills = [], profile = n
   }
 }
 
-export function reviewCommitmentSuggestion(trades = []) {
-  const list = Array.isArray(trades) ? trades : []
-  if (!list.length) return { ruleType: 'require_stop', ruleValue: 'required', title: 'Set a stop-loss before every entry', targetCount: 10 }
-  const missingStops = list.filter((trade) => {
-    const entry = finitePositive(trade.entry), stop = finitePositive(trade.stop)
-    return !entry || !stop || (trade.direction === 'Short' ? stop <= entry : stop >= entry)
-  }).length
-  if (missingStops / list.length >= 0.25) return { ruleType: 'require_stop', ruleValue: 'required', title: 'Set a stop-loss before every entry', targetCount: 10 }
-  const dayCounts = new Map()
-  for (const trade of list) {
-    const day = String(trade.entryTime || trade.timestamp || '').slice(0, 10)
-    dayCounts.set(day, (dayCounts.get(day) || 0) + 1)
-  }
-  const maxTrades = Math.max(...dayCounts.values(), 1)
-  if (maxTrades >= 4) return { ruleType: 'max_trades_day', ruleValue: '3', title: 'Take no more than 3 trades in one day', targetCount: 10 }
-  const risks = list.map((trade) => finitePositive(trade.riskAmount)).filter(Boolean).sort((a, b) => a - b)
-  if (risks.length >= 3 && risks[risks.length - 1] > risks[Math.floor(risks.length / 2)] * 1.5) {
-    const limit = Math.round(risks[Math.floor(risks.length * 0.75)])
-    return { ruleType: 'max_risk', ruleValue: String(limit), title: `Risk no more than $${limit} per trade`, targetCount: 10 }
-  }
-  const belowTwo = list.filter((trade) => finitePositive(trade.rr) > 0 && finitePositive(trade.rr) < 2).length
-  if (belowTwo / list.length >= 0.3) return { ruleType: 'min_rr', ruleValue: '2', title: 'Only take trades with at least 2:1 reward-to-risk', targetCount: 10 }
-  return { ruleType: 'max_trades_day', ruleValue: String(Math.max(1, Math.min(3, Math.ceil(list.length / Math.max(1, dayCounts.size))))), title: 'Keep daily trade count within the reviewed pace', targetCount: 10 }
-}
-
-
 /* ───────── session comparison ───────── */
 export function tradeSessionDate(trade = {}) {
   const entry = String(trade.entryTime || '')

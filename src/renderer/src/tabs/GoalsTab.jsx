@@ -3,9 +3,10 @@ import { T, mono, inputStyle } from '../theme.js'
 import { fmt$, periodLabel } from '../utils.js'
 import { currentPeriodKey, periodPerformance } from '../periodRetrospective.js'
 import { Panel, Field } from '../components/Shared.jsx'
+import { CoachCommitmentCard } from '../components/CoachCommitmentCard.jsx'
 
 /* ───────── goals ───────── */
-export function Goals({ goals = {}, onSave, trades = [], now = new Date() }) {
+export function Goals({ goals = {}, onSave, trades = [], now = new Date(), commitments = [], onAddCommitment, onUpdateCommitment, onDeleteCommitment, onOpenCoach }) {
   const weekKey = currentPeriodKey('week', now)
   const monthKey = currentPeriodKey('month', now)
   const week = periodPerformance(trades, weekKey, 'week')
@@ -16,19 +17,22 @@ export function Goals({ goals = {}, onSave, trades = [], now = new Date() }) {
   useEffect(() => { setW(String(goals.weekly ?? 0)); setM(String(goals.monthly ?? 0)) }, [goals])
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <Panel title="Targets">
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Weekly $"><input style={inputStyle} className="w-full rounded px-2 py-1.5 text-sm" value={w} onChange={(e) => setW(e.target.value)} inputMode="decimal" /></Field>
-          <Field label="Monthly $"><input style={inputStyle} className="w-full rounded px-2 py-1.5 text-sm" value={m} onChange={(e) => setM(e.target.value)} inputMode="decimal" /></Field>
-        </div>
-        <button type="button" onClick={() => onSave({ weekly: parseFloat(w) || 0, monthly: parseFloat(m) || 0 })} className="mt-3 rounded-md px-3 py-2 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306' }}>Save targets</button>
-      </Panel>
-      <Panel title="Progress">
-        <ProgressBar label={`This week · ${periodLabel(weekKey, 'week')}`} cur={week.actualPnl} target={goals.weekly} tradeCount={week.tradeCount} />
-        <div className="h-4" />
-        <ProgressBar label={`This month · ${periodLabel(monthKey, 'month')}`} cur={month.actualPnl} target={goals.monthly} tradeCount={month.tradeCount} />
-      </Panel>
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Panel title="Targets">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Weekly $"><input style={inputStyle} className="w-full rounded px-2 py-1.5 text-sm" value={w} onChange={(e) => setW(e.target.value)} inputMode="decimal" /></Field>
+            <Field label="Monthly $"><input style={inputStyle} className="w-full rounded px-2 py-1.5 text-sm" value={m} onChange={(e) => setM(e.target.value)} inputMode="decimal" /></Field>
+          </div>
+          <button type="button" onClick={() => onSave({ weekly: parseFloat(w) || 0, monthly: parseFloat(m) || 0 })} className="mt-3 rounded-md px-3 py-2 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306' }}>Save targets</button>
+        </Panel>
+        <Panel title="Progress">
+          <ProgressBar label={`This week · ${periodLabel(weekKey, 'week')}`} cur={week.actualPnl} target={goals.weekly} tradeCount={week.tradeCount} />
+          <div className="h-4" />
+          <ProgressBar label={`This month · ${periodLabel(monthKey, 'month')}`} cur={month.actualPnl} target={goals.monthly} tradeCount={month.tradeCount} />
+        </Panel>
+      </div>
+      <CoachCommitmentCard commitments={commitments} trades={trades} onAdd={onAddCommitment} onUpdate={onUpdateCommitment} onDelete={onDeleteCommitment} onOpenCoach={onOpenCoach} />
     </div>
   )
 }

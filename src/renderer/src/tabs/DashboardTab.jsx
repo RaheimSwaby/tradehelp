@@ -9,7 +9,7 @@ import { PnlCalendar } from './JournalTab.jsx'
 import { buildDataAwareGreeting, quoteOfTheDay } from '../quotes.js'
 import { formatClockMinute } from '../sessionClock.js'
 import { CoachBriefCard } from '../components/CoachBriefCard.jsx'
-import { CoachCommitmentCard } from '../components/CoachCommitmentCard.jsx'
+import { PreflightStatus } from '../components/PreflightStatus.jsx'
 import { ShareReportModal } from '../components/ShareReportModal.jsx'
 import { DayReplayModal } from '../components/DayReplayModal.jsx'
 import { SessionCompareModal } from '../components/SessionCompareModal.jsx'
@@ -248,7 +248,7 @@ export function TimingPerformance({ stats, onDrilldown }) {
 }
 
 /* ───────── dashboard ───────── */
-export function Dashboard({ stats, trades, accounts = [], settings, journalData, onSaveSettings, onOpenCoach, payouts = [], plans = [], commitments = [], pnlFeedback = null, onAddCommitment, onUpdateCommitment, onDeleteCommitment, onOpenTrade, onTimingDrilldown, onClearDemo, personalClock = null, personalSchedule = null, now = Date.now() }) {
+export function Dashboard({ stats, trades, accounts = [], settings, journalData, onSaveSettings, onOpenCoach, onOpenTradeMode, payouts = [], plans = [], commitments = [], rules = [], todayNet = 0, maxLoss = 0, live = false, pnlFeedback = null, onOpenTrade, onTimingDrilldown, onClearDemo, personalClock = null, personalSchedule = null, now = Date.now() }) {
   const [view, setView] = useState('all') // all | live | prop
   // Derived from the trades already in hand rather than a separate count, so
   // the banner can never disagree with what is actually on screen.
@@ -316,6 +316,8 @@ export function Dashboard({ stats, trades, accounts = [], settings, journalData,
         </div>
       )}
 
+      <PreflightStatus rules={rules} todayNet={todayNet} maxLoss={maxLoss} live={live} onBreak={settings?.onBreak === 'true'} onAction={onOpenTradeMode} />
+
       <div className="rounded-xl px-4 py-3" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
         <div className="text-sm font-semibold" style={{ color: T.text }}>{greeting}</div>
         {windowSummary && (
@@ -338,7 +340,6 @@ export function Dashboard({ stats, trades, accounts = [], settings, journalData,
         </div>
       </div>
       <CoachBriefCard trades={viewTrades} stats={vStats} settings={settings} journalData={journalData} onSaveSettings={onSaveSettings} onOpenCoach={onOpenCoach} />
-      <CoachCommitmentCard commitments={viewCommitments} trades={viewTrades} scopeLabel={view === 'prop' ? 'Prop view' : view === 'live' ? 'Live view' : ''} onAdd={onAddCommitment} onUpdate={onUpdateCommitment} onDelete={onDeleteCommitment} onOpenCoach={onOpenCoach} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         {hasProp ? <div className="flex items-center gap-1.5">
           {[['all', 'All'], ['live', 'Live'], ['prop', 'Prop']].map(([k, label]) => (

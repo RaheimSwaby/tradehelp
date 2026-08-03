@@ -77,7 +77,7 @@ function CommitmentModal({ onClose, onSave }) {
         <div className="flex items-start gap-2">
           <Target size={18} style={{ color: T.accent }} />
           <div>
-            <div className="text-sm font-semibold">Start a coach commitment</div>
+            <div className="text-sm font-semibold">Start a trading commitment</div>
             <div className="text-xs mt-0.5" style={{ color: T.faint }}>Choose one behavior to measure over your next trades. Starting a new focus archives the current one.</div>
           </div>
           <button type="button" onClick={onClose} className="ml-auto" style={{ color: T.faint }}><X size={18} /></button>
@@ -165,7 +165,7 @@ export function CommitmentFocus({ commitment }) {
 
 export function CoachCommitmentCard({ commitments = [], trades = [], scopeLabel = '', onAdd, onUpdate, onDelete, onOpenCoach }) {
   const [creating, setCreating] = useState(false)
-  const [showHistory, setShowHistory] = useState(false)
+  const [showDetails, setShowDetails] = useState(false)
   const active = commitments.find((commitment) => commitment.status === 'active') || null
   const completed = commitments.find((commitment) => commitment.status === 'completed') || null
   const current = active || completed
@@ -175,49 +175,70 @@ export function CoachCommitmentCard({ commitments = [], trades = [], scopeLabel 
 
   return (
     <>
-      <Panel title="Coach commitment" right={
-        <button type="button" onClick={() => setCreating(true)} className="flex items-center gap-1 text-xs px-2 py-1 rounded-md font-semibold" style={{ background: T.accent, color: '#1A1306' }}><Plus size={13} /> {current ? 'New focus' : 'Start focus'}</button>
+      <Panel title="Trading commitments" right={
+        <button type="button" onClick={() => setCreating(true)} className="flex items-center gap-1 text-xs px-2 py-1 rounded-md font-semibold" style={{ background: T.accent, color: '#1A1306' }}><Plus size={13} /> {current ? 'New commitment' : 'Start commitment'}</button>
       }>
         {!current ? (
           <div className="flex flex-wrap items-center gap-3">
             <div className="grow min-w-[220px]">
-              <div className="text-sm">Turn coaching into one behavior you can measure.</div>
+              <div className="text-sm">Turn a goal into one behavior you can measure.</div>
               <div className="text-xs mt-1" style={{ color: T.faint }}>Choose a trade limit, risk limit, time cutoff, or allowed setup for your next trades.</div>
             </div>
-            <button type="button" onClick={onOpenCoach} className="rounded-md px-3 py-1.5 text-xs" style={{ border: `1px solid ${T.line}`, color: T.accent }}>Open AI Coach</button>
+            {history.length > 0 && <button type="button" onClick={() => setShowDetails((value) => !value)} className="rounded-md px-2.5 py-1.5 text-xs" style={{ color: T.accent, border: `1px solid ${T.line}` }}>{showDetails ? 'See less' : `See past (${history.length})`}</button>}
+            <button type="button" onClick={onOpenCoach} className="rounded-md px-3 py-1.5 text-xs" style={{ border: `1px solid ${T.line}`, color: T.accent }}>Ask AI Coach</button>
           </div>
         ) : (
-          <>
-            <div className="flex items-start gap-3">
-              <Target size={18} style={{ color: current.status === 'completed' ? T.up : T.accent }} />
-              <div className="grow min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-semibold">{current.title}</span>
-                  <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded-full" style={{ color: current.status === 'completed' ? T.up : T.accent, border: `1px solid ${current.status === 'completed' ? T.up : T.accent}` }}>{current.status}</span>
-                </div>
-                <div className="text-xs mt-0.5" style={{ color: T.faint }}>{COMMITMENT_RULE_META[current.ruleType]?.result(current.ruleValue) || current.ruleValue}</div>
+          <div className="flex flex-wrap xl:flex-nowrap items-center gap-3">
+            <Target size={18} className="shrink-0" style={{ color: current.status === 'completed' ? T.up : T.accent }} />
+            <div className="grow min-w-[220px]">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-semibold">{current.title}</span>
+                <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded-full" style={{ color: current.status === 'completed' ? T.up : T.accent, border: `1px solid ${current.status === 'completed' ? T.up : T.accent}` }}>{current.status}</span>
               </div>
-              {active && <button type="button" onClick={() => onUpdate({ ...active, status: 'archived' })} title="Archive focus" style={{ color: T.faint }}><Archive size={15} /></button>}
+              <div className="text-xs mt-0.5 truncate" style={{ color: T.faint }}>{COMMITMENT_RULE_META[current.ruleType]?.result(current.ruleValue) || current.ruleValue}</div>
             </div>
-            <div className="h-2.5 rounded-full overflow-hidden mt-3" style={{ background: T.surface2 }}><div className="h-full rounded-full" style={{ width: `${progress}%`, background: current.status === 'completed' ? T.up : T.accent, transition: 'width .3s' }} /></div>
-            <div className="flex flex-wrap justify-between gap-2 mt-1.5 text-xs" style={{ color: T.faint }}>
-              <span>{progressCount}/{current.targetCount} trades measured{scopeLabel ? ' overall' : ''}</span>
-              <span>{current.evaluatedCount ? `${current.adheredCount}/${current.evaluatedCount} followed · ${fmtN(current.adherenceRate, 0)}%${scopeLabel ? ` · ${scopeLabel}` : ' adherence'}` : scopeLabel ? `No checks · ${scopeLabel}` : 'Waiting for the next trade'}</span>
+            <div className="shrink-0 text-xs" style={{ color: T.faint }}>
+              <span style={{ ...mono, color: T.text }}>{progressCount}/{current.targetCount}</span> trades
+              <span className="mx-1.5">·</span>
+              {current.evaluatedCount ? `${fmtN(current.adherenceRate, 0)}% followed` : 'Waiting for a trade'}
             </div>
-            <CommitmentResults commitment={current} trades={trades} />
-          </>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <button type="button" onClick={() => setShowDetails((value) => !value)} className="rounded-md px-2.5 py-1.5 text-xs font-semibold" style={{ color: T.accent, border: `1px solid ${T.line}` }}>{showDetails ? 'See less' : 'See more'}</button>
+              {active && (
+                <button type="button" onClick={() => window.confirm('Archive this commitment? Its results will stay in your history.') && onUpdate({ ...active, status: 'archived' })} className="flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs" style={{ color: T.dim, border: `1px solid ${T.line}` }}>
+                  <Archive size={12} /> Archive
+                </button>
+              )}
+              <button type="button" onClick={() => window.confirm('Delete this commitment and all of its results?') && onDelete(current.id)} className="flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs" style={{ color: T.down, border: `1px solid ${T.line}` }}>
+                <Trash2 size={12} /> Delete
+              </button>
+            </div>
+          </div>
         )}
-        {history.length > 0 && (
-          <div className="mt-3">
-            <button type="button" onClick={() => setShowHistory((value) => !value)} className="text-xs" style={{ color: T.accent }}>{showHistory ? 'Hide commitment history' : `Show commitment history (${history.length})`}</button>
-            {showHistory && (
-              <div className="space-y-2 mt-2">
-                {history.slice(0, 8).map((commitment) => (
-                  <div key={commitment.id} className="rounded-lg px-3 py-2 flex items-start gap-2 text-xs" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
+
+        {showDetails && (
+          <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${T.line}` }}>
+            {current && (
+              <>
+                <div className="h-2 rounded-full overflow-hidden" style={{ background: T.surface2 }}><div className="h-full rounded-full" style={{ width: `${progress}%`, background: current.status === 'completed' ? T.up : T.accent, transition: 'width .3s' }} /></div>
+                <div className="flex flex-wrap justify-between gap-2 mt-1.5 text-xs" style={{ color: T.faint }}>
+                  <span>{progressCount}/{current.targetCount} trades measured{scopeLabel ? ' overall' : ''}</span>
+                  <span>{current.evaluatedCount ? `${current.adheredCount}/${current.evaluatedCount} followed · ${fmtN(current.adherenceRate, 0)}%${scopeLabel ? ` · ${scopeLabel}` : ' adherence'}` : scopeLabel ? `No checks · ${scopeLabel}` : 'Waiting for the next trade'}</span>
+                </div>
+                <CommitmentResults commitment={current} trades={trades} />
+              </>
+            )}
+            {history.length > 0 && (
+              <div className={current ? 'mt-3' : ''}>
+                <div className="text-[10px] uppercase tracking-wider mb-2" style={{ color: T.faint }}>Past commitments</div>
+                <div className="space-y-2 mt-2">
+                  {history.slice(0, 8).map((commitment) => (
+                    <div key={commitment.id} className="rounded-lg px-3 py-2 flex items-start gap-2 text-xs" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
                     <div className="grow"><div className="font-semibold">{commitment.title}</div><div style={{ color: T.faint }}>{scopeLabel ? `${commitment.evaluatedCount} checks · ${fmtN(commitment.adherenceRate, 0)}% followed · ${scopeLabel}` : `${commitment.evaluatedCount}/${commitment.targetCount} measured · ${fmtN(commitment.adherenceRate, 0)}% followed`}</div></div>
                     <button type="button" onClick={() => window.confirm('Delete this commitment and its results?') && onDelete(commitment.id)} style={{ color: T.down }}><Trash2 size={13} /></button>
-                  </div>
-                ))}
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>

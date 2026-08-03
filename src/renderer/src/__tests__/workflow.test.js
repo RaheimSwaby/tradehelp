@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   instrumentRootSymbol, defaultInstrumentProfile, selectInstrumentProfile, instrumentMultiplier,
   calculatePlanSizing, calculatePointRisk, scoreTradePlanV1, scorePlanExecutionV1, parsePlaybookTarget,
-  synthesizeTradeFills, averageCostFillPreview, reviewCommitmentSuggestion,
+  synthesizeTradeFills, averageCostFillPreview,
   summarizeTradeSession, tradeSessionDate, dHashFromRgba, hammingDistance64, dHashSimilarity,
   INSTRUMENT_PROFILE_DEFAULTS
 } from '../workflow.js'
@@ -234,26 +234,6 @@ describe('parsePlaybookTarget', () => {
     expect(parsePlaybookTarget('2R')).toBe('')
     expect(parsePlaybookTarget('50%')).toBe('')
     expect(parsePlaybookTarget('')).toBe('')
-  })
-})
-
-describe('reviewCommitmentSuggestion', () => {
-  const t = (o) => ({ entry: 100, stop: 98, direction: 'Long', timestamp: '2026-07-15 09:30', rr: 3, riskAmount: 100, ...o })
-  it('defaults to requiring a stop with no history', () => {
-    expect(reviewCommitmentSuggestion([]).ruleType).toBe('require_stop')
-  })
-  it('flags missing stops first', () => {
-    expect(reviewCommitmentSuggestion([t({ stop: 0 }), t({ stop: 0 }), t({}), t({})]).ruleType).toBe('require_stop')
-  })
-  it('flags overtrading when a day runs hot', () => {
-    const day = Array.from({ length: 5 }, () => t({}))
-    expect(reviewCommitmentSuggestion(day).ruleType).toBe('max_trades_day')
-  })
-  it('always returns a rule the evaluator understands', () => {
-    const known = new Set(['max_trades_day', 'max_risk', 'latest_entry', 'setup_only', 'min_rr', 'require_stop', 'max_daily_loss'])
-    for (const sample of [[], [t({})], [t({ stop: 0 })], Array.from({ length: 5 }, () => t({}))]) {
-      expect(known.has(reviewCommitmentSuggestion(sample).ruleType)).toBe(true)
-    }
   })
 })
 

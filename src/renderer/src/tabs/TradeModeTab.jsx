@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { CheckSquare, Square, Zap, Play, Plus, Trash2, AlertTriangle, Target, Monitor, Video, RefreshCw, Clock3 } from 'lucide-react'
+import { CheckSquare, Square, Zap, Play, Plus, Trash2, AlertTriangle, Monitor, Video, RefreshCw, Clock3 } from 'lucide-react'
 import { T, mono, inputStyle } from '../theme.js'
 import { fmt$, fmtN, clamp, untilLabel } from '../utils.js'
 import { Stat, Panel, Field } from '../components/Shared.jsx'
 import { TradePlansPanel } from '../components/TradePlansPanel.jsx'
-import { CommitmentFocus } from '../components/CoachCommitmentCard.jsx'
+import { PreflightStatus } from '../components/PreflightStatus.jsx'
 
 /* ───────── trade mode ───────── */
 export function Check({ on, label, onClick }) {
@@ -30,7 +30,7 @@ function sizeLabel(bytes) {
   return `${(value / (1024 * 1024)).toFixed(1)} MB`
 }
 
-export function TradeModeTab({ settings, onSave, rules, live, arming = false, todayNet, todayCount, weekNet, goal, maxLoss, onStart, onEnd, session, recordingState, elapsed = 0, sessions = [], plans = [], trades = [], accounts = [], playbook = [], profiles = [], planPrefill, onConsumePlanPrefill, commitment, onAddPlan, onUpdatePlan, onDeletePlan }) {
+export function TradeModeTab({ settings, onSave, rules, live, arming = false, todayNet, todayCount, weekNet, goal, maxLoss, onStart, onEnd, session, recordingState, elapsed = 0, sessions = [], plans = [], trades = [], accounts = [], playbook = [], profiles = [], planPrefill, onConsumePlanPrefill, onAddPlan, onUpdatePlan, onDeletePlan }) {
   const [list, setList] = useState(rules)
   const [g, setG] = useState(String(goal || ''))
   const [ml, setMl] = useState(String(maxLoss || ''))
@@ -66,8 +66,10 @@ export function TradeModeTab({ settings, onSave, rules, live, arming = false, to
   const lossPct = maxLoss > 0 ? clamp((-todayNet / maxLoss) * 100, 0, 100) : 0
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-5">
-      <div className="space-y-4">
+    <div className="space-y-4">
+      <PreflightStatus rules={rules} todayNet={todayNet} maxLoss={maxLoss} live={live} onBreak={settings?.onBreak === 'true'} />
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-5">
+        <div className="space-y-4">
         <TradePlansPanel plans={plans} trades={trades} accounts={accounts} playbook={playbook} profiles={profiles} prefill={planPrefill} onConsumePrefill={onConsumePlanPrefill} onAdd={onAddPlan} onUpdate={onUpdatePlan} onDelete={onDeletePlan} />
         <Panel title="Your trading rules" right={
           <button type="button" onClick={add} className="flex items-center gap-1 text-xs px-2 py-1 rounded-md" style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}` }}><Plus size={13} /> Add rule</button>
@@ -102,9 +104,8 @@ export function TradeModeTab({ settings, onSave, rules, live, arming = false, to
         </div>
       </div>
 
-      <div className="space-y-4">
-        <CommitmentFocus commitment={commitment} />
-        <Panel title="Session">
+        <div className="space-y-4">
+          <Panel title="Session">
           {live ? (
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-2">
@@ -137,9 +138,9 @@ export function TradeModeTab({ settings, onSave, rules, live, arming = false, to
               <p className="text-xs" style={{ color: T.faint }}>Runs your pre-flight checklist, then flips the app into a focused "go time" mode.</p>
             </div>
           )}
-        </Panel>
-        {!live && sessions.length > 0 && (
-          <Panel title="Recent sessions">
+          </Panel>
+          {!live && sessions.length > 0 && (
+            <Panel title="Recent sessions">
             <div className="space-y-2">
               {sessions.slice(0, 4).map((item) => (
                 <div key={item.id} className="flex items-center gap-3 rounded-md px-2.5 py-2" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
@@ -153,14 +154,15 @@ export function TradeModeTab({ settings, onSave, rules, live, arming = false, to
                 </div>
               ))}
             </div>
-          </Panel>
-        )}
+            </Panel>
+          )}
+        </div>
       </div>
     </div>
   )
 }
 
-export function Preflight({ rules, checks, setChecks, snapshot, goal, maxLoss, imminent, now, commitment, launching = false, recordingEnabled, setRecordingEnabled, captureSources = [], selectedSource, setSelectedSource, captureLoading, captureError, onRefreshSources, onCancel, onGoLive }) {
+export function Preflight({ rules, checks, setChecks, snapshot, goal, maxLoss, imminent, now, launching = false, recordingEnabled, setRecordingEnabled, captureSources = [], selectedSource, setSelectedSource, captureLoading, captureError, onRefreshSources, onCancel, onGoLive }) {
   const toggle = (i) => setChecks((c) => ({ ...c, [i]: !c[i] }))
   const unchecked = rules.reduce((n, _, i) => n + (checks[i] ? 0 : 1), 0)
   const dateLabel = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })
@@ -179,16 +181,6 @@ export function Preflight({ rules, checks, setChecks, snapshot, goal, maxLoss, i
             <div className="rounded-lg px-3 py-2 text-xs flex items-center gap-2" style={{ background: T.accentSoft, color: T.accent }}>
               <AlertTriangle size={14} style={{ flexShrink: 0 }} />
               <span>High-impact news — {imminent.country} {imminent.title} in {untilLabel(imminent.ts, now)}. Consider waiting for the print.</span>
-            </div>
-          )}
-          {commitment && (
-            <div className="rounded-lg px-3 py-2.5 flex items-start gap-2" style={{ background: T.accentSoft, border: `1px solid ${T.accent}`, color: T.text }}>
-              <Target size={15} style={{ color: T.accent, flexShrink: 0, marginTop: 1 }} />
-              <div>
-                <div className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: T.accent }}>Current coach focus</div>
-                <div className="text-sm font-semibold mt-0.5">{commitment.title}</div>
-                <div className="text-xs mt-0.5" style={{ color: T.dim }}>{commitment.evaluatedCount}/{commitment.targetCount} trades measured · process first, outcome second</div>
-              </div>
             </div>
           )}
           <div className="grid grid-cols-3 gap-3">

@@ -1,17 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, ReferenceLine, Tooltip } from 'recharts'
-import { Sparkles, Target } from 'lucide-react'
+import { Sparkles } from 'lucide-react'
 import { T, mono, inputStyle } from '../theme.js'
 import { fmt$, fmtN, periodLabel, streamChat } from '../utils.js'
 import { computeStats, letterFor, executionGrade, tradeContext } from '../stats.js'
 import {
-  buildPeriodRetrospective, commitmentEvidenceSnapshot, parsePeriodRetrospective,
+  buildPeriodRetrospective, parsePeriodRetrospective,
   reviewPeriodKeys, serializePeriodRetrospective, tradeDateKey, tradesInPeriod
 } from '../periodRetrospective.js'
-import { Stat, Panel, Field } from '../components/Shared.jsx'
+import { Stat, Panel } from '../components/Shared.jsx'
 import { GroupTable, ReasonList } from './PsychologyTab.jsx'
-import { COMMITMENT_RULE_META } from '../components/CoachCommitmentCard.jsx'
-import { reviewCommitmentSuggestion } from '../workflow.js'
 import { coachVoiceInstruction, shouldIncludeWrittenJournal } from '../coachInsights.js'
 
 /* ───────── periodic reviews ───────── */
@@ -49,8 +47,7 @@ function RetrospectiveMetric({ label, value, sub, color = T.text }) {
 }
 
 export function Reviews({
-  trades = [], reviews = {}, goals = {}, commitments = [], settings = {}, onSave,
-  activeCommitment, onAddCommitment, now = new Date()
+  trades = [], reviews = {}, goals = {}, settings = {}, onSave, now = new Date()
 }) {
   const [gran, setGran] = useState('week')
   const [sel, setSel] = useState('')
@@ -87,17 +84,6 @@ export function Reviews({
   const [saved, setSaved] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [ai, setAi] = useState(null)
-  const [commitmentDraft, setCommitmentDraft] = useState(() => reviewCommitmentSuggestion(periodTrades))
-  const [commitmentBusy, setCommitmentBusy] = useState(false)
-  const [commitmentStarted, setCommitmentStarted] = useState(false)
-
-  const evidenceOptions = useMemo(() => {
-    const byId = new Map()
-    for (const commitment of [...(Array.isArray(commitments) ? commitments : []), activeCommitment]) {
-      if (commitment?.id && !byId.has(String(commitment.id))) byId.set(String(commitment.id), commitment)
-    }
-    return [...byId.values()]
-  }, [commitments, activeCommitment])
 
   useEffect(() => {
     setText(persistedReview.reflection)
@@ -107,7 +93,6 @@ export function Reviews({
     setSaveError('')
     setAi(null)
   }, [period, persistedReview])
-  useEffect(() => { setCommitmentDraft(reviewCommitmentSuggestion(periodTrades)); setCommitmentStarted(false) }, [period, periodTrades])
   useEffect(() => { setSaved(false); setSaveError('') }, [text, processStatus, commitmentEvidence])
 
   const retrospective = useMemo(() => buildPeriodRetrospective({
@@ -121,31 +106,6 @@ export function Reviews({
     reflection: text
   }), [period, gran, goals, trades, persistedReview, processStatus, commitmentEvidence, text])
   const goalPresentation = outcomePresentation(retrospective.goalOutcome)
-
-  function chooseCommitmentRule(ruleType) {
-    const meta = COMMITMENT_RULE_META[ruleType]
-    const ruleValue = meta.defaultValue
-    setCommitmentDraft({ ruleType, ruleValue, title: meta.describe(ruleValue), targetCount: 10 })
-  }
-  function changeCommitmentValue(ruleValue) {
-    const meta = COMMITMENT_RULE_META[commitmentDraft.ruleType]
-    setCommitmentDraft((current) => ({ ...current, ruleValue, title: meta.describe(ruleValue) }))
-  }
-  async function startReviewCommitment() {
-    if (activeCommitment && !window.confirm(`Replace the active commitment “${activeCommitment.title}”? It will be archived and this review focus will become active.`)) return
-    setCommitmentBusy(true)
-    try {
-      const started = await onAddCommitment?.({ ...commitmentDraft, source: `review:${gran}:${period}` })
-      if (started !== false) setCommitmentStarted(true)
-    } finally {
-      setCommitmentBusy(false)
-    }
-  }
-  function selectEvidence(id) {
-    if (!id) { setCommitmentEvidence(null); return }
-    const commitment = evidenceOptions.find((item) => String(item.id) === id)
-    setCommitmentEvidence(commitmentEvidenceSnapshot(commitment))
-  }
 
   async function save() {
     if (!period) return
@@ -197,16 +157,6 @@ export function Reviews({
               return <button key={value} type="button" aria-pressed={selected} onClick={() => setProcessStatus(value)} className="rounded-md px-3 py-1.5 text-xs font-semibold" style={{ color: selected ? color : T.dim, background: selected ? T.surface2 : 'transparent', border: `1px solid ${selected ? color : T.line}` }}>{label}</button>
             })}
           </div>
-          <div className="mt-3 max-w-xl">
-            <Field label="Commitment evidence (optional)">
-              <select style={inputStyle} className="w-full rounded px-2 py-1.5 text-sm" value={commitmentEvidence?.id || ''} onChange={(event) => selectEvidence(event.target.value)}>
-                <option value="">No linked commitment</option>
-                {commitmentEvidence?.id && !evidenceOptions.some((item) => String(item.id) === commitmentEvidence.id) && <option value={commitmentEvidence.id}>{commitmentEvidence.title || 'Saved commitment'}</option>}
-                {evidenceOptions.map((commitment) => <option key={commitment.id} value={commitment.id}>{commitment.title} · {commitment.evaluatedCount || 0} checks</option>)}
-              </select>
-            </Field>
-            {commitmentEvidence && <div className="text-xs mt-1.5" style={{ color: T.faint }}>{commitmentEvidence.adheredCount}/{commitmentEvidence.evaluatedCount} checks followed · {fmtN(commitmentEvidence.adherenceRate, 0)}% adherence</div>}
-          </div>
         </div>
       </Panel>
 
@@ -247,34 +197,13 @@ export function Reviews({
       )}
 
       {periodTrades.length > 0 && (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <GroupTable title="P&L by setup" rows={stats.bySetup} />
-            <div className="space-y-4">
-              <ReasonList title="Why you won" rows={stats.reasonsWin} tone="up" />
-              <ReasonList title="Why you lost" rows={stats.reasonsLoss} tone="down" />
-            </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <GroupTable title="P&L by setup" rows={stats.bySetup} />
+          <div className="space-y-4">
+            <ReasonList title="Why you won" rows={stats.reasonsWin} tone="up" />
+            <ReasonList title="Why you lost" rows={stats.reasonsLoss} tone="down" />
           </div>
-
-          <Panel title="Next-period commitment" right={<Target size={15} style={{ color: T.accent }} />}>
-            <p className="text-xs mb-3" style={{ color: T.faint }}>TradeHelp proposes a deterministic, measurable rule from this period. Adjust it before handing it to the coach tracker.</p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <Field label="Rule">
-                <select style={inputStyle} className="w-full rounded px-2 py-1.5 text-sm" value={commitmentDraft.ruleType} onChange={(event) => chooseCommitmentRule(event.target.value)}>
-                  {Object.entries(COMMITMENT_RULE_META).map(([key, meta]) => <option key={key} value={key}>{meta.label}</option>)}
-                </select>
-              </Field>
-              <Field label={COMMITMENT_RULE_META[commitmentDraft.ruleType]?.label || 'Value'}>
-                {COMMITMENT_RULE_META[commitmentDraft.ruleType]?.input === 'none'
-                  ? <div className="rounded px-2 py-1.5 text-sm" style={{ background: T.surface2, border: `1px solid ${T.line}`, color: T.dim }}>Required on every trade</div>
-                  : <input type={COMMITMENT_RULE_META[commitmentDraft.ruleType]?.input || 'text'} min={COMMITMENT_RULE_META[commitmentDraft.ruleType]?.input === 'number' ? 1 : undefined} style={inputStyle} className="w-full rounded px-2 py-1.5 text-sm" value={commitmentDraft.ruleValue} onChange={(event) => changeCommitmentValue(event.target.value)} />}
-              </Field>
-              <Field label="Measure next trades"><input type="number" min="1" max="100" style={inputStyle} className="w-full rounded px-2 py-1.5 text-sm" value={commitmentDraft.targetCount} onChange={(event) => setCommitmentDraft((current) => ({ ...current, targetCount: Math.max(1, Math.min(100, Number(event.target.value) || 1)) }))} /></Field>
-            </div>
-            <div className="mt-3"><Field label="Commitment title"><input style={inputStyle} className="w-full rounded px-3 py-2 text-sm" value={commitmentDraft.title} onChange={(event) => setCommitmentDraft((current) => ({ ...current, title: event.target.value }))} /></Field></div>
-            <div className="flex items-center gap-3 mt-3"><button type="button" onClick={startReviewCommitment} disabled={commitmentBusy || !commitmentDraft.ruleValue || !commitmentDraft.title.trim()} className="rounded-md px-4 py-2 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306', opacity: commitmentBusy || !commitmentDraft.title.trim() ? 0.5 : 1 }}>{commitmentBusy ? 'Starting…' : activeCommitment ? 'Replace active commitment' : 'Start commitment'}</button>{commitmentStarted && <span className="text-xs" style={{ color: T.up }}>Commitment started ✓</span>}</div>
-          </Panel>
-        </>
+        </div>
       )}
 
       <Panel title="Your reflection" right={
