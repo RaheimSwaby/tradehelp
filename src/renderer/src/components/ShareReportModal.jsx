@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Check, Copy, Download, Share2, X } from 'lucide-react'
 import { T, inputStyle } from '../theme.js'
 import { buildShareReport, DEFAULT_SHARE_OPTIONS, drawShareReport } from '../shareReport.js'
@@ -13,12 +14,13 @@ const CONTROLS = [
 
 const canvasBlob = (canvas) => new Promise((resolve) => canvas.toBlob(resolve, 'image/png'))
 
-export function ShareReportModal({ trades, accountLabel, accent, onClose, payouts = [], dayLogs = [] }) {
+export function ShareReportModal({ trades, accountLabel, accent, onClose, payouts = [], dayLogs = [], commitments = [] }) {
   const [range, setRange] = useState('30')
   const [options, setOptions] = useState(DEFAULT_SHARE_OPTIONS)
   const [status, setStatus] = useState('')
   const canvasRef = useRef(null)
-  const report = useMemo(() => buildShareReport(trades, range, accountLabel, payouts, dayLogs), [trades, range, accountLabel, payouts, dayLogs])
+  const modalRef = useRef(null)
+  const report = useMemo(() => buildShareReport(trades, range, accountLabel, payouts, dayLogs, commitments), [trades, range, accountLabel, payouts, dayLogs, commitments])
 
   useEffect(() => {
     if (canvasRef.current) drawShareReport(canvasRef.current, report, options, accent)
@@ -26,6 +28,7 @@ export function ShareReportModal({ trades, accountLabel, accent, onClose, payout
   useEffect(() => {
     const close = (e) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', close)
+    modalRef.current?.focus({ preventScroll: true })
     return () => window.removeEventListener('keydown', close)
   }, [onClose])
 
@@ -58,8 +61,8 @@ export function ShareReportModal({ trades, accountLabel, accent, onClose, payout
     } catch { setStatus('System sharing unavailable - save the PNG and post it anywhere') }
   }
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: 'rgba(5,8,12,0.82)' }} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
+  return createPortal(
+    <div ref={modalRef} role="dialog" aria-modal="true" aria-label="Share performance report" tabIndex={-1} className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: 'rgba(5,8,12,0.82)' }} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
       <div className="w-full max-w-6xl max-h-[94vh] rounded-lg overflow-hidden flex flex-col" style={{ background: T.surface, color: T.text, border: `1px solid ${T.line}`, boxShadow: '0 24px 70px rgba(0,0,0,0.55)' }}>
         <header className="flex items-center gap-3 px-4 py-3" style={{ borderBottom: `1px solid ${T.line}` }}>
           <Share2 size={17} style={{ color: T.accent }} />
@@ -101,6 +104,7 @@ export function ShareReportModal({ trades, accountLabel, accent, onClose, payout
           </aside>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

@@ -59,3 +59,28 @@ describe('share report model', () => {
     expect(report.recent.every((row) => row.grade)).toBe(true)
   })
 })
+
+describe('share report accolades', () => {
+  const shareTrades = [
+    { id: 's1', symbol: 'NQ', direction: 'Long', pnl: 250, stop: 19980, entry: 20000, target: 20100, timestamp: '2026-07-27 09:30', entryTime: '2026-07-27 09:30' },
+    { id: 's2', symbol: 'NQ', direction: 'Long', pnl: -90, stop: 19980, entry: 20000, target: 20100, timestamp: '2026-07-28 09:30', entryTime: '2026-07-28 09:30' }
+  ]
+
+  // The card gets posted publicly, so a badge earned for breaking rules must never
+  // reach it — even if a caller later starts passing rule breaks through.
+  it('never puts troll badges on a shareable card', () => {
+    const report = buildShareReport(shareTrades, 'all', 'All accounts', [], [])
+    expect(report.achievements.some((a) => /Rule Breaker|Doing My Own Thing|Casino Connoisseur/.test(a.name))).toBe(false)
+  })
+
+  it('accepts commitments so earned discipline badges can appear', () => {
+    const commitments = [{
+      id: 'c1', title: 'Stop before every entry', ruleType: 'require_stop', status: 'completed',
+      targetCount: 10, evaluatedCount: 10, adheredCount: 10, adherenceRate: 100
+    }]
+    const withCommitments = buildShareReport(shareTrades, 'all', 'All accounts', [], [], commitments)
+    const without = buildShareReport(shareTrades, 'all', 'All accounts', [], [])
+    expect(withCommitments.achievements.length).toBeGreaterThanOrEqual(without.achievements.length)
+    expect(Array.isArray(withCommitments.achievements)).toBe(true)
+  })
+})

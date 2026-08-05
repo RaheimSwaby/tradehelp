@@ -43,7 +43,7 @@ function rangeLabel(trades, range) {
   return `${fmt(dates[0])} - ${fmt(dates[dates.length - 1])}`
 }
 
-export function buildShareReport(trades = [], range = '30', accountLabel = 'All accounts', payouts = [], dayLogs = []) {
+export function buildShareReport(trades = [], range = '30', accountLabel = 'All accounts', payouts = [], dayLogs = [], commitments = []) {
   const selected = tradesForShareRange(trades, range)
   const stats = computeStats(selected)
   const rating = computeRating(selected, stats)
@@ -51,8 +51,11 @@ export function buildShareReport(trades = [], range = '30', accountLabel = 'All 
   // Accolades are lifetime milestones, so compute them across ALL trades — not the
   // selected date range — otherwise a "Last 7 days" report would hide earned badges.
   const allStats = computeStats(trades)
-  const achievements = computeAchievements(trades, allStats, payouts, dayLogs)
-    .filter((a) => a.unlocked)
+  // Commitments are passed so earned discipline badges actually show up here; rule
+  // breaks are deliberately withheld, and troll badges filtered regardless. This image
+  // gets posted publicly, and nobody means to broadcast "logged 25 rule breaks".
+  const achievements = computeAchievements(trades, allStats, payouts, dayLogs, commitments)
+    .filter((a) => a.unlocked && !a.troll)
     .map((a) => ({ name: a.name, tier: a.tier }))
   const avgExecution = selected.length
     ? Math.round(selected.reduce((sum, t) => sum + executionGrade(t).score, 0) / selected.length)

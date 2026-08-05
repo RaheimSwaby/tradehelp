@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, ReferenceLine, Tooltip } from 'recharts'
-import { Sparkles } from 'lucide-react'
+import { CalendarRange, Sparkles, Trash2 } from 'lucide-react'
 import { T, mono, inputStyle } from '../theme.js'
 import { fmt$, fmtN, periodLabel, streamChat } from '../utils.js'
 import { computeStats, letterFor, executionGrade, tradeContext } from '../stats.js'
@@ -11,6 +11,8 @@ import {
 import { Stat, Panel } from '../components/Shared.jsx'
 import { GroupTable, ReasonList } from './PsychologyTab.jsx'
 import { coachVoiceInstruction, shouldIncludeWrittenJournal } from '../coachInsights.js'
+import { buildWeeklyWrap } from '../weeklyWrap.js'
+import { WeeklyWrapContent } from '../components/WeeklyWrap.jsx'
 
 /* ───────── periodic reviews ───────── */
 const REVIEW_SYSTEM = `You are a trading coach writing a short periodic review. Given the trader's aggregated stats and trades for ONE period, summarize how the period went using their real numbers, name 1-2 strengths and 1-2 leaks (revenge, FOMO, overtrading, cutting winners early, oversizing), then give 2 concrete focus points for next period. No price predictions or buy/sell advice. Under ~170 words.`
@@ -47,7 +49,7 @@ function RetrospectiveMetric({ label, value, sub, color = T.text }) {
 }
 
 export function Reviews({
-  trades = [], reviews = {}, goals = {}, settings = {}, onSave, now = new Date()
+  trades = [], ruleBreaks = [], reviews = {}, goals = {}, settings = {}, onSave, onDelete, onOpenWeeklyWrap, now = new Date()
 }) {
   const [gran, setGran] = useState('week')
   const [sel, setSel] = useState('')
@@ -63,6 +65,10 @@ export function Reviews({
     [trades, period, gran]
   )
   const stats = useMemo(() => computeStats(periodTrades), [periodTrades])
+  const weeklyWrap = useMemo(
+    () => gran === 'week' ? buildWeeklyWrap({ trades, ruleBreaks, weekKey: period }) : null,
+    [gran, trades, ruleBreaks, period]
+  )
   const avgGrade = periodTrades.length ? Math.round(periodTrades.reduce((a, t) => a + executionGrade(t).score, 0) / periodTrades.length) : 0
   const records = useMemo(() => {
     if (!periodTrades.length) return null
@@ -85,13 +91,62 @@ export function Reviews({
   const [saveError, setSaveError] = useState('')
   const [ai, setAi] = useState(null)
 
+  // Every period the user has actually written in, newest first. Keys carry their own
+  // granularity (2026-08-03 week, 2026-08 month, 2026-Q3, 2026), so the list can jump
+  // straight to a note without the reader knowing which view it was written in.
+  const savedNotes = useMemo(() => {
+    const granularityOf = (key) => {
+      if (key === 'all-time') return 'all'
+      if (/^\d{4}-\d{2}-\d{2}$/.test(key)) return 'week'
+      if (/^\d{4}-\d{2}$/.test(key)) return 'month'
+      if (/^\d{4}-Q[1-4]$/.test(key)) return 'quarter'
+      if (/^\d{4}$/.test(key)) return 'year'
+      return ''
+    }
+    return Object.entries(reviews || {})
+      .map(([key, raw]) => {
+        const granularity = granularityOf(key)
+        if (!granularity) return null
+        const parsed = parsePeriodRetrospective(raw)
+        const reflection = String(parsed.reflection || '').trim()
+        if (!reflection) return null // an auto-built retrospective with no writing is not a note
+        return {
+          key,
+          granularity,
+          label: granularity === 'all' ? 'All-time' : periodLabel(key, granularity),
+          pnl: Number.isFinite(Number(parsed.retrospective?.actualPnl)) ? Number(parsed.retrospective.actualPnl) : null,
+          snippet: reflection.replace(/\s+/g, ' ').slice(0, 110)
+        }
+      })
+      .filter(Boolean)
+      .sort((a, b) => (a.key === 'all-time' ? 1 : b.key === 'all-time' ? -1 : b.key.localeCompare(a.key)))
+  }, [reviews])
+
+  function openSavedNote(note) {
+    setGran(note.granularity)
+    if (note.granularity !== 'all') setSel(note.key)
+  }
+
+  async function deleteSavedNote(note) {
+    if (!window.confirm(`Delete your note for ${note.label}? The stats for that period are rebuilt from your trades, so only the writing is lost.`)) return
+    await onDelete?.(note.key)
+  }
+
+  const loadedPeriodRef = useRef(null)
   useEffect(() => {
+    const periodChanged = loadedPeriodRef.current !== period
+    loadedPeriodRef.current = period
     setText(persistedReview.reflection)
     setProcessStatus(persistedReview.retrospective?.process?.status || 'not-assessed')
     setCommitmentEvidence(persistedReview.retrospective?.process?.evidence || null)
-    setSaved(false)
-    setSaveError('')
-    setAi(null)
+    // Only reset on an actual period change. Saving updates `reviews`, which re-runs
+    // this effect — clearing here wiped the "Saved ✓" confirmation the instant it
+    // appeared, so a successful save looked like nothing had happened.
+    if (periodChanged) {
+      setSaved(false)
+      setSaveError('')
+      setAi(null)
+    }
   }, [period, persistedReview])
   useEffect(() => { setSaved(false); setSaveError('') }, [text, processStatus, commitmentEvidence])
 
@@ -141,6 +196,14 @@ export function Reviews({
           </select>
         )}
       </div>
+
+      {weeklyWrap && (
+        <Panel title={`Weekly wrap-up · ${pLabel}`} right={
+          <button type="button" onClick={() => onOpenWeeklyWrap?.(period)} className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-md" style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}` }}><CalendarRange size={13} /> Full-screen recap</button>
+        }>
+          <WeeklyWrapContent wrap={weeklyWrap} />
+        </Panel>
+      )}
 
       <Panel title={`Goal-anchored retrospective · ${pLabel}`}>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -221,6 +284,39 @@ export function Reviews({
           {saved && <span className="text-xs" style={{ color: T.up }}>Saved ✓</span>}
           {saveError && <span className="text-xs" style={{ color: T.down }}>{saveError}</span>}
         </div>
+      </Panel>
+
+      {/* Saved reviews were only reachable by guessing which period you wrote in.
+          This lists everything actually written, newest first, so notes can be found
+          without hunting through the period dropdown. */}
+      <Panel title={`Saved notes · ${savedNotes.length}`}>
+        {savedNotes.length === 0 ? (
+          <div className="text-sm py-2" style={{ color: T.dim }}>
+            Nothing written yet. Save a retrospective above and it will be listed here.
+          </div>
+        ) : (
+          <div className="space-y-1 max-h-72 overflow-y-auto">
+            {savedNotes.map((note) => (
+              <div key={note.key} className="flex items-stretch gap-1 rounded-lg"
+                style={{ background: note.key === period ? T.accentSoft : T.surface2, border: `1px solid ${note.key === period ? T.accent : 'transparent'}` }}>
+                <button type="button" onClick={() => openSavedNote(note)} className="flex-1 min-w-0 text-left px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold" style={{ color: T.text }}>{note.label}</span>
+                    <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded" style={{ color: T.dim, border: `1px solid ${T.line}` }}>{note.granularity}</span>
+                    {note.pnl != null && (
+                      <span className="ml-auto text-xs font-semibold" style={{ ...mono, color: note.pnl >= 0 ? T.up : T.down }}>{fmt$(note.pnl)}</span>
+                    )}
+                  </div>
+                  <div className="text-xs mt-0.5 truncate" style={{ color: T.dim }}>{note.snippet}</div>
+                </button>
+                <button type="button" onClick={() => deleteSavedNote(note)} title={`Delete note for ${note.label}`}
+                  aria-label={`Delete note for ${note.label}`} className="px-2.5 shrink-0" style={{ color: T.down }}>
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </Panel>
     </div>
   )
