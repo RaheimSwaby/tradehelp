@@ -22,6 +22,13 @@ const V036_NOTES = `- Cosmetic Refresh - each theme preset now has its own restr
 - Dashboard quotes rotate daily and AI Coach quick prompts adapt to your journal`
 
 export const RELEASE_NOTES = {
+  '0.46.0': `- Weekly and monthly wrap-ups turn your completed trading periods into a clear recap and one focus to carry forward
+- Session reviews now record which rule was broken and why, then surface repeated reasons as a visible pattern
+- Session history is searchable and filterable, with saved notes, recordings, rule-break details, editing and deletion; deleting a session never removes its Journal trades
+- Saved retrospective notes are listed together in Reviews so they are easier to reopen or delete
+- New reality-check achievements: Rule Breaker, Doing My Own Thing and Casino Connoisseur
+- Share Report now opens directly in view, includes earned discipline badges and keeps troll achievements off public images
+- Better keyboard navigation, visible focus states and clearer Journal labels make the app faster to scan and operate`,
   '0.45.0': `- New News tab — the economic calendar inside the app, with a month view that puts upcoming releases next to your own P&L for that day
 - See how you actually trade the news — your win rate and P&L within 30 minutes of a high-impact release, compared against quiet markets and broken down per event
 - Playbook setups now hold up to four example charts, each with its own label

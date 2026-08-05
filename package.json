@@ -1,9 +1,13 @@
 {
     "name": "tradehelp",
-    "version": "0.45.0",
+    "version": "0.46.0",
     "description": "Local-first trading journal with an offline AI coach (Electron + React + SQLite + Ollama)",
     "main": "./out/main/index.js",
     "license": "MIT",
+    "engines": {
+        "//": "better-sqlite3 ships no prebuild past Node 22, so newer Node falls back to node-gyp, which needs Python distutils (removed in 3.12). Match CI to avoid it.",
+        "node": ">=20 <23"
+    },
     "scripts": {
         "predev": "npm run rebuild",
         "dev": "electron-vite dev",
