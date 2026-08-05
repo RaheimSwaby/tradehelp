@@ -34,6 +34,7 @@ import { Backdrop } from './components/Backdrop.jsx'
 import { CustomBackground } from './components/CustomBackground.jsx'
 import { Onboarding } from './components/Onboarding.jsx'
 import { DailyReport } from './components/DailyReport.jsx'
+import { WeeklyWrapModal } from './components/WeeklyWrap.jsx'
 import { FeedbackPrompt } from './components/FeedbackPrompt.jsx'
 import { HelpModal } from './components/HelpModal.jsx'
 import { EasterEggNudge } from './components/EasterEggNudge.jsx'
@@ -41,8 +42,9 @@ import { buildEasterEggNudges, lastTradingDay } from './coachInsights.js'
 import { dHashDataUrl, IMAGE_FINGERPRINT_VERSION } from './workflow.js'
 import { formatClockMinute, localDateKey, inferTradingSchedule, manualTradingSchedule, personalTradingClock, sessionEdgeCue } from './sessionClock.js'
 import { selectFloatingNotice } from './notificationQueue.js'
-import { tradeDateKey } from './periodRetrospective.js'
+import { tradeDateKey, tradePeriodKey } from './periodRetrospective.js'
 import { startSessionRecorder } from './sessionRecorder.js'
+import { buildWeeklyWrap, monthlyWrapCandidate, previousMonthKey, previousWeekKey, weeklyWrapCandidate } from './weeklyWrap.js'
 
 /* ───────── logo mark: three ascending candles, tracks the live theme ───────── */
 function LogoMark({ size = 22, ignite = false, live = false }) {
@@ -170,6 +172,8 @@ export default function App() {
   const [propExpenses, setPropExpenses] = useState([])
   const [tradePlans, setTradePlans] = useState([])
   const [commitments, setCommitments] = useState([])
+  const [ruleBreaks, setRuleBreaks] = useState([])
+  const [weeklyWrap, setWeeklyWrap] = useState(null)
   const [instrumentProfiles, setInstrumentProfiles] = useState([])
   const [savedSearches, setSavedSearches] = useState([])
   const [planPrefill, setPlanPrefill] = useState(null)
@@ -228,9 +232,10 @@ export default function App() {
       if (window.api.listPropExpenses) setPropExpenses(await window.api.listPropExpenses())
       if (window.api.listTradePlans) setTradePlans(await window.api.listTradePlans())
       if (window.api.listCommitments) setCommitments(await window.api.listCommitments())
+      if (window.api.listRuleBreaks) setRuleBreaks(await window.api.listRuleBreaks())
       if (window.api.listInstrumentProfiles) setInstrumentProfiles(await window.api.listInstrumentProfiles())
       if (window.api.listSavedSearches) setSavedSearches(await window.api.listSavedSearches())
-      if (window.api.listTradingSessions) setTradingSessions(await window.api.listTradingSessions())
+      if (window.api.listTradingSessions) setTradingSessions(await window.api.listTradingSessions(100))
       setReady(true)
     })()
   }, [hasApi])
@@ -262,6 +267,68 @@ export default function App() {
   function openDailyReport() {
     if (reportDay) setDailyReport(reportDay)
   }
+
+  function weeklyWrapSeen() {
+    try { const value = JSON.parse(settings?.weeklyWrapSeen || '[]'); if (Array.isArray(value)) return value } catch {}
+    return []
+  }
+
+  async function closeWeeklyWrap() {
+    const period = weeklyWrap?.weekKey
+    // Holds both week and month keys now, so a year needs 52 + 12 slots.
+    // Persist the seen key before clearing the modal. Clearing first lets the scheduling
+    // effect run once with stale settings and immediately reopen the same recap.
+    if (period) await saveSettings({ weeklyWrapSeen: JSON.stringify([...new Set([...weeklyWrapSeen(), period])].slice(-64)) })
+    setWeeklyWrap(null)
+  }
+
+  // Focus notes are keyed by period, and week keys (2026-07-27) never collide with
+  // month keys (2026-07), so the weekly and monthly focus stay independent.
+  function wrapFocusMap() {
+    try { const value = JSON.parse(settings?.wrapFocus || '{}'); if (value && typeof value === 'object') return value } catch {}
+    return {}
+  }
+
+  async function saveWrapFocus(period, text) {
+    if (!period) return
+    const map = { ...wrapFocusMap() }
+    if (text) map[period] = text
+    else delete map[period]
+    // Keep the most recent entries only, so this setting cannot grow without bound.
+    const trimmed = Object.fromEntries(Object.entries(map).sort(([a], [b]) => a.localeCompare(b)).slice(-64))
+    await saveSettings({ wrapFocus: JSON.stringify(trimmed) })
+  }
+
+  /** What the trader committed to after the period immediately before this one. */
+  function priorWrapFocus(wrap) {
+    if (!wrap?.weekKey) return ''
+    const anchor = new Date(`${wrap.weekKey.length === 7 ? `${wrap.weekKey}-01` : wrap.weekKey}T12:00:00`)
+    if (Number.isNaN(anchor.getTime())) return ''
+    const key = wrap.granularity === 'month' ? previousMonthKey(anchor) : previousWeekKey(anchor)
+    return String(wrapFocusMap()[key] || '')
+  }
+
+  function showWeeklyWrap(period, granularity = 'week') {
+    const wrap = buildWeeklyWrap({ trades, ruleBreaks, weekKey: period, granularity })
+    if (wrap) setWeeklyWrap(wrap)
+  }
+
+  useEffect(() => {
+    if (!ready || !settings || weeklyWrap) return
+    const seen = weeklyWrapSeen()
+    // The month rewind wins when both are due — a new month is always a new week too,
+    // and stacking two recaps on one launch is worse than showing the bigger one first.
+    // The other stays unseen and appears on the next launch.
+    const candidates = [
+      { granularity: 'month', period: monthlyWrapCandidate(new Date(now)) },
+      { granularity: 'week', period: weeklyWrapCandidate(new Date(now)) }
+    ]
+    for (const { granularity, period } of candidates) {
+      if (!period || seen.includes(period)) continue
+      const wrap = buildWeeklyWrap({ trades, ruleBreaks, weekKey: period, granularity })
+      if (wrap) { setWeeklyWrap(wrap); return }
+    }
+  }, [ready, settings, trades, ruleBreaks, now, weeklyWrap]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Feedback nudge: once ever, after the trader has journaled enough to have a real
   // opinion (20+ trades). Rendered only when nothing else is popped up.
@@ -325,12 +392,13 @@ export default function App() {
 
   async function refreshWorkflow() {
     if (!hasApi) return []
-    const [nextTrades, nextPlans, nextCommitments] = await Promise.all([
+    const [nextTrades, nextPlans, nextCommitments, nextRuleBreaks] = await Promise.all([
       window.api.listTrades(),
       window.api.listTradePlans ? window.api.listTradePlans() : Promise.resolve(tradePlans),
-      window.api.listCommitments ? window.api.listCommitments() : Promise.resolve(commitments)
+      window.api.listCommitments ? window.api.listCommitments() : Promise.resolve(commitments),
+      window.api.listRuleBreaks ? window.api.listRuleBreaks() : Promise.resolve(ruleBreaks)
     ])
-    setTrades(nextTrades); setTradePlans(nextPlans); setCommitments(nextCommitments)
+    setTrades(nextTrades); setTradePlans(nextPlans); setCommitments(nextCommitments); setRuleBreaks(nextRuleBreaks)
     return nextTrades
   }
   async function withImageFingerprint(image) {
@@ -362,6 +430,11 @@ export default function App() {
   function demoPageCounts() {
     setTab('dashboard')
     setPageAnimationReplay((value) => value + 1)
+  }
+  function demoWeeklyWrap() {
+    const latestWeek = trades.map((trade) => tradePeriodKey(trade, 'week')).filter(Boolean).sort().reverse()[0]
+    if (latestWeek) showWeeklyWrap(latestWeek)
+    else setWorkflowMsg('Log at least one trade to preview a weekly wrap-up.')
   }
   async function addTrade(t, images = [], videoTokens = []) {
     if (!hasApi) return
@@ -407,21 +480,24 @@ export default function App() {
   async function rollbackImport(id) { if (hasApi) { const result = await window.api.rollbackImportBatch(id); await refreshWorkflow(); return result } }
   async function reloadAll() {
     if (!hasApi) return
-    const [nextTrades, nextGoals, nextReviews, nextSettings, nextPlans, nextCommitments, nextProfiles, nextSearches, nextPayouts, nextPropExpenses] = await Promise.all([
+    const [nextTrades, nextGoals, nextReviews, nextSettings, nextPlans, nextCommitments, nextProfiles, nextSearches, nextPayouts, nextPropExpenses, nextRuleBreaks, nextSessions] = await Promise.all([
       window.api.listTrades(), window.api.getGoals(), window.api.getReviews(), window.api.getSettings(),
       window.api.listTradePlans ? window.api.listTradePlans() : [],
       window.api.listCommitments ? window.api.listCommitments() : [],
       window.api.listInstrumentProfiles ? window.api.listInstrumentProfiles() : [],
       window.api.listSavedSearches ? window.api.listSavedSearches() : [],
       window.api.listPayouts ? window.api.listPayouts() : [],
-      window.api.listPropExpenses ? window.api.listPropExpenses() : []
+      window.api.listPropExpenses ? window.api.listPropExpenses() : [],
+      window.api.listRuleBreaks ? window.api.listRuleBreaks() : [],
+      window.api.listTradingSessions ? window.api.listTradingSessions(100) : []
     ])
     setTrades(nextTrades); setGoals(nextGoals); setReviews(nextReviews); setSettings(nextSettings)
     setTradePlans(nextPlans); setCommitments(nextCommitments); setInstrumentProfiles(nextProfiles); setSavedSearches(nextSearches)
-    setPayouts(nextPayouts); setPropExpenses(nextPropExpenses)
+    setPayouts(nextPayouts); setPropExpenses(nextPropExpenses); setRuleBreaks(nextRuleBreaks); setTradingSessions(nextSessions)
   }
   async function saveGoals(g) { if (hasApi) setGoals(await window.api.setGoals(g)) }
   async function saveReview(period, text) { if (hasApi) setReviews(await window.api.setReview(period, text)) }
+  async function removeReview(period) { if (hasApi && window.api.deleteReview) setReviews(await window.api.deleteReview(period)) }
   async function refreshLicense() { if (hasApi && window.api.getLicense) setLicense(await window.api.getLicense()) }
   async function saveSettings(s) { if (hasApi) setSettings(await window.api.setSettings(s)) }
   const propFirmAccounts = useMemo(() => {
@@ -454,6 +530,27 @@ export default function App() {
   async function addCommitment(commitment) { if (hasApi && window.api.addCommitment) return runWorkflow(() => window.api.addCommitment(commitment), setCommitments); return false }
   async function updateCommitment(commitment) { if (hasApi && window.api.updateCommitment) await runWorkflow(() => window.api.updateCommitment(commitment), setCommitments) }
   async function deleteCommitment(id) { if (hasApi && window.api.deleteCommitment) await runWorkflow(() => window.api.deleteCommitment(id), setCommitments) }
+  async function deleteRuleBreak(id) { if (hasApi && window.api.deleteRuleBreak) await runWorkflow(() => window.api.deleteRuleBreak(id), setRuleBreaks) }
+  async function updateTradingSession(id, notes) {
+    if (!hasApi || !window.api.updateTradingSession) return false
+    const ok = await runWorkflow(() => window.api.updateTradingSession(id, { notes }), (updated) => {
+      setTradingSessions((current) => current.map((session) => session.id === updated.id ? updated : session))
+    })
+    return ok
+  }
+  async function deleteTradingSession(id) {
+    if (!hasApi || !window.api.deleteTradingSession) return false
+    try {
+      const nextSessions = await window.api.deleteTradingSession(id)
+      const nextRuleBreaks = window.api.listRuleBreaks ? await window.api.listRuleBreaks() : ruleBreaks
+      setTradingSessions(nextSessions)
+      setRuleBreaks(nextRuleBreaks)
+      return true
+    } catch (error) {
+      setWorkflowMsg(error?.message || 'That session could not be deleted.')
+      return false
+    }
+  }
 
   async function addInstrumentProfile(profile) { const next = await window.api.addInstrumentProfile(profile); setInstrumentProfiles(next); return next }
   async function updateInstrumentProfile(profile) { const next = await window.api.updateInstrumentProfile(profile); setInstrumentProfiles(next); return next }
@@ -639,13 +736,27 @@ export default function App() {
     setChecks({})
     setLockoutDismissed(false)
   }
-  async function saveSessionReview(notes) {
+  async function saveSessionReview(notes, brokenRules = []) {
     if (!sessionReview?.id) return
     const saved = await window.api.finishTradingSession(sessionReview.id, { endedAt: sessionReview.endedAt, notes })
-    setTradingSessions(await window.api.listTradingSessions())
+    let nextRuleBreaks = ruleBreaks
+    for (const entry of brokenRules) {
+      nextRuleBreaks = await window.api.addRuleBreak({
+        ...entry,
+        sessionId: sessionReview.id,
+        occurredAt: sessionReview.endedAt || new Date().toISOString()
+      })
+    }
+    setRuleBreaks(nextRuleBreaks)
+    setTradingSessions(await window.api.listTradingSessions(100))
     setSessionReview(null)
     setActiveSession(null)
     setRecordingState({ status: 'off', error: '' })
+    const period = weeklyWrapCandidate(new Date(saved.endedAt || Date.now()), { afterSession: true })
+    if (period && !weeklyWrapSeen().includes(period)) {
+      const wrap = buildWeeklyWrap({ trades, ruleBreaks: nextRuleBreaks, weekKey: period })
+      if (wrap) setWeeklyWrap(wrap)
+    }
     return saved
   }
   async function discardSessionRecording() {
@@ -690,7 +801,7 @@ export default function App() {
   }, [now, watchedEvents, eventsEnabled])
 
   // ── achievements ──
-  const achievements = useMemo(() => computeAchievements(trades, stats, payouts, dayLogs, commitments), [trades, stats, payouts, dayLogs, commitments])
+  const achievements = useMemo(() => computeAchievements(trades, stats, payouts, dayLogs, commitments, ruleBreaks), [trades, stats, payouts, dayLogs, commitments, ruleBreaks])
   const unlockedAt = useMemo(() => { try { return JSON.parse(settings?.achievements || '{}') } catch { return {} } }, [settings])
   useEffect(() => {
     if (!hasApi || !settings) return
@@ -704,13 +815,14 @@ export default function App() {
     setToastQueue((q) => [...q, ...newly])
   }, [achievements, unlockedAt, hasApi])
   const floatingBlocked = Boolean(
-    onboard || tradeMode || notesView || preflight || whatsNew || goTransition ||
+    onboard || tradeMode || notesView || preflight || sessionReview || whatsNew || goTransition ||
     (GATE_CONFIGURED && license?.state === 'expired')
   )
   const activeFloatingNotice = selectFloatingNotice({
     risk: Boolean(workflowMsg || imminentEvent || (tradeMode && lossHit && !lockoutDismissed)),
     update: Boolean(updateReady),
     dailyReview: Boolean(dailyReport),
+    weeklyReview: Boolean(weeklyWrap),
     timing: Boolean(sessionCue && personalClockAlerts),
     achievement: Boolean(toast),
     nudge: Boolean(nudge),
@@ -762,6 +874,27 @@ export default function App() {
     return () => { alive = false }
   }, [hasApi, settings?.customBackgroundFile])
 
+  const tabRefs = useRef([])
+  // Arrows move along the tablist and switch immediately (automatic activation), which
+  // is the behaviour people expect from a desktop app's tab strip.
+  function moveTab(index) {
+    const next = (index + TABS.length) % TABS.length
+    setTab(TABS[next][0])
+    tabRefs.current[next]?.focus()
+  }
+  function onTabListKeyDown(event) {
+    const current = TABS.findIndex(([id]) => id === tab)
+    if (current < 0) return
+    const moves = {
+      ArrowRight: current + 1, ArrowDown: current + 1,
+      ArrowLeft: current - 1, ArrowUp: current - 1,
+      Home: 0, End: TABS.length - 1
+    }
+    if (!(event.key in moves)) return
+    event.preventDefault()
+    moveTab(moves[event.key])
+  }
+
   const TABS = [
     ['journal', 'Journal', Feather],
     ['trade', 'Trade Mode', CrosshairCandle],
@@ -777,6 +910,34 @@ export default function App() {
     ['news', 'News', Newspaper],
     ['settings', 'Settings', SettingsIcon]
   ]
+
+  // Desktop-app tab shortcuts: Ctrl/Cmd+1-9 jumps to a tab, Ctrl/Cmd+Tab cycles.
+  // Deliberately no plain-letter bindings — they would fire while typing a trade note.
+  useEffect(() => {
+    const onKey = (event) => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey) return
+      const current = TABS.findIndex(([id]) => id === tab)
+      if (import.meta.env.DEV && event.shiftKey && event.key.toLowerCase() === 'w') {
+        event.preventDefault()
+        demoWeeklyWrap()
+        return
+      }
+      if (event.key === 'Tab') {
+        event.preventDefault()
+        const next = (current + (event.shiftKey ? -1 : 1) + TABS.length) % TABS.length
+        setTab(TABS[next][0])
+        return
+      }
+      if (event.shiftKey) return
+      const digit = Number(event.key)
+      if (Number.isInteger(digit) && digit >= 1 && digit <= 9 && TABS[digit - 1]) {
+        event.preventDefault()
+        setTab(TABS[digit - 1][0])
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [tab]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div style={{ color: T.text, minHeight: '100vh', borderTop: `3px solid ${tradeMode ? T.accent : 'transparent'}` }}>
@@ -808,6 +969,9 @@ export default function App() {
                 <button type="button" onClick={demoPageCounts} className="px-2 py-1 rounded text-[10px] font-semibold" title="Open Dashboard and replay its page-entry count-up animations" style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}` }}>
                   Demo page counts
                 </button>
+                <button type="button" onClick={demoWeeklyWrap} className="px-2 py-1 rounded text-[10px] font-semibold" title="Preview the latest stats-backed weekly wrap-up (Ctrl+Shift+W)" style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}` }}>
+                  Demo weekly wrap
+                </button>
               </>
             )}
             <Readout label="WIN" value={`${fmtN(stats.winRate, 1)}%`} />
@@ -833,11 +997,18 @@ export default function App() {
           </div>
         </header>
 
-        <nav className="flex flex-wrap gap-1 mb-5">
-          {TABS.map(([id, label, Icon]) => {
+        {/* A tablist is one stop in the tab order, not thirteen: Tab reaches the nav,
+            arrows move along it, Tab again drops into the page. Screen readers also
+            announce position ("tab 3 of 13") instead of a run of unrelated buttons. */}
+        <nav role="tablist" aria-label="Primary" className="flex flex-wrap gap-1 mb-5" onKeyDown={onTabListKeyDown}>
+          {TABS.map(([id, label, Icon], index) => {
             const active = tab === id
             return (
-              <button key={id} type="button" onClick={() => setTab(id)}
+              <button key={id} type="button" role="tab" id={`th-tab-${id}`}
+                aria-selected={active} aria-controls="th-tabpanel"
+                tabIndex={active ? 0 : -1}
+                ref={(node) => { tabRefs.current[index] = node }}
+                onClick={() => setTab(id)}
                 className={`th-tab flex items-center gap-2 px-3 py-2 rounded-md text-sm${active ? ' th-tab-on' : ''}`}
                 style={{ background: active ? T.surface2 : 'transparent', color: active ? T.accent : T.dim, border: `1px solid ${active ? T.line : 'transparent'}` }}>
                 <Icon size={15} /> {label}
@@ -856,15 +1027,15 @@ export default function App() {
           <Paywall onActivated={refreshLicense} />
         ) : (
           <PageAnimationContext.Provider value={`${tab}-${pageAnimationReplay}`}>
-          <div key={tab} className="th-cinematic">
+          <div key={tab} id="th-tabpanel" role="tabpanel" aria-labelledby={`th-tab-${tab}`} className="th-cinematic">
             {tab === 'journal' && <Journal trades={trades} onAdd={addTrade} onUpdate={updateTrade} onRemove={removeTrade} onNotes={setNotesView} onImport={importTrades} onRollbackImport={rollbackImport} accounts={propFirmAccounts} profiles={instrumentProfiles} savedSearches={savedSearches} onAddSavedSearch={addSavedSearch} onUpdateSavedSearch={updateSavedSearch} onDeleteSavedSearch={deleteSavedSearch} onRefreshSavedSearches={refreshSavedSearches} settings={settings} onSaveSettings={saveSettings} dayLogs={dayLogs} onAddDayLog={addDayLog} onDeleteDayLog={deleteDayLog} drilldown={journalDrilldown} onConsumeDrilldown={() => setJournalDrilldown(null)} />}
-            {tab === 'trade' && <TradeModeTab settings={settings} onSave={saveSettings} rules={rules} live={tradeMode} arming={goTransition === 'arming'} todayNet={todayNet} todayCount={todayTrades.length} weekNet={weekNet} goal={dailyGoal} maxLoss={maxLoss} onStart={startDay} onEnd={endSession} session={activeSession} recordingState={recordingState} elapsed={sessionElapsed} sessions={tradingSessions} plans={tradePlans} trades={trades} accounts={propFirmAccounts} playbook={playbook} profiles={instrumentProfiles} planPrefill={planPrefill} onConsumePlanPrefill={() => setPlanPrefill(null)} onAddPlan={addTradePlan} onUpdatePlan={updateTradePlan} onDeletePlan={deleteTradePlan} />}
+            {tab === 'trade' && <TradeModeTab settings={settings} onSave={saveSettings} rules={rules} ruleBreaks={ruleBreaks} onDeleteRuleBreak={deleteRuleBreak} onUpdateSession={updateTradingSession} onDeleteSession={deleteTradingSession} live={tradeMode} arming={goTransition === 'arming'} todayNet={todayNet} todayCount={todayTrades.length} weekNet={weekNet} goal={dailyGoal} maxLoss={maxLoss} onStart={startDay} onEnd={endSession} session={activeSession} recordingState={recordingState} elapsed={sessionElapsed} sessions={tradingSessions} plans={tradePlans} trades={trades} accounts={propFirmAccounts} playbook={playbook} profiles={instrumentProfiles} planPrefill={planPrefill} onConsumePlanPrefill={() => setPlanPrefill(null)} onAddPlan={addTradePlan} onUpdatePlan={updateTradePlan} onDeletePlan={deleteTradePlan} />}
             {tab === 'propfirm' && <PropFirm trades={trades} accounts={propFirmAccounts} onSave={savePropFirmAccounts} settings={settings} onSaveSettings={saveSettings} payouts={payouts} onAddPayout={addPayout} onDeletePayout={deletePayout} expenses={propExpenses} onAddExpense={addPropExpense} onDeleteExpense={deletePropExpense} />}
             {tab === 'dashboard' && <Dashboard stats={stats} trades={trades} accounts={propFirmAccounts} settings={settings} journalData={{ reviews, playbook, dayLogs, goals, payouts, commitments }} payouts={payouts} plans={tradePlans} commitments={commitments} rules={rules} todayNet={todayNet} maxLoss={maxLoss} live={tradeMode} pnlFeedback={pnlFeedback} onSaveSettings={saveSettings} onOpenCoach={() => setTab('coach')} onOpenTradeMode={() => setTab('trade')} onOpenTrade={setNotesView} onTimingDrilldown={openTimingJournal} onClearDemo={clearDemoTrades} personalClock={sessionClock} personalSchedule={personalSchedule} now={now} />}
             {tab === 'psych' && <Psychology stats={stats} />}
             {tab === 'rating' && <Rating trades={trades} stats={stats} achievements={achievements} unlockedAt={unlockedAt} settings={settings} onSave={saveSettings} payouts={payouts} />}
             {tab === 'goals' && <Goals goals={goals} onSave={saveGoals} trades={trades} now={now} commitments={commitments} onAddCommitment={addCommitment} onUpdateCommitment={updateCommitment} onDeleteCommitment={deleteCommitment} onOpenCoach={() => setTab('coach')} />}
-            {tab === 'reviews' && <Reviews trades={trades} reviews={reviews} goals={goals} settings={settings} onSave={saveReview} now={now} />}
+            {tab === 'reviews' && <Reviews trades={trades} ruleBreaks={ruleBreaks} reviews={reviews} goals={goals} settings={settings} onSave={saveReview} onDelete={removeReview} onOpenWeeklyWrap={showWeeklyWrap} now={now} />}
             {tab === 'coach' && <Coach trades={trades} stats={stats} settings={settings} reviews={reviews} playbook={playbook} dayLogs={dayLogs} goals={goals} payouts={payouts} commitments={commitments} events={events} now={now} />}
             {tab === 'patterns' && <Patterns trades={trades} onOpenTrade={setNotesView} />}
             {tab === 'playbook' && <PlaybookTab entries={playbook} trades={trades} onAdd={addPlaybookEntry} onUpdate={updatePlaybookEntry} onDelete={deletePlaybookEntry} onPlan={planFromPlaybook} />}
@@ -885,7 +1056,7 @@ export default function App() {
           captureLoading={captureLoading} captureError={captureError} onRefreshSources={loadCaptureSources}
           onCancel={cancelPreflight} onGoLive={goLive} />
       )}
-      {sessionReview && <SessionEndReview session={sessionReview} recordingState={recordingState} onSave={saveSessionReview} onDiscardRecording={discardSessionRecording} />}
+      {sessionReview && <SessionEndReview session={sessionReview} recordingState={recordingState} rules={rules} ruleBreaks={ruleBreaks} onSave={saveSessionReview} onDiscardRecording={discardSessionRecording} />}
       {goTransition === 'live' && <GoTimeTransition />}
       {tradeMode && lossHit && !lockoutDismissed && (
         <Lockout net={todayNet} maxLoss={maxLoss} onEnd={endSession} onDismiss={() => setLockoutDismissed(true)} />
@@ -913,6 +1084,11 @@ export default function App() {
       {activeFloatingNotice === 'daily-review' && dailyReport && (
         <DailyReport trades={trades} date={dailyReport} settings={settings}
           onClose={closeDailyReport} onOpenCoach={() => { closeDailyReport(); setTab('coach') }} />
+      )}
+      {activeFloatingNotice === 'weekly-review' && weeklyWrap && (
+        <WeeklyWrapModal wrap={weeklyWrap} settings={settings} onClose={closeWeeklyWrap}
+          onSaveFocus={saveWrapFocus} priorFocus={priorWrapFocus(weeklyWrap)}
+          onOpenReview={() => { closeWeeklyWrap(); setTab('reviews') }} />
       )}
       {activeFloatingNotice === 'feedback' && feedbackPrompt && (
         <FeedbackPrompt onShare={shareFeedback} onDismiss={endFeedbackPrompt} />

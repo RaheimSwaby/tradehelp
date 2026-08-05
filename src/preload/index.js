@@ -67,6 +67,8 @@ const api = {
   getActiveTradingSession: () => ipcRenderer.invoke('sessions:active'),
   createTradingSession: (input) => ipcRenderer.invoke('sessions:create', input),
   finishTradingSession: (id, input) => ipcRenderer.invoke('sessions:finish', id, input),
+  updateTradingSession: (id, input) => ipcRenderer.invoke('sessions:update', id, input),
+  deleteTradingSession: (id) => ipcRenderer.invoke('sessions:delete', id),
   discardTradingSessionRecording: (id) => ipcRenderer.invoke('sessions:recording:discard', id),
   listCaptureSources: () => ipcRenderer.invoke('capture:sources'),
   startSessionRecording: (id, input) => ipcRenderer.invoke('sessions:recording:start', id, input),
@@ -89,6 +91,11 @@ const api = {
 
   getReviews: () => ipcRenderer.invoke('reviews:get'),
   setReview: (period, text) => ipcRenderer.invoke('reviews:set', period, text),
+  deleteReview: (period) => ipcRenderer.invoke('reviews:delete', period),
+
+  listRuleBreaks: () => ipcRenderer.invoke('rule-breaks:list'),
+  addRuleBreak: (entry) => ipcRenderer.invoke('rule-breaks:add', entry),
+  deleteRuleBreak: (id) => ipcRenderer.invoke('rule-breaks:delete', id),
 
   listPlaybook: () => ipcRenderer.invoke('playbook:list'),
   addPlaybookEntry: (e) => ipcRenderer.invoke('playbook:add', e),

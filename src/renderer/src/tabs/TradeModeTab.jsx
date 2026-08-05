@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { CheckSquare, Square, Zap, Play, Plus, Trash2, AlertTriangle, Monitor, Video, RefreshCw, Clock3 } from 'lucide-react'
+import { CheckSquare, Square, Zap, Play, Plus, Trash2, AlertTriangle, Monitor, Video, RefreshCw, Clock3, ShieldAlert, ChevronDown, Search, Pencil, Save, X } from 'lucide-react'
 import { T, mono, inputStyle } from '../theme.js'
 import { fmt$, fmtN, clamp, untilLabel } from '../utils.js'
 import { Stat, Panel, Field } from '../components/Shared.jsx'
 import { TradePlansPanel } from '../components/TradePlansPanel.jsx'
 import { PreflightStatus } from '../components/PreflightStatus.jsx'
+import { filterTradingSessions, ruleBreakKey, ruleBreaksForSession, summarizeRuleBreaks } from '../weeklyWrap.js'
 
 /* ───────── trade mode ───────── */
 export function Check({ on, label, onClick }) {
@@ -30,11 +31,15 @@ function sizeLabel(bytes) {
   return `${(value / (1024 * 1024)).toFixed(1)} MB`
 }
 
-export function TradeModeTab({ settings, onSave, rules, live, arming = false, todayNet, todayCount, weekNet, goal, maxLoss, onStart, onEnd, session, recordingState, elapsed = 0, sessions = [], plans = [], trades = [], accounts = [], playbook = [], profiles = [], planPrefill, onConsumePlanPrefill, onAddPlan, onUpdatePlan, onDeletePlan }) {
+export function TradeModeTab({ settings, onSave, rules, ruleBreaks = [], onDeleteRuleBreak, onUpdateSession, onDeleteSession, live, arming = false, todayNet, todayCount, weekNet, goal, maxLoss, onStart, onEnd, session, recordingState, elapsed = 0, sessions = [], plans = [], trades = [], accounts = [], playbook = [], profiles = [], planPrefill, onConsumePlanPrefill, onAddPlan, onUpdatePlan, onDeletePlan }) {
   const [list, setList] = useState(rules)
   const [g, setG] = useState(String(goal || ''))
   const [ml, setMl] = useState(String(maxLoss || ''))
   const [saved, setSaved] = useState(false)
+  const [expandedSessionId, setExpandedSessionId] = useState('')
+  const [showAllSessions, setShowAllSessions] = useState(false)
+  const [sessionQuery, setSessionQuery] = useState('')
+  const [sessionFilter, setSessionFilter] = useState('all')
   const cleanRules = (l) => (l || []).map((r) => String(r || '').trim()).filter(Boolean)
   // Key the sync on rule CONTENT, not array identity: `rules` is rebuilt on every
   // settings write (achievements, daily-report flags, …), and depending on its
@@ -64,6 +69,12 @@ export function TradeModeTab({ settings, onSave, rules, live, arming = false, to
   const inp = 'w-full rounded px-2 py-1.5 text-sm'
   const goalPct = goal > 0 ? clamp((todayNet / goal) * 100, 0, 100) : 0
   const lossPct = maxLoss > 0 ? clamp((-todayNet / maxLoss) * 100, 0, 100) : 0
+  const filteredSessions = useMemo(
+    () => filterTradingSessions(sessions, ruleBreaks, sessionQuery, sessionFilter),
+    [sessions, ruleBreaks, sessionQuery, sessionFilter]
+  )
+  const sessionArchiveActive = Boolean(sessionQuery.trim() || sessionFilter !== 'all')
+  const visibleSessions = sessionArchiveActive || showAllSessions ? filteredSessions : filteredSessions.slice(0, 4)
 
   return (
     <div className="space-y-4">
@@ -89,6 +100,8 @@ export function TradeModeTab({ settings, onSave, rules, live, arming = false, to
           )}
           <p className="text-xs mt-3" style={{ color: T.faint }}>These become your pre-flight checklist every time you start a trading day.</p>
         </Panel>
+
+        <RuleBreakPanel ruleBreaks={ruleBreaks} rules={rules} onDelete={onDeleteRuleBreak} />
 
         <Panel title="Daily limits">
           <div className="grid grid-cols-2 gap-3">
@@ -140,25 +153,157 @@ export function TradeModeTab({ settings, onSave, rules, live, arming = false, to
           )}
           </Panel>
           {!live && sessions.length > 0 && (
-            <Panel title="Recent sessions">
-            <div className="space-y-2">
-              {sessions.slice(0, 4).map((item) => (
-                <div key={item.id} className="flex items-center gap-3 rounded-md px-2.5 py-2" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-xs font-semibold">{new Date(item.startedAt).toLocaleString()}</div>
-                    <div className="text-[11px] mt-0.5" style={{ color: T.dim }}>
-                      {item.tradeCount} trade{item.tradeCount === 1 ? '' : 's'} · {fmt$(item.netPnl)} · {durationLabel(new Date(item.endedAt || item.startedAt) - new Date(item.startedAt))}
-                    </div>
-                  </div>
-                  {item.recordingUrl && <video controls preload="metadata" src={item.recordingUrl} className="w-24 h-14 object-cover rounded" />}
-                </div>
-              ))}
-            </div>
+            <Panel title="Session history" right={<span className="text-xs" style={{ ...mono, color: T.faint }}>{filteredSessions.length}/{sessions.length}</span>}>
+              <div className="flex flex-wrap sm:flex-nowrap gap-2 mb-3">
+                <label className="relative min-w-0 flex-1">
+                  <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: T.faint }} />
+                  <input value={sessionQuery} onChange={(event) => setSessionQuery(event.target.value)} aria-label="Search sessions" placeholder="Search date, note, rule, or why…" className="w-full rounded-md pl-8 pr-8 py-2 text-xs" style={inputStyle} />
+                  {sessionQuery && <button type="button" onClick={() => setSessionQuery('')} aria-label="Clear session search" className="absolute right-2.5 top-1/2 -translate-y-1/2" style={{ color: T.faint }}><X size={13} /></button>}
+                </label>
+                <select value={sessionFilter} onChange={(event) => setSessionFilter(event.target.value)} aria-label="Filter sessions" className="rounded-md px-2.5 py-2 text-xs" style={{ ...inputStyle, width: 'auto' }}>
+                  <option value="all">All sessions</option>
+                  <option value="notes">Has notes</option>
+                  <option value="rule-breaks">Rule breaks</option>
+                  <option value="recordings">Recordings</option>
+                  <option value="clean">Clean sessions</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                {visibleSessions.map((item) => (
+                  <SessionHistoryItem key={item.id} session={item} ruleBreaks={ruleBreaks} expanded={expandedSessionId === item.id} onToggle={() => setExpandedSessionId(expandedSessionId === item.id ? '' : item.id)} onUpdate={onUpdateSession} onDelete={onDeleteSession} />
+                ))}
+                {visibleSessions.length === 0 && <div className="text-xs py-5 text-center" style={{ color: T.faint }}>No saved sessions match that search.</div>}
+              </div>
+              {!sessionArchiveActive && sessions.length > 4 && (
+                <button type="button" onClick={() => setShowAllSessions((value) => !value)} className="w-full mt-3 text-xs px-2 py-1.5 rounded-md" style={{ color: T.accent, background: T.surface2, border: `1px solid ${T.line}` }}>{showAllSessions ? 'Show recent' : `See all ${sessions.length}`}</button>
+              )}
             </Panel>
           )}
         </div>
       </div>
     </div>
+  )
+}
+
+export function SessionHistoryItem({ session, ruleBreaks = [], expanded = false, onToggle, onUpdate, onDelete }) {
+  const breaks = ruleBreaksForSession(ruleBreaks, session?.id)
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(session?.notes || '')
+  const [busy, setBusy] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  useEffect(() => { setDraft(session?.notes || '') }, [session?.notes])
+  if (!session) return null
+
+  async function saveNote() {
+    setBusy(true)
+    const ok = await onUpdate?.(session.id, draft)
+    setBusy(false)
+    if (ok !== false) setEditing(false)
+  }
+
+  async function removeSession() {
+    setBusy(true)
+    const ok = await onDelete?.(session.id)
+    setBusy(false)
+    if (ok !== false) setConfirmDelete(false)
+  }
+
+  return (
+    <div className="rounded-md overflow-hidden" style={{ background: T.surface2, border: `1px solid ${expanded ? T.accent : T.line}` }}>
+      <button type="button" aria-expanded={expanded} onClick={onToggle} className="w-full flex items-center gap-3 px-2.5 py-2 text-left">
+        <div className="min-w-0 flex-1">
+          <div className="text-xs font-semibold">{new Date(session.startedAt).toLocaleString()}</div>
+          <div className="text-[11px] mt-0.5" style={{ color: T.dim }}>
+            {session.tradeCount} trade{session.tradeCount === 1 ? '' : 's'} · {fmt$(session.netPnl)} · {durationLabel(new Date(session.endedAt || session.startedAt) - new Date(session.startedAt))}
+            {session.notes ? ' · note saved' : ''}{breaks.length ? ` · ${breaks.length} rule break${breaks.length === 1 ? '' : 's'}` : ''}
+          </div>
+        </div>
+        <ChevronDown size={15} style={{ color: expanded ? T.accent : T.faint, transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
+      </button>
+      {expanded && (
+        <div className="px-3 pb-3 space-y-3" style={{ borderTop: `1px solid ${T.line}` }}>
+          <div className="pt-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-[10px] uppercase tracking-wider" style={{ color: T.faint }}>Session note</div>
+              {!editing && <button type="button" onClick={() => setEditing(true)} className="flex items-center gap-1 text-[11px]" style={{ color: T.accent }}><Pencil size={11} /> Edit note</button>}
+            </div>
+            {editing ? (
+              <div className="mt-2 space-y-2">
+                <textarea value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={5000} rows={3} autoFocus placeholder="What worked? What needs adjustment?" className="w-full rounded-md px-2.5 py-2 text-xs resize-y" style={inputStyle} />
+                <div className="flex justify-end gap-2">
+                  <button type="button" disabled={busy} onClick={() => { setDraft(session.notes || ''); setEditing(false) }} className="text-xs px-2.5 py-1.5 rounded-md" style={{ color: T.dim, border: `1px solid ${T.line}` }}>Cancel</button>
+                  <button type="button" disabled={busy} onClick={saveNote} className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-md font-semibold" style={{ color: '#1A1306', background: T.accent }}><Save size={12} /> {busy ? 'Saving…' : 'Save note'}</button>
+                </div>
+              </div>
+            ) : <div className="text-xs mt-1 whitespace-pre-wrap" style={{ color: session.notes ? T.text : T.faint }}>{session.notes || 'No session note was added.'}</div>}
+          </div>
+          {breaks.length > 0 && (
+            <div>
+              <div className="text-[10px] uppercase tracking-wider" style={{ color: T.down }}>Rule breaks</div>
+              <div className="space-y-1.5 mt-1.5">
+                {breaks.map((entry) => (
+                  <div key={entry.id} className="rounded px-2.5 py-2" style={{ background: `${T.down}0D`, border: `1px solid ${T.down}44` }}>
+                    <div className="text-xs font-semibold">{entry.ruleText}</div>
+                    <div className="text-xs mt-0.5" style={{ color: T.dim }}>Why: {entry.reason}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {session.recordingUrl
+            ? <video controls preload="metadata" src={session.recordingUrl} className="w-full rounded-md max-h-48" />
+            : <div className="text-[10px]" style={{ color: T.faint }}>Saved locally · no recording attached</div>}
+          <div className="pt-2" style={{ borderTop: `1px solid ${T.line}` }}>
+            {confirmDelete ? (
+              <div className="rounded-md p-2.5" style={{ background: `${T.down}0D`, border: `1px solid ${T.down}44` }}>
+                <div className="text-xs" style={{ color: T.text }}>Delete this session, its rule-break reasons, and its recording? Journal trades stay untouched.</div>
+                <div className="flex justify-end gap-2 mt-2">
+                  <button type="button" disabled={busy} onClick={() => setConfirmDelete(false)} className="text-xs px-2.5 py-1.5 rounded-md" style={{ color: T.dim, border: `1px solid ${T.line}` }}>Keep session</button>
+                  <button type="button" disabled={busy} onClick={removeSession} className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-md font-semibold" style={{ color: '#fff', background: T.down }}><Trash2 size={12} /> {busy ? 'Deleting…' : 'Delete permanently'}</button>
+                </div>
+              </div>
+            ) : <button type="button" onClick={() => setConfirmDelete(true)} className="flex items-center gap-1 text-[11px]" style={{ color: T.down }}><Trash2 size={11} /> Delete session</button>}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function RuleBreakPanel({ ruleBreaks = [], rules = [], onDelete }) {
+  const summary = useMemo(() => summarizeRuleBreaks(ruleBreaks, rules), [ruleBreaks, rules])
+  const recent = ruleBreaks.slice(0, 5)
+  return (
+    <Panel title="Rule-break pattern" right={<span className="text-xs" style={{ ...mono, color: summary.total ? T.down : T.up }}>{summary.total} logged</span>}>
+      {summary.weakness ? (
+        <>
+          <div className="flex gap-2.5">
+            <ShieldAlert size={17} style={{ color: T.down, flexShrink: 0, marginTop: 1 }} />
+            <div className="min-w-0">
+              <div className="text-sm font-semibold">Current weakness: {summary.weakness.label}</div>
+              <div className="text-xs mt-1" style={{ color: T.dim }}>{summary.weakness.count} recorded break{summary.weakness.count === 1 ? '' : 's'}. {summary.focus}</div>
+            </div>
+          </div>
+          <details className="mt-3">
+            <summary className="text-xs flex items-center gap-1.5 select-none" style={{ color: T.accent }}><ChevronDown size={13} /> Recent reasons</summary>
+            <div className="mt-2 space-y-2">
+              {recent.map((entry) => (
+                <div key={entry.id} className="rounded-md px-2.5 py-2 flex gap-2" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-semibold truncate">{entry.ruleText}</div>
+                    <div className="text-xs mt-0.5" style={{ color: T.dim }}>{entry.reason}</div>
+                    <div className="text-[10px] mt-1" style={{ color: T.faint }}>{new Date(entry.occurredAt).toLocaleDateString()}</div>
+                  </div>
+                  <button type="button" onClick={() => onDelete?.(entry.id)} aria-label={`Delete rule-break note for ${entry.ruleText}`} title="Delete this entry" style={{ color: T.faint }}><Trash2 size={14} /></button>
+                </div>
+              ))}
+            </div>
+          </details>
+        </>
+      ) : (
+        <div className="text-sm" style={{ color: T.dim }}>No rule breaks logged yet. Session reviews will remember the reason when one happens.</div>
+      )}
+    </Panel>
   )
 }
 
@@ -271,22 +416,31 @@ export function LiveBanner({ net, goal, maxLoss, lossHit, recordingState, elapse
   )
 }
 
-export function SessionEndReview({ session, recordingState, onSave, onDiscardRecording }) {
+export function SessionEndReview({ session, recordingState, rules = [], ruleBreaks = [], onSave, onDiscardRecording }) {
   const [notes, setNotes] = useState('')
+  const [broken, setBroken] = useState({})
+  const [reasons, setReasons] = useState({})
+  const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   if (!session) return null
   async function submit(discard = false) {
+    const selected = rules.flatMap((rule, index) => broken[index] ? [{ ruleText: rule, reason: String(reasons[index] || '').trim() }] : [])
+    if (selected.some((entry) => !entry.reason)) {
+      setError('Add what led to each selected rule break.')
+      return
+    }
     setSaving(true)
+    setError('')
     try {
       if (discard) await onDiscardRecording()
-      await onSave(notes)
+      await onSave(notes, selected)
     } finally {
       setSaving(false)
     }
   }
   return (
     <div className="th-overlay fixed inset-0 flex items-center justify-center p-4 z-[80]" style={{ background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(5px)' }}>
-      <div className="rounded-xl w-full max-w-lg" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
+      <div className="rounded-xl w-full max-w-2xl max-h-[92vh] overflow-y-auto" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
         <div className="px-5 py-4" style={{ borderBottom: `1px solid ${T.line}` }}>
           <div className="text-base font-semibold">Session complete</div>
           <div className="text-xs mt-1" style={{ color: T.dim }}>Review the session before returning to normal mode.</div>
@@ -304,11 +458,38 @@ export function SessionEndReview({ session, recordingState, onSave, onDiscardRec
             </div>
           )}
           {recordingState?.error && <div className="text-xs" style={{ color: T.down }}>{recordingState.error}</div>}
+          {rules.length > 0 && (
+            <div>
+              <div className="text-xs font-semibold">Did you break a rule?</div>
+              <div className="text-[11px] mt-0.5 mb-2" style={{ color: T.dim }}>Leave everything clear if the session stayed clean. Select only what actually happened.</div>
+              <div className="space-y-2">
+                {rules.map((rule, index) => {
+                  const selected = Boolean(broken[index])
+                  const prior = ruleBreaks.find((entry) => (entry.ruleKey || ruleBreakKey(entry.ruleText)) === ruleBreakKey(rule))
+                  return (
+                    <div key={`${rule}-${index}`} className="rounded-lg p-2.5" style={{ background: selected ? `${T.down}0D` : T.surface2, border: `1px solid ${selected ? `${T.down}66` : T.line}` }}>
+                      <button type="button" onClick={() => { setBroken((current) => ({ ...current, [index]: !current[index] })); setError('') }} className="w-full flex items-start gap-2 text-left">
+                        {selected ? <CheckSquare size={17} style={{ color: T.down, flexShrink: 0 }} /> : <Square size={17} style={{ color: T.faint, flexShrink: 0 }} />}
+                        <span className="text-xs font-semibold">{rule}</span>
+                      </button>
+                      {selected && (
+                        <div className="pl-6 mt-2">
+                          {prior && <div className="text-[11px] mb-1.5" style={{ color: T.accent }}>Last time: “{prior.reason}”</div>}
+                          <input value={reasons[index] || ''} onChange={(event) => setReasons((current) => ({ ...current, [index]: event.target.value }))} maxLength={600} placeholder="What pulled you away from this rule?" className="w-full rounded-md px-2.5 py-2 text-xs" style={inputStyle} />
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
           <Field label="Session notes">
             <textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={3} placeholder="What worked? What needs adjustment?" className="w-full rounded-md px-3 py-2 text-sm resize-y" style={inputStyle} />
           </Field>
         </div>
         <div className="px-5 py-4 flex flex-wrap justify-end gap-2" style={{ borderTop: `1px solid ${T.line}` }}>
+          {error && <span className="mr-auto text-xs self-center" style={{ color: T.down }}>{error}</span>}
           {session.recordingStatus === 'ready' && <button type="button" disabled={saving} onClick={() => submit(true)} className="rounded-md px-3 py-2 text-sm" style={{ background: T.surface2, color: T.down, border: `1px solid ${T.line}` }}>Delete recording &amp; save</button>}
           <button type="button" disabled={saving} onClick={() => submit(false)} className="rounded-md px-4 py-2 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306' }}>{saving ? 'Saving…' : 'Save session'}</button>
         </div>

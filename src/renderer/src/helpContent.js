@@ -47,6 +47,18 @@ export const HELP_SECTIONS = [
       {
         q: 'What are pre-trade plans?',
         a: 'Write the setup, levels, risk and thesis before you enter, then Lock the plan so it can\'t be rewritten after the fact. When the trade is done, link the actual trade to compare intent against what you really did.'
+      },
+      {
+        q: 'Where do completed Trade Mode sessions go?',
+        a: 'Trade Mode → Session history. Sessions are saved even when you did not record your screen. Expand one to see its duration, trades, P&L, notes, recording status and any rule breaks logged at the end.'
+      },
+      {
+        q: 'Can I search, edit or delete a saved session?',
+        a: 'Yes. Session history can be searched by date, note, rule or rule-break reason, and filtered for notes, rule breaks, recordings or clean sessions. Expand a session to edit its notes or delete it. Deleting a session also removes its recording and linked rule-break entries, but the trades themselves stay in your Journal.'
+      },
+      {
+        q: 'Why does TradeHelp ask why I broke a rule?',
+        a: 'The rule tells you what happened; the reason helps expose what keeps causing it. When ending a session, select only rules you actually broke and add what led to each one. TradeHelp keeps those explanations locally and surfaces repeated reasons in your rule-break patterns and wrap-ups.'
       }
     ]
   },
@@ -73,6 +85,28 @@ export const HELP_SECTIONS = [
       {
         q: 'How does the journal search work?',
         a: 'Type plain English: "losing NQ trades last week after 11am". Every condition it understood shows as a removable chip, so you can see exactly what is being filtered and drop any part you did not mean.'
+      }
+    ]
+  },
+  {
+    id: 'reviews',
+    title: 'Reviews and wrap-ups',
+    items: [
+      {
+        q: 'What is the weekly or monthly wrap-up?',
+        a: 'It is a local recap built from your completed trades and recorded rule breaks: net P&L, record, win rate, repeated setups or emotions, your current weakness and one suggested focus. The numbers do not require AI; asking the Coach for a note is optional.'
+      },
+      {
+        q: 'When does a wrap-up appear?',
+        a: 'TradeHelp offers a completed weekly or monthly recap once for that period. A monthly wrap takes priority when both are ready. You can also open weekly recaps from Reviews and use the full-screen recap button there.'
+      },
+      {
+        q: 'What happens to the focus I save?',
+        a: 'Your focus is saved locally against that week or month. The next matching wrap shows it back to you so you can compare what you intended to work on with what your journal recorded.'
+      },
+      {
+        q: 'Where are my written review notes?',
+        a: 'Reviews → Saved notes lists every retrospective you wrote, newest first. Select one to reopen its period or delete the note. Deleting the note does not delete trades or their calculated statistics.'
       }
     ]
   },
@@ -136,7 +170,7 @@ export const HELP_SECTIONS = [
       },
       {
         q: 'How do achievements work?',
-        a: 'They reward behaviour, not P&L: tilt-free streaks, journaling consistency, honouring your stop, completing commitments. Each has a difficulty tier, and they use best-ever tallies so once earned they stay earned.'
+        a: 'Most reward behaviour, not P&L: tilt-free streaks, journaling consistency, honouring your stop, and completing commitments. A few clearly labelled troll achievements use humour to call out repeated rule breaks. Each has a difficulty tier, and achievements use best-ever tallies so once earned they stay earned.'
       },
       {
         q: 'Why log a no-trade day?',

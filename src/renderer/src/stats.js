@@ -1,4 +1,4 @@
-import { Trophy, Brain, Snowflake, Shield, Target, BookOpen, Camera, TrendingUp, Calendar, Flame, Wallet, Banknote, CalendarCheck, Coffee, Sunrise, Crosshair, Handshake, Repeat, ShieldCheck, Scale } from 'lucide-react'
+import { Trophy, Brain, Snowflake, Shield, Target, BookOpen, Camera, TrendingUp, Calendar, Flame, Wallet, Banknote, CalendarCheck, Coffee, Sunrise, Crosshair, Handshake, Repeat, ShieldCheck, Scale, Dice5, BadgeAlert, Route } from 'lucide-react'
 import { TILT, REASONS, clamp, fmtN, holdMs, periodKey, pad2 } from './utils.js'
 import { TRADING_WINDOW_HISTORY_LIMITS } from './sessionClock.js'
 import { parsePeriodRetrospective } from './periodRetrospective.js'
@@ -449,7 +449,7 @@ export const ACH_TIERS = {
   diamond: { label: 'Diamond', color: '#7FE3F0' }
 }
 
-export function computeAchievements(trades, stats, payouts = [], dayLogs = [], commitments = []) {
+export function computeAchievements(trades, stats, payouts = [], dayLogs = [], commitments = [], ruleBreaks = []) {
   const sorted = [...trades].sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''))
   let aGradeLosses = 0, stopSet = 0, withShots = 0, honoredCur = 0, honoredBest = 0, planned = 0
   const loggedRisks = sorted.map((trade) => Math.abs(Number(trade.riskAmount) || 0)).filter((risk) => risk > 0).sort((a, b) => a - b)
@@ -507,6 +507,7 @@ export function computeAchievements(trades, stats, payouts = [], dayLogs = [], c
   // Only completed commitments (a full run of measured trades) count.
   const doneCommitments = (commitments || []).filter((c) => c.status === 'completed')
   const bestAdherence = doneCommitments.reduce((m, c) => Math.max(m, Number(c.adherenceRate) || 0), 0)
+  const ruleBreakCount = Array.isArray(ruleBreaks) ? ruleBreaks.length : 0
 
   const defs = [
     { id: 'process', name: 'Process over Profit', Icon: Trophy, tier: 'gold', desc: '10 A-grade trades that still lost — right trade, accepted variance.', current: aGradeLosses, goal: 10 },
@@ -525,7 +526,10 @@ export function computeAchievements(trades, stats, payouts = [], dayLogs = [], c
     { id: 'firstpayout', name: 'First Payout', Icon: Wallet, tier: 'gold', desc: 'Cashed your first prop firm payout.', current: (payouts?.length || 0) >= 1 ? 1 : 0, goal: 1 },
     { id: 'committed', name: 'Kept My Word', Icon: Handshake, tier: 'bronze', desc: 'Completed your first coach commitment — a full run of trades measured against one rule.', current: doneCommitments.length, goal: 1 },
     { id: 'habitbuilder', name: 'Habit Builder', Icon: Repeat, tier: 'silver', desc: 'Completed 3 coach commitments — process is becoming routine.', current: doneCommitments.length, goal: 3 },
-    { id: 'ironclad', name: 'Ironclad Discipline', Icon: ShieldCheck, tier: 'diamond', desc: 'Completed a commitment with 90%+ of trades following your rule.', current: Math.round(bestAdherence), goal: 90 }
+    { id: 'ironclad', name: 'Ironclad Discipline', Icon: ShieldCheck, tier: 'diamond', desc: 'Completed a commitment with 90%+ of trades following your rule.', current: Math.round(bestAdherence), goal: 90 },
+    { id: 'rulebreaker', name: 'Rule Breaker', Icon: BadgeAlert, tier: 'bronze', troll: true, desc: 'Broke a written rule 3 times. The app has receipts.', current: ruleBreakCount, goal: 3 },
+    { id: 'doingmyownthing', name: 'Doing My Own Thing', Icon: Route, tier: 'silver', troll: true, desc: 'Logged 10 rule breaks. Apparently the plan was a suggestion.', current: ruleBreakCount, goal: 10 },
+    { id: 'casinoconnoisseur', name: 'Casino Connoisseur', Icon: Dice5, tier: 'gold', troll: true, desc: 'Logged 25 rule breaks. A prestigious reminder to stop freelancing.', current: ruleBreakCount, goal: 25 }
   ]
   return defs.map((d) => ({
     ...d,

@@ -205,6 +205,17 @@ export function initDb() {
     CREATE TABLE IF NOT EXISTS reviews (
       period TEXT PRIMARY KEY, text TEXT, updatedAt TEXT
     );
+    CREATE TABLE IF NOT EXISTS rule_breaks (
+      id TEXT PRIMARY KEY,
+      ruleKey TEXT NOT NULL,
+      ruleText TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      occurredAt TEXT NOT NULL,
+      sessionId TEXT DEFAULT '',
+      createdAt TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_rule_breaks_occurredAt ON rule_breaks(occurredAt);
+    CREATE INDEX IF NOT EXISTS idx_rule_breaks_ruleKey ON rule_breaks(ruleKey, occurredAt);
     CREATE TABLE IF NOT EXISTS playbook (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -1017,6 +1028,32 @@ export function finishTradingSession(id, input = {}) {
   return getTradingSession(id)
 }
 
+export function updateTradingSession(id, input = {}) {
+  const key = String(id || '')
+  const session = db.prepare('SELECT id,status FROM trading_sessions WHERE id = ?').get(key)
+  if (!session) throw new Error('Trading session not found')
+  if (session.status === 'active') throw new Error('End the active session before editing it')
+  db.prepare('UPDATE trading_sessions SET notes = ?, updatedAt = ? WHERE id = ?')
+    .run(String(input.notes || '').slice(0, 5000), new Date().toISOString(), key)
+  return getTradingSession(key)
+}
+
+export function deleteTradingSession(id) {
+  const key = String(id || '')
+  const session = db.prepare('SELECT id,status,recordingFile FROM trading_sessions WHERE id = ?').get(key)
+  if (!session) return listTradingSessions(100)
+  if (session.status === 'active') throw new Error('End the active session before deleting it')
+  db.transaction(() => {
+    db.prepare('DELETE FROM trading_session_trades WHERE sessionId = ?').run(key)
+    db.prepare('DELETE FROM rule_breaks WHERE sessionId = ?').run(key)
+    db.prepare('DELETE FROM trading_sessions WHERE id = ?').run(key)
+  })()
+  if (session.recordingFile) {
+    try { unlinkSync(join(sessionRecordingsDir, session.recordingFile)) } catch {}
+  }
+  return listTradingSessions(100)
+}
+
 export function getTradingSessionRecordingFile(id) {
   const row = db.prepare(`SELECT recordingFile,mimeType FROM trading_sessions
     WHERE id = ? AND recordingStatus = 'ready'`).get(String(id))
@@ -1432,6 +1469,10 @@ const SETTINGS_DEFAULTS = Object.freeze({
   liveCapital: '0',
   dailyReportEnabled: 'true',
   dailyReportSeen: '',
+  weeklyWrapSeen: '[]',
+  // { "2026-07-27": "one thing to hold next period" } — written by the wrap-up so the
+  // focus is the trader's own words, not only the generated suggestion.
+  wrapFocus: '{}',
   feedbackPromptSeen: '',
   easterEggEnabled: 'true',
   easterEggSeen: '[]',
@@ -2145,6 +2186,54 @@ export function setReview(period, text) {
   return getReviews()
 }
 
+// Removes the row rather than blanking it: the retrospective is rebuilt from trades on
+// demand, so an emptied row would only linger in the period list and in backups.
+export function deleteReview(period) {
+  db.prepare('DELETE FROM reviews WHERE period = ?').run(String(period || ''))
+  return getReviews()
+}
+
+/* ────────── rule-break journal ────────── */
+export function ruleKey(ruleText) {
+  return String(ruleText || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 180)
+}
+
+export function listRuleBreaks() {
+  return db.prepare('SELECT * FROM rule_breaks ORDER BY occurredAt DESC, createdAt DESC, rowid DESC').all()
+}
+
+export function addRuleBreak(entry = {}) {
+  const ruleText = String(entry.ruleText || '').replace(/\s+/g, ' ').trim().slice(0, 240)
+  const reason = String(entry.reason || '').replace(/\s+/g, ' ').trim().slice(0, 600)
+  if (!ruleText) throw new Error('Choose the rule that was broken')
+  if (!reason) throw new Error('Add what led to the rule break')
+  const occurred = new Date(entry.occurredAt || Date.now())
+  if (Number.isNaN(occurred.getTime())) throw new Error('Rule-break date is invalid')
+  const createdAt = new Date().toISOString()
+  db.prepare(`INSERT INTO rule_breaks
+    (id,ruleKey,ruleText,reason,occurredAt,sessionId,createdAt)
+    VALUES (@id,@ruleKey,@ruleText,@reason,@occurredAt,@sessionId,@createdAt)`).run({
+    id: String(entry.id || randomUUID()),
+    ruleKey: ruleKey(ruleText),
+    ruleText,
+    reason,
+    occurredAt: occurred.toISOString(),
+    sessionId: String(entry.sessionId || ''),
+    createdAt
+  })
+  return listRuleBreaks()
+}
+
+export function deleteRuleBreak(id) {
+  db.prepare('DELETE FROM rule_breaks WHERE id = ?').run(String(id || ''))
+  return listRuleBreaks()
+}
+
 /* ───────── backup / export / import ───────── */
 const SECRET_KEYS = ['cloudKey', 'finnhubKey', 'fmpKey', 'licenseKey', 'licenseInstanceId']
 const PORTABLE_TRADE_FIELDS = [
@@ -2276,7 +2365,7 @@ export function getAllData() {
   const settings = getSettings()
   for (const k of SECRET_KEYS) delete settings[k]
   const snapshot = {
-    app: 'tradehelp', version: 8, exportedAt: new Date().toISOString(),
+    app: 'tradehelp', version: 9, exportedAt: new Date().toISOString(),
     trades: db.prepare('SELECT * FROM trades').all(),
     tradeFills: db.prepare(`SELECT id,tradeId,kind,side,quantity,price,fee,filledAt,sequence,sourceRef
       FROM trade_fills ORDER BY tradeId,sequence,filledAt,rowid`).all(),
@@ -2288,6 +2377,7 @@ export function getAllData() {
       executionScore,scoreDetail,createdAt,updatedAt FROM trade_plans`).all().map((plan) => ({ ...plan, scoreDetail: parsedScoreDetail(plan.scoreDetail) })),
     commitments: db.prepare('SELECT * FROM coach_commitments').all(),
     commitmentResults: db.prepare('SELECT * FROM commitment_results').all(),
+    ruleBreaks: listRuleBreaks(),
     playbook: listPlaybook(),
     // The archive can't be re-fetched without an API key — it only accumulates a week
     // at a time — so losing it on restore would blank every news correlation for months.
@@ -2316,7 +2406,7 @@ export function getAllData() {
 
 export function restoreData(data) {
   const version = Number(data?.version || 3)
-  if (![3, 4, 5, 6, 7, 8].includes(version)) throw new Error('Unsupported backup version')
+  if (![3, 4, 5, 6, 7, 8, 9].includes(version)) throw new Error('Unsupported backup version')
   const prepared = preparePortableData(data || {}, db.prepare('SELECT * FROM trades').all())
   const portableData = prepared.data
   const tx = db.transaction((d) => {
@@ -2449,6 +2539,22 @@ export function restoreData(data) {
         const tradeId = String(result.tradeId || '')
         if (!commitmentId || !tradeId || !commitmentExists.get(commitmentId)) continue
         ins.run(commitmentId, tradeId, String(result.day || '').slice(0, 10), result.adhered ? 1 : 0, String(result.detail || ''), String(result.evaluatedAt || new Date().toISOString()))
+      }
+    }
+    if (Array.isArray(d.ruleBreaks)) {
+      const insert = db.prepare(`INSERT OR REPLACE INTO rule_breaks
+        (id,ruleKey,ruleText,reason,occurredAt,sessionId,createdAt)
+        VALUES (@id,@ruleKey,@ruleText,@reason,@occurredAt,@sessionId,@createdAt)`)
+      for (const entry of d.ruleBreaks) {
+        const ruleText = String(entry.ruleText || '').replace(/\s+/g, ' ').trim().slice(0, 240)
+        const reason = String(entry.reason || '').replace(/\s+/g, ' ').trim().slice(0, 600)
+        const occurredAt = new Date(entry.occurredAt || entry.createdAt || Date.now())
+        if (!ruleText || !reason || Number.isNaN(occurredAt.getTime())) continue
+        insert.run({
+          id: String(entry.id || randomUUID()), ruleKey: ruleKey(ruleText), ruleText, reason,
+          occurredAt: occurredAt.toISOString(), sessionId: String(entry.sessionId || ''),
+          createdAt: String(entry.createdAt || new Date().toISOString())
+        })
       }
     }
     // Reuses the normal recorder so a restored archive gets the same key derivation and
@@ -2605,7 +2711,7 @@ export function restoreData(data) {
   return {
     trades: listTrades(), tradeFills: db.prepare('SELECT * FROM trade_fills ORDER BY tradeId,sequence,filledAt,rowid').all(),
     instrumentProfiles: listInstrumentProfiles(), savedSearches: listSavedSearches(), tradePlans: listTradePlans(),
-    commitments: listCoachCommitments(), commitmentResults: db.prepare('SELECT * FROM commitment_results').all(),
+    commitments: listCoachCommitments(), commitmentResults: db.prepare('SELECT * FROM commitment_results').all(), ruleBreaks: listRuleBreaks(),
     playbook: listPlaybook(), economicEvents: listEconomicEvents(), dayLogs: listDayLogs(), payouts: listPayouts(), propExpenses: listPropExpenses(), importBatches: listImportBatches(),
     brokerConnections: listBrokerConnections(),
     tradingSessions: listTradingSessions(100),

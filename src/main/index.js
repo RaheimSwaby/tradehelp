@@ -356,6 +356,8 @@ function registerIpc() {
   ipcMain.handle('sessions:active', () => db.getActiveTradingSession())
   ipcMain.handle('sessions:create', (_event, input) => db.createTradingSession(input))
   ipcMain.handle('sessions:finish', (_event, id, input) => db.finishTradingSession(id, input))
+  ipcMain.handle('sessions:update', (_event, id, input) => db.updateTradingSession(id, input))
+  ipcMain.handle('sessions:delete', (_event, id) => db.deleteTradingSession(id))
   ipcMain.handle('sessions:recording:discard', async (_event, id) => {
     const active = activeSessionRecordings.get(String(id))
     if (active) {
@@ -436,6 +438,11 @@ function registerIpc() {
 
   ipcMain.handle('reviews:get', () => db.getReviews())
   ipcMain.handle('reviews:set', (_e, period, text) => db.setReview(period, text))
+  ipcMain.handle('reviews:delete', (_e, period) => db.deleteReview(period))
+
+  ipcMain.handle('rule-breaks:list', () => db.listRuleBreaks())
+  ipcMain.handle('rule-breaks:add', (_e, entry) => db.addRuleBreak(entry))
+  ipcMain.handle('rule-breaks:delete', (_e, id) => db.deleteRuleBreak(id))
 
   ipcMain.handle('playbook:list', () => db.listPlaybook())
   ipcMain.handle('playbook:add', (_e, entry) => db.addPlaybookEntry(entry))

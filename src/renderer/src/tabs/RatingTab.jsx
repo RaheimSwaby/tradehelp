@@ -165,6 +165,7 @@ export function AchievementShelf({ achievements, unlockedAt }) {
                 <span className="text-sm font-semibold" style={{ color: u ? T.text : T.dim }}>{a.name}</span>
                 <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full shrink-0 font-semibold" style={{ color: u ? (a.tier === 'gold' || a.tier === 'diamond' ? '#1A1306' : T.bg) : T.faint, background: u ? c : 'transparent', border: `1px solid ${u ? c : T.line}` }}>{tier.label}</span>
               </div>
+              {a.troll && <div className="text-[10px] uppercase tracking-wider font-semibold mt-2" style={{ color: T.down }}>Troll badge · reality check</div>}
               <div className="text-xs mt-1" style={{ color: T.faint }}>{a.desc}</div>
               {u ? (
                 <div className="text-xs mt-2" style={{ color: T.up }}>Unlocked{unlockedAt?.[a.id] ? ` · ${unlockedAt[a.id].slice(0, 10)}` : ''}</div>
@@ -201,7 +202,7 @@ export function AchievementToast({ a, onClose }) {
         </div>
       </div>
       <div className="flex-1 min-w-0">
-        <div className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: c }}>Achievement unlocked · {tier.label}</div>
+        <div className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: a.troll ? T.down : c }}>{a.troll ? 'Troll achievement unlocked' : `Achievement unlocked · ${tier.label}`}</div>
         <div className="text-sm font-semibold mt-0.5">{a.name}</div>
         {a.desc && <div className="text-[11px] mt-0.5 leading-snug" style={{ color: T.dim }}>{a.desc}</div>}
       </div>

@@ -32,12 +32,13 @@ import {
   disconnectBrokerConnection, importBrokerSyncItems, resetBrokerConnectionData,
   applyMobileTradeChanges, importMobileTrades, mobileTradeSnapshot, getMobileSyncToken, rotateMobileSyncToken,
   getGoals, setGoals,
+  addRuleBreak, deleteRuleBreak, listRuleBreaks,
   getSettings, setSettings, getTradeRuleState, mergeMobileTradeRules,
   getMobileAccountState, mergeMobileAccountState,
   addImage, listImages, getImage, deleteImage,
   createTradingSession, getActiveTradingSession, getTradingSession, listTradingSessions,
   beginTradingSessionRecording, completeTradingSessionRecording, discardTradingSessionRecording,
-  finishTradingSession,
+  finishTradingSession, updateTradingSession, deleteTradingSession,
   addPropExpense, listPropExpenses, deletePropExpense,
   recordEconomicEvents, listEconomicEvents, economicEventCoverage,
   getAllData, restoreData,
@@ -130,6 +131,30 @@ describe('trades — delete', () => {
   })
 })
 
+describe('rule-break journal', () => {
+  it('stores the rule snapshot, reason, session and normalized key', () => {
+    const entries = addRuleBreak({
+      id: 'rule-break-one',
+      ruleText: ' Risk is within my plan! ',
+      reason: '  Increased size after a loss.  ',
+      sessionId: 'session-rule-test',
+      occurredAt: '2026-07-31T16:00:00.000Z'
+    })
+    expect(entries.find((entry) => entry.id === 'rule-break-one')).toMatchObject({
+      ruleKey: 'risk-is-within-my-plan',
+      ruleText: 'Risk is within my plan!',
+      reason: 'Increased size after a loss.',
+      sessionId: 'session-rule-test'
+    })
+  })
+
+  it('requires a reason and supports deletion', () => {
+    expect(() => addRuleBreak({ ruleText: 'Use a stop', reason: '' })).toThrow('Add what led')
+    deleteRuleBreak('rule-break-one')
+    expect(listRuleBreaks().some((entry) => entry.id === 'rule-break-one')).toBe(false)
+  })
+})
+
 describe('trading sessions', () => {
   it('tracks an active session and links trades inside its time window', () => {
     // A trade's timestamp is local wall-clock ('2026-02-10 09:30') but a session stores
@@ -179,6 +204,28 @@ describe('trading sessions', () => {
     expect(discarded).toMatchObject({ recordingStatus: 'discarded', size: 0, recordingUrl: '' })
     finishTradingSession(session.id, { endedAt: '2026-02-11T10:00:00.000Z' })
     expect(getTradingSession(session.id)?.status).toBe('completed')
+  })
+
+  it('updates notes and deletes a session with its linked rule breaks but not journal trades', () => {
+    const session = createTradingSession({
+      id: '33333333-3333-4333-8333-333333333333',
+      startedAt: '2026-02-12T09:00:00.000Z'
+    })
+    finishTradingSession(session.id, { endedAt: '2026-02-12T10:00:00.000Z', notes: 'Original note' })
+    addRuleBreak({
+      id: 'session-delete-rule-break',
+      ruleText: 'Keep size fixed',
+      reason: 'Chased the loss',
+      sessionId: session.id,
+      occurredAt: '2026-02-12T10:00:00.000Z'
+    })
+
+    expect(updateTradingSession(session.id, { notes: 'Edited note' }).notes).toBe('Edited note')
+    const tradeCountBefore = listTrades().length
+    deleteTradingSession(session.id)
+    expect(getTradingSession(session.id)).toBeNull()
+    expect(listRuleBreaks().some((entry) => entry.id === 'session-delete-rule-break')).toBe(false)
+    expect(listTrades()).toHaveLength(tradeCountBefore)
   })
 })
 

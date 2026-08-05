@@ -11,8 +11,8 @@ function trade(overrides = {}) {
   }
 }
 
-const ach = (trades, { payouts = [], dayLogs = [], commitments = [] } = {}) =>
-  computeAchievements(trades, computeStats(trades), payouts, dayLogs, commitments)
+const ach = (trades, { payouts = [], dayLogs = [], commitments = [], ruleBreaks = [] } = {}) =>
+  computeAchievements(trades, computeStats(trades), payouts, dayLogs, commitments, ruleBreaks)
 const byId = (list, id) => list.find((a) => a.id === id)
 
 describe('achievement tiers', () => {
@@ -30,6 +30,16 @@ describe('Sat On My Hands', () => {
     const a = byId(ach([], { dayLogs: [...logs9, { id: '9' }] }), 'satonhands')
     expect(a.current).toBe(10)
     expect(a.unlocked).toBe(true)
+  })
+})
+
+describe('troll achievements', () => {
+  it('roasts repeated rule breaks at 3, 10 and 25 entries', () => {
+    const breaks = Array.from({ length: 10 }, (_, index) => ({ id: String(index) }))
+    expect(byId(ach([], { ruleBreaks: breaks }), 'rulebreaker').unlocked).toBe(true)
+    expect(byId(ach([], { ruleBreaks: breaks }), 'doingmyownthing').unlocked).toBe(true)
+    expect(byId(ach([], { ruleBreaks: breaks }), 'casinoconnoisseur').unlocked).toBe(false)
+    expect(byId(ach([], { ruleBreaks: breaks }), 'doingmyownthing').troll).toBe(true)
   })
 })
 
