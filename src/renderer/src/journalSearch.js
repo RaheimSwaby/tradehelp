@@ -13,7 +13,7 @@ const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'frida
 const STOP_WORDS = new Set([
   'a', 'account', 'accounts', 'all', 'an', 'and', 'are', 'direction', 'emotion', 'emotions', 'entries', 'entry',
   'find', 'for', 'from', 'had', 'i', 'in', 'me', 'my', 'note', 'notes', 'of', 'on', 'only', 'outcome',
-  'please', 'results', 'setup', 'setups', 'show', 'symbol', 'take', 'taken', 'that', 'the', 'trade', 'trades',
+  'please', 'results', 'setup', 'setups', 'show', 'strategies', 'strategy', 'symbol', 'take', 'taken', 'that', 'the', 'trade', 'trades',
   'was', 'were', 'when', 'where', 'with'
 ])
 

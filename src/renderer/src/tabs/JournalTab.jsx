@@ -553,17 +553,17 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
               </div>
             )}
           </Field>
-          <Field label="Setup">
+          <Field label="Setup / strategy">
             <div className="flex gap-1.5">
               <select style={inputStyle} className={inp} value={f.setup} onChange={set('setup')}>
                 {!setupOptions.includes(f.setup) && f.setup && <option value={f.setup}>{f.setup}</option>}
                 {setupOptions.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
-              <button type="button" onClick={() => { setAddingSetup((v) => !v); setAddingEmotion(false) }} title="Add a custom setup" className="shrink-0 rounded px-2" style={{ background: T.surface2, border: `1px solid ${T.line}`, color: T.accent }}><Plus size={14} /></button>
+              <button type="button" onClick={() => { setAddingSetup((v) => !v); setAddingEmotion(false) }} title="Add a custom setup or strategy" className="shrink-0 rounded px-2" style={{ background: T.surface2, border: `1px solid ${T.line}`, color: T.accent }}><Plus size={14} /></button>
             </div>
             {addingSetup && (
               <div className="flex gap-1.5 mt-1.5">
-                <input autoFocus style={inputStyle} className={inp} value={newSetup} onChange={(e) => setNewSetup(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSetup() } if (e.key === 'Escape') setAddingSetup(false) }} placeholder="New setup" />
+                <input autoFocus style={inputStyle} className={inp} value={newSetup} onChange={(e) => setNewSetup(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSetup() } if (e.key === 'Escape') setAddingSetup(false) }} placeholder="New setup or strategy" />
                 <button type="button" onClick={addSetup} className="shrink-0 rounded px-2" style={{ background: T.accent, color: '#1A1306' }}><Check size={14} /></button>
               </div>
             )}
@@ -785,7 +785,7 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
             <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs" role="status" style={{ background: T.accentSoft, border: `1px solid ${T.accent}`, color: T.text }}>
               <span style={{ color: T.accent }}>Timing drilldown</span>
               <strong>{describeJournalDrilldown(timingDrilldown)}</strong>
-              <span style={{ color: T.dim }}>{filtered.length} matching trade{filtered.length === 1 ? '' : 's'}; add symbol, setup, account, or outcome filters below.</span>
+              <span style={{ color: T.dim }}>{filtered.length} matching trade{filtered.length === 1 ? '' : 's'}; add symbol, setup/strategy, account, or outcome filters below.</span>
               <button type="button" onClick={() => setTimingDrilldown(null)} className="ml-auto inline-flex items-center gap-1" style={{ color: T.faint }}>Clear <X size={12} /></button>
             </div>
           )}
@@ -854,7 +854,11 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
             <table className="w-full text-sm" style={mono}>
               <thead>
                 <tr style={{ color: T.faint }} className="text-xs uppercase tracking-wider">
-                  {['Time', 'Symbol', 'Dir', 'P&L', 'Grade', 'R:R', 'Held', 'Setup', 'Emotion'].map((h) => <th key={h} className="text-left font-normal px-3 py-2">{h}</th>)}
+                  {/* Numbers sit right-aligned so decimal points line up down the column —
+                      with tabular-nums that makes magnitude scannable at a glance. */}
+                  {['Time', 'Symbol', 'Dir', 'P&L', 'Grade', 'R:R', 'Held', 'Setup / strategy', 'Emotion'].map((h) => (
+                    <th key={h} className={`font-normal px-3 py-2 ${['P&L', 'R:R', 'Held'].includes(h) ? 'text-right' : 'text-left'}`}>{h}</th>
+                  ))}
                   <th className="text-right font-normal px-3 py-2 sticky right-0" style={{ background: T.surface }}>Edit · Del</th>
                 </tr>
               </thead>
@@ -873,10 +877,10 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
                       </span>
                     </td>
                     <td className="px-3 py-2" style={{ color: t.direction === 'Long' ? T.up : T.down }}>{t.direction}</td>
-                    <td className="px-3 py-2 font-semibold" style={{ color: t.pnl >= 0 ? T.up : T.down }}>{fmt$(t.pnl)}</td>
+                    <td className="px-3 py-2 text-right font-semibold" style={{ color: t.pnl >= 0 ? T.up : T.down }}>{fmt$(t.pnl)}</td>
                     <td className="px-3 py-2"><GradeChip t={t} /></td>
-                    <td className="px-3 py-2" style={{ color: T.dim }}>{t.rr ? `1:${fmtN(t.rr, 1)}` : '—'}</td>
-                    <td className="px-3 py-2" style={{ color: T.dim }}>{fmtDuration(holdMs(t)) || '—'}</td>
+                    <td className="px-3 py-2 text-right" style={{ color: T.dim }}>{t.rr ? `1:${fmtN(t.rr, 1)}` : '—'}</td>
+                    <td className="px-3 py-2 text-right" style={{ color: T.dim }}>{fmtDuration(holdMs(t)) || '—'}</td>
                     <td className="px-3 py-2" style={{ color: T.dim }}>{t.setup}</td>
                     <td className="px-3 py-2" style={{ color: T.dim }}>{t.emotion}</td>
                     <td className="px-3 py-2 text-right whitespace-nowrap sticky right-0" style={{ background: T.surface }}>

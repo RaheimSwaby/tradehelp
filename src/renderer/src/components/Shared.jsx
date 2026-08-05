@@ -160,8 +160,12 @@ export function Readout({ label, value, tone, feedback }) {
   const feedbackClass = feedback ? ` th-pnl-feedback th-pnl-feedback-${Number(feedback.delta) >= 0 ? 'win' : 'loss'}` : ''
   return (
     <div className={`flex items-baseline gap-1.5${feedbackClass}`} style={{ '--pnl-pulse': pulseColor, '--pnl-settle': color }}>
-      <span className="text-xs" style={{ color: T.faint }}>{label}</span>
-      <span className="th-pnl-number" style={{ color }}>
+      {/* T.faint on the app background is ~3.2:1, under the 4.5:1 needed at this size.
+          T.dim is already in every palette and clears it, so the header stays readable
+          without introducing a colour the themes don't define. Slight tracking helps
+          these all-caps abbreviations resolve at 12px. */}
+      <span className="text-xs" style={{ color: T.dim, letterSpacing: '0.06em' }}>{label}</span>
+      <span className="th-pnl-number font-semibold" style={{ color }}>
         <AnimatedValue value={value} from={feedback?.from} animationKey={feedback?.id} />
       </span>
     </div>

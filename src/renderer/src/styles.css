@@ -22,11 +22,26 @@ body { margin: 0; background: #0E1117; transition: background .3s ease; }
 button { transition: opacity .12s ease, transform .1s ease, background .15s ease, color .15s ease, border-color .15s ease; }
 button:not(:disabled):active { transform: scale(0.97); }
 
+/* Tailwind v4 dropped cursor:pointer from its button reset, so every button here was
+   showing the plain arrow. A disabled control keeps the default cursor on purpose. */
+button:not(:disabled), [role="button"]:not([aria-disabled="true"]) { cursor: pointer; }
+button:disabled { cursor: default; }
+
 /* accent focus ring on inputs — replaces the browser default outline */
 input:focus-visible, select:focus-visible, textarea:focus-visible {
   outline: none;
   border-color: var(--th-accent, #F5B642) !important;
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--th-accent, #F5B642) 25%, transparent);
+}
+
+/* Same ring for buttons and links, which previously had no visible focus at all —
+   tabbing through the app left you with no idea where you were. Offset so the ring
+   sits outside the control rather than crowding its label. */
+button:focus-visible, a:focus-visible, [role="button"]:focus-visible, summary:focus-visible {
+  outline: 2px solid var(--th-accent, #F5B642);
+  /* Kept tight: several cards use overflow-hidden, which clips anything drawn far
+     outside the control. 1px still reads as a ring without getting cropped. */
+  outline-offset: 1px;
 }
 
 /* nav tabs: slight lift + glow when the mouse floats over them */
