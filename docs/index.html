@@ -86,6 +86,17 @@
   .privacy h2{margin-bottom:10px}
   .privacy p{color:var(--dim);max-width:620px;margin:0 auto}
 
+  /* verifiable community proof — endorsements are attributed, never anonymous */
+  .endorsement{position:relative;max-width:760px;margin:0 auto;padding:28px 30px;background:linear-gradient(145deg,var(--surface),rgba(28,36,51,.82));border:1px solid var(--line);border-radius:16px;box-shadow:0 18px 45px rgba(0,0,0,.24);overflow:hidden}
+  .endorsement::before{content:"“";position:absolute;right:22px;top:-26px;color:rgba(245,182,66,.11);font-family:Georgia,serif;font-size:150px;line-height:1;pointer-events:none}
+  .endorsement-label{display:flex;align-items:center;gap:8px;color:var(--accent);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em}
+  .endorsement-label::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--up);box-shadow:0 0 12px rgba(52,211,153,.55)}
+  .endorsement blockquote{position:relative;margin:15px 0 18px;color:var(--text);font-size:clamp(16px,2.2vw,19px);line-height:1.65}
+  .endorsement footer{display:flex;align-items:center;gap:10px;padding:0;border:0;text-align:left;font-size:13px}
+  .endorsement footer a{color:var(--text);font-weight:700;text-decoration:underline;text-decoration-color:rgba(245,182,66,.55);text-underline-offset:3px}
+  .endorsement footer a:hover{color:var(--accent)}
+  .endorsement footer time{color:var(--faint)}
+
   /* newsletter capture */
   .sub-form{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;max-width:440px;margin:0 auto}
   .sub-input{flex:1;min-width:220px;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:11px 14px;color:var(--text);font-size:15px;font-family:inherit;transition:border-color .15s ease}
@@ -164,7 +175,7 @@
   <div class="wrap">
     <span class="pill">Offline · private · yours forever</span>
     <h1>Your trading edge,<br /><span class="accent">on your machine.</span></h1>
-    <p class="sub">A local-first trading journal with an offline AI coach. Log trades, grade your process, track prop-firm rules, and let AI read your charts — all without your data ever leaving your device.</p>
+    <p class="sub">Stop repeating the same trading mistakes by using data instead of emotion. TradeHelp keeps your journal, process reviews, prop-firm rules, and optional offline AI coach private on your own device.</p>
     <div class="cta">
       <a class="btn" href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.exe" data-goatcounter-click="download-windows" data-goatcounter-title="Download Windows (hero)">
         <img src="logo.svg" width="18" height="18" alt="" /> Download for Windows
@@ -310,6 +321,28 @@
   </div>
 </section>
 
+<section aria-labelledby="community-proof-title">
+  <div class="wrap">
+    <h2 id="community-proof-title">Noticed by the trading community</h2>
+    <p class="lede">Independent feedback shared publicly on PeerPush.</p>
+    <article class="endorsement">
+      <div class="endorsement-label">Community endorsement</div>
+      <!-- Quoted to the sentence that is actually about this product. The rest of the
+           original praised educational resources and a support desk, which TradeHelp
+           does not ship — leaving it in reads as filler to anyone who knows the app. -->
+      <blockquote>
+        Trading support tools are critical for trader success, and TradeHelp looks like it addresses real pain points.
+      </blockquote>
+      <footer>
+        <a href="https://peerpush.com/u/omribenshoham" target="_blank" rel="noopener"
+           data-goatcounter-click="peerpush-review-author" data-goatcounter-title="PeerPush endorsement author">@omribenshoham</a>
+        <span aria-hidden="true">·</span>
+        <time datetime="2026-07-24">Jul 24, 2026</time>
+      </footer>
+    </article>
+  </div>
+</section>
+
 <section>
   <div class="wrap">
     <div class="privacy">
@@ -335,14 +368,19 @@
 
 <footer>
   <div class="wrap">
-    <p style="margin-bottom:18px">
+    <div style="margin-bottom:18px;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:12px">
       <a href="https://peerpush.com/p/tradehelp" target="_blank" rel="noopener"
          data-goatcounter-click="peerpush" data-goatcounter-title="PeerPush badge">
         <img src="https://peerpush.com/p/tradehelp/badge.png" alt="TradeHelp on PeerPush"
              width="230" height="65" loading="lazy"
              style="width:230px;max-width:100%;height:auto;vertical-align:middle" />
       </a>
-    </p>
+      <a href="https://peerpush.com/p/tradehelp" target="_blank" rel="noopener"
+         data-goatcounter-click="peerpush-rating" data-goatcounter-title="PeerPush rating badge">
+        <img src="https://peerpush.com/p/tradehelp/rating-badge.png" alt="TradeHelp rating on PeerPush"
+             loading="lazy" style="width:100%;max-width:400px;height:auto;vertical-align:middle" />
+      </a>
+    </div>
     <p style="margin-bottom:14px">
       Built by one trader, spread by word of mouth — know a trader who'd like it?
       <button type="button" id="shareBtn" class="share-link">Share TradeHelp</button><span id="shareMsg" aria-live="polite" style="color:var(--up)"></span>

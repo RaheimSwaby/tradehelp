@@ -12,3 +12,12 @@ dist/
 
 # Local demo/screenshot output — large binaries, not part of the app
 /artifacts/
+
+# Throwaway screenshots from verifying UI work, and exported share reports
+.tmp-*.png
+/TradeHelp-report-*.png
+
+# Rendered promo video only. The marketing folder itself is tracked (ad pages and
+# render scripts belong in the repo); it is the multi-MB output that must not be.
+/marketing/**/*.mp4
+/marketing/**/*.webm
