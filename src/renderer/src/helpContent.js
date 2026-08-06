@@ -8,7 +8,7 @@ export const HELP_SECTIONS = [
     items: [
       {
         q: 'Where is my data stored?',
-        a: 'In a single SQLite database in your user data folder, with chart screenshots as files alongside it. Nothing is uploaded anywhere — no account, no server. Settings → Data & backup → "Open data folder" takes you straight to it.'
+        a: 'In a single SQLite database in your user data folder, with chart screenshots as files alongside it. Your trades are never uploaded anywhere — no account, no server. Settings → Data & backup → "Open data folder" takes you straight to it. The only features that reach the internet are ones you choose: update checks, economic news, a cloud AI provider if you pick one instead of a local model, and the live chart — see "Does the live chart send my data anywhere?" under Charts.'
       },
       {
         q: 'How do I log my first trade?',
@@ -85,6 +85,32 @@ export const HELP_SECTIONS = [
       {
         q: 'How does the journal search work?',
         a: 'Type plain English: "losing NQ trades last week after 11am". Every condition it understood shows as a removable chip, so you can see exactly what is being filtered and drop any part you did not mean.'
+      }
+    ]
+  },
+  {
+    id: 'charts',
+    title: 'Charts',
+    items: [
+      {
+        q: 'What are the two charts in the Chart tab?',
+        a: 'The live chart is a TradingView embed with real market data, indicators and symbol search. The reconstruction is drawn by TradeHelp itself from the prices you recorded, and works with no connection.'
+      },
+      {
+        q: 'Is the reconstruction real market data?',
+        a: 'No, and it is labelled that way in the app. TradeHelp does not store historical price bars, so it infers a path between your entry, exit, stop and target to give the trade visual context. Treat the entry, exit and level lines as accurate — they are your own numbers — but not the movement between them. For what price actually did, use the live chart or a screenshot you attached at the time.'
+      },
+      {
+        q: 'Why does the same trade always look the same?',
+        a: 'The reconstruction is generated from the trade itself, so it is identical every time you open that trade. It will not redraw differently between visits.'
+      },
+      {
+        q: 'Does the live chart send my data anywhere?',
+        a: 'The live chart loads from TradingView, so it needs a connection and TradingView can see which symbol you are viewing, the same as opening their site in a browser. Your trades, notes, prices and P&L are never sent — they stay in your local database. If you would rather nothing left your machine at all, use the reconstruction, which is built entirely from your own data.'
+      },
+      {
+        q: 'The live chart is blank.',
+        a: 'It needs an internet connection, since the data comes from TradingView. Offline, use the reconstruction instead.'
       }
     ]
   },
