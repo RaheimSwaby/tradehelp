@@ -5,6 +5,7 @@ import { fmt$, fmtN, holdMs, fmtDuration, toJpeg } from '../utils.js'
 import { streamChat } from '../utils.js'
 import { GradeChip } from './Shared.jsx'
 import { LazyImage } from './LazyImage.jsx'
+import { TradeChart } from './TradeChart.jsx'
 
 const VISION_SYSTEM = `You are a trading chart analyst inside a trader's journal. You are shown the screenshot(s) of ONE trade plus its details (symbol, direction, setup, outcome, R:R, emotion). Read the chart: describe the visible price structure (trend, key levels, candle behaviour), then judge whether the entry/exit and the stated setup look clean and consistent with what's on the chart — including any 'Before' vs 'After' images. Some charts may have the trader's OWN markers drawn on them (e.g. Entry, Stop, Target) — treat those as ground truth for where those levels are, rather than guessing from the candles. Finish with ONE concrete, specific thing to repeat or fix next time. Do NOT predict future prices or give buy/sell signals. Keep it under ~160 words, concrete and direct.`
 
@@ -20,6 +21,7 @@ export function NotesModal({ trade, onClose, onUpdate, onAttachmentsChange }) {
   const [imgs, setImgs] = useState(null)
   const [videos, setVideos] = useState(null)
   const [zoom, setZoom] = useState(null)
+  const [mediaTab, setMediaTab] = useState('chart') // 'chart' | 'screenshots'
   const [analysis, setAnalysis] = useState(null) // { loading } | { text } | { error }
   const [notes, setNotes] = useState(trade.notes || '')
   const [baseNotes, setBaseNotes] = useState(trade.notes || '')
@@ -120,39 +122,81 @@ export function NotesModal({ trade, onClose, onUpdate, onAttachmentsChange }) {
             </div>
           )}
         </div>
-        {imgs === null ? (
-          <div className="mt-4 text-xs" style={{ color: T.faint }}>Loading screenshots…</div>
-        ) : imgs.length > 0 ? (
-          <div className="mt-4">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-xs uppercase tracking-wider" style={{ color: T.faint }}>Screenshots</div>
+        <div className="mt-4">
+          <div className="flex items-center justify-between mb-3 border-b pb-2" style={{ borderColor: T.line }}>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setMediaTab('chart')}
+                className="px-3 py-1 text-xs rounded-md font-semibold transition-colors"
+                style={{
+                  background: mediaTab === 'chart' ? T.accent : T.surface2,
+                  color: mediaTab === 'chart' ? '#1A1306' : T.text,
+                  border: `1px solid ${mediaTab === 'chart' ? T.accent : T.line}`
+                }}
+              >
+                📊 TradingView Chart
+              </button>
+              <button
+                type="button"
+                onClick={() => setMediaTab('screenshots')}
+                className="px-3 py-1 text-xs rounded-md font-semibold transition-colors"
+                style={{
+                  background: mediaTab === 'screenshots' ? T.accent : T.surface2,
+                  color: mediaTab === 'screenshots' ? '#1A1306' : T.text,
+                  border: `1px solid ${mediaTab === 'screenshots' ? T.accent : T.line}`
+                }}
+              >
+                🖼️ Screenshots ({imgs?.length || 0})
+              </button>
+            </div>
+            {mediaTab === 'screenshots' && imgs?.length > 0 && (
               <button type="button" onClick={analyze} disabled={analysis?.loading}
                 className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md font-semibold"
                 style={{ background: T.accent, color: '#1A1306', opacity: analysis?.loading ? 0.6 : 1 }}>
                 <Sparkles size={13} /> {analysis?.loading ? 'Analyzing…' : 'Analyze chart'}
               </button>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {imgs.map((im) => (
-                <div key={im.id} className="rounded-lg overflow-hidden" style={{ border: `1px solid ${T.line}` }}>
-                  <div className="flex items-center justify-between px-2 py-1" style={{ background: T.surface2 }}>
-                    <span className="text-xs" style={{ color: T.dim }}>{im.tag || 'untagged'}</span>
-                    <button type="button" onClick={() => del(im.id)} title="Delete image" style={{ color: T.faint }}><Trash2 size={13} /></button>
-                  </div>
-                  <LazyImage id={im.id} tag={im.tag} onZoom={setZoom} />
-                </div>
-              ))}
-            </div>
-            {analysis && (
-              <div className="mt-3 rounded-lg p-3 text-sm" style={{ background: T.accentSoft, border: `1px solid ${T.line}`, color: '#F3D9A0' }}>
-                {analysis.loading ? <span style={{ color: T.accent }}>Reading the chart… local vision models can take a moment.</span>
-                  : analysis.error ? <span style={{ color: T.down }}>⚠︎ {analysis.error}</span>
-                  : <div className="whitespace-pre-wrap">{analysis.text}</div>}
-                {!analysis.loading && <div className="text-xs mt-2" style={{ color: T.faint }}>AI chart read · not financial advice</div>}
-              </div>
             )}
           </div>
-        ) : null}
+
+          {mediaTab === 'chart' && (
+            <div className="mb-4">
+              <TradeChart trade={trade} height={380} />
+            </div>
+          )}
+
+          {mediaTab === 'screenshots' && (
+            <div>
+              {imgs === null ? (
+                <div className="text-xs" style={{ color: T.faint }}>Loading screenshots…</div>
+              ) : imgs.length > 0 ? (
+                <div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {imgs.map((im) => (
+                      <div key={im.id} className="rounded-lg overflow-hidden" style={{ border: `1px solid ${T.line}` }}>
+                        <div className="flex items-center justify-between px-2 py-1" style={{ background: T.surface2 }}>
+                          <span className="text-xs" style={{ color: T.dim }}>{im.tag || 'untagged'}</span>
+                          <button type="button" onClick={() => del(im.id)} title="Delete image" style={{ color: T.faint }}><Trash2 size={13} /></button>
+                        </div>
+                        <LazyImage id={im.id} tag={im.tag} onZoom={setZoom} />
+                      </div>
+                    ))}
+                  </div>
+                  {analysis && (
+                    <div className="mt-3 rounded-lg p-3 text-sm" style={{ background: T.accentSoft, border: `1px solid ${T.line}`, color: '#F3D9A0' }}>
+                      {analysis.loading ? <span style={{ color: T.accent }}>Reading the chart… local vision models can take a moment.</span>
+                        : analysis.error ? <span style={{ color: T.down }}>⚠︎ {analysis.error}</span>
+                        : <div className="whitespace-pre-wrap">{analysis.text}</div>}
+                      {!analysis.loading && <div className="text-xs mt-2" style={{ color: T.faint }}>AI chart read · not financial advice</div>}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-xs" style={{ color: T.faint }}>No screenshots attached to this trade. The Chart tab can show a reconstruction from your recorded prices, or pull up the live chart for this symbol.</div>
+              )}
+            </div>
+          )}
+        </div>
         {videos === null ? (
           <div className="mt-4 text-xs" style={{ color: T.faint }}>Loading screen recordings…</div>
         ) : videos.length > 0 ? (

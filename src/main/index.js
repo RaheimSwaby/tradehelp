@@ -468,6 +468,35 @@ function registerIpc() {
     const s = String(url)
     if (/^https?:\/\//i.test(s)) shell.openExternal(s)
   })
+  ipcMain.handle('app:openDetachedChart', (_e, symbol = 'NASDAQ:NQ1!') => {
+    const clean = encodeURIComponent(String(symbol).replace(/\s+/g, ''))
+    const chartUrl = `https://www.tradingview.com/widgetembed/?symbol=${clean}&interval=5&theme=dark&style=1&timezone=Etc%2FUTC&studies=%5B%5D&hide_side_toolbar=0&allow_symbol_change=1&save_image=1&calendar=1&hotlist=1`
+    const popout = new BrowserWindow({
+      width: 1200,
+      height: 800,
+      minWidth: 800,
+      minHeight: 500,
+      title: `TradeHelp Chart Workstation — ${symbol}`,
+      backgroundColor: '#09090b',
+      autoHideMenuBar: true,
+      // This window loads a third-party page. These are Electron's defaults,
+      // but they are stated explicitly so a future default change can't quietly
+      // hand remote content more privilege than it should ever have.
+      webPreferences: {
+        sandbox: true,
+        contextIsolation: true,
+        nodeIntegration: false,
+        webviewTag: false
+      }
+    })
+    // Anything the embedded page tries to open goes to the real browser rather
+    // than spawning further app windows we don't control.
+    popout.webContents.setWindowOpenHandler(({ url }) => {
+      if (/^https?:\/\//i.test(url)) shell.openExternal(url)
+      return { action: 'deny' }
+    })
+    popout.loadURL(chartUrl)
+  })
   ipcMain.handle('key:test', (_e, payload) => testKey(payload))
   ipcMain.handle('app:version', () => app.getVersion())
   ipcMain.handle('release:notes', async () => {

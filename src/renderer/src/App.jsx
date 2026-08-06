@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react'
 import {
   LayoutDashboard, Brain, Target, Settings as SettingsIcon, Gauge, Play,
   Feather, Landmark, ScrollText, Radar, CalendarClock, AlertTriangle, X, Clock3, TrendingUp, HelpCircle,
-  Newspaper
+  Newspaper, LineChart
 } from 'lucide-react'
 import { Whistle, PlayDiagram, CrosshairCandle } from './components/Icons.jsx'
 import { applyTheme, T, mono } from './theme.js'
@@ -14,6 +14,7 @@ import { PageAnimationContext } from './pageAnimation.js'
 import { NotesModal } from './components/NotesModal.jsx'
 import { WhatsNew } from './components/WhatsNew.jsx'
 import { Journal } from './tabs/JournalTab.jsx'
+import { ChartTab } from './tabs/ChartTab.jsx'
 import { Dashboard } from './tabs/DashboardTab.jsx'
 import { Psychology } from './tabs/PsychologyTab.jsx'
 import { Rating, AchievementToast } from './tabs/RatingTab.jsx'
@@ -897,6 +898,7 @@ export default function App() {
 
   const TABS = [
     ['journal', 'Journal', Feather],
+    ['chart', 'Charts', LineChart],
     ['trade', 'Trade Mode', CrosshairCandle],
     ['propfirm', 'Accounts', Landmark],
     ['dashboard', 'Dashboard', LayoutDashboard],
@@ -1029,6 +1031,7 @@ export default function App() {
           <PageAnimationContext.Provider value={`${tab}-${pageAnimationReplay}`}>
           <div key={tab} id="th-tabpanel" role="tabpanel" aria-labelledby={`th-tab-${tab}`} className="th-cinematic">
             {tab === 'journal' && <Journal trades={trades} onAdd={addTrade} onUpdate={updateTrade} onRemove={removeTrade} onNotes={setNotesView} onImport={importTrades} onRollbackImport={rollbackImport} accounts={propFirmAccounts} profiles={instrumentProfiles} savedSearches={savedSearches} onAddSavedSearch={addSavedSearch} onUpdateSavedSearch={updateSavedSearch} onDeleteSavedSearch={deleteSavedSearch} onRefreshSavedSearches={refreshSavedSearches} settings={settings} onSaveSettings={saveSettings} dayLogs={dayLogs} onAddDayLog={addDayLog} onDeleteDayLog={deleteDayLog} drilldown={journalDrilldown} onConsumeDrilldown={() => setJournalDrilldown(null)} />}
+            {tab === 'chart' && <ChartTab trades={trades} onOpenTrade={setNotesView} />}
             {tab === 'trade' && <TradeModeTab settings={settings} onSave={saveSettings} rules={rules} ruleBreaks={ruleBreaks} onDeleteRuleBreak={deleteRuleBreak} onUpdateSession={updateTradingSession} onDeleteSession={deleteTradingSession} live={tradeMode} arming={goTransition === 'arming'} todayNet={todayNet} todayCount={todayTrades.length} weekNet={weekNet} goal={dailyGoal} maxLoss={maxLoss} onStart={startDay} onEnd={endSession} session={activeSession} recordingState={recordingState} elapsed={sessionElapsed} sessions={tradingSessions} plans={tradePlans} trades={trades} accounts={propFirmAccounts} playbook={playbook} profiles={instrumentProfiles} planPrefill={planPrefill} onConsumePlanPrefill={() => setPlanPrefill(null)} onAddPlan={addTradePlan} onUpdatePlan={updateTradePlan} onDeletePlan={deleteTradePlan} />}
             {tab === 'propfirm' && <PropFirm trades={trades} accounts={propFirmAccounts} onSave={savePropFirmAccounts} settings={settings} onSaveSettings={saveSettings} payouts={payouts} onAddPayout={addPayout} onDeletePayout={deletePayout} expenses={propExpenses} onAddExpense={addPropExpense} onDeleteExpense={deletePropExpense} />}
             {tab === 'dashboard' && <Dashboard stats={stats} trades={trades} accounts={propFirmAccounts} settings={settings} journalData={{ reviews, playbook, dayLogs, goals, payouts, commitments }} payouts={payouts} plans={tradePlans} commitments={commitments} rules={rules} todayNet={todayNet} maxLoss={maxLoss} live={tradeMode} pnlFeedback={pnlFeedback} onSaveSettings={saveSettings} onOpenCoach={() => setTab('coach')} onOpenTradeMode={() => setTab('trade')} onOpenTrade={setNotesView} onTimingDrilldown={openTimingJournal} onClearDemo={clearDemoTrades} personalClock={sessionClock} personalSchedule={personalSchedule} now={now} />}
