@@ -52,7 +52,7 @@ export async function activate(db, key) {
   if (p.refunded || p.chargebacked || p.disputed) {
     return { ok: false, error: 'This purchase was refunded or disputed, so the key is no longer valid.' }
   }
-  if (Number(r.data.uses) > MAX_ACTIVATIONS) {
+  if (Number(r.data.uses) >= MAX_ACTIVATIONS) {
     return { ok: false, error: `This key has already been activated on ${MAX_ACTIVATIONS} devices. If that's not right, reply to your Gumroad receipt and we'll reset it.` }
   }
   db.setSettings({ licenseKey: key, licenseInstanceId: p.id || p.sale_id || '', licenseStatus: 'active' })

@@ -111,6 +111,9 @@ async function readStream(res, onChunk, sse, extract, onThinking) {
 }
 
 export async function models(settings) {
+  // Cloud providers don't expose a model list through a standard endpoint, and
+  // the Ollama /api/tags endpoint only makes sense when the provider is Ollama.
+  if (settings.provider !== 'ollama') return []
   const res = await fetch(`${trim(settings.ollamaUrl)}/api/tags`).catch(() => {
     throw new Error('Cannot reach Ollama at ' + settings.ollamaUrl)
   })

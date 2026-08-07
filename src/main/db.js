@@ -1040,8 +1040,16 @@ export function finishTradingSession(id, input = {}) {
     db.prepare(`UPDATE trading_sessions SET endedAt = ?, status = 'completed', notes = ?, updatedAt = ?
       WHERE id = ?`).run(endedAt, String(input.notes || ''), endedAt, String(id))
     if (Number.isFinite(startMs) && Number.isFinite(endMs)) {
-      db.prepare('DELETE FROM trading_session_trades WHERE sessionId = ?').run(String(id))
+      // Only link trades that aren't already linked — incremental, not a full rescan.
+      // Trades added during the session were already linked by linkTradeToActiveSession;
+      // this catches imports and any other trades that landed in the window without
+      // going through addTrade (e.g. bulk CSV import, broker sync, mobile sync).
+      const linked = new Set(
+        db.prepare('SELECT tradeId FROM trading_session_trades WHERE sessionId = ?')
+          .all(String(id)).map((r) => r.tradeId)
+      )
       for (const trade of db.prepare('SELECT * FROM trades').all()) {
+        if (linked.has(trade.id)) continue
         const timestamp = tradeTimestampMs(trade)
         if (Number.isFinite(timestamp) && timestamp >= startMs && timestamp <= endMs) {
           linkTradeToSession(id, trade.id, endedAt)
@@ -3162,7 +3170,9 @@ export function trimPriceBarsToTrades(root, padding = 4 * 60 * 60) {
 
   // Deleting rows frees pages inside the file but does not shrink it, and
   // reclaiming disk is the entire point — so compact, outside the transaction.
-  try { db.exec('VACUUM') } catch {}
+  // VACUUM rewrites the entire database file and can block the main process for
+  // seconds on a large journal, so defer it past the IPC response.
+  setTimeout(() => { try { db.exec('VACUUM') } catch {} }, 0)
 
   return { ok: true, root: key, before, after, removed: before - after, windows: windows.length }
 }
@@ -3182,11 +3192,14 @@ export function backupDb() {
     const dir = join(app.getPath('userData'), 'backups')
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
     const dest = join(dir, `tradehelp-${new Date().toISOString().slice(0, 10)}.db`)
-    db.backup(dest).then(() => {
-      const files = readdirSync(dir).filter((f) => f.endsWith('.db')).sort()
-      for (const f of files.slice(0, Math.max(0, files.length - 7))) { try { unlinkSync(join(dir, f)) } catch {} }
-    }).catch((err) => console.error('[backup] SQLite backup failed:', err))
+    // better-sqlite3 backup is synchronous — returns the db instance, not a Promise.
+    db.backup(dest)
+    // Keep the last 7 daily backups, remove older ones.
+    const files = readdirSync(dir).filter((f) => f.endsWith('.db')).sort()
+    for (const f of files.slice(0, Math.max(0, files.length - 7))) {
+      try { unlinkSync(join(dir, f)) } catch {}
+    }
   } catch (err) {
-    console.error('[backup] Backup setup failed:', err)
+    console.error('[backup] Daily backup failed:', err)
   }
 }

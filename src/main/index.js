@@ -364,7 +364,11 @@ function registerIpc() {
   ipcMain.handle('data:import', async () => {
     const { canceled, filePaths } = await dialog.showOpenDialog(win, { properties: ['openFile'], filters: [{ name: 'JSON', extensions: ['json'] }] })
     if (canceled || !filePaths?.[0]) return { ok: false }
-    try { return { ok: true, data: db.restoreData(JSON.parse(readFileSync(filePaths[0], 'utf8'))) } }
+    try {
+      const data = db.restoreData(JSON.parse(readFileSync(filePaths[0], 'utf8')))
+      settingsCache = null // restored settings may differ from the cached snapshot
+      return { ok: true, data }
+    }
     catch (e) { return { ok: false, error: String(e?.message || e) } }
   })
   ipcMain.handle('data:openFolder', () => shell.openPath(app.getPath('userData')))
