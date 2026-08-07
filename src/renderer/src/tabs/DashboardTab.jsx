@@ -90,6 +90,39 @@ function TimeframePerformance({ stats }) {
   )
 }
 
+function SymbolPerformance({ stats }) {
+  const rows = (stats.bySymbol || []).filter((r) => r.name && r.name !== '—')
+  if (!rows || rows.length === 0) return null
+
+  // Sort by trade count descending, taking top 6 symbols
+  const sortedSymbols = [...rows].sort((a, b) => b.n - a.n).slice(0, 6)
+
+  return (
+    <Panel title="Performance by Symbol" right={<span className="text-[10px]" style={{ color: T.faint }}>{rows.length} traded symbol{rows.length === 1 ? '' : 's'}</span>}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+        {sortedSymbols.map((s) => (
+          <div key={s.name} className="p-3 rounded-lg flex items-center justify-between" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
+            <div>
+              <div className="font-bold text-sm" style={{ color: T.text, ...mono }}>{s.name}</div>
+              <div className="text-xs mt-0.5" style={{ color: T.dim }}>
+                {s.n} trade{s.n === 1 ? '' : 's'} · <span style={{ color: s.wr >= 50 ? T.up : T.down }}>{fmtN(s.wr, 0)}% WR</span>
+              </div>
+            </div>
+            <div className="text-right" style={mono}>
+              <div className="font-bold text-sm" style={{ color: s.pnl >= 0 ? T.up : T.down }}>
+                {fmt$(s.pnl)}
+              </div>
+              <div className="text-[10px]" style={{ color: T.faint }}>
+                {s.n ? `${fmt$(s.pnl / s.n)}/trade` : ''}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Panel>
+  )
+}
+
 function RiskConsistency({ stats }) {
   if (!stats.riskSample) return null
   return (
@@ -369,6 +402,7 @@ export function Dashboard({ stats, trades, accounts = [], settings, journalData,
       </div>
 
       <RiskConsistency stats={vStats} />
+      <SymbolPerformance stats={vStats} />
       <TimeframePerformance stats={vStats} />
       <LeakFinder trades={viewTrades} />
 

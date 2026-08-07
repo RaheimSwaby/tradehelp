@@ -293,6 +293,7 @@ export function computeStats(trades) {
     grossProfit, grossLoss, nonTiltStreak: ntCur, bestNonTilt: ntBest,
     reasonsWin: toReasonArr(reasonsWin), reasonsLoss: toReasonArr(reasonsLoss),
     byEmotion: groupPnl('emotion'), bySetup: groupPnl('setup'),
+    bySymbol: groupPnl('symbol', (v) => String(v || '—').toUpperCase()),
     byAnalysisTimeframe: groupPnl('analysisTimeframe', normalizeTimeframe),
     byEntryTimeframe: groupPnl('entryTimeframe', normalizeTimeframe),
     byManagementTimeframe: groupPnl('managementTimeframe', normalizeTimeframe),
