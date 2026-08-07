@@ -54,6 +54,7 @@ td:first-child{color:var(--text)}
 .yes{color:var(--up)}
 .no{color:var(--down)}
 .meh{color:var(--faint)}
+.us{color:var(--text)}
 
 .callout{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:10px;padding:14px 18px;margin:18px 0;color:var(--dim);font-size:14.5px}
 code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13.5px}
