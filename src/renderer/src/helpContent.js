@@ -94,23 +94,55 @@ export const HELP_SECTIONS = [
     items: [
       {
         q: 'What are the two charts in the Chart tab?',
-        a: 'The live chart is a TradingView embed with real market data, indicators and symbol search. The reconstruction is drawn by TradeHelp itself from the prices you recorded, and works with no connection.'
+        a: 'The live chart is a TradingView embed with real market data, indicators and symbol search. The execution map is drawn by TradeHelp itself from the prices you recorded, and works with no connection.'
       },
       {
-        q: 'Is the reconstruction real market data?',
-        a: 'No, and it is labelled that way in the app. TradeHelp does not store historical price bars, so it infers a path between your entry, exit, stop and target to give the trade visual context. Treat the entry, exit and level lines as accurate — they are your own numbers — but not the movement between them. For what price actually did, use the live chart or a screenshot you attached at the time.'
+        q: 'Why does the execution map have no candles?',
+        a: 'Because TradeHelp does not store market data, so it has no candles to show you. Earlier versions filled the gap with a generated price series, which was clearly labelled but still put shapes on screen that never happened. The map now plots only what your journal actually knows: your entry, your exit, and your stop and target levels. The segment between entry and exit is dashed because that path is unknown.'
       },
       {
-        q: 'Why does the same trade always look the same?',
-        a: 'The reconstruction is generated from the trade itself, so it is identical every time you open that trade. It will not redraw differently between visits.'
+        q: 'Can I see real candles behind my trades?',
+        a: 'Yes, if your platform can export price history. Settings → Chart data → Import bars. TradeHelp buys no market data, so this is history you already pay your own platform for: it is stored on your machine, works offline afterwards, and the trade chart becomes real candles with your entry, exit, stop and target drawn on top — which the live TradingView chart cannot do, because it does not know your levels. Without an import nothing changes.'
+      },
+      {
+        q: 'Which platforms can export bars I can import?',
+        a: 'NinjaTrader 8 (Tools → Historical Data → Export), TradingView, MetaTrader 4 and 5, and Sierra Chart are all handled, along with most other platforms — any CSV or text file of date, open, high, low, close and volume. The bars do not have to come from the broker you traded with; they are just market data for that instrument, so a free NinjaTrader simulation account can supply candles for trades you placed elsewhere.'
+      },
+      {
+        q: 'I trade at a prop firm — does this work for me?',
+        a: 'Almost certainly. Apex, TopStep, MyFundedFutures and similar firms mostly front-end on NinjaTrader, Tradovate, Quantower or TradingView, and NinjaTrader and TradingView between them cover the bulk of that market. Export from whichever of those you use. If your firm routes through Rithmic or CQG without an export option, pull the bars from any other platform that has the instrument — the data does not need to come from the account you traded.'
+      },
+      {
+        q: 'The candles are offset from my entry marker.',
+        a: 'The export used a different clock than TradeHelp assumed. Re-import and set "Times in the file are" to match: UTC for NinjaTrader and TradingView, or the broker server offset for MetaTrader, which commonly writes UTC+2 or UTC+3 with nothing in the file to say so. Files carrying an explicit offset, as TradingView writes, are handled automatically.'
+      },
+      {
+        q: 'Do imported bars take up much space?',
+        a: 'A platform export covers whole sessions, but only the minutes around a trade are ever drawn — on a typical export that is over 80% of the rows doing nothing. Settings → Chart data → Trim to trades keeps bars within four hours of one of your trades and reclaims the rest. Every context window up to ±4h keeps working; only ±1d may show gaps. It cannot be undone without exporting again, so it is never automatic.'
+      },
+      {
+        q: 'How do I see the live chart for one of my trades?',
+        a: 'Press "Live chart" on the execution map toolbar. It opens the TradingView chart already set to that trade\'s instrument, with real market data and full timeframe control. TradingView\'s embed cannot be pointed at a specific date, so scroll back to the trade time shown in the banner. A screenshot attached to the trade at the time is the other option, and the only one that works offline.'
+      },
+      {
+        q: 'Why is there no timeframe selector on the trade chart?',
+        a: 'Because the scale is deliberately fixed at four hours either side of the trade. That is what makes duration readable without clicking anything: a two-minute scalp and a four-hour hold look plainly different, where a chart sized to each trade would make them look identical. Scroll to zoom and drag to pan, then press "Fit trade" to come back. Four hours also matches what "Trim to trades" keeps, so the chart never asks for data trimming removed. The live TradingView chart has full timeframe control.'
+      },
+      {
+        q: 'The execution map is empty for one of my trades.',
+        a: 'That trade has no entry price recorded. Rather than estimate one, the chart says so. Add the entry price to the trade and it will draw. A trade with an entry but no exit yet plots the entry alone.'
+      },
+      {
+        q: 'The live chart shows the wrong instrument.',
+        a: 'Symbols are matched on the contract root, so NQ, MNQ, "NQ 06-24", /ES, ES_F and ESH5 all resolve correctly, and stock tickers are passed to TradingView unprefixed so it picks the right listing. If a symbol still resolves wrong, type the fully qualified form (for example CME_MINI:ES1!) into the symbol box — anything containing a colon is used exactly as written.'
       },
       {
         q: 'Does the live chart send my data anywhere?',
-        a: 'The live chart loads from TradingView, so it needs a connection and TradingView can see which symbol you are viewing, the same as opening their site in a browser. Your trades, notes, prices and P&L are never sent — they stay in your local database. If you would rather nothing left your machine at all, use the reconstruction, which is built entirely from your own data.'
+        a: 'The live chart loads from TradingView, so it needs a connection and TradingView can see which symbol you are viewing, the same as opening their site in a browser. Your trades, notes, prices and P&L are never sent — they stay in your local database. If you would rather nothing left your machine at all, use the execution map, which is built entirely from your own data.'
       },
       {
         q: 'The live chart is blank.',
-        a: 'It needs an internet connection, since the data comes from TradingView. Offline, use the reconstruction instead.'
+        a: 'It needs an internet connection, since the data comes from TradingView. Offline, use the execution map instead.'
       }
     ]
   },

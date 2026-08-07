@@ -22,6 +22,13 @@ const V036_NOTES = `- Cosmetic Refresh - each theme preset now has its own restr
 - Dashboard quotes rotate daily and AI Coach quick prompts adapt to your journal`
 
 export const RELEASE_NOTES = {
+  '0.47.0': `- New Chart tab — pull up any trade and see exactly where your entry, exit, stop and target sat, with trendlines, zones and notes you can draw straight on it, plus a pop-out window for a second screen
+- TradeHelp stores no market data, so the trade view shows your recorded prices rather than inventing candles around them: the stretch between entry and exit is left dashed, because your journal genuinely does not know what price did in between
+- Import price bars from your own platform and that view becomes real candles with your levels drawn on top — something no live chart can do, since it does not know where your stop was. Works with NinjaTrader 8, TradingView, MetaTrader 4 and 5, Sierra Chart and most other exports (Settings → Chart data)
+- Imported bars never leave your machine and keep working offline. The trade picker marks which trades have candles behind them, and "Trim to trades" reclaims the parts of an export you will never look at
+- Live Market View gives you the full TradingView chart for any instrument, one click from the trade you are reviewing
+- Dashboard now breaks your results down by symbol, so you can see at a glance which instruments actually pay you
+- NinjaTrader imports no longer leave escape codes in your trade notes, so a strategy name with a pipe in it reads the way you wrote it`,
   '0.46.0': `- Weekly and monthly wrap-ups turn your completed trading periods into a clear recap and one focus to carry forward
 - Session reviews now record which rule was broken and why, then surface repeated reasons as a visible pattern
 - Session history is searchable and filterable, with saved notes, recordings, rule-break details, editing and deletion; deleting a session never removes its Journal trades
