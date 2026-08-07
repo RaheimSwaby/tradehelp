@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell, dialog, protocol, net, Notification, desktopCapturer } from 'electron'
+import { app, BrowserWindow, ipcMain, shell, dialog, protocol, net, Notification, desktopCapturer, session } from 'electron'
 import { extname, join, sep } from 'path'
 import { copyFileSync, createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'fs'
 import { randomUUID } from 'crypto'
@@ -201,6 +201,21 @@ function createWindow(rendererPort) {
 
 app.whenReady().then(() => {
   app.setAppUserModelId('com.tradehelp.app') // so Windows notifications show "TradeHelp", not "electron.app"
+  
+  // Set origin and referer headers for TradingView data feeds in production builds
+  try {
+    session.defaultSession.webRequest.onBeforeSendHeaders(
+      { urls: ['*://*.tradingview.com/*', '*://*.tradingview-widget.com/*'] },
+      (details, callback) => {
+        details.requestHeaders['Referer'] = 'https://www.tradingview.com/'
+        details.requestHeaders['Origin'] = 'https://www.tradingview.com'
+        callback({ requestHeaders: details.requestHeaders })
+      }
+    )
+  } catch (err) {
+    console.error('TradingView header interceptor error:', err)
+  }
+
   db.initDb()
   brokerSync = createBrokerSync(db, { allowDevelopment: !app.isPackaged })
   mobileSync = createMobileSyncServer(db, {

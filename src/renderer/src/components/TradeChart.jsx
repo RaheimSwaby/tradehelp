@@ -39,17 +39,56 @@ export function TradeChart({ trade = SAMPLE_FALLBACK_TRADE, height = 550, mode =
 
 /**
  * Official Live TradingView Widget Embed Component
+ * Works seamlessly in both Dev Mode and packaged Production builds.
  */
 function LiveTradingViewWidget({ symbol = 'CME_MINI:NQ1!', height = 550 }) {
-  const cleanSymbol = encodeURIComponent(symbol.replace(/\s+/g, ''))
+  const rawClean = symbol.replace(/\s+/g, '').toUpperCase()
+  const cleanSymbol = encodeURIComponent(rawClean)
+
+  const srcDocContent = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    html, body { width: 100%; height: 100%; margin: 0; padding: 0; background: #09090b; overflow: hidden; }
+    #tv_chart_container { width: 100%; height: 100%; }
+  </style>
+  <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+</head>
+<body>
+  <div id="tv_chart_container"></div>
+  <script type="text/javascript">
+    try {
+      new TradingView.widget({
+        "autosize": true,
+        "symbol": "${rawClean}",
+        "interval": "5",
+        "timezone": "Etc/UTC",
+        "theme": "dark",
+        "style": "1",
+        "locale": "en",
+        "toolbar_bg": "#09090b",
+        "enable_publishing": false,
+        "allow_symbol_change": true,
+        "container_id": "tv_chart_container"
+      });
+    } catch(e) {
+      console.error('TradingView Widget Error:', e);
+    }
+  </script>
+</body>
+</html>`
+
   const widgetUrl = `https://www.tradingview.com/widgetembed/?symbol=${cleanSymbol}&interval=5&theme=dark&style=1&timezone=Etc%2FUTC&studies=%5B%5D&hide_side_toolbar=0&allow_symbol_change=1&save_image=1&calendar=1&hotlist=1`
 
   return (
     <div style={{ width: '100%', height: `${height}px`, borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.12)', background: '#09090b' }}>
       <iframe
         title="Live TradingView Chart"
+        srcDoc={srcDocContent}
         src={widgetUrl}
         style={{ width: '100%', height: '100%', border: 'none', background: '#09090b' }}
+        allow="autoplay; fullscreen"
         allowFullScreen
       />
     </div>
