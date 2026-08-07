@@ -18,6 +18,12 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:14px 0
 .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:17px;letter-spacing:-.01em;color:var(--text)}
 .brand:hover{text-decoration:none}
 .brand .h{color:var(--accent)}
+
+.nav-links{display:flex;gap:22px;align-items:center;font-size:14px}
+.nav-links a{color:var(--dim);transition:color .15s ease}
+.nav-links a:hover{color:var(--text);text-decoration:none}
+@media (max-width:720px){.nav-links{display:none}}
+
 .btn{display:inline-flex;align-items:center;gap:8px;background:var(--accent);color:#1A1306;font-weight:600;padding:10px 16px;border-radius:10px;border:none;cursor:pointer;font-size:14px;transition:transform .15s ease,box-shadow .15s ease,filter .15s ease}
 .btn:hover{filter:brightness(1.05);transform:translateY(-1px);box-shadow:0 10px 24px rgba(245,182,66,.22);text-decoration:none}
 .btn.ghost{background:var(--surface2);color:var(--text);border:1px solid var(--line)}
