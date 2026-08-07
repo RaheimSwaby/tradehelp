@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { T, mono, inputStyle, ACCENT_OPTIONS, THEME_PRESETS, GO_TIME_OPTIONS, PNL_STYLE_OPTIONS, FONT_OPTIONS } from '../theme.js'
 import { CHECKOUT_URL, SITE_URL } from '../utils.js'
 import { Panel, Field } from '../components/Shared.jsx'
 import { BACKDROP_OPTIONS } from '../components/Backdrop.jsx'
 import { SOURCE_ZONE_OPTIONS } from '../utils/barImport.js'
+import { RELEASE_NOTES } from '../releaseNotes.js'
 import { BrokerSyncPanel } from '../widgets/BrokerSyncPanel.jsx'
 import { MobileSyncPanel } from '../widgets/MobileSyncPanel.jsx'
 import { Instagram, MessagesSquare, Plus, Pencil, Trash2, X, Globe } from 'lucide-react'
@@ -309,6 +310,84 @@ function PriceBarsPanel() {
   )
 }
 
+/** Newest first. Plain numeric compare per part, so 0.10.0 sorts above 0.9.0. */
+function compareVersionsDesc(a, b) {
+  const pa = String(a).split('.').map(Number)
+  const pb = String(b).split('.').map(Number)
+  for (let i = 0; i < Math.max(pa.length, pb.length); i += 1) {
+    const d = (pb[i] || 0) - (pa[i] || 0)
+    if (d) return d
+  }
+  return 0
+}
+
+/**
+ * Every release's notes, not just the newest.
+ *
+ * The "what's new" modal shows once and is gone, so anyone who dismissed it —
+ * or who updated across several versions at once — had no way back to what
+ * changed. The notes for every version are already bundled; this just makes
+ * them reachable.
+ */
+function ReleaseNotesPanel() {
+  const [expanded, setExpanded] = useState(null)
+  const [currentVersion, setCurrentVersion] = useState('')
+  const versions = useMemo(() => Object.keys(RELEASE_NOTES).sort(compareVersionsDesc), [])
+
+  useEffect(() => {
+    let cancelled = false
+    window.api?.appVersion?.()
+      .then((v) => { if (!cancelled) setCurrentVersion(String(v || '')) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+
+  // Open the running version by default — that is the one worth reading first.
+  useEffect(() => {
+    if (currentVersion && RELEASE_NOTES[currentVersion]) setExpanded(currentVersion)
+  }, [currentVersion])
+
+  return (
+    <Panel title="What's new">
+      <p className="text-sm mb-3" style={{ color: T.dim }}>
+        Every release, newest first — worth a scroll if you updated across a few versions and want to
+        see what you missed.
+      </p>
+      <div className="space-y-1.5 max-h-96 overflow-y-auto pr-1 custom-scrollbar">
+        {versions.map((v) => {
+          const isOpen = expanded === v
+          const isCurrent = v === currentVersion
+          return (
+            <div key={v} className="rounded-md" style={{ background: T.surface2, border: `1px solid ${isCurrent ? T.accent : T.line}` }}>
+              <button
+                type="button"
+                onClick={() => setExpanded(isOpen ? null : v)}
+                aria-expanded={isOpen}
+                className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left"
+              >
+                <span className="flex items-center gap-2 text-sm font-semibold" style={{ color: T.text, ...mono }}>
+                  v{v}
+                  {isCurrent && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold" style={{ background: T.accentSoft, color: T.accent }}>
+                      you have this
+                    </span>
+                  )}
+                </span>
+                <span className="text-xs" style={{ color: T.faint }}>{isOpen ? '−' : '+'}</span>
+              </button>
+              {isOpen && (
+                <div className="px-3 pb-3 text-xs whitespace-pre-line" style={{ color: T.dim, lineHeight: 1.55 }}>
+                  {String(RELEASE_NOTES[v] || '').trim()}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </Panel>
+  )
+}
+
 const BLANK_PROFILE = { symbol: '', name: '', assetClass: 'Futures', tickSize: '', tickValue: '', quantityStep: '1' }
 
 function InstrumentProfilesPanel({ profiles = [], onAdd, onUpdate, onDelete }) {
@@ -580,6 +659,7 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
       <MobileSyncPanel />
       <InstrumentProfilesPanel profiles={profiles} onAdd={onAddProfile} onUpdate={onUpdateProfile} onDelete={onDeleteProfile} />
       <PriceBarsPanel />
+      <ReleaseNotesPanel />
       <Panel title="Appearance 2.0">
         <Field label="Theme presets">
           <div className="grid grid-cols-2 gap-2 mt-1">

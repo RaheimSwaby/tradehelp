@@ -1,7 +1,8 @@
 import { app, BrowserWindow, ipcMain, shell, dialog, protocol, net, Notification, desktopCapturer } from 'electron'
-import { extname, join } from 'path'
-import { copyFileSync, createWriteStream, existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'fs'
+import { extname, join, sep } from 'path'
+import { copyFileSync, createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'fs'
 import { randomUUID } from 'crypto'
+import { createServer } from 'http'
 import { pathToFileURL } from 'url'
 import * as db from './db.js'
 import { chat, chatStream, models } from './ai.js'
@@ -22,6 +23,7 @@ let videoPickCleanupTimer = null
 let importWatcher = null
 let brokerSync = null
 let mobileSync = null
+let rendererServer = null
 const VIDEO_SCHEME = 'tradehelp-media'
 const VIDEO_PICK_TTL_MS = 15 * 60 * 1000
 const MAX_VIDEO_PICKS = 10
@@ -71,6 +73,50 @@ function safeVideoError(error, fallback) {
   return fallback
 }
 
+/**
+ * Serves the bundled renderer from 127.0.0.1 so the packaged app has the same
+ * http origin the dev server gives it.
+ *
+ * Loaded from file://, an embedded page has no origin to send. The TradingView
+ * chart is an iframe and its data socket rejects that with "bad auth token", so
+ * the live chart worked in dev and stayed blank once packaged. A custom scheme
+ * does not satisfy it either — only http(s) does. Bound to loopback, serving
+ * nothing but the already-public bundle.
+ */
+function startRendererServer() {
+  const root = join(__dirname, '../renderer')
+  const MIME = {
+    '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript',
+    '.css': 'text/css', '.json': 'application/json', '.map': 'application/json',
+    '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif', '.svg': 'image/svg+xml', '.webp': 'image/webp',
+    '.ico': 'image/x-icon', '.woff': 'font/woff', '.woff2': 'font/woff2',
+    '.ttf': 'font/ttf', '.otf': 'font/otf', '.mp3': 'audio/mpeg', '.wav': 'audio/wav'
+  }
+
+  return new Promise((resolve, reject) => {
+    rendererServer = createServer((req, res) => {
+      try {
+        const pathname = new URL(req.url || '/', 'http://127.0.0.1').pathname
+        const rel = decodeURIComponent(pathname).replace(/^\/+/, '') || 'index.html'
+        const target = join(root, rel)
+        // Never serve anything outside the bundled renderer directory.
+        if (target !== root && !target.startsWith(root + sep)) return res.writeHead(403).end()
+        if (!existsSync(target) || !statSync(target).isFile()) return res.writeHead(404).end()
+        res.writeHead(200, {
+          'Content-Type': MIME[extname(target).toLowerCase()] || 'application/octet-stream',
+          'Cache-Control': 'no-store'
+        })
+        return createReadStream(target).pipe(res)
+      } catch {
+        return res.writeHead(500).end()
+      }
+    })
+    rendererServer.on('error', reject)
+    rendererServer.listen(0, '127.0.0.1', () => resolve(rendererServer.address().port))
+  })
+}
+
 function registerVideoProtocol() {
   protocol.handle(VIDEO_SCHEME, async (request) => {
     try {
@@ -101,7 +147,7 @@ function registerVideoProtocol() {
   })
 }
 
-function createWindow() {
+function createWindow(rendererPort) {
   win = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -142,12 +188,14 @@ function createWindow() {
   // from the journal.
   win.webContents.on('will-navigate', (event, url) => {
     if (devUrl && url.startsWith(devUrl)) return
+    if (rendererPort && url.startsWith(`http://127.0.0.1:${rendererPort}/`)) return
     if (url.startsWith('file://')) return
     event.preventDefault()
     if (/^https?:\/\//i.test(url)) shell.openExternal(url)
   })
 
   if (devUrl) win.loadURL(devUrl)
+  else if (rendererPort) win.loadURL(`http://127.0.0.1:${rendererPort}/index.html`)
   else win.loadFile(join(__dirname, '../renderer/index.html'))
 }
 
@@ -167,7 +215,14 @@ app.whenReady().then(() => {
   videoPickCleanupTimer.unref?.()
   db.backupDb()
   registerIpc()
-  createWindow()
+  // If loopback cannot bind, fall back to file:// rather than failing to open
+  // at all — everything works then except the embedded live chart.
+  startRendererServer()
+    .then((port) => createWindow(port))
+    .catch((e) => {
+      console.error('[renderer] loopback server unavailable, using file://:', e?.message || e)
+      createWindow(null)
+    })
   importWatcher = createImportWatcher(db, (event) => {
     try { win?.webContents?.send('imports:changed', event) } catch {}
     if (!Notification.isSupported() || event.type === 'error') return
@@ -180,12 +235,13 @@ app.whenReady().then(() => {
   importWatcher.start()
   initUpdater(() => win)
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    if (BrowserWindow.getAllWindows().length === 0) createWindow(rendererServer?.address()?.port || null)
   })
 })
 
 app.on('before-quit', () => {
   if (videoPickCleanupTimer) clearInterval(videoPickCleanupTimer)
+  try { rendererServer?.close() } catch {}
   importWatcher?.stop()
   mobileSync?.stop().catch(() => {})
   pendingVideoPicks.clear()

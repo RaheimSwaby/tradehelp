@@ -22,6 +22,8 @@ const V036_NOTES = `- Cosmetic Refresh - each theme preset now has its own restr
 - Dashboard quotes rotate daily and AI Coach quick prompts adapt to your journal`
 
 export const RELEASE_NOTES = {
+  '0.47.1': `- Fixed the Live Market View showing nothing in the installed app — it worked while the app was in development and went blank once packaged, which is exactly the gap this release closes
+- Settings now keeps every release's notes, so you can look back through earlier versions and find features you missed`,
   '0.47.0': `- New Chart tab — pull up any trade and see exactly where your entry, exit, stop and target sat, with trendlines, zones and notes you can draw straight on it, plus a pop-out window for a second screen
 - TradeHelp stores no market data, so the trade view shows your recorded prices rather than inventing candles around them: the stretch between entry and exit is left dashed, because your journal genuinely does not know what price did in between
 - Import price bars from your own platform and that view becomes real candles with your levels drawn on top — something no live chart can do, since it does not know where your stop was. Works with NinjaTrader 8, TradingView, MetaTrader 4 and 5, Sierra Chart and most other exports (Settings → Chart data)
