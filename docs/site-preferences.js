@@ -207,6 +207,12 @@
         d.classList.remove('is-closed');
       });
     }
+
+    if (document.querySelector('.dropdown.is-open')) {
+      document.body.classList.add('has-active-click');
+    } else {
+      document.body.classList.remove('has-active-click');
+    }
   });
 
   document.addEventListener('mousemove', function (e) {
