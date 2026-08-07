@@ -3,21 +3,21 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>TradeHelp — local-first trading journal & offline AI coach</title>
-<meta name="description" content="A desktop trading journal with an offline AI coach. Your trades live on your machine and never leave it. Free 14-day trial, then a one-time $50 — no subscription. Windows, macOS & Linux." />
+<title>TradeHelp: local-first trading journal and offline AI coach</title>
+<meta name="description" content="A desktop trading journal with an offline AI coach. Your trades live on your machine and never leave it. Free 14-day trial, then a one-time $50. No subscription. Windows, macOS & Linux." />
 <link rel="canonical" href="https://trade-help.app/" />
 <meta property="article:modified_time" content="2026-08-06" />
 
 <!-- OpenGraph & Twitter Card Social Preview -->
 <meta property="og:type" content="website" />
 <meta property="og:url" content="https://trade-help.app/" />
-<meta property="og:title" content="TradeHelp — Local-First Trading Journal & Offline AI Coach" />
-<meta property="og:description" content="A desktop trading journal with an offline AI coach. Your trades live on your machine in SQLite. Free 14-day trial, then a one-time $50 — no subscription." />
+<meta property="og:title" content="TradeHelp: Local-First Trading Journal and Offline AI Coach" />
+<meta property="og:description" content="A desktop trading journal with an offline AI coach. Your trades live on your machine in SQLite. Free 14-day trial, then a one-time $50. No subscription." />
 <meta property="og:image" content="https://trade-help.app/shots/dashboard.png" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
 <meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="TradeHelp — Local-First Trading Journal & Offline AI Coach" />
+<meta name="twitter:title" content="TradeHelp: Local-First Trading Journal and Offline AI Coach" />
 <meta name="twitter:description" content="Stop paying monthly subscriptions for trading journals. Store trades locally in SQLite with an offline AI coach." />
 <meta name="twitter:image" content="https://trade-help.app/shots/dashboard.png" />
 
@@ -65,7 +65,7 @@
           "name": "How does TradeHelp compare to TradeZella or TraderSync?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Unlike TradeZella or TraderSync which charge $30–$50/month subscription fees and store your trades on cloud servers, TradeHelp is a one-time $50 purchase ($25 founders launch price) with no subscription, zero accounts, and 100% offline data privacy."
+            "text": "Unlike TradeZella or TraderSync which charge $30-$50/month subscription fees and store your trades on cloud servers, TradeHelp is a one-time $50 purchase ($25 founders launch price) with no subscription, zero accounts, and 100% offline data privacy."
           }
         },
         {
@@ -103,13 +103,13 @@
   .brand .h{color:var(--accent)}
   .btn{display:inline-flex;align-items:center;gap:8px;background:var(--accent);color:#1A1306;font-weight:600;padding:11px 18px;border-radius:10px;border:none;cursor:pointer;font-size:15px;transition:transform .15s ease,box-shadow .15s ease,filter .15s ease,border-color .15s ease}
   .btn.ghost{background:var(--surface2);color:var(--text);border:1px solid var(--line)}
-  .btn:hover{filter:brightness(1.05);transform:translateY(-1px);box-shadow:0 10px 24px rgba(245,182,66,.22)}
+  .btn:hover{filter:brightness(1.04);transform:translateY(-1px);box-shadow:0 8px 20px rgba(0,0,0,.35)}
   .btn.ghost:hover{box-shadow:0 10px 24px rgba(0,0,0,.3);border-color:var(--accent)}
 
   header.hero{text-align:center;padding:56px 0 40px}
   .pill{display:inline-block;font-size:12px;color:var(--faint);border:1px solid var(--line);border-radius:999px;padding:4px 12px;margin-bottom:22px}
   h1{font-size:clamp(34px,5vw,52px);line-height:1.1;letter-spacing:-.02em;font-weight:700}
-  h1 .accent{background:linear-gradient(120deg,var(--accent),#FFD98A);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent}
+  h1 .accent{color:var(--accent)}
   .sub{color:var(--dim);font-size:clamp(16px,2.2vw,20px);max-width:620px;margin:18px auto 30px}
   .cta{display:flex;gap:12px;justify-content:center;align-items:center;flex-wrap:wrap}
   .note{color:var(--faint);font-size:13px;margin-top:14px}
@@ -122,18 +122,17 @@
   .strike{color:var(--faint);text-decoration:line-through;font-weight:400;font-size:.55em;margin-right:6px;vertical-align:middle}
   .founders-tag{display:inline-block;color:var(--accent);font-weight:700;font-size:14px;margin-top:6px}
 
-  .strip{border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:var(--surface);margin-top:48px}
-  .strip .wrap{display:flex;flex-wrap:wrap;gap:8px 28px;justify-content:center;padding:16px 24px;font-size:14px;color:var(--dim)}
-  .strip b{color:var(--text);font-weight:600}
-
   section{padding:56px 0}
   h2{font-size:28px;letter-spacing:-.01em;font-weight:700;text-align:center;margin-bottom:8px}
   .lede{color:var(--dim);text-align:center;max-width:560px;margin:0 auto 36px}
   .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
-  .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease}
-  .card:hover{transform:translateY(-3px);border-color:var(--accent);box-shadow:0 14px 32px rgba(0,0,0,.36)}
+  /* the flagship feature earns more room than the nine behind it */
+  .grid .card.lead{grid-column:span 2}
+  .grid .card.lead h3{font-size:18px}
+  @media (max-width:560px){.grid .card.lead{grid-column:span 1}}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;transition:border-color .16s ease}
+  .card:hover{border-color:var(--faint)}
   .card h3{font-size:16px;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:8px}
-  .dot{width:9px;height:9px;border-radius:3px;display:inline-block}
   .card p{color:var(--dim);font-size:14.5px}
 
   /* comparison table */
@@ -151,6 +150,7 @@
   .meh{color:var(--faint)}
   .cmp-more{text-align:center;margin-top:22px}
 
+  .foot-links{display:flex;flex-wrap:wrap;gap:6px 18px;justify-content:center;margin-bottom:10px}
   .nav-links{display:flex;gap:22px;align-items:center;font-size:14px}
   .nav-links a{color:var(--dim);transition:color .15s ease}
   .nav-links a:hover{color:var(--text)}
@@ -210,24 +210,16 @@
     transform:translateY(0);
   }
 
-  body:not(.has-active-click) .dropdown:hover:not(.is-closed) .dropdown-content a:nth-child(1), .dropdown.is-open .dropdown-content a:nth-child(1) { transition-delay: 0.03s; }
-  body:not(.has-active-click) .dropdown:hover:not(.is-closed) .dropdown-content a:nth-child(2), .dropdown.is-open .dropdown-content a:nth-child(2) { transition-delay: 0.07s; }
-  body:not(.has-active-click) .dropdown:hover:not(.is-closed) .dropdown-content a:nth-child(3), .dropdown.is-open .dropdown-content a:nth-child(3) { transition-delay: 0.11s; }
-  body:not(.has-active-click) .dropdown:hover:not(.is-closed) .dropdown-content a:nth-child(4), .dropdown.is-open .dropdown-content a:nth-child(4) { transition-delay: 0.15s; }
-  body:not(.has-active-click) .dropdown:hover:not(.is-closed) .dropdown-content a:nth-child(5), .dropdown.is-open .dropdown-content a:nth-child(5) { transition-delay: 0.19s; }
-  body:not(.has-active-click) .dropdown:hover:not(.is-closed) .dropdown-content a:nth-child(6), .dropdown.is-open .dropdown-content a:nth-child(6) { transition-delay: 0.23s; }
-
   .dropdown-content a:hover{background:var(--surface2);color:var(--accent);text-decoration:none;transform:translateX(3px)!important}
 
   .privacy{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:34px;text-align:center}
   .privacy h2{margin-bottom:10px}
   .privacy p{color:var(--dim);max-width:620px;margin:0 auto}
 
-  /* verifiable community proof — endorsements are attributed, never anonymous */
-  .endorsement{position:relative;max-width:760px;margin:0 auto;padding:28px 30px;background:linear-gradient(145deg,var(--surface),rgba(28,36,51,.82));border:1px solid var(--line);border-radius:16px;box-shadow:0 18px 45px rgba(0,0,0,.24);overflow:hidden}
-  .endorsement::before{content:"“";position:absolute;right:22px;top:-26px;color:rgba(245,182,66,.11);font-family:Georgia,serif;font-size:150px;line-height:1;pointer-events:none}
+  /* verifiable community proof: endorsements are attributed, never anonymous */
+  .endorsement{position:relative;max-width:760px;margin:0 auto;padding:28px 30px;background:linear-gradient(145deg,var(--surface),rgba(28,36,51,.82));border:1px solid var(--line);border-radius:16px;box-shadow:0 18px 45px rgba(0,0,0,.24)}
   .endorsement-label{display:flex;align-items:center;gap:8px;color:var(--accent);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em}
-  .endorsement-label::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--up);box-shadow:0 0 12px rgba(52,211,153,.55)}
+  .endorsement-label::before{content:"";width:18px;height:1px;background:var(--accent)}
   .endorsement blockquote{position:relative;margin:15px 0 18px;color:var(--text);font-size:clamp(16px,2.2vw,19px);line-height:1.65}
   .endorsement footer{display:flex;align-items:center;gap:10px;padding:0;border:0;text-align:left;font-size:13px}
   .endorsement footer a{color:var(--text);font-weight:700;text-decoration:underline;text-decoration-color:rgba(245,182,66,.55);text-underline-offset:3px}
@@ -248,7 +240,7 @@
   .share-link{background:none;border:none;padding:0;font:inherit;color:var(--accent);text-decoration:underline;cursor:pointer}
   .share-link:hover{filter:brightness(1.1)}
 
-  /* mobile handoff — shown only to phone visitors, who can't install a desktop app */
+  /* mobile handoff: shown only to phone visitors, who cannot install a desktop app */
   .mobile-cta{display:none;max-width:520px;margin:22px auto 0;text-align:left;background:var(--surface);border:1px solid var(--accent);border-radius:12px;padding:16px}
   .mobile-cta.show{display:block}
   .mobile-cta .mc-title{font-size:15px;font-weight:700;color:var(--text)}
@@ -266,7 +258,7 @@
   .firstrun b{color:var(--text)}
   .firstrun code{display:block;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:8px 0 16px;font-family:ui-monospace,Consolas,monospace;font-size:13px;color:var(--accent);overflow-x:auto}
 
-  /* scroll-reveal — only active when JS is present, so content is always visible without it */
+  /* scroll-reveal: only active when JS is present, so content is always visible without it */
   .js .reveal{opacity:0;transform:translateY(14px);transition:opacity .5s ease,transform .5s ease}
   .js .reveal.in{opacity:1;transform:none}
   @media (prefers-reduced-motion: reduce){.js .reveal{opacity:1;transform:none;transition:none}}
@@ -290,7 +282,7 @@
 </head>
 <body>
 <canvas id="bg-matrix" aria-hidden="true"></canvas>
-<div class="promo">🔥 Founders' pricing — <b>50% off the first 100</b> · <span class="was">$50</span> <b>$25</b> once · <a href="https://tradehelp.gumroad.com/l/oyftvr">Claim it →</a></div>
+<div class="promo">Founders' pricing: <b>50% off the first 100</b>. <span class="was">$50</span> <b>$25</b> once. <a href="https://tradehelp.gumroad.com/l/oyftvr">Claim it</a></div>
 <div class="topbar">
   <div class="wrap">
     <nav>
@@ -318,7 +310,7 @@
         <a href="#pricing">Pricing</a>
       </div>
       <div style="display:flex;gap:10px;align-items:center">
-        <a class="btn ghost" href="https://tradehelp.gumroad.com/l/oyftvr">Buy — $25</a>
+        <a class="btn ghost" href="https://tradehelp.gumroad.com/l/oyftvr">Buy for $25</a>
         <a class="btn" href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.exe" data-goatcounter-click="download-windows" data-goatcounter-title="Download Windows (nav)">Download</a>
       </div>
     </nav>
@@ -327,7 +319,7 @@
 
 <header class="hero">
   <div class="wrap">
-    <span class="pill">Offline · private · yours forever</span>
+    <span class="pill">Your journal stays on your computer</span>
     <h1>Your trading edge,<br /><span class="accent">on your machine.</span></h1>
     <p class="sub">Stop repeating the same trading mistakes by using data instead of emotion. TradeHelp keeps your journal, process reviews, prop-firm rules, and optional offline AI coach private on your own device.</p>
     <div class="cta">
@@ -335,29 +327,29 @@
         <img src="logo.svg" width="18" height="18" alt="" /> Download for Windows
       </a>
       <a class="btn ghost" href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.dmg" data-goatcounter-click="download-mac" data-goatcounter-title="Download macOS (hero)">Download for macOS</a>
-      <a class="btn ghost" href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.AppImage" data-goatcounter-click="download-linux" data-goatcounter-title="Download Linux (hero)">Linux</a>
+      <a class="btn ghost" href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.AppImage" data-goatcounter-click="download-linux" data-goatcounter-title="Download Linux (hero)">Download for Linux</a>
     </div>
     <p class="note">Free 14-day trial, then <span class="was" style="text-decoration:line-through;opacity:.7">$50</span> <b style="color:var(--accent)">$25 once</b> for the first 100 · Windows, macOS &amp; Linux</p>
     <div class="mobile-cta" id="mobileCta">
-      <div class="mc-title">📱 TradeHelp is a desktop app</div>
+      <div class="mc-title">TradeHelp is a desktop app</div>
       <p>Looks like you're on a phone. Send yourself the link so it's ready when you're at your Windows or Mac computer.</p>
       <div class="mc-row">
-        <a class="mc-btn" id="mcEmail" href="#">✉️ Email me the link</a>
+        <a class="mc-btn" id="mcEmail" href="#">Email me the link</a>
         <button type="button" class="mc-btn alt" id="mcShare">Copy link</button>
       </div>
     </div>
     <details class="firstrun">
       <summary>First launch, or updating an older Mac copy?</summary>
-      <p><b>Windows:</b> SmartScreen may warn because the app isn't code-signed yet — click <b>More info → Run anyway</b>.</p>
-      <p><b>macOS:</b> Nothing to do. TradeHelp is signed with an Apple Developer ID and notarized by Apple — drag it to Applications and open it.</p>
-      <p><b>Already have TradeHelp on a Mac?</b> Download this version and replace the copy in your Applications folder. <b>Your journal is not touched</b> — trades, screenshots and settings live in a separate data folder, so nothing is lost. Older Mac builds could not update themselves; once you are on this one, future updates install in the background.</p>
+      <p><b>Windows:</b> SmartScreen may warn you, because the app isn't code-signed yet. Click <b>More info</b>, then <b>Run anyway</b>.</p>
+      <p><b>macOS:</b> Nothing to do. Apple has notarized TradeHelp and it carries a Developer ID signature. Drag it to Applications and open it.</p>
+      <p><b>Already have TradeHelp on a Mac?</b> Download this version and drop it into Applications over the old copy. You keep everything: trades, screenshots and settings sit in a separate folder the installer never touches. This is also the last update you'll install by hand. From here they arrive in the background.</p>
     </details>
   </div>
 </header>
 
 <div class="wrap">
   <figure class="shot hero-shot">
-    <div class="bar"><i></i><i></i><i></i><span class="t">TradeHelp — Promo video</span></div>
+    <div class="bar"><i></i><i></i><i></i><span class="t">TradeHelp promo video</span></div>
     <div class="frame">
       <!-- Autoplay only works muted; controls stay so anyone can unmute or pause it. -->
       <video id="tourVideo" controls autoplay muted loop playsinline preload="metadata" poster="shots/dashboard.png"
@@ -369,30 +361,21 @@
   </figure>
 </div>
 
-<div class="strip">
-  <div class="wrap">
-    <span><b>Local-first</b> — SQLite on your machine</span>
-    <span><b>Offline AI</b> — your machine, your model</span>
-    <span><b>No account</b> — nothing to sign up for</span>
-    <span><b>Auto-updates</b> — always current</span>
-  </div>
-</div>
-
 <section id="features">
   <div class="wrap">
     <h2>Everything in one place</h2>
-    <p class="lede">A serious journal for serious traders — without the subscription or the cloud.</p>
+    <p class="lede">A serious journal for serious traders. No subscription, no cloud.</p>
     <div class="grid">
-      <div class="card"><h3><span class="dot" style="background:var(--up)"></span>Your trades on real charts</h3><p>See where your entry, exit, stop and target actually sat. Import price history from NinjaTrader, TradingView or MetaTrader and it becomes real candles with your own levels on top — offline, on your machine.</p></div>
-      <div class="card"><h3><span class="dot" style="background:var(--accent)"></span>Trade Mode</h3><p>Your own pre-trade checklist, daily goal &amp; a full-screen max-loss alarm, and a focused “go time” view that flips the whole app when you're live.</p></div>
-      <div class="card"><h3><span class="dot" style="background:var(--accent)"></span>AI chart analysis</h3><p>Attach a screenshot and an offline vision model reads the chart — then compares your winning vs losing setups to find what separates them.</p></div>
-      <div class="card"><h3><span class="dot" style="background:var(--down)"></span>Performance heat map</h3><p>See your win rate by hour and day on a fire-colored grid — it flags the exact windows you trade best so you can lean into your edge.</p></div>
-      <div class="card"><h3><span class="dot" style="background:var(--accent)"></span>Playbook</h3><p>Document each setup — entry criteria, invalidation, targets — and every trade auto-links to it, showing the real win rate and P&amp;L per strategy.</p></div>
-      <div class="card"><h3><span class="dot" style="background:var(--accent)"></span>Prop-firm tracking</h3><p>Track one or many challenges — profit target, daily loss, trailing drawdown — with live cushion-to-breach and a tightest-account flag.</p></div>
-      <div class="card"><h3><span class="dot" style="background:var(--up)"></span>Rating &amp; achievements</h3><p>A 59–99 trader rating that grades your <em>process</em>, not luck, plus psychology-based achievements and a non-tilt streak.</p></div>
-      <div class="card"><h3><span class="dot" style="background:var(--up)"></span>Reviews &amp; journal</h3><p>Weekly to year-to-date reviews with stats, an equity curve, a P&amp;L calendar and a saved written reflection — with an optional AI summary.</p></div>
-      <div class="card"><h3><span class="dot" style="background:var(--down)"></span>Local Import Inbox</h3><p>Watch broker export folders, detect new CSVs, reuse account mappings, review warnings, and roll back a full import safely. NinjaTrader, Tradovate and TopstepX are recognized automatically.</p></div>
-      <div class="card"><h3><span class="dot" style="background:var(--accent)"></span>Make it yours</h3><p>Light &amp; dark themes, eleven accent colors, and six animated backdrops — constellation, matrix rain, glow orbs, flames, drifting candles or a bouncing equalizer.</p></div>
+      <div class="card lead"><h3>Your trades on real charts</h3><p>See where your entry, exit, stop and target actually sat. Import price history from NinjaTrader, TradingView or MetaTrader and it becomes real candles with your own levels on top, offline and on your machine.</p></div>
+      <div class="card"><h3>Trade Mode</h3><p>Your own pre-trade checklist, daily goal &amp; a full-screen max-loss alarm, and a focused “go time” view that flips the whole app when you're live.</p></div>
+      <div class="card"><h3>AI chart analysis</h3><p>Attach a screenshot and an offline vision model reads the chart, then compares your winning and losing setups to find what separates them.</p></div>
+      <div class="card"><h3>Performance heat map</h3><p>See your win rate by hour and day on a fire-colored grid. It flags the exact windows you trade best, so you can lean into your edge.</p></div>
+      <div class="card"><h3>Playbook</h3><p>Document each setup: entry criteria, invalidation, targets. Every trade auto-links to it, showing the real win rate and P&amp;L per strategy.</p></div>
+      <div class="card"><h3>Prop-firm tracking</h3><p>Track one or many challenges against profit target, daily loss and trailing drawdown, with live cushion-to-breach and a tightest-account flag.</p></div>
+      <div class="card"><h3>Rating &amp; achievements</h3><p>A 59 to 99 trader rating that grades your <em>process</em>, not luck, plus psychology-based achievements and a non-tilt streak.</p></div>
+      <div class="card"><h3>Reviews &amp; journal</h3><p>Weekly to year-to-date reviews with stats, an equity curve, a P&amp;L calendar and a saved written reflection, with an optional AI summary.</p></div>
+      <div class="card"><h3>Local Import Inbox</h3><p>Watch broker export folders, detect new CSVs, reuse account mappings, review warnings, and roll back a full import safely. NinjaTrader, Tradovate and TopstepX are recognized automatically.</p></div>
+      <div class="card"><h3>Make it yours</h3><p>Light &amp; dark themes, eleven accent colors, and six animated backdrops: constellation, matrix rain, glow orbs, flames, drifting candles or a bouncing equalizer.</p></div>
     </div>
   </div>
 </section>
@@ -400,27 +383,27 @@
 <section>
   <div class="wrap">
     <h2>See it in action</h2>
-    <p class="lede">A focused dark desk that grades your process — here's what you actually work in.</p>
+    <p class="lede">A focused dark workspace that grades your process, not your luck. This is what you work in every day.</p>
     <div class="shots-grid">
       <figure class="shot">
         <div class="bar"><i></i><i></i><i></i><span class="t">Charts</span></div>
-        <div class="frame"><span class="ph">shots/charts.png</span><img src="shots/charts.png" alt="Chart workstation — a trade shown on real imported candles with its entry and exit marked, and drawing tools alongside" loading="lazy" onload="this.parentNode.classList.add('has-img')" onerror="this.remove()" /></div>
+        <div class="frame"><span class="ph">shots/charts.png</span><img src="shots/charts.png" alt="Chart workstation: a trade shown on real imported candles with its entry and exit marked, and drawing tools alongside" loading="lazy" onload="this.parentNode.classList.add('has-img')" onerror="this.remove()" /></div>
       </figure>
       <figure class="shot">
         <div class="bar"><i></i><i></i><i></i><span class="t">Accounts</span></div>
-        <div class="frame"><span class="ph">shots/accounts.png</span><img src="shots/accounts.png" alt="Accounts — live and prop-firm tracking with funded capital, balance, drawdown cushion and payouts" loading="lazy" onload="this.parentNode.classList.add('has-img')" onerror="this.remove()" /></div>
+        <div class="frame"><span class="ph">shots/accounts.png</span><img src="shots/accounts.png" alt="Accounts: live and prop-firm tracking with funded capital, balance, drawdown cushion and payouts" loading="lazy" onload="this.parentNode.classList.add('has-img')" onerror="this.remove()" /></div>
       </figure>
       <figure class="shot">
         <div class="bar"><i></i><i></i><i></i><span class="t">AI Coach</span></div>
-        <div class="frame"><span class="ph">shots/coach.png</span><img src="shots/coach.png" alt="AI coach — offline coaching that reads your real stats and trades, running on your own machine" loading="lazy" onload="this.parentNode.classList.add('has-img')" onerror="this.remove()" /></div>
+        <div class="frame"><span class="ph">shots/coach.png</span><img src="shots/coach.png" alt="AI coach: offline coaching that reads your real stats and trades, running on your own machine" loading="lazy" onload="this.parentNode.classList.add('has-img')" onerror="this.remove()" /></div>
       </figure>
       <figure class="shot">
         <div class="bar"><i></i><i></i><i></i><span class="t">Reviews</span></div>
-        <div class="frame"><span class="ph">shots/reviews.png</span><img src="shots/reviews.png" alt="Reviews — weekly to all-time performance with records, an equity curve and P&amp;L by setup" loading="lazy" onload="this.parentNode.classList.add('has-img')" onerror="this.remove()" /></div>
+        <div class="frame"><span class="ph">shots/reviews.png</span><img src="shots/reviews.png" alt="Reviews: weekly to all-time performance with records, an equity curve and P&amp;L by setup" loading="lazy" onload="this.parentNode.classList.add('has-img')" onerror="this.remove()" /></div>
       </figure>
       <figure class="shot">
         <div class="bar"><i></i><i></i><i></i><span class="t">Trader rating</span></div>
-        <div class="frame"><span class="ph">shots/rating.png</span><img src="shots/rating.png" alt="Trader rating — a 59–99 process score, graded attributes and tiered Bronze-to-Diamond medals" loading="lazy" onload="this.parentNode.classList.add('has-img')" onerror="this.remove()" /></div>
+        <div class="frame"><span class="ph">shots/rating.png</span><img src="shots/rating.png" alt="Trader rating: a 59 to 99 process score, graded attributes and tiered Bronze-to-Diamond medals" loading="lazy" onload="this.parentNode.classList.add('has-img')" onerror="this.remove()" /></div>
       </figure>
     </div>
   </div>
@@ -429,10 +412,10 @@
 <section id="mobile">
   <div class="wrap">
     <div class="privacy" style="max-width:620px;margin:0 auto">
-      <span class="pill" style="margin-bottom:14px">📱 In development</span>
+      <span class="pill" style="margin-bottom:14px">In development</span>
       <h2>TradeHelp Mobile is on the way</h2>
-      <p style="margin:10px auto 8px">Log the trade while it's still fresh — symbol, P&amp;L, a chart screenshot and an honest post-trade rule check, right from your phone. Then do the deep review back at your desk.</p>
-      <p style="margin:0 auto 20px;color:var(--faint);font-size:14px">It syncs straight to TradeHelp Desktop over your own Wi-Fi — your trades still never touch a server.</p>
+      <p style="margin:10px auto 8px">Log the trade while it's still fresh: symbol, P&amp;L, a chart screenshot and an honest post-trade rule check, right from your phone. Then do the deep review back at your desk.</p>
+      <p style="margin:0 auto 20px;color:var(--faint);font-size:14px">It syncs straight to TradeHelp Desktop over your own Wi-Fi, so your trades still never touch a server.</p>
       <form id="mobileForm" class="sub-form" data-loops-form data-user-group="mobile-waitlist" data-event="mobile-waitlist" novalidate>
         <input type="email" class="sub-input" placeholder="you@email.com" autocomplete="email" required aria-label="Email address for the mobile early-access list" />
         <button type="submit" class="btn">Get early access</button>
@@ -452,13 +435,13 @@
           <tr><th></th><th class="us">TradeHelp</th><th>TradeZella</th></tr>
         </thead>
         <tbody>
-          <tr><td>Price</td><td class="us"><span class="yes">$50 once</span>, free updates</td><td class="meh">Subscription — ~$300+/yr</td></tr>
+          <tr><td>Price</td><td class="us"><span class="yes">$50 once</span>, free updates</td><td class="meh">Subscription, ~$300+/yr</td></tr>
           <tr><td>Your trades live</td><td class="us">On your machine (local SQLite)</td><td class="meh">Their cloud</td></tr>
           <tr><td>Account required</td><td class="us"><span class="yes">None</span></td><td class="meh">Yes</td></tr>
           <tr><td>Works offline</td><td class="us"><span class="yes">Fully</span></td><td class="no">No</td></tr>
           <tr><td>AI coach</td><td class="us">Runs locally (Ollama, LM Studio…) or your own key</td><td class="meh">Cloud only</td></tr>
           <tr><td>Prop-firm tracking</td><td class="us">Per-account cushion, targets &amp; payouts</td><td class="meh">Basic</td></tr>
-          <tr><td>Live-session guardrails</td><td class="us"><span class="yes">Yes</span> — checklist + max-loss alarm</td><td class="no">—</td></tr>
+          <tr><td>Live-session guardrails</td><td class="us"><span class="yes">Yes</span>, checklist and max-loss alarm</td><td class="no">No</td></tr>
         </tbody>
       </table>
     </div>
@@ -472,10 +455,10 @@
     <p class="lede">Try everything free for 14 days. If it earns a place in your routine, unlock it forever.</p>
     <div class="privacy" style="max-width:520px;margin:0 auto">
       <div style="font-size:46px;font-weight:700;letter-spacing:-.02em"><span class="strike">$50</span>$25<span style="font-size:16px;color:var(--dim);font-weight:400"> once</span></div>
-      <div class="founders-tag">🔥 Founders' pricing — first 100 buyers only</div>
-      <p style="margin:10px auto 22px">No subscription. No account. Works offline. Free updates for life — and one key activates up to 2 devices.</p>
-      <a class="btn" href="https://tradehelp.gumroad.com/l/oyftvr">Buy on Gumroad — $25</a>
-      <p class="note">14-day free trial included — <a href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.exe" data-goatcounter-click="download-windows" data-goatcounter-title="Download Windows (pricing)" style="color:var(--dim);text-decoration:underline">download free</a> and start today.</p>
+      <div class="founders-tag">Founders' pricing: first 100 buyers only</div>
+      <p style="margin:10px auto 22px">No subscription. No account. Works offline. Free updates for life, and one key activates up to 2 devices.</p>
+      <a class="btn" href="https://tradehelp.gumroad.com/l/oyftvr">Buy on Gumroad for $25</a>
+      <p class="note">14-day free trial included. <a href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.exe" data-goatcounter-click="download-windows" data-goatcounter-title="Download Windows (pricing)" style="color:var(--dim);text-decoration:underline">download free</a> and start today.</p>
     </div>
   </div>
 </section>
@@ -488,7 +471,7 @@
       <div class="endorsement-label">Community endorsement</div>
       <!-- Quoted to the sentence that is actually about this product. The rest of the
            original praised educational resources and a support desk, which TradeHelp
-           does not ship — leaving it in reads as filler to anyone who knows the app. -->
+           does not ship, so leaving it in reads as filler to anyone who knows the app. -->
       <blockquote>
         Trading support tools are critical for trader success, and TradeHelp looks like it addresses real pain points.
       </blockquote>
@@ -506,7 +489,7 @@
   <div class="wrap">
     <div class="privacy">
       <h2>Offline by design</h2>
-      <p>Your trades, notes and screenshots live in a single file on your computer. There's no server, no account, and no cloud — so your edge stays yours. The AI coach runs on your own machine — Ollama, LM Studio, or any OpenAI-compatible model you already trust — or your own API key if you prefer.</p>
+      <p>Your trades, notes and screenshots live in a single file on your computer. No server, no account, no cloud. The AI coach runs on your own machine through Ollama, LM Studio, or any OpenAI-compatible model you already trust. Prefer your own API key? That works too.</p>
     </div>
   </div>
 </section>
@@ -515,7 +498,7 @@
   <div class="wrap">
     <div class="privacy" style="max-width:560px;margin:0 auto">
       <h2>Get setup tips &amp; updates</h2>
-      <p style="margin:10px auto 20px">Get one email: a 5-minute guide to setting up the offline AI coach, plus new features as they ship. No spam, unsubscribe anytime — and your trades are never part of it.</p>
+      <p style="margin:10px auto 20px">Get one email: a 5-minute guide to setting up the offline AI coach, plus new features as they ship. No spam, unsubscribe anytime. Your trades are never part of it.</p>
       <form id="subscribeForm" class="sub-form" data-loops-form data-event="subscribe" novalidate>
         <input type="email" class="sub-input" placeholder="you@email.com" autocomplete="email" required aria-label="Email address" />
         <button type="submit" class="btn">Keep me posted</button>
@@ -541,7 +524,7 @@
       </a>
     </div>
     <p style="margin-bottom:14px">
-      Built by one trader, spread by word of mouth — know a trader who'd like it?
+      Built by one trader, spread by word of mouth. Know a trader who'd like it?
       <button type="button" id="shareBtn" class="share-link">Share TradeHelp</button><span id="shareMsg" aria-live="polite" style="color:var(--up)"></span>
     </p>
     <p style="margin-bottom:14px">
@@ -551,23 +534,30 @@
          style="color:var(--accent);text-decoration:underline">Become an affiliate</a>
       and earn on every sale you refer.
     </p>
-    <p style="margin-bottom:10px">
-      <a href="trading-journal-software.html">Trading Journal Software</a> ·
-      <a href="vs-tradezella.html">TradeHelp vs TradeZella</a> ·
-      <a href="vs-tradersync.html">TradeHelp vs TraderSync</a> ·
-      <a href="prop-firm-trading-journal.html">Journal for prop-firm traders</a> ·
-      <a href="offline-trading-journal.html">Offline trading journal</a> ·
-      Import guides: <a href="import-ninjatrader.html">NinjaTrader</a>, <a href="import-tradovate.html">Tradovate</a>, <a href="import-topstepx.html">TopstepX</a>
+    <p class="foot-links">
+      <a href="trading-journal-software.html">Trading Journal Software</a>
+      <a href="vs-tradezella.html">TradeHelp vs TradeZella</a>
+      <a href="vs-tradersync.html">TradeHelp vs TraderSync</a>
+      <a href="prop-firm-trading-journal.html">Journal for prop-firm traders</a>
+      <a href="offline-trading-journal.html">Offline trading journal</a>
     </p>
-    TradeHelp — not financial advice. An educational journaling tool. ·
-    <a href="https://discord.gg/ATfcXSD4j">Discord</a> ·
-    <a href="https://instagram.com/tradehelp.app">Instagram</a> ·
-    <a href="support.html">Support</a> &middot;
-    <a href="privacy.html">Privacy</a> &middot;
-    <a href="https://github.com/RaheimSwaby/tradehelp">Source on GitHub</a>
+    <p class="foot-links" style="margin-bottom:14px">
+      <span style="color:var(--faint)">Import guides</span>
+      <a href="import-ninjatrader.html">NinjaTrader</a>
+      <a href="import-tradovate.html">Tradovate</a>
+      <a href="import-topstepx.html">TopstepX</a>
+    </p>
+    <p style="margin-bottom:10px">TradeHelp is not financial advice. An educational journaling tool.</p>
+    <p class="foot-links">
+      <a href="https://discord.gg/ATfcXSD4j">Discord</a>
+      <a href="https://instagram.com/tradehelp.app">Instagram</a>
+      <a href="support.html">Support</a>
+      <a href="privacy.html">Privacy</a>
+      <a href="https://github.com/RaheimSwaby/tradehelp">Source on GitHub</a>
+    </p>
     <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line);font-size:13px;color:var(--dim)">
-      Built &amp; Maintained by <span style="color:var(--accent);font-weight:600">TradeHelp</span> · Independent Privacy-First Desktop Software
-      <div style="font-size:12px;color:var(--faint);margin-top:4px">Last updated: <time datetime="2026-08-06">August 2026</time> · TradeHelp Version 0.47.2</div>
+      Built and maintained by <span style="color:var(--accent);font-weight:600">TradeHelp</span>. Independent, privacy-first desktop software.
+      <div style="font-size:12px;color:var(--faint);margin-top:4px">Last updated: <time datetime="2026-08-06">August 2026</time>, version 0.47.2</div>
     </div>
   </div>
 </footer>
@@ -601,22 +591,22 @@
           .then(function (res) {
             if (res.ok && res.d.success !== false) {
               msg.textContent = group === 'mobile-waitlist'
-                ? "You're on the list — you'll hear from me the moment it's ready."
-                : 'Thanks — check your inbox to confirm.';
+                ? "You're on the list. You'll hear from me the moment it's ready."
+                : 'Thanks! Check your inbox to confirm.';
               msg.className = 'note sub-msg ok'; form.reset();
               if (window.goatcounter && window.goatcounter.count) window.goatcounter.count({ path: eventName, title: 'Email signup: ' + eventName, event: true });
               if (window.tradeHelpReddit) window.tradeHelpReddit.track('SignUp');
             } else {
-              msg.textContent = (res.d && res.d.message) || 'Something went wrong — please try again.'; msg.className = 'note sub-msg err';
+              msg.textContent = (res.d && res.d.message) || 'Something went wrong. Please try again.'; msg.className = 'note sub-msg err';
             }
           })
-          .catch(function () { msg.textContent = 'Network error — please try again.'; msg.className = 'note sub-msg err'; })
+          .catch(function () { msg.textContent = 'Network error. Please try again.'; msg.className = 'note sub-msg err'; })
           .then(function () { btn.disabled = false; btn.textContent = label; });
       });
     });
   })();
 
-  // "Share TradeHelp" — native share sheet on mobile, copy-link on desktop.
+  // "Share TradeHelp": native share sheet on mobile, copy-link on desktop.
   (function () {
     var btn = document.getElementById('shareBtn');
     if (!btn) return;
@@ -675,7 +665,6 @@
     root.classList.add('js');
     var els = document.querySelectorAll('.card, .shot, section > .wrap > h2, section > .wrap > .lede, .privacy');
     els.forEach(function (el) { el.classList.add('reveal'); });
-    document.querySelectorAll('.grid .card').forEach(function (el, i) { el.style.transitionDelay = (i % 4) * 60 + 'ms'; });
     if (!('IntersectionObserver' in window)) { els.forEach(function (el) { el.classList.add('in'); }); return; }
     var io = new IntersectionObserver(function (entries) {
       entries.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
@@ -708,7 +697,9 @@
 
     var pageUrl = 'https://trade-help.app/';
     var subject = 'Download TradeHelp on my computer';
-    var body = "Here's the link to download TradeHelp — a local-first trading journal — when I'm at my computer:\n\n" +
+    var body = "Here's the link to download TradeHelp, a local-first trading journal, for when I'm at my computer:
+
+" +
       pageUrl + "\n\nWindows, macOS & Linux · free 14-day trial.";
     // Fire a GoatCounter event (script loads async, so guard on availability).
     var gc = function (name, title) {
@@ -724,14 +715,14 @@
       share.textContent = 'Send to my computer';
       share.addEventListener('click', function () {
         gc('mobile-share-link', 'Mobile: share the link');
-        navigator.share({ title: 'TradeHelp — desktop trading journal', url: pageUrl }).catch(function () {});
+        navigator.share({ title: 'TradeHelp, a desktop trading journal', url: pageUrl }).catch(function () {});
       });
     } else {
       share.addEventListener('click', function () {
         gc('mobile-copy-link', 'Mobile: copy the link');
         if (navigator.clipboard) {
           navigator.clipboard.writeText(pageUrl).then(function () {
-            share.textContent = 'Link copied ✓';
+            share.textContent = 'Link copied';
             setTimeout(function () { share.textContent = 'Copy link'; }, 2000);
           });
         }

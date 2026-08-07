@@ -39,6 +39,13 @@ ul,ol{color:var(--dim);padding-left:22px;margin:10px 0}
 li{margin:5px 0}
 .lede{font-size:17px}
 
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;transition:border-color .16s ease}
+.card:hover{border-color:var(--faint)}
+.card h3{margin:0 0 6px}
+.card p{margin:0}
+.card ul{margin:8px 0 0}
+
 table{width:100%;border-collapse:collapse;margin:18px 0;font-size:14.5px}
 th,td{text-align:left;padding:11px 14px;border:1px solid var(--line)}
 th{background:var(--surface2);color:var(--text);font-weight:600}
@@ -128,38 +135,16 @@ body:not(.has-active-click) .dropdown:hover:not(.is-closed) .dropdown-content a,
   transform:translateY(0);
 }
 
-body:not(.has-active-click) .dropdown:hover:not(.is-closed) .dropdown-content a:nth-child(1), .dropdown.is-open .dropdown-content a:nth-child(1) { transition-delay: 0.03s; }
-body:not(.has-active-click) .dropdown:hover:not(.is-closed) .dropdown-content a:nth-child(2), .dropdown.is-open .dropdown-content a:nth-child(2) { transition-delay: 0.07s; }
-body:not(.has-active-click) .dropdown:hover:not(.is-closed) .dropdown-content a:nth-child(3), .dropdown.is-open .dropdown-content a:nth-child(3) { transition-delay: 0.11s; }
-body:not(.has-active-click) .dropdown:hover:not(.is-closed) .dropdown-content a:nth-child(4), .dropdown.is-open .dropdown-content a:nth-child(4) { transition-delay: 0.15s; }
-body:not(.has-active-click) .dropdown:hover:not(.is-closed) .dropdown-content a:nth-child(5), .dropdown.is-open .dropdown-content a:nth-child(5) { transition-delay: 0.19s; }
-body:not(.has-active-click) .dropdown:hover:not(.is-closed) .dropdown-content a:nth-child(6), .dropdown.is-open .dropdown-content a:nth-child(6) { transition-delay: 0.23s; }
-
 .dropdown-content a:hover{background:var(--surface2);color:var(--accent);text-decoration:none;transform:translateX(3px)!important}
 
-/* Waterfall Cascade Page Entrance Animation */
-@keyframes waterfallCascade {
-  0% { opacity: 0; transform: translateY(22px); }
-  100% { opacity: 1; transform: translateY(0); }
+/* Single fast fade-in for the page chrome. No staggered cascade: content should
+   appear together, not queue up one element at a time. */
+@keyframes pageFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
-
-.topbar { animation: waterfallCascade 0.5s cubic-bezier(0.16, 1, 0.3, 1) both; }
-article > .wrap > h1, header.hero h1 { animation: waterfallCascade 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.08s both; }
-article > .wrap > .lede, header.hero .sub { animation: waterfallCascade 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.16s both; }
-article > .wrap > table, .grid, .compare, .shots-grid, .hero-shot { animation: waterfallCascade 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.24s both; }
-.card, .shot { animation: waterfallCascade 0.6s cubic-bezier(0.16, 1, 0.3, 1) both; }
-.grid > .card:nth-child(1), .shots-grid > .shot:nth-child(1) { animation-delay: 0.24s; }
-.grid > .card:nth-child(2), .shots-grid > .shot:nth-child(2) { animation-delay: 0.28s; }
-.grid > .card:nth-child(3), .shots-grid > .shot:nth-child(3) { animation-delay: 0.32s; }
-.grid > .card:nth-child(4), .shots-grid > .shot:nth-child(4) { animation-delay: 0.36s; }
-.grid > .card:nth-child(5), .shots-grid > .shot:nth-child(5) { animation-delay: 0.40s; }
-.grid > .card:nth-child(6) { animation-delay: 0.44s; }
-.cta-box, .faq, footer { animation: waterfallCascade 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.36s both; }
+.topbar, article > .wrap > h1, header.hero h1 { animation: pageFade .3s ease both; }
 
 @media (prefers-reduced-motion: reduce) {
-  .topbar, article > .wrap > h1, header.hero h1, article > .wrap > .lede, header.hero .sub, table, .grid, .cta-box, footer, .card, .shot {
-    animation: none !important;
-    opacity: 1 !important;
-    transform: none !important;
-  }
+  .topbar, article > .wrap > h1, header.hero h1 { animation: none !important; }
 }
