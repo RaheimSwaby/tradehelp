@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BROKER_PRESETS, detectBrokerPreset, applyPresetMap, parseCSV } from '../utils.js'
+import { BROKER_PRESETS, detectBrokerPreset, applyPresetMap, parseCSV, decodeCsvEntities } from '../utils.js'
 import { prepareCsvImport } from '../importEngine.js'
 
 const presetByKey = (k) => BROKER_PRESETS.find((p) => p.key === k)
@@ -186,5 +186,31 @@ describe('preset post fixups', () => {
     expect(t.exit).toBe(19990.00)
     expect(t.entryTime).toBe('2025-07-01 10:00')
     expect(t.exitTime).toBe('2025-07-01 10:15')
+  })
+})
+
+describe('NinjaTrader CSV entity decoding', () => {
+  // NinjaTrader escapes characters that clash with its own delimiters, so a
+  // strategy named with a pipe arrived in the trader's notes as "&#124;".
+  it('decodes the pipe NinjaTrader escapes in strategy names', () => {
+    expect(decodeCsvEntities('v8withwick&#124;v8withwick')).toBe('v8withwick|v8withwick')
+  })
+
+  it('decodes the other entities these exports carry', () => {
+    expect(decodeCsvEntities('&quot;Breakout&quot;')).toBe('"Breakout"')
+    expect(decodeCsvEntities('A &amp; B')).toBe('A & B')
+    expect(decodeCsvEntities('&lt;tag&gt;')).toBe('<tag>')
+    expect(decodeCsvEntities('&#x7C;')).toBe('|')
+  })
+
+  // &amp; must resolve last, or "&amp;#124;" would decode twice into a pipe.
+  it('does not double-decode an escaped ampersand', () => {
+    expect(decodeCsvEntities('&amp;#124;')).toBe('&#124;')
+  })
+
+  it('trims and tolerates empty input', () => {
+    expect(decodeCsvEntities('  Wick  ')).toBe('Wick')
+    expect(decodeCsvEntities(null)).toBe('')
+    expect(decodeCsvEntities(undefined)).toBe('')
   })
 })

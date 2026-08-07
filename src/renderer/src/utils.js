@@ -154,6 +154,26 @@ export function parseCSV(text) {
   if (cur !== '' || row.length) { row.push(cur); rows.push(row) }
   return rows.filter((r) => r.some((c) => String(c).trim() !== ''))
 }
+/**
+ * Decodes the HTML entities NinjaTrader writes into its CSV exports.
+ *
+ * A pipe would collide with its own delimiters, so a strategy named
+ * "v8withwick|v8withwick" is exported as "v8withwick&#124;v8withwick". Stored
+ * raw, that entity ends up verbatim in the trader's own trade notes.
+ */
+export function decodeCsvEntities(value) {
+  return String(value || '')
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCharCode(parseInt(code, 16)))
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    // Last, so an escaped "&amp;#124;" does not decode twice into a pipe.
+    .replace(/&amp;/g, '&')
+    .trim()
+}
+
 export function csvNum(v) {
   let s = String(v ?? '').trim().replace(/[$,\s]/g, '')
   if (!s) return 0
@@ -214,8 +234,8 @@ function ninjaOrdersToTrades(rows, headers, existingKeys = new Set()) {
         qty: csvNum(x.get('filledQty') || x.get('Filled Qty')),
         price: csvNum(x.get('avgPrice') || x.get('Avg Fill Price') || x.get('decimalFillAvg')),
         time,
-        text: String(x.get('Text') || '').trim(),
-        type: String(x.get('Type') || '').trim()
+        text: decodeCsvEntities(x.get('Text')),
+        type: decodeCsvEntities(x.get('Type'))
       }
     })
     .filter((f) => f.symbol && f.time && f.price && f.qty)
