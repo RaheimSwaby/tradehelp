@@ -1,8 +1,10 @@
-import React, { useState, useMemo, Component } from 'react'
+import React, { useState, useMemo, useRef, useEffect, Component } from 'react'
 import { T, mono } from '../theme.js'
 import { fmt$, fmtN, holdMs, fmtDuration } from '../utils.js'
 import { TradeChart } from '../components/TradeChart.jsx'
-import { LineChart, Search, AlertCircle, Globe, BarChart2, ExternalLink, Maximize2 } from 'lucide-react'
+import { formatTradingViewSymbol, toTimestamp } from '../utils/tradeChartUtils.js'
+import { instrumentRootSymbol } from '../workflow.js'
+import { LineChart, Search, AlertCircle, ExternalLink, Maximize2, ChevronDown, Check, Edit3, Lock, Save, Globe, CandlestickChart } from 'lucide-react'
 
 class ChartErrorBoundary extends Component {
   constructor(props) {
@@ -48,26 +50,233 @@ const SAMPLE_DEMO_TRADE = {
   pnl: 1250.0,
   setup: 'Pullback',
   emotion: 'Calm',
-  notes: 'Sample trade execution. Switch to Live Market View for real-time TradingView charts!',
+  notes: 'Sample trade execution. Log or import your trades to see your exact price action!',
   timestamp: new Date().toISOString().slice(0, 16).replace('T', ' ')
 }
 
-export function ChartTab({ trades = [], onOpenTrade }) {
+const DEFAULT_QUICK_SYMBOLS = ['CME_MINI:NQ1!', 'CME_MINI:ES1!', 'BINANCE:BTCUSDT', 'NASDAQ:AAPL', 'NASDAQ:TSLA']
+
+export function ChartTab({ trades = [], onOpenTrade, onUpdateTrade }) {
   return (
     <ChartErrorBoundary>
-      <ChartTabContent trades={trades} onOpenTrade={onOpenTrade} />
+      <ChartTabContent trades={trades} onOpenTrade={onOpenTrade} onUpdateTrade={onUpdateTrade} />
     </ChartErrorBoundary>
   )
 }
 
-function ChartTabContent({ trades = [], onOpenTrade }) {
-  const [viewMode, setViewMode] = useState('live') // 'live' | 'trade'
-  const [liveSymbol, setLiveSymbol] = useState('NASDAQ:NQ1!')
+/**
+ * Interactive Searchable Trade Combobox Dropdown
+ */
+function TradePickerCombobox({ trades = [], selectedId, onSelectTrade, barMatchedIds }) {
+  // Deliberately understated: this means bars exist for that window, not that
+  // they are the right contract. A reassuring badge would overclaim.
+  const hasBars = (id) => barMatchedIds?.has(String(id))
+  const [isOpen, setIsOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const containerRef = useRef(null)
 
-  const safeTrades = Array.isArray(trades) && trades.length > 0 ? trades : [SAMPLE_DEMO_TRADE]
-  const [selectedId, setSelectedId] = useState(safeTrades[0]?.id || 'demo-sample')
+  const selectedTrade = useMemo(() => {
+    return trades.find((t) => String(t.id) === String(selectedId)) || trades[0]
+  }, [trades, selectedId])
+
+  const matchingTrades = useMemo(() => {
+    if (!searchQuery.trim()) return trades
+    const q = searchQuery.toLowerCase().trim()
+    return trades.filter((t) => {
+      if (!t) return false
+      const sym = String(t.symbol || '').toLowerCase()
+      const setup = String(t.setup || '').toLowerCase()
+      const date = String(t.timestamp || '').toLowerCase()
+      const pnl = String(t.pnl || '').toLowerCase()
+      const dir = String(t.direction || '').toLowerCase()
+      const notes = String(t.notes || '').toLowerCase()
+      return sym.includes(q) || setup.includes(q) || date.includes(q) || pnl.includes(q) || dir.includes(q) || notes.includes(q)
+    })
+  }, [trades, searchQuery])
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setIsOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  return (
+    <div ref={containerRef} className="relative inline-block text-left" style={{ minWidth: 260 }}>
+      {/* Combobox Trigger Button */}
+      <div
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors"
+        style={{ background: T.surface2, border: `1px solid ${T.line}`, color: T.text, ...mono }}
+      >
+        <div className="flex items-center gap-1.5 truncate">
+          <Search size={13} style={{ color: T.faint, flexShrink: 0 }} />
+          {selectedTrade ? (
+            <span className="truncate">
+              {String(selectedTrade.timestamp || '').slice(0, 10)} · <strong style={{ color: T.text }}>{selectedTrade.symbol || 'Trade'}</strong> ({selectedTrade.direction || 'Long'}) <span style={{ color: (Number(selectedTrade.pnl) || 0) >= 0 ? T.up : T.down }}>({(Number(selectedTrade.pnl) || 0) >= 0 ? '+' : ''}{fmt$(Number(selectedTrade.pnl) || 0)})</span>
+            </span>
+          ) : (
+            <span style={{ color: T.faint }}>Select trade...</span>
+          )}
+          {/* Repeated on the closed picker so the state is visible without
+              opening the list. */}
+          {selectedTrade && hasBars(selectedTrade.id) && (
+            <CandlestickChart size={12} style={{ color: '#34d399', flexShrink: 0 }} title="Imported bars cover this trade" />
+          )}
+        </div>
+        <ChevronDown size={14} style={{ color: T.faint, transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+      </div>
+
+      {/* Combobox Dropdown Panel */}
+      {isOpen && (
+        <div
+          className="absolute right-0 mt-2 w-80 rounded-xl shadow-2xl z-50 p-2 space-y-2 overflow-hidden"
+          style={{ background: T.surface, border: `1px solid ${T.line}` }}
+        >
+          {/* Live Search Input */}
+          <div className="relative">
+            <Search size={14} className="absolute left-2.5 top-2.5" style={{ color: T.faint }} />
+            <input
+              type="text"
+              autoFocus
+              placeholder="Search symbol, setup, date..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-8 pr-3 py-1.5 rounded-lg text-xs"
+              style={{ background: T.surface2, border: `1px solid ${T.line}`, color: T.text }}
+            />
+          </div>
+
+          {/* Trade List */}
+          <div className="max-h-60 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+            {matchingTrades.length === 0 ? (
+              <div className="p-3 text-center text-xs" style={{ color: T.faint }}>
+                No trades match "{searchQuery}"
+              </div>
+            ) : (
+              matchingTrades.map((t) => {
+                const isSelected = String(t.id) === String(selectedId)
+                const isWin = (Number(t.pnl) || 0) >= 0
+                return (
+                  <div
+                    key={t.id}
+                    onClick={() => {
+                      onSelectTrade(t.id)
+                      setIsOpen(false)
+                    }}
+                    className="flex items-center justify-between p-2 rounded-lg text-xs cursor-pointer transition-colors"
+                    style={{
+                      background: isSelected ? 'rgba(96, 165, 250, 0.12)' : 'transparent',
+                      border: isSelected ? `1px solid rgba(96, 165, 250, 0.3)` : '1px solid transparent'
+                    }}
+                  >
+                    <div className="space-y-0.5 truncate pr-2">
+                      <div className="font-semibold flex items-center gap-1.5 truncate">
+                        <span>{t.symbol || 'Trade'}</span>
+                        {hasBars(t.id) && (
+                          <span
+                            className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold shrink-0"
+                            style={{ background: 'rgba(52,211,153,0.15)', color: '#34d399', border: '1px solid rgba(52,211,153,0.35)' }}
+                            title="Imported bars cover this trade — the chart can show real candles"
+                          >
+                            <CandlestickChart size={10} /> bars
+                          </span>
+                        )}
+                        <span className="text-[10px] px-1.5 py-0.2 rounded" style={{ background: t.direction === 'Short' ? 'rgba(239,68,68,0.15)' : 'rgba(34,197,94,0.15)', color: t.direction === 'Short' ? T.down : T.up }}>
+                          {t.direction || 'Long'}
+                        </span>
+                        {t.setup && <span className="text-[10px] font-normal" style={{ color: T.dim }}>({t.setup})</span>}
+                      </div>
+                      <div className="text-[10px] truncate" style={{ color: T.faint }}>
+                        {String(t.timestamp || '').slice(0, 16)}
+                      </div>
+                    </div>
+
+                    <div className="text-right shrink-0 font-bold" style={mono}>
+                      <div style={{ color: isWin ? T.up : T.down }}>
+                        {isWin ? '+' : ''}{fmt$(Number(t.pnl) || 0)}
+                      </div>
+                      {isSelected && <Check size={12} className="ml-auto mt-0.5" style={{ color: T.accent }} />}
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ChartTabContent({ trades = [], onOpenTrade, onUpdateTrade }) {
+  const [viewMode, setViewMode] = useState('candles') // 'candles' | 'live'
+  const [liveSymbol, setLiveSymbol] = useState('CME_MINI:NQ1!')
+
+  const [quickSymbols, setQuickSymbols] = useState(() => {
+    try {
+      const stored = localStorage.getItem('th_quick_symbols')
+      return stored ? JSON.parse(stored) : DEFAULT_QUICK_SYMBOLS
+    } catch {
+      return DEFAULT_QUICK_SYMBOLS
+    }
+  })
+  // Set when the live chart was opened from a specific trade, so we can point
+  // the trader at the moment to scroll back to.
+  const [liveOrigin, setLiveOrigin] = useState(null)
+  const [editingSymbols, setEditingSymbols] = useState(false)
+  const [symbolDraft, setSymbolDraft] = useState('')
+  const [isSolidifying, setIsSolidifying] = useState(false)
+
+  // Sort trades descending by timestamp so the latest trade is always first
+  const safeTrades = useMemo(() => {
+    const list = Array.isArray(trades) && trades.length > 0 ? trades : [SAMPLE_DEMO_TRADE]
+    return [...list].sort((a, b) => String(b.timestamp || '').localeCompare(String(a.timestamp || '')))
+  }, [trades])
+
+  // Which trades have imported bars behind them. One round trip for the whole
+  // list, so the picker can mark them without a query per row.
+  const [barMatchedIds, setBarMatchedIds] = useState(() => new Set())
+
+  useEffect(() => {
+    let cancelled = false
+    if (!window.api?.matchTradesToBars) return undefined
+
+    const items = safeTrades
+      .map((t) => {
+        const root = instrumentRootSymbol(t.symbol)
+        const entry = toTimestamp(t.entryTime || t.timestamp, 0)
+        if (!root || !entry) return null
+        const exit = t.exitTime ? toTimestamp(t.exitTime, entry) : entry
+        return { id: String(t.id), root, from: entry, to: Math.max(exit, entry) }
+      })
+      .filter(Boolean)
+
+    if (items.length === 0) {
+      setBarMatchedIds(new Set())
+      return undefined
+    }
+
+    window.api
+      .matchTradesToBars(items)
+      .then((ids) => { if (!cancelled) setBarMatchedIds(new Set((ids || []).map(String))) })
+      .catch(() => { if (!cancelled) setBarMatchedIds(new Set()) })
+
+    return () => { cancelled = true }
+  }, [safeTrades])
+
+  const [selectedId, setSelectedId] = useState(() => safeTrades[0]?.id || 'demo-sample')
   const [symbolFilter, setSymbolFilter] = useState('')
-  const [outcomeFilter, setOutcomeFilter] = useState('all') // all | win | loss
+  const [outcomeFilter, setOutcomeFilter] = useState('all')
+
+  useEffect(() => {
+    if (safeTrades[0]?.id) {
+      setSelectedId(safeTrades[0].id)
+    }
+  }, [trades])
 
   const filteredTrades = useMemo(() => {
     return safeTrades.filter((t) => {
@@ -81,8 +290,51 @@ function ChartTabContent({ trades = [], onOpenTrade }) {
   }, [safeTrades, symbolFilter, outcomeFilter])
 
   const selectedTrade = useMemo(() => {
-    return safeTrades.find((t) => t?.id === selectedId) || filteredTrades[0] || safeTrades[0] || SAMPLE_DEMO_TRADE
+    return safeTrades.find((t) => String(t?.id) === String(selectedId)) || filteredTrades[0] || safeTrades[0] || SAMPLE_DEMO_TRADE
   }, [safeTrades, selectedId, filteredTrades])
+
+  // Form State for Solidifying Execution Table
+  const [editForm, setEditForm] = useState({
+    symbol: '',
+    direction: 'Long',
+    entry: '',
+    exit: '',
+    stop: '',
+    target: '',
+    pnl: ''
+  })
+
+  useEffect(() => {
+    if (selectedTrade) {
+      setEditForm({
+        symbol: selectedTrade.symbol || 'ES_F',
+        direction: selectedTrade.direction || 'Long',
+        entry: selectedTrade.entry || '',
+        exit: selectedTrade.exit || '',
+        stop: selectedTrade.stop || '',
+        target: selectedTrade.target || '',
+        pnl: selectedTrade.pnl || ''
+      })
+    }
+  }, [selectedTrade])
+
+  const handleSaveExecutionTable = () => {
+    if (!selectedTrade) return
+    const updated = {
+      ...selectedTrade,
+      symbol: editForm.symbol.trim().toUpperCase(),
+      direction: editForm.direction,
+      entry: Number(editForm.entry) || 0,
+      exit: Number(editForm.exit) || 0,
+      stop: editForm.stop ? Number(editForm.stop) : null,
+      target: editForm.target ? Number(editForm.target) : null,
+      pnl: Number(editForm.pnl) || 0
+    }
+    if (onUpdateTrade) {
+      onUpdateTrade(updated)
+    }
+    setIsSolidifying(false)
+  }
 
   const handleOpenDetached = () => {
     if (window.api?.openDetachedChart) {
@@ -100,6 +352,39 @@ function ChartTabContent({ trades = [], onOpenTrade }) {
     }
   }
 
+  const saveQuickSymbols = (newList) => {
+    setQuickSymbols(newList)
+    try {
+      localStorage.setItem('th_quick_symbols', JSON.stringify(newList))
+    } catch {}
+  }
+
+  /**
+   * Jump from a trade's execution map to the live chart for that instrument.
+   *
+   * TradingView's embed cannot be pointed at an absolute date, so rather than
+   * pretend it lands on the trade, the banner says which moment to scroll back
+   * to and the trade stays selected underneath.
+   */
+  const handleViewLive = (symbol, trade) => {
+    if (symbol) setLiveSymbol(symbol)
+    setLiveOrigin(trade ? { symbol, when: trade.entryTime || trade.timestamp || '', label: trade.symbol || symbol } : null)
+    setViewMode('live')
+  }
+
+  const addSymbol = () => {
+    const s = symbolDraft.trim().toUpperCase()
+    if (!s) return
+    // Let the instrument classifier pick the exchange. Assuming NASDAQ turned
+    // every future into a symbol TradingView cannot resolve (ES -> NASDAQ:ES).
+    const formatted = s.includes(':') ? s : formatTradingViewSymbol(s)
+    if (!quickSymbols.includes(formatted)) {
+      saveQuickSymbols([...quickSymbols, formatted])
+    }
+    setLiveSymbol(formatted)
+    setSymbolDraft('')
+  }
+
   return (
     <div className="space-y-4">
       {/* Top Header / Mode Switcher */}
@@ -107,15 +392,29 @@ function ChartTabContent({ trades = [], onOpenTrade }) {
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
             <LineChart size={20} style={{ color: T.accent }} />
-            <span className="font-semibold text-base">TradingView Workstation</span>
+            <span className="font-semibold text-base">Chart Workstation</span>
           </div>
 
-          {/* Mode Switch Buttons */}
+          {/* Mode Selector */}
           <div className="flex items-center gap-1 p-1 rounded-lg" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
+            {/* The chart uses imported candles when available and falls back to
+                the locally generated execution path when no bars cover it. */}
             <button
               type="button"
-              onClick={() => setViewMode('live')}
-              className="flex items-center gap-1.5 px-3 py-1 text-xs rounded font-semibold transition-colors"
+              onClick={() => { setLiveOrigin(null); setViewMode('candles') }}
+              title="Show candles from bars you imported in Settings → Chart data"
+              className="flex items-center gap-1.5 px-3 py-1 text-xs rounded font-medium transition-colors"
+              style={{
+                background: viewMode === 'candles' ? T.accent : 'transparent',
+                color: viewMode === 'candles' ? '#1A1306' : T.dim
+              }}
+            >
+              <CandlestickChart size={13} /> Imported Candles
+            </button>
+            <button
+              type="button"
+              onClick={() => { setLiveOrigin(null); setViewMode('live') }}
+              className="flex items-center gap-1.5 px-3 py-1 text-xs rounded font-medium transition-colors"
               style={{
                 background: viewMode === 'live' ? T.accent : 'transparent',
                 color: viewMode === 'live' ? '#1A1306' : T.dim
@@ -123,39 +422,49 @@ function ChartTabContent({ trades = [], onOpenTrade }) {
             >
               <Globe size={13} /> Live Market View
             </button>
-            <button
-              type="button"
-              onClick={() => setViewMode('trade')}
-              className="flex items-center gap-1.5 px-3 py-1 text-xs rounded font-semibold transition-colors"
-              style={{
-                background: viewMode === 'trade' ? T.accent : 'transparent',
-                color: viewMode === 'trade' ? '#1A1306' : T.dim
-              }}
-            >
-              <BarChart2 size={13} /> Trade Execution View
-            </button>
           </div>
         </div>
 
-        {/* Dynamic Controls based on View Mode */}
+        {/* Dynamic Controls based on view mode */}
         {viewMode === 'live' ? (
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span style={{ color: T.faint }}>Quick Symbol:</span>
-            {['NASDAQ:NQ1!', 'CME_MINI:ES1!', 'BINANCE:BTCUSDT', 'NASDAQ:AAPL', 'NASDAQ:TSLA'].map((sym) => (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs" style={{ color: T.faint }}>Quick Symbols:</span>
+            {quickSymbols.map((s) => (
               <button
-                key={sym}
+                key={s}
                 type="button"
-                onClick={() => setLiveSymbol(sym)}
-                className="px-2 py-1 rounded text-[11px] font-semibold transition-colors"
+                onClick={() => setLiveSymbol(s)}
+                className="px-2.5 py-1 rounded text-xs font-semibold transition-colors"
                 style={{
-                  background: liveSymbol === sym ? T.surface2 : 'transparent',
-                  color: liveSymbol === sym ? T.accent : T.dim,
-                  border: `1px solid ${liveSymbol === sym ? T.accent : T.line}`
+                  background: liveSymbol === s ? T.accent : T.surface2,
+                  color: liveSymbol === s ? '#1A1306' : T.text,
+                  border: `1px solid ${T.line}`,
+                  ...mono
                 }}
               >
-                {sym.split(':')[1] || sym}
+                {s.split(':')[1] || s}
               </button>
             ))}
+
+            {editingSymbols ? (
+              <>
+                <input
+                  value={symbolDraft}
+                  onChange={(e) => setSymbolDraft(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSymbol() } }}
+                  placeholder="EXCHANGE:SYMBOL"
+                  className="px-2 py-1 rounded text-[11px] w-40"
+                  style={{ background: T.bg, color: T.text, border: `1px solid ${T.line}` }}
+                />
+                <button type="button" onClick={addSymbol} className="px-2 py-1 rounded text-[11px] font-semibold"
+                  style={{ background: T.accent, color: '#1A1306', border: 'none' }}>Add</button>
+                <button type="button" onClick={() => { setEditingSymbols(false); setSymbolDraft('') }}
+                  className="px-2 py-1 rounded text-[11px]" style={{ color: T.dim, background: 'transparent', border: `1px solid ${T.line}` }}>Done</button>
+              </>
+            ) : (
+              <button type="button" onClick={() => setEditingSymbols(true)}
+                className="px-2 py-1 rounded text-[11px]" style={{ color: T.faint, background: 'transparent', border: `1px dashed ${T.line}` }}>Edit</button>
+            )}
             <input
               type="text"
               placeholder="e.g. CME:6E1!"
@@ -220,33 +529,48 @@ function ChartTabContent({ trades = [], onOpenTrade }) {
               ))}
             </div>
 
-            {/* Trade Picker Dropdown */}
-            <select
-              value={selectedTrade?.id || ''}
-              onChange={(e) => setSelectedId(e.target.value)}
-              className="px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer"
-              style={{ background: T.surface2, border: `1px solid ${T.line}`, color: T.text, maxWidth: 240, ...mono }}
-            >
-              {filteredTrades.map((t) => (
-                <option key={t.id || Math.random()} value={t.id}>
-                  {String(t.timestamp || '').slice(0, 10)} · {t.symbol || 'Trade'} {t.direction || ''} ({(Number(t.pnl) || 0) >= 0 ? '+' : ''}{fmt$(Number(t.pnl) || 0)})
-                </option>
-              ))}
-            </select>
+            {/* Searchable Trade Picker Combobox Dropdown */}
+            <TradePickerCombobox
+              trades={filteredTrades}
+              selectedId={selectedTrade?.id}
+              onSelectTrade={setSelectedId}
+              barMatchedIds={barMatchedIds}
+            />
           </div>
         )}
       </div>
 
       {/* Main View Container */}
       {viewMode === 'live' ? (
-        <div className="w-full">
+        <div className="w-full space-y-2">
+          {liveOrigin && (
+            <div className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg text-xs" style={{ background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.25)', color: T.text }}>
+              <span>
+                Live chart for <strong>{liveOrigin.label}</strong>. This is real market data — scroll back to{' '}
+                <strong style={mono}>{liveOrigin.when || 'the trade date'}</strong> to see the price action around your trade.
+              </span>
+              <button
+                onClick={() => { setLiveOrigin(null); setViewMode('candles') }}
+                className="px-2 py-1 rounded font-semibold shrink-0"
+                style={{ background: T.surface2, border: `1px solid ${T.line}`, color: T.dim }}
+              >
+                Back to chart
+              </button>
+            </div>
+          )}
           <TradeChart mode="live" liveSymbol={liveSymbol} height={620} />
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
           {/* Main Chart Area (3 Columns) */}
           <div className="lg:col-span-3">
-            <TradeChart mode="trade" trade={selectedTrade} height={580} />
+            <TradeChart
+              mode="trade"
+              trade={selectedTrade}
+              height={580}
+              onViewLive={handleViewLive}
+              preferCandles={viewMode === 'candles'}
+            />
           </div>
 
           {/* Trade Specs & Details Sidebar (1 Column) */}
@@ -256,7 +580,7 @@ function ChartTabContent({ trades = [], onOpenTrade }) {
                 <div>
                   <div className="text-lg font-bold flex items-center gap-1.5">
                     {selectedTrade.symbol || 'Trade'}
-                    <span className="text-xs px-2 py-0.5 rounded font-semibold" style={{ background: selectedTrade.direction === 'Long' ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)', color: selectedTrade.direction === 'Long' ? T.up : T.down }}>
+                    <span className="text-xs px-2 py-0.5 rounded font-semibold" style={{ background: selectedTrade.direction === 'Short' ? 'rgba(239,68,68,0.15)' : 'rgba(34,197,94,0.15)', color: selectedTrade.direction === 'Short' ? T.down : T.up }}>
                       {selectedTrade.direction || 'Long'}
                     </span>
                   </div>
@@ -295,6 +619,128 @@ function ChartTabContent({ trades = [], onOpenTrade }) {
                   </div>
                 </div>
               </div>
+
+              {/* Solidify & Lock Execution Table Action */}
+              <div className="pt-2 border-t" style={{ borderColor: T.line }}>
+                <button
+                  type="button"
+                  onClick={() => setIsSolidifying(!isSolidifying)}
+                  className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all"
+                  style={{
+                    background: isSolidifying ? 'rgba(96, 165, 250, 0.2)' : T.surface2,
+                    color: isSolidifying ? T.accent : T.text,
+                    border: `1px solid ${isSolidifying ? T.accent : T.line}`
+                  }}
+                >
+                  <Lock size={13} style={{ color: T.accent }} />
+                  {isSolidifying ? 'Close Execution Solidifier' : 'Solidify Execution Table'}
+                </button>
+              </div>
+
+              {/* Inline Execution Solidifier Form */}
+              {isSolidifying && (
+                <div className="p-3 rounded-lg space-y-2.5 border mt-2 text-xs" style={{ background: T.surface2, borderColor: T.line }}>
+                  <div className="font-semibold flex items-center gap-1" style={{ color: T.accent }}>
+                    <Edit3 size={13} /> Solidify Trade Parameters
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[10px] font-semibold mb-0.5" style={{ color: T.faint }}>Symbol</label>
+                      <input
+                        type="text"
+                        value={editForm.symbol}
+                        onChange={(e) => setEditForm({ ...editForm, symbol: e.target.value })}
+                        className="w-full px-2 py-1 rounded text-xs font-semibold"
+                        style={{ background: T.bg, border: `1px solid ${T.line}`, color: T.text, ...mono }}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold mb-0.5" style={{ color: T.faint }}>Direction</label>
+                      <select
+                        value={editForm.direction}
+                        onChange={(e) => setEditForm({ ...editForm, direction: e.target.value })}
+                        className="w-full px-2 py-1 rounded text-xs font-semibold"
+                        style={{ background: T.bg, border: `1px solid ${T.line}`, color: T.text }}
+                      >
+                        <option value="Long">Long</option>
+                        <option value="Short">Short</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[10px] font-semibold mb-0.5" style={{ color: T.faint }}>Entry Price</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={editForm.entry}
+                        onChange={(e) => setEditForm({ ...editForm, entry: e.target.value })}
+                        className="w-full px-2 py-1 rounded text-xs font-semibold"
+                        style={{ background: T.bg, border: `1px solid ${T.line}`, color: T.text, ...mono }}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold mb-0.5" style={{ color: T.faint }}>Exit Price</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={editForm.exit}
+                        onChange={(e) => setEditForm({ ...editForm, exit: e.target.value })}
+                        className="w-full px-2 py-1 rounded text-xs font-semibold"
+                        style={{ background: T.bg, border: `1px solid ${T.line}`, color: T.text, ...mono }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[10px] font-semibold mb-0.5" style={{ color: T.faint }}>Stop Loss</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={editForm.stop}
+                        onChange={(e) => setEditForm({ ...editForm, stop: e.target.value })}
+                        className="w-full px-2 py-1 rounded text-xs font-semibold"
+                        style={{ background: T.bg, border: `1px solid ${T.line}`, color: T.text, ...mono }}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold mb-0.5" style={{ color: T.faint }}>Take Profit</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={editForm.target}
+                        onChange={(e) => setEditForm({ ...editForm, target: e.target.value })}
+                        className="w-full px-2 py-1 rounded text-xs font-semibold"
+                        style={{ background: T.bg, border: `1px solid ${T.line}`, color: T.text, ...mono }}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-semibold mb-0.5" style={{ color: T.faint }}>Net P&L ($)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={editForm.pnl}
+                      onChange={(e) => setEditForm({ ...editForm, pnl: e.target.value })}
+                      className="w-full px-2 py-1 rounded text-xs font-semibold"
+                      style={{ background: T.bg, border: `1px solid ${T.line}`, color: T.text, ...mono }}
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleSaveExecutionTable}
+                    className="w-full flex items-center justify-center gap-1 py-1.5 rounded font-semibold text-xs transition-opacity hover:opacity-90 mt-1"
+                    style={{ background: T.accent, color: '#1A1306' }}
+                  >
+                    <Save size={13} /> Save & Lock Chart Execution
+                  </button>
+                </div>
+              )}
 
               {/* Strategy & Notes */}
               <div className="space-y-1.5 pt-1 text-xs">

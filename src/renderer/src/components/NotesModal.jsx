@@ -192,7 +192,7 @@ export function NotesModal({ trade, onClose, onUpdate, onAttachmentsChange }) {
                   )}
                 </div>
               ) : (
-                <div className="text-xs" style={{ color: T.faint }}>No screenshots attached to this trade. The Chart tab can show a reconstruction from your recorded prices, or pull up the live chart for this symbol.</div>
+                <div className="text-xs" style={{ color: T.faint }}>No screenshots attached to this trade. The Chart tab can map this trade from your recorded prices, or pull up the live chart for this symbol.</div>
               )}
             </div>
           )}
