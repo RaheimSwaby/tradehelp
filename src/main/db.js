@@ -353,6 +353,30 @@ export function initDb() {
       PRIMARY KEY (connectionId, externalId)
     );
     CREATE INDEX IF NOT EXISTS idx_broker_sync_items_trade ON broker_sync_items(tradeId);
+    -- OHLC bars the trader exported from their own platform. TradeHelp buys no
+    -- market data; this is the trader's own licensed history, kept locally so
+    -- charts still work offline once imported.
+    CREATE TABLE IF NOT EXISTS price_bars (
+      root TEXT NOT NULL,
+      ts INTEGER NOT NULL,
+      open REAL NOT NULL,
+      high REAL NOT NULL,
+      low REAL NOT NULL,
+      close REAL NOT NULL,
+      volume REAL,
+      PRIMARY KEY (root, ts)
+    );
+    CREATE INDEX IF NOT EXISTS idx_price_bars_lookup ON price_bars(root, ts);
+    CREATE TABLE IF NOT EXISTS price_bar_series (
+      root TEXT PRIMARY KEY,
+      label TEXT DEFAULT '',
+      contract TEXT DEFAULT '',
+      sourceFile TEXT DEFAULT '',
+      barCount INTEGER NOT NULL DEFAULT 0,
+      firstTs INTEGER,
+      lastTs INTEGER,
+      importedAt TEXT NOT NULL
+    );
   `)
 
   // Migrate older DBs that predate columns added above.
@@ -1447,6 +1471,9 @@ const SETTINGS_DEFAULTS = Object.freeze({
   // Ticker tape: keyless by default (Stooq/Binance). Add a Finnhub key for real-time stocks.
   tickerEnabled: 'true',
   tickerSymbols: 'SPY,QQQ,BTC,ETH',
+  // Quick-select buttons above the live chart. TradingView's own
+  // EXCHANGE:SYMBOL form, since that is what the widget takes.
+  chartSymbols: 'CME_MINI:NQ1!,CME_MINI:ES1!,BINANCE:BTCUSDT,NASDAQ:AAPL,NASDAQ:TSLA',
   finnhubKey: '',
   // Economic calendar: keyless by default (ForexFactory). Add an FMP key for a fuller feed.
   eventsEnabled: 'true',
@@ -1524,6 +1551,24 @@ function normalizeManualClockWindows(value) {
   return JSON.stringify(windows)
 }
 
+/**
+ * Quick-select chart symbols, stored comma-separated like tickerSymbols.
+ * Uppercased and de-duplicated so the buttons can't end up with two entries
+ * that differ only by case, and capped so the row stays a row.
+ */
+function normalizeChartSymbols(value) {
+  const raw = Array.isArray(value) ? value.join(',') : String(value ?? '')
+  const seen = new Set()
+  for (const part of raw.split(',')) {
+    const symbol = part.trim().toUpperCase().replace(/\s+/g, '').slice(0, 32)
+    if (symbol) seen.add(symbol)
+  }
+  // An empty list would leave the chart with no way to switch symbol, so fall
+  // back rather than persisting nothing.
+  if (!seen.size) return SETTINGS_DEFAULTS.chartSymbols
+  return [...seen].slice(0, 12).join(',')
+}
+
 function normalizeTradeRules(value) {
   let parsed
   try { parsed = Array.isArray(value) ? value : JSON.parse(String(value)) } catch { parsed = [] }
@@ -1574,6 +1619,7 @@ function nextRuleRevision(current = '') {
 
 function normalizeSettingValue(key, value) {
   const stringValue = String(value)
+  if (key === 'chartSymbols') return normalizeChartSymbols(value)
   if (key === 'tradeRules') return normalizeTradeRules(value)
   if (key === 'tradeRulesUpdatedAt') return normalizeRuleRevision(value)
   if (key === 'traderName') return stringValue.replace(/\s+/g, ' ').trim().slice(0, 40)
@@ -2976,6 +3022,161 @@ export function deletePropExpense(id) {
 }
 
 // Daily snapshot of the SQLite file into userData/backups, keeping the last 7.
+/* ───────── imported price bars ───────── */
+
+/**
+ * Stores a parsed bar export, replacing whatever was held for that instrument.
+ *
+ * Re-importing is the fix for a bad or partial export, so replace rather than
+ * merge: merging would leave stale bars from the wrong contract or the wrong
+ * time zone silently mixed in with the good ones.
+ */
+export function importPriceBars({ root, label = '', contract = '', sourceFile = '', bars = [] } = {}) {
+  const key = String(root || '').trim().toUpperCase()
+  if (!key) return { ok: false, error: 'No instrument for these bars.' }
+  if (!Array.isArray(bars) || bars.length === 0) return { ok: false, error: 'No bars to import.' }
+
+  const insert = db.prepare(
+    `INSERT OR REPLACE INTO price_bars (root, ts, open, high, low, close, volume)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
+  )
+
+  const run = db.transaction((rows) => {
+    db.prepare('DELETE FROM price_bars WHERE root = ?').run(key)
+    for (const b of rows) {
+      insert.run(key, b.time, b.open, b.high, b.low, b.close, b.volume ?? null)
+    }
+    db.prepare(
+      `INSERT OR REPLACE INTO price_bar_series (root, label, contract, sourceFile, barCount, firstTs, lastTs, importedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      key,
+      String(label || key),
+      String(contract || ''),
+      String(sourceFile || ''),
+      rows.length,
+      rows[0].time,
+      rows[rows.length - 1].time,
+      new Date().toISOString()
+    )
+  })
+
+  run(bars)
+  return { ok: true, root: key, barCount: bars.length, firstTs: bars[0].time, lastTs: bars[bars.length - 1].time }
+}
+
+export function listPriceSeries() {
+  return db.prepare('SELECT * FROM price_bar_series ORDER BY importedAt DESC').all()
+}
+
+/**
+ * Bars for one instrument within a window. Returns [] rather than everything
+ * when the window is missing, so a caller that forgets the range cannot
+ * accidentally pull a 44,000-row export into the renderer.
+ */
+export function getPriceBars(root, from, to) {
+  const key = String(root || '').trim().toUpperCase()
+  if (!key || !Number.isFinite(from) || !Number.isFinite(to)) return []
+  return db
+    .prepare('SELECT ts AS time, open, high, low, close, volume FROM price_bars WHERE root = ? AND ts >= ? AND ts <= ? ORDER BY ts')
+    .all(key, Math.floor(from), Math.floor(to))
+}
+
+/** Local wall-clock parse, matching how trade times are stored and read. */
+function tradeEpoch(value) {
+  if (!value) return null
+  const ms = new Date(String(value).replace(' ', 'T')).getTime()
+  return Number.isNaN(ms) ? null : Math.floor(ms / 1000)
+}
+
+/** Every trade's window for one instrument, padded either side. */
+function tradeWindows(root, padding) {
+  const rows = db.prepare('SELECT symbol, timestamp, entryTime, exitTime FROM trades').all()
+  const windows = []
+  for (const r of rows) {
+    if (instrumentRootSymbol(r.symbol) !== root) continue
+    const entry = tradeEpoch(r.entryTime || r.timestamp)
+    if (entry === null) continue
+    const exit = tradeEpoch(r.exitTime) ?? entry
+    windows.push({ from: entry - padding, to: Math.max(exit, entry) + padding })
+  }
+  return windows
+}
+
+/**
+ * Which of these trades have bars covering them.
+ *
+ * One round trip for the whole journal: asking per trade would be a query per
+ * row, and this drives a badge that renders for every trade in the list.
+ */
+export function matchTradesToBars(items = []) {
+  if (!Array.isArray(items) || items.length === 0) return []
+  const stmt = db.prepare('SELECT 1 FROM price_bars WHERE root = ? AND ts >= ? AND ts <= ? LIMIT 1')
+  const matched = []
+  for (const it of items) {
+    const root = String(it?.root || '').trim().toUpperCase()
+    if (!root || !Number.isFinite(it?.from) || !Number.isFinite(it?.to)) continue
+    if (stmt.get(root, Math.floor(it.from), Math.floor(it.to))) matched.push(it.id)
+  }
+  return matched
+}
+
+/**
+ * Drops bars that sit outside any trade's window.
+ *
+ * A platform export covers whole sessions, but only the minutes around an
+ * actual trade are ever drawn — on one real export that was 82% of the rows
+ * doing nothing. Deliberately manual and never automatic: re-exporting is a
+ * chore in the platform, so throwing history away has to be the trader's call.
+ */
+export function trimPriceBarsToTrades(root, padding = 4 * 60 * 60) {
+  const key = String(root || '').trim().toUpperCase()
+  if (!key) return { ok: false, error: 'No instrument given.' }
+
+  const before = db.prepare('SELECT COUNT(*) c FROM price_bars WHERE root = ?').get(key).c
+  if (before === 0) return { ok: false, error: 'No bars stored for that instrument.' }
+
+  const windows = tradeWindows(key, Math.max(0, Number(padding) || 0))
+  if (windows.length === 0) {
+    return { ok: false, error: `No ${key} trades to trim around — nothing would be kept.` }
+  }
+
+  db.transaction(() => {
+    db.exec('CREATE TEMP TABLE IF NOT EXISTS keep_windows (a INTEGER, b INTEGER)')
+    db.exec('DELETE FROM keep_windows')
+    const ins = db.prepare('INSERT INTO keep_windows (a, b) VALUES (?, ?)')
+    for (const w of windows) ins.run(w.from, w.to)
+    db.prepare(
+      `DELETE FROM price_bars
+        WHERE root = ?
+          AND NOT EXISTS (SELECT 1 FROM keep_windows w WHERE price_bars.ts BETWEEN w.a AND w.b)`
+    ).run(key)
+    db.exec('DROP TABLE IF EXISTS keep_windows')
+
+    const span = db.prepare('SELECT COUNT(*) c, MIN(ts) lo, MAX(ts) hi FROM price_bars WHERE root = ?').get(key)
+    db.prepare('UPDATE price_bar_series SET barCount = ?, firstTs = ?, lastTs = ? WHERE root = ?')
+      .run(span.c, span.lo, span.hi, key)
+  })()
+
+  const after = db.prepare('SELECT COUNT(*) c FROM price_bars WHERE root = ?').get(key).c
+
+  // Deleting rows frees pages inside the file but does not shrink it, and
+  // reclaiming disk is the entire point — so compact, outside the transaction.
+  try { db.exec('VACUUM') } catch {}
+
+  return { ok: true, root: key, before, after, removed: before - after, windows: windows.length }
+}
+
+export function deletePriceSeries(root) {
+  const key = String(root || '').trim().toUpperCase()
+  if (!key) return { ok: false }
+  db.transaction(() => {
+    db.prepare('DELETE FROM price_bars WHERE root = ?').run(key)
+    db.prepare('DELETE FROM price_bar_series WHERE root = ?').run(key)
+  })()
+  return { ok: true }
+}
+
 export function backupDb() {
   try {
     const dir = join(app.getPath('userData'), 'backups')

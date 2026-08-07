@@ -3,6 +3,7 @@ import { T, mono, inputStyle, ACCENT_OPTIONS, THEME_PRESETS, GO_TIME_OPTIONS, PN
 import { CHECKOUT_URL, SITE_URL } from '../utils.js'
 import { Panel, Field } from '../components/Shared.jsx'
 import { BACKDROP_OPTIONS } from '../components/Backdrop.jsx'
+import { SOURCE_ZONE_OPTIONS } from '../utils/barImport.js'
 import { BrokerSyncPanel } from '../widgets/BrokerSyncPanel.jsx'
 import { MobileSyncPanel } from '../widgets/MobileSyncPanel.jsx'
 import { Instagram, MessagesSquare, Plus, Pencil, Trash2, X, Globe } from 'lucide-react'
@@ -153,6 +154,157 @@ export function DataPanel({ onReload }) {
       </div>
       {msg && <div className="mt-3 text-xs" style={{ color: T.dim }}>{msg}</div>}
       <p className="text-xs mt-2" style={{ color: T.faint }}>JSON exports include journal records and day logs but exclude screenshot and recording files, plus API keys. For a complete backup with all attachments, copy the entire data folder. A daily SQLite backup is also kept there.</p>
+    </Panel>
+  )
+}
+
+/**
+ * Optional, for traders whose platform can export price history.
+ *
+ * TradeHelp buys no market data and redistributes none: this imports the
+ * history the trader already pays their own platform for, stores it locally,
+ * and uses it to draw real candles behind a trade with that trade's own entry,
+ * stop and target on top. Without an import nothing changes anywhere.
+ */
+function PriceBarsPanel() {
+  const [series, setSeries] = useState([])
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [sourceZone, setSourceZone] = useState('utc')
+
+  const refresh = async () => {
+    try {
+      setSeries((await window.api.listPriceSeries()) || [])
+    } catch {
+      setSeries([])
+    }
+  }
+
+  useEffect(() => { refresh() }, [])
+
+  async function importFile() {
+    if (busy) return
+    setBusy(true); setMsg('')
+    try {
+      const r = await window.api.importPriceBars(sourceZone)
+      if (r?.canceled) setMsg('')
+      else if (!r?.ok) setMsg(r?.error || 'That file could not be imported.')
+      else {
+        const skipped = r.skipped ? `, ${r.skipped} row(s) skipped` : ''
+        setMsg(`Imported ${r.barCount.toLocaleString()} bars for ${r.root}${skipped}.`)
+        await refresh()
+      }
+    } catch (reason) {
+      setMsg(reason?.message || 'That file could not be imported.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function remove(row) {
+    if (!window.confirm(`Delete the imported ${row.root} bars? Your trades are not affected.`)) return
+    try { await window.api.deletePriceSeries(row.root); await refresh() } catch {}
+  }
+
+  // Platform exports cover whole sessions, but only the minutes around a trade
+  // are ever drawn. Manual and never automatic: re-exporting is a chore in the
+  // platform, so discarding history stays the trader's decision.
+  async function trim(row) {
+    const hours = 4
+    const ok = window.confirm(
+      `Keep only bars within ${hours} hours of one of your ${row.root} trades, and delete the rest?\n\n` +
+      `This usually removes most of an export. Charts keep working for every trade you have, at every ` +
+      `context window up to ±${hours}h; the ±1d window may show gaps.\n\n` +
+      `This cannot be undone — you would need to export from your platform again.`
+    )
+    if (!ok) return
+    setBusy(true); setMsg('')
+    try {
+      const r = await window.api.trimPriceBars(row.root, hours * 3600)
+      if (!r?.ok) setMsg(r?.error || 'Those bars could not be trimmed.')
+      else {
+        setMsg(`Trimmed ${row.root}: kept ${r.after.toLocaleString()} of ${r.before.toLocaleString()} bars around ${r.windows} trade(s).`)
+        await refresh()
+      }
+    } catch (reason) {
+      setMsg(reason?.message || 'Those bars could not be trimmed.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const when = (ts) => (ts ? new Date(ts * 1000).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '—')
+
+  return (
+    <Panel title="Chart data (optional)" right={
+      <button type="button" onClick={importFile} disabled={busy} className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold" style={{ background: T.accent, color: '#1A1306', opacity: busy ? 0.6 : 1 }}>
+        <Plus size={13} /> {busy ? 'Importing…' : 'Import bars'}
+      </button>
+    }>
+      <p className="text-sm mb-3" style={{ color: T.dim }}>
+        TradeHelp stores no market data, so trade charts show your entry, exit, stop and target rather than
+        price action. If your platform can export price history, import it here and those charts become real
+        candles with your levels drawn on top. Everything stays on this machine and works offline afterwards.
+      </p>
+      <p className="text-xs mb-3" style={{ color: T.faint }}>
+        NinjaTrader 8: Tools → Historical Data → Export, pick the instrument and a Minute period. Keep the
+        contract in the file name (for example <span style={mono}>MES 09-26.Last.txt</span>) so the instrument
+        can be identified.
+      </p>
+      <p className="text-xs mb-3" style={{ color: T.faint }}>
+        TradingView, MetaTrader 4 and 5, Sierra Chart and most other platforms also work — any CSV or text
+        export of date, open, high, low, close and volume. The bars do not have to come from the broker you
+        traded with; they are just market data for that instrument.
+      </p>
+
+      {/* MetaTrader writes broker server time with nothing in the file to say
+          so, which parses cleanly and lands every candle hours off. */}
+      <div className="mb-3">
+        <label className="text-xs block mb-1" style={{ color: T.dim }}>Times in the file are</label>
+        <select
+          value={sourceZone}
+          onChange={(e) => setSourceZone(e.target.value)}
+          className="rounded px-2 py-1.5 text-xs"
+          style={{ ...inputStyle, maxWidth: 320 }}
+        >
+          {SOURCE_ZONE_OPTIONS.map((o) => (
+            <option key={o.id} value={o.id}>{o.label}</option>
+          ))}
+        </select>
+        <p className="text-xs mt-1" style={{ color: T.faint }}>
+          Leave on UTC for NinjaTrader and TradingView. If candles land beside your entry marker rather than
+          on it, the file used a different clock — re-import with the matching offset.
+        </p>
+      </div>
+
+      {series.length === 0 ? (
+        <div className="text-xs" style={{ color: T.faint }}>Nothing imported yet — trade charts show the execution map.</div>
+      ) : (
+        <div className="space-y-2">
+          {series.map((row) => (
+            <div key={row.root} className="flex items-center justify-between gap-3 rounded-md px-3 py-2 text-xs" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
+              <div className="min-w-0">
+                <div className="font-semibold" style={{ color: T.text }}>{row.label || row.root} <span style={{ color: T.faint }}>({row.root})</span></div>
+                <div style={{ color: T.faint, ...mono }}>{Number(row.barCount).toLocaleString()} bars · {when(row.firstTs)} → {when(row.lastTs)}</div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => trim(row)}
+                  disabled={busy}
+                  title={`Keep only bars near your ${row.root} trades and reclaim the rest`}
+                  className="rounded px-2 py-1 text-[11px] font-semibold"
+                  style={{ background: T.surface, color: T.dim, border: `1px solid ${T.line}`, opacity: busy ? 0.6 : 1 }}
+                >
+                  Trim to trades
+                </button>
+                <button type="button" onClick={() => remove(row)} title="Delete these bars" style={{ color: T.down }}><Trash2 size={14} /></button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {msg && <div className="mt-3 text-xs" style={{ color: T.dim }}>{msg}</div>}
     </Panel>
   )
 }
@@ -427,6 +579,7 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
       <BrokerSyncPanel accounts={accounts} onReload={onReload} />
       <MobileSyncPanel />
       <InstrumentProfilesPanel profiles={profiles} onAdd={onAddProfile} onUpdate={onUpdateProfile} onDelete={onDeleteProfile} />
+      <PriceBarsPanel />
       <Panel title="Appearance 2.0">
         <Field label="Theme presets">
           <div className="grid grid-cols-2 gap-2 mt-1">

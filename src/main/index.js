@@ -12,6 +12,8 @@ import * as license from './license.js'
 import { testKey } from './keytest.js'
 import { createImportWatcher, readInboxFile } from './importWatcher.js'
 import { createBrokerSync } from './brokerSync.js'
+import { parseBarExport, resolveSourceZone } from '../renderer/src/utils/barImport.js'
+import { instrumentRootSymbol } from '../renderer/src/workflow.js'
 import { createMobileSyncServer } from './mobileSync.js'
 
 let win
@@ -125,6 +127,26 @@ function createWindow() {
   win.webContents.on('console-message', (_event, level, message, line, sourceId) => {
     if (level >= 2) console.error(`[renderer] ${message} (${sourceId}:${line})`)
   })
+
+  // The embedded TradingView chart is remote content and carries its own links.
+  // Without this, clicking one made Electron open an uncontrolled child window:
+  // it loaded the full site, whose beforeunload handlers then refused to let it
+  // close, and it inherited default webPreferences rather than the app's.
+  // Links belong in the user's own browser.
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url)
+    return { action: 'deny' }
+  })
+
+  // Nothing embedded should be able to navigate the app window itself away
+  // from the journal.
+  win.webContents.on('will-navigate', (event, url) => {
+    if (devUrl && url.startsWith(devUrl)) return
+    if (url.startsWith('file://')) return
+    event.preventDefault()
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url)
+  })
+
   if (devUrl) win.loadURL(devUrl)
   else win.loadFile(join(__dirname, '../renderer/index.html'))
 }
@@ -468,7 +490,7 @@ function registerIpc() {
     const s = String(url)
     if (/^https?:\/\//i.test(s)) shell.openExternal(s)
   })
-  ipcMain.handle('app:openDetachedChart', (_e, symbol = 'NASDAQ:NQ1!') => {
+  ipcMain.handle('app:openDetachedChart', (_e, symbol = 'CME_MINI:NQ1!') => {
     const clean = encodeURIComponent(String(symbol).replace(/\s+/g, ''))
     const chartUrl = `https://www.tradingview.com/widgetembed/?symbol=${clean}&interval=5&theme=dark&style=1&timezone=Etc%2FUTC&studies=%5B%5D&hide_side_toolbar=0&allow_symbol_change=1&save_image=1&calendar=1&hotlist=1`
     const popout = new BrowserWindow({
@@ -479,9 +501,6 @@ function registerIpc() {
       title: `TradeHelp Chart Workstation — ${symbol}`,
       backgroundColor: '#09090b',
       autoHideMenuBar: true,
-      // This window loads a third-party page. These are Electron's defaults,
-      // but they are stated explicitly so a future default change can't quietly
-      // hand remote content more privilege than it should ever have.
       webPreferences: {
         sandbox: true,
         contextIsolation: true,
@@ -489,12 +508,23 @@ function registerIpc() {
         webviewTag: false
       }
     })
-    // Anything the embedded page tries to open goes to the real browser rather
-    // than spawning further app windows we don't control.
+
     popout.webContents.setWindowOpenHandler(({ url }) => {
       if (/^https?:\/\//i.test(url)) shell.openExternal(url)
       return { action: 'deny' }
     })
+
+    popout.webContents.on('will-prevent-unload', (event) => event.preventDefault())
+
+    popout.webContents.on('before-input-event', (event, input) => {
+      if (input.type !== 'keyDown') return
+      const closeCombo = (input.key || '').toLowerCase() === 'w' && (input.control || input.meta)
+      if (closeCombo || input.key === 'Escape') {
+        event.preventDefault()
+        if (!popout.isDestroyed()) popout.close()
+      }
+    })
+
     popout.loadURL(chartUrl)
   })
   ipcMain.handle('key:test', (_e, payload) => testKey(payload))
@@ -528,6 +558,57 @@ function registerIpc() {
       }
     } catch { return { platform } }
   })
+
+  /* ── imported price bars ──
+     Opt-in, for traders whose platform can export the history they already pay
+     for. TradeHelp buys and redistributes no market data; the file is read once
+     and stored locally, so charts keep working offline afterwards. */
+  ipcMain.handle('bars:import', async (_e, sourceZoneId = 'utc') => {
+    const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+      title: 'Import price bars exported from your platform',
+      properties: ['openFile'],
+      filters: [{ name: 'Exported bars', extensions: ['txt', 'csv'] }]
+    })
+    if (canceled || !filePaths?.[0]) return { ok: false, canceled: true }
+
+    try {
+      const path = filePaths[0]
+      if (statSync(path).size > 200_000_000) {
+        return { ok: false, error: 'That file is over 200 MB. Export a narrower date range.' }
+      }
+
+      const text = readFileSync(path, 'utf8')
+      const { bars, errors, delimiter, hasVolume } = parseBarExport(text, { sourceZone: resolveSourceZone(sourceZoneId) })
+      if (bars.length === 0) {
+        return { ok: false, error: errors[0]?.reason || 'No readable bars in that file.' }
+      }
+
+      // NinjaTrader names exports after the instrument: "MES 09-26.Last.txt".
+      const fileName = path.split(/[\\/]/).pop() || ''
+      const named = fileName.replace(/\.[^.]*$/, '').replace(/\.(last|bid|ask|mid)$/i, '')
+      const root = instrumentRootSymbol(named) || instrumentRootSymbol(named.split(/[\s._-]/)[0])
+      if (!root) {
+        return { ok: false, error: `Could not tell which instrument "${fileName}" is for. Rename it to start with the contract, e.g. "MES 09-26.txt".` }
+      }
+
+      const result = db.importPriceBars({
+        root,
+        label: named,
+        contract: named.replace(root, '').trim(),
+        sourceFile: fileName,
+        bars
+      })
+
+      return { ...result, fileName, delimiter, hasVolume, skipped: errors.length, errors: errors.slice(0, 5) }
+    } catch (e) {
+      return { ok: false, error: String(e?.message || e) }
+    }
+  })
+  ipcMain.handle('bars:series', () => db.listPriceSeries())
+  ipcMain.handle('bars:get', (_e, root, from, to) => db.getPriceBars(root, from, to))
+  ipcMain.handle('bars:delete', (_e, root) => db.deletePriceSeries(root))
+  ipcMain.handle('bars:match', (_e, items) => db.matchTradesToBars(items))
+  ipcMain.handle('bars:trim', (_e, root, padding) => db.trimPriceBarsToTrades(root, padding))
 
   ipcMain.handle('settings:get', () => db.getSettings())
   ipcMain.handle('settings:set', (_e, s) => { const r = db.setSettings(s); settingsCache = r; return r })
