@@ -187,12 +187,33 @@
     var trigger = e.target.closest('.dropdown-trigger');
     var dropdown = trigger ? trigger.closest('.dropdown') : null;
     
-    document.querySelectorAll('.dropdown.is-open').forEach(function (d) {
-      if (d !== dropdown) d.classList.remove('is-open');
+    document.querySelectorAll('.dropdown').forEach(function (d) {
+      if (d !== dropdown) {
+        d.classList.remove('is-open');
+        d.classList.remove('is-closed');
+      }
     });
 
     if (dropdown) {
-      dropdown.classList.toggle('is-open');
+      if (dropdown.classList.contains('is-open')) {
+        dropdown.classList.remove('is-open');
+        dropdown.classList.add('is-closed');
+      } else {
+        dropdown.classList.remove('is-closed');
+        dropdown.classList.add('is-open');
+      }
+    } else {
+      document.querySelectorAll('.dropdown.is-closed').forEach(function (d) {
+        d.classList.remove('is-closed');
+      });
+    }
+  });
+
+  document.addEventListener('mousemove', function (e) {
+    if (!e.target.closest('.dropdown')) {
+      document.querySelectorAll('.dropdown.is-closed').forEach(function (d) {
+        d.classList.remove('is-closed');
+      });
     }
   });
 

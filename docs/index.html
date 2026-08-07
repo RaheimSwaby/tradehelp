@@ -161,7 +161,7 @@
   .dropdown-trigger{color:var(--dim);cursor:pointer;display:flex;align-items:center;gap:4px;font-size:14px;background:none;border:none;font-family:inherit;padding:6px 0;transition:color .2s ease}
   .dropdown-trigger:hover, .dropdown.is-open .dropdown-trigger{color:var(--text)}
   .dropdown-trigger::after{content:"▾";color:var(--faint);font-size:11px;margin-left:3px;display:inline-block;transition:transform .25s cubic-bezier(0.16, 1, 0.3, 1), color .2s ease}
-  .dropdown:hover .dropdown-trigger::after, .dropdown.is-open .dropdown-trigger::after{transform:rotate(180deg);color:var(--accent)}
+  .dropdown:hover:not(.is-closed) .dropdown-trigger::after, .dropdown.is-open .dropdown-trigger::after{transform:rotate(180deg);color:var(--accent)}
   .dropdown-content{
     display:block;
     opacity:0;
@@ -184,7 +184,7 @@
     transition:opacity .22s cubic-bezier(0.16, 1, 0.3, 1), transform .22s cubic-bezier(0.16, 1, 0.3, 1), visibility .22s;
   }
 
-  .dropdown:hover .dropdown-content,
+  .dropdown:hover:not(.is-closed) .dropdown-content,
   .dropdown.is-open .dropdown-content{
     opacity:1;
     visibility:visible;
@@ -204,18 +204,18 @@
     transition:opacity .22s cubic-bezier(0.16, 1, 0.3, 1), transform .22s cubic-bezier(0.16, 1, 0.3, 1), background .15s ease, color .15s ease;
   }
 
-  .dropdown:hover .dropdown-content a,
+  .dropdown:hover:not(.is-closed) .dropdown-content a,
   .dropdown.is-open .dropdown-content a {
     opacity:1;
     transform:translateY(0);
   }
 
-  .dropdown:hover .dropdown-content a:nth-child(1), .dropdown.is-open .dropdown-content a:nth-child(1) { transition-delay: 0.03s; }
-  .dropdown:hover .dropdown-content a:nth-child(2), .dropdown.is-open .dropdown-content a:nth-child(2) { transition-delay: 0.07s; }
-  .dropdown:hover .dropdown-content a:nth-child(3), .dropdown.is-open .dropdown-content a:nth-child(3) { transition-delay: 0.11s; }
-  .dropdown:hover .dropdown-content a:nth-child(4), .dropdown.is-open .dropdown-content a:nth-child(4) { transition-delay: 0.15s; }
-  .dropdown:hover .dropdown-content a:nth-child(5), .dropdown.is-open .dropdown-content a:nth-child(5) { transition-delay: 0.19s; }
-  .dropdown:hover .dropdown-content a:nth-child(6), .dropdown.is-open .dropdown-content a:nth-child(6) { transition-delay: 0.23s; }
+  .dropdown:hover:not(.is-closed) .dropdown-content a:nth-child(1), .dropdown.is-open .dropdown-content a:nth-child(1) { transition-delay: 0.03s; }
+  .dropdown:hover:not(.is-closed) .dropdown-content a:nth-child(2), .dropdown.is-open .dropdown-content a:nth-child(2) { transition-delay: 0.07s; }
+  .dropdown:hover:not(.is-closed) .dropdown-content a:nth-child(3), .dropdown.is-open .dropdown-content a:nth-child(3) { transition-delay: 0.11s; }
+  .dropdown:hover:not(.is-closed) .dropdown-content a:nth-child(4), .dropdown.is-open .dropdown-content a:nth-child(4) { transition-delay: 0.15s; }
+  .dropdown:hover:not(.is-closed) .dropdown-content a:nth-child(5), .dropdown.is-open .dropdown-content a:nth-child(5) { transition-delay: 0.19s; }
+  .dropdown:hover:not(.is-closed) .dropdown-content a:nth-child(6), .dropdown.is-open .dropdown-content a:nth-child(6) { transition-delay: 0.23s; }
 
   .dropdown-content a:hover{background:var(--surface2);color:var(--accent);text-decoration:none;transform:translateX(3px)!important}
 
@@ -741,11 +741,34 @@
   document.addEventListener('click', function (e) {
     var trigger = e.target.closest('.dropdown-trigger');
     var dropdown = trigger ? trigger.closest('.dropdown') : null;
-    document.querySelectorAll('.dropdown.is-open').forEach(function (d) {
-      if (d !== dropdown) d.classList.remove('is-open');
+    
+    document.querySelectorAll('.dropdown').forEach(function (d) {
+      if (d !== dropdown) {
+        d.classList.remove('is-open');
+        d.classList.remove('is-closed');
+      }
     });
+
     if (dropdown) {
-      dropdown.classList.toggle('is-open');
+      if (dropdown.classList.contains('is-open')) {
+        dropdown.classList.remove('is-open');
+        dropdown.classList.add('is-closed');
+      } else {
+        dropdown.classList.remove('is-closed');
+        dropdown.classList.add('is-open');
+      }
+    } else {
+      document.querySelectorAll('.dropdown.is-closed').forEach(function (d) {
+        d.classList.remove('is-closed');
+      });
+    }
+  });
+
+  document.addEventListener('mousemove', function (e) {
+    if (!e.target.closest('.dropdown')) {
+      document.querySelectorAll('.dropdown.is-closed').forEach(function (d) {
+        d.classList.remove('is-closed');
+      });
     }
   });
 </script>
