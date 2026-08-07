@@ -65,6 +65,95 @@ pre code{background:none;border:none;padding:0}
 .cta-box p{max-width:520px;margin:8px auto 18px}
 .cta-box .note{color:var(--faint);font-size:13px;margin-top:12px}
 
-footer{border-top:1px solid var(--line);margin-top:36px;padding:26px 0;color:var(--faint);font-size:13px}
 footer .links{display:flex;flex-wrap:wrap;gap:6px 18px;margin-bottom:10px}
 footer a{color:var(--dim)}
+
+/* Sleek Animated Navigation Dropdown Menu */
+.dropdown{position:relative;display:inline-block}
+.dropdown-trigger{color:var(--dim);cursor:pointer;display:flex;align-items:center;gap:4px;font-size:14px;background:none;border:none;font-family:inherit;padding:6px 0;transition:color .2s ease}
+.dropdown-trigger:hover, .dropdown.is-open .dropdown-trigger{color:var(--text)}
+.dropdown-trigger::after{content:"▾";color:var(--faint);font-size:11px;margin-left:3px;display:inline-block;transition:transform .25s cubic-bezier(0.16, 1, 0.3, 1), color .2s ease}
+.dropdown:hover .dropdown-trigger::after, .dropdown.is-open .dropdown-trigger::after{transform:rotate(180deg);color:var(--accent)}
+.dropdown-content{
+  display:block;
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+  position:absolute;
+  top:100%;
+  left:50%;
+  transform:translateX(-50%) translateY(10px) scale(0.96);
+  min-width:215px;
+  background:rgba(21, 27, 38, 0.94);
+  backdrop-filter:blur(16px);
+  -webkit-backdrop-filter:blur(16px);
+  border:1px solid rgba(245, 182, 66, 0.25);
+  border-radius:12px;
+  padding:6px;
+  box-shadow:0 20px 48px rgba(0,0,0,0.55), 0 0 24px rgba(245,182,66,0.08);
+  z-index:100;
+  margin-top:8px;
+  transition:opacity .22s cubic-bezier(0.16, 1, 0.3, 1), transform .22s cubic-bezier(0.16, 1, 0.3, 1), visibility .22s;
+}
+
+.dropdown:hover .dropdown-content,
+.dropdown.is-open .dropdown-content{
+  opacity:1;
+  visibility:visible;
+  pointer-events:auto;
+  transform:translateX(-50%) translateY(0) scale(1);
+}
+
+/* Sub-Item Waterfall Cascade Animation */
+.dropdown-content a{
+  display:block;
+  padding:8.5px 13px;
+  font-size:13.5px;
+  color:var(--dim);
+  border-radius:7px;
+  opacity:0;
+  transform:translateY(-8px);
+  transition:opacity .22s cubic-bezier(0.16, 1, 0.3, 1), transform .22s cubic-bezier(0.16, 1, 0.3, 1), background .15s ease, color .15s ease;
+}
+
+.dropdown:hover .dropdown-content a,
+.dropdown.is-open .dropdown-content a {
+  opacity:1;
+  transform:translateY(0);
+}
+
+.dropdown:hover .dropdown-content a:nth-child(1), .dropdown.is-open .dropdown-content a:nth-child(1) { transition-delay: 0.03s; }
+.dropdown:hover .dropdown-content a:nth-child(2), .dropdown.is-open .dropdown-content a:nth-child(2) { transition-delay: 0.07s; }
+.dropdown:hover .dropdown-content a:nth-child(3), .dropdown.is-open .dropdown-content a:nth-child(3) { transition-delay: 0.11s; }
+.dropdown:hover .dropdown-content a:nth-child(4), .dropdown.is-open .dropdown-content a:nth-child(4) { transition-delay: 0.15s; }
+.dropdown:hover .dropdown-content a:nth-child(5), .dropdown.is-open .dropdown-content a:nth-child(5) { transition-delay: 0.19s; }
+.dropdown:hover .dropdown-content a:nth-child(6), .dropdown.is-open .dropdown-content a:nth-child(6) { transition-delay: 0.23s; }
+
+.dropdown-content a:hover{background:var(--surface2);color:var(--accent);text-decoration:none;transform:translateX(3px)!important}
+
+/* Waterfall Cascade Page Entrance Animation */
+@keyframes waterfallCascade {
+  0% { opacity: 0; transform: translateY(22px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.topbar { animation: waterfallCascade 0.5s cubic-bezier(0.16, 1, 0.3, 1) both; }
+article > .wrap > h1, header.hero h1 { animation: waterfallCascade 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.08s both; }
+article > .wrap > .lede, header.hero .sub { animation: waterfallCascade 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.16s both; }
+article > .wrap > table, .grid, .compare, .shots-grid, .hero-shot { animation: waterfallCascade 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.24s both; }
+.card, .shot { animation: waterfallCascade 0.6s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.grid > .card:nth-child(1), .shots-grid > .shot:nth-child(1) { animation-delay: 0.24s; }
+.grid > .card:nth-child(2), .shots-grid > .shot:nth-child(2) { animation-delay: 0.28s; }
+.grid > .card:nth-child(3), .shots-grid > .shot:nth-child(3) { animation-delay: 0.32s; }
+.grid > .card:nth-child(4), .shots-grid > .shot:nth-child(4) { animation-delay: 0.36s; }
+.grid > .card:nth-child(5), .shots-grid > .shot:nth-child(5) { animation-delay: 0.40s; }
+.grid > .card:nth-child(6) { animation-delay: 0.44s; }
+.cta-box, .faq, footer { animation: waterfallCascade 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.36s both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .topbar, article > .wrap > h1, header.hero h1, article > .wrap > .lede, header.hero .sub, table, .grid, .cta-box, footer, .card, .shot {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}

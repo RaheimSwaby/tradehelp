@@ -6,7 +6,81 @@
 <title>TradeHelp — local-first trading journal & offline AI coach</title>
 <meta name="description" content="A desktop trading journal with an offline AI coach. Your trades live on your machine and never leave it. Free 14-day trial, then a one-time $50 — no subscription. Windows, macOS & Linux." />
 <link rel="canonical" href="https://trade-help.app/" />
-<link rel="icon" href="logo.svg" />
+<meta property="article:modified_time" content="2026-08-06" />
+
+<!-- OpenGraph & Twitter Card Social Preview -->
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://trade-help.app/" />
+<meta property="og:title" content="TradeHelp — Local-First Trading Journal & Offline AI Coach" />
+<meta property="og:description" content="A desktop trading journal with an offline AI coach. Your trades live on your machine in SQLite. Free 14-day trial, then a one-time $50 — no subscription." />
+<meta property="og:image" content="https://trade-help.app/shots/dashboard.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="TradeHelp — Local-First Trading Journal & Offline AI Coach" />
+<meta name="twitter:description" content="Stop paying monthly subscriptions for trading journals. Store trades locally in SQLite with an offline AI coach." />
+<meta name="twitter:image" content="https://trade-help.app/shots/dashboard.png" />
+
+<!-- Google Rich Snippet & Structured Data -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "SoftwareApplication",
+      "@id": "https://trade-help.app/#software",
+      "name": "TradeHelp",
+      "operatingSystem": "Windows, macOS, Linux",
+      "applicationCategory": "FinanceApplication",
+      "price": "25.00",
+      "priceCurrency": "USD",
+      "description": "Local-first desktop trading journal with an offline AI coach. Your trades live locally in SQLite and never leave your machine.",
+      "offers": {
+        "@type": "Offer",
+        "price": "25.00",
+        "priceCurrency": "USD",
+        "priceValidUntil": "2027-12-31",
+        "availability": "https://schema.org/InStock"
+      },
+      "author": {
+        "@type": "Organization",
+        "name": "TradeHelp",
+        "url": "https://trade-help.app/"
+      }
+    },
+    {
+      "@type": "FAQPage",
+      "@id": "https://trade-help.app/#faq",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Is TradeHelp completely offline and private?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. TradeHelp is a local-first desktop application that stores your trades, charts, and journal notes in a local SQLite database on your computer. Your trade data is never uploaded to any server or cloud."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How does TradeHelp compare to TradeZella or TraderSync?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Unlike TradeZella or TraderSync which charge $30–$50/month subscription fees and store your trades on cloud servers, TradeHelp is a one-time $50 purchase ($25 founders launch price) with no subscription, zero accounts, and 100% offline data privacy."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Does the offline AI coach require an internet connection?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. The AI coach runs locally on your machine via Ollama or LM Studio. You can also connect your own API key if you prefer."
+          }
+        }
+      ]
+    }
+  ]
+}
+</script>
 <style>
   :root{
     --bg:#0E1117; --surface:#151B26; --surface2:#1C2433; --line:#2A3344;
@@ -81,6 +155,69 @@
   .nav-links a{color:var(--dim);transition:color .15s ease}
   .nav-links a:hover{color:var(--text)}
   @media (max-width:720px){.nav-links{display:none}}
+
+  /* Sleek Animated Navigation Dropdown Menu */
+  .dropdown{position:relative;display:inline-block}
+  .dropdown-trigger{color:var(--dim);cursor:pointer;display:flex;align-items:center;gap:4px;font-size:14px;background:none;border:none;font-family:inherit;padding:6px 0;transition:color .2s ease}
+  .dropdown-trigger:hover, .dropdown.is-open .dropdown-trigger{color:var(--text)}
+  .dropdown-trigger::after{content:"▾";color:var(--faint);font-size:11px;margin-left:3px;display:inline-block;transition:transform .25s cubic-bezier(0.16, 1, 0.3, 1), color .2s ease}
+  .dropdown:hover .dropdown-trigger::after, .dropdown.is-open .dropdown-trigger::after{transform:rotate(180deg);color:var(--accent)}
+  .dropdown-content{
+    display:block;
+    opacity:0;
+    visibility:hidden;
+    pointer-events:none;
+    position:absolute;
+    top:100%;
+    left:50%;
+    transform:translateX(-50%) translateY(10px) scale(0.96);
+    min-width:215px;
+    background:rgba(21, 27, 38, 0.94);
+    backdrop-filter:blur(16px);
+    -webkit-backdrop-filter:blur(16px);
+    border:1px solid rgba(245, 182, 66, 0.25);
+    border-radius:12px;
+    padding:6px;
+    box-shadow:0 20px 48px rgba(0,0,0,0.55), 0 0 24px rgba(245,182,66,0.08);
+    z-index:100;
+    margin-top:8px;
+    transition:opacity .22s cubic-bezier(0.16, 1, 0.3, 1), transform .22s cubic-bezier(0.16, 1, 0.3, 1), visibility .22s;
+  }
+
+  .dropdown:hover .dropdown-content,
+  .dropdown.is-open .dropdown-content{
+    opacity:1;
+    visibility:visible;
+    pointer-events:auto;
+    transform:translateX(-50%) translateY(0) scale(1);
+  }
+
+  /* Sub-Item Waterfall Cascade Animation */
+  .dropdown-content a{
+    display:block;
+    padding:8.5px 13px;
+    font-size:13.5px;
+    color:var(--dim);
+    border-radius:7px;
+    opacity:0;
+    transform:translateY(-8px);
+    transition:opacity .22s cubic-bezier(0.16, 1, 0.3, 1), transform .22s cubic-bezier(0.16, 1, 0.3, 1), background .15s ease, color .15s ease;
+  }
+
+  .dropdown:hover .dropdown-content a,
+  .dropdown.is-open .dropdown-content a {
+    opacity:1;
+    transform:translateY(0);
+  }
+
+  .dropdown:hover .dropdown-content a:nth-child(1), .dropdown.is-open .dropdown-content a:nth-child(1) { transition-delay: 0.03s; }
+  .dropdown:hover .dropdown-content a:nth-child(2), .dropdown.is-open .dropdown-content a:nth-child(2) { transition-delay: 0.07s; }
+  .dropdown:hover .dropdown-content a:nth-child(3), .dropdown.is-open .dropdown-content a:nth-child(3) { transition-delay: 0.11s; }
+  .dropdown:hover .dropdown-content a:nth-child(4), .dropdown.is-open .dropdown-content a:nth-child(4) { transition-delay: 0.15s; }
+  .dropdown:hover .dropdown-content a:nth-child(5), .dropdown.is-open .dropdown-content a:nth-child(5) { transition-delay: 0.19s; }
+  .dropdown:hover .dropdown-content a:nth-child(6), .dropdown.is-open .dropdown-content a:nth-child(6) { transition-delay: 0.23s; }
+
+  .dropdown-content a:hover{background:var(--surface2);color:var(--accent);text-decoration:none;transform:translateX(3px)!important}
 
   .privacy{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:34px;text-align:center}
   .privacy h2{margin-bottom:10px}
@@ -160,7 +297,24 @@
       <a class="brand" href="#"><img src="logo.svg" width="30" height="30" alt="" />Trade<span class="h">Help</span></a>
       <div class="nav-links">
         <a href="#features">Features</a>
-        <a href="#compare">Compare</a>
+        <div class="dropdown">
+          <button type="button" class="dropdown-trigger">Compare</button>
+          <div class="dropdown-content">
+            <a href="vs-tradezella.html">vs TradeZella</a>
+            <a href="vs-tradersync.html">vs TraderSync</a>
+          </div>
+        </div>
+        <div class="dropdown">
+          <button type="button" class="dropdown-trigger">Guides</button>
+          <div class="dropdown-content">
+            <a href="trading-journal-software.html">Trading Journal Software</a>
+            <a href="prop-firm-trading-journal.html">Prop Firm Journal</a>
+            <a href="offline-trading-journal.html">Offline Journal</a>
+            <a href="import-ninjatrader.html">NinjaTrader Import Guide</a>
+            <a href="import-tradovate.html">Tradovate Import Guide</a>
+            <a href="import-topstepx.html">TopstepX Import Guide</a>
+          </div>
+        </div>
         <a href="#pricing">Pricing</a>
       </div>
       <div style="display:flex;gap:10px;align-items:center">
@@ -398,7 +552,9 @@
       and earn on every sale you refer.
     </p>
     <p style="margin-bottom:10px">
+      <a href="trading-journal-software.html">Trading Journal Software</a> ·
       <a href="vs-tradezella.html">TradeHelp vs TradeZella</a> ·
+      <a href="vs-tradersync.html">TradeHelp vs TraderSync</a> ·
       <a href="prop-firm-trading-journal.html">Journal for prop-firm traders</a> ·
       <a href="offline-trading-journal.html">Offline trading journal</a> ·
       Import guides: <a href="import-ninjatrader.html">NinjaTrader</a>, <a href="import-tradovate.html">Tradovate</a>, <a href="import-topstepx.html">TopstepX</a>
@@ -409,6 +565,10 @@
     <a href="support.html">Support</a> &middot;
     <a href="privacy.html">Privacy</a> &middot;
     <a href="https://github.com/RaheimSwaby/tradehelp">Source on GitHub</a>
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line);font-size:13px;color:var(--dim)">
+      Built &amp; Maintained by <span style="color:var(--accent);font-weight:600">TradeHelp</span> · Independent Privacy-First Desktop Software
+      <div style="font-size:12px;color:var(--faint);margin-top:4px">Last updated: <time datetime="2026-08-06">August 2026</time> · TradeHelp Version 0.47.2</div>
+    </div>
   </div>
 </footer>
 
@@ -575,9 +735,19 @@
             setTimeout(function () { share.textContent = 'Copy link'; }, 2000);
           });
         }
-      });
     }
   })();
+  // Dropdown Click-Toggle & Click-Away handler
+  document.addEventListener('click', function (e) {
+    var trigger = e.target.closest('.dropdown-trigger');
+    var dropdown = trigger ? trigger.closest('.dropdown') : null;
+    document.querySelectorAll('.dropdown.is-open').forEach(function (d) {
+      if (d !== dropdown) d.classList.remove('is-open');
+    });
+    if (dropdown) {
+      dropdown.classList.toggle('is-open');
+    }
+  });
 </script>
 <script src="matrix.js"></script>
 <script src="site-preferences.js"></script>

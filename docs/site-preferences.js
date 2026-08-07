@@ -182,6 +182,20 @@
     showChoices: showConsent
   };
 
+  // Dropdown Click-Toggle & Click-Away handler
+  document.addEventListener('click', function (e) {
+    var trigger = e.target.closest('.dropdown-trigger');
+    var dropdown = trigger ? trigger.closest('.dropdown') : null;
+    
+    document.querySelectorAll('.dropdown.is-open').forEach(function (d) {
+      if (d !== dropdown) d.classList.remove('is-open');
+    });
+
+    if (dropdown) {
+      dropdown.classList.toggle('is-open');
+    }
+  });
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', start);
   } else {
