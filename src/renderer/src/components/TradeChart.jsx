@@ -15,6 +15,7 @@ import {
 } from '../utils/tradeChartUtils.js'
 import { barsCoverTrade } from '../utils/barImport.js'
 import { instrumentRootSymbol } from '../workflow.js'
+import { localTimeZone } from '../importTimezone.js'
 import { ChartDrawingOverlay } from './ChartDrawingOverlay.jsx'
 
 const SAMPLE_FALLBACK_TRADE = {
@@ -44,6 +45,10 @@ export function TradeChart({ trade = SAMPLE_FALLBACK_TRADE, height = 550, mode =
 function LiveTradingViewWidget({ symbol = 'CME_MINI:NQ1!', height = 550 }) {
   const rawClean = symbol.replace(/\s+/g, '').toUpperCase()
   const cleanSymbol = encodeURIComponent(rawClean)
+  // The widget defaults to UTC, which made a 14:30 trade read as 18:30 on the
+  // axis for anyone east or west of Greenwich. The rest of the app journals in
+  // the trader's own wall-clock time, so the live chart must match it.
+  const timezone = localTimeZone()
 
   const srcDocContent = `<!DOCTYPE html>
 <html>
@@ -63,7 +68,7 @@ function LiveTradingViewWidget({ symbol = 'CME_MINI:NQ1!', height = 550 }) {
         "autosize": true,
         "symbol": "${rawClean}",
         "interval": "5",
-        "timezone": "Etc/UTC",
+        "timezone": "${timezone}",
         "theme": "dark",
         "style": "1",
         "locale": "en",
@@ -79,7 +84,7 @@ function LiveTradingViewWidget({ symbol = 'CME_MINI:NQ1!', height = 550 }) {
 </body>
 </html>`
 
-  const widgetUrl = `https://www.tradingview.com/widgetembed/?symbol=${cleanSymbol}&interval=5&theme=dark&style=1&timezone=Etc%2FUTC&studies=%5B%5D&hide_side_toolbar=0&allow_symbol_change=1&save_image=1&calendar=1&hotlist=1`
+  const widgetUrl = `https://www.tradingview.com/widgetembed/?symbol=${cleanSymbol}&interval=5&theme=dark&style=1&timezone=${encodeURIComponent(timezone)}&studies=%5B%5D&hide_side_toolbar=0&allow_symbol_change=1&save_image=1&calendar=1&hotlist=1`
 
   return (
     <div style={{ width: '100%', height: `${height}px`, borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.12)', background: '#09090b' }}>
