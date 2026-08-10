@@ -441,62 +441,63 @@ function registerIpc() {
       try {
         db.addTradeVideoFromPath(tradeId, picked.sourcePath)
       } catch (error) {
-        errors.push(`${picked.originalName}: ${safeVideoError(error, 'The recording could not be copied into TradeHelp.')}`)
+        errors.push(`${picked.originalName}: ${safeVideoError(error, 'Could not attach the recording.')}`)
       }
     }
-    return { ok: errors.length === 0, videos: publicVideos(db.listTradeVideos(tradeId)), errors }
+    return { ok: true, videos: publicVideos(db.listTradeVideos(tradeId)), errors }
   })
-  ipcMain.handle('videos:list', (_event, tradeId) => publicVideos(db.listTradeVideos(tradeId)))
-  ipcMain.handle('videos:delete', (_event, id) => publicVideos(db.deleteTradeVideo(id)))
+  ipcMain.handle('videos:list', (_e, tradeId) => publicVideos(db.listTradeVideos(tradeId)))
+  ipcMain.handle('videos:delete', (_e, id) => { db.deleteTradeVideo(id); return { ok: true } })
+  ipcMain.handle('videos:rename', (_e, id, name) => { db.renameTradeVideo(id, String(name || '').trim()); return { ok: true } })
 
-  ipcMain.handle('sessions:list', (_event, limit) => db.listTradingSessions(limit))
-  ipcMain.handle('sessions:active', () => db.getActiveTradingSession())
-  ipcMain.handle('sessions:create', (_event, input) => db.createTradingSession(input))
-  ipcMain.handle('sessions:finish', (_event, id, input) => db.finishTradingSession(id, input))
-  ipcMain.handle('sessions:update', (_event, id, input) => db.updateTradingSession(id, input))
-  ipcMain.handle('sessions:delete', (_event, id) => db.deleteTradingSession(id))
-  ipcMain.handle('sessions:recording:discard', async (_event, id) => {
-    const active = activeSessionRecordings.get(String(id))
-    if (active) {
-      await new Promise((resolve) => active.stream.end(resolve))
-      activeSessionRecordings.delete(String(id))
-    }
-    return db.discardTradingSessionRecording(id)
-  })
-  ipcMain.handle('capture:sources', async () => {
-    const sources = await desktopCapturer.getSources({
-      types: ['screen', 'window'],
-      thumbnailSize: { width: 320, height: 180 },
-      fetchWindowIcons: false
-    })
-    return sources.map((source) => ({
-      id: source.id,
-      name: source.name,
-      displayId: source.display_id || '',
-      kind: source.id.startsWith('screen:') ? 'screen' : 'window',
-      thumbnail: source.thumbnail?.isEmpty() ? '' : source.thumbnail.toDataURL()
-    }))
-  })
-  ipcMain.handle('sessions:recording:start', (event, id, input = {}) => {
+  ipcMain.handle('sessions:list', () => db.listTradingSessions())
+  ipcMain.handle('sessions:get', (_e, id) => db.getTradingSession(id))
+  ipcMain.handle('sessions:add', (_e, session) => db.addTradingSession(session))
+  ipcMain.handle('sessions:update', (_e, session) => db.updateTradingSession(session))
+  ipcMain.handle('sessions:delete', (_e, id) => db.deleteTradingSession(id))
+  ipcMain.handle('sessions:recording:start', async (event, id) => {
     const sessionId = String(id)
-    if (activeSessionRecordings.has(sessionId)) throw new Error('This session is already recording')
-    if (activeSessionRecordings.size) throw new Error('Another session is already recording')
-    const file = `${sessionId}.webm`
-    const path = db.tradingSessionRecordingPath(file)
-    const stream = createWriteStream(path, { flags: 'w' })
-    const recording = { stream, path, bytes: 0, ownerId: event.sender.id, failed: false }
-    stream.on('error', () => {
-      recording.failed = true
+    const session = db.getTradingSession(sessionId)
+    if (!session) throw new Error('Session not found')
+    if (activeSessionRecordings.has(sessionId)) throw new Error('Already recording this session')
+    const sources = await desktopCapturer.getSources({ types: ['screen', 'window'], thumbnailSize: { width: 1, height: 1 } })
+    if (!sources.length) throw new Error('No screen or window available to record')
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: {
+        mandatory: {
+          chromeMediaSource: 'desktop',
+          chromeMediaSourceId: sources[0].id,
+          minWidth: 1,
+          maxWidth: 3840,
+          minHeight: 1,
+          maxHeight: 2160,
+          minFrameRate: 1,
+          maxFrameRate: 30
+        }
+      }
+    })
+    const path = db.startTradingSessionRecording(sessionId)
+    const recording = {
+      ownerId: event.sender.id,
+      stream,
+      path,
+      bytes: 0
+    }
+    activeSessionRecordings.set(sessionId, recording)
+    recording.stream.on('error', (error) => {
+      try { recording.stream.destroy() } catch {}
       activeSessionRecordings.delete(sessionId)
       try { db.failTradingSessionRecording(sessionId) } catch {}
+      console.error('[session-recording] stream error:', error?.message || error)
     })
-    activeSessionRecordings.set(sessionId, recording)
-    return db.beginTradingSessionRecording(sessionId, { file, mimeType: input.mimeType || 'video/webm' })
+    return { ok: true, path }
   })
-  ipcMain.handle('sessions:recording:append', async (event, id, chunk) => {
+  ipcMain.handle('sessions:recording:write', async (event, id, chunk) => {
     const sessionId = String(id)
     const recording = activeSessionRecordings.get(sessionId)
-    if (!recording || recording.ownerId !== event.sender.id || recording.failed) throw new Error('Session recording is not active')
+    if (!recording) throw new Error('No active recording for this session')
+    if (recording.ownerId !== event.sender.id) throw new Error('Session recording owner changed')
     const data = Buffer.from(chunk)
     if (!data.length) return { ok: true, size: recording.bytes }
     if (recording.bytes + data.length > db.TRADE_VIDEO_MAX_BYTES) throw new Error('Session recording reached the 2 GB limit')
@@ -567,7 +568,8 @@ function registerIpc() {
   })
   ipcMain.handle('app:openDetachedChart', (_e, symbol = 'CME_MINI:NQ1!') => {
     const clean = encodeURIComponent(String(symbol).replace(/\s+/g, ''))
-    const chartUrl = `https://www.tradingview.com/widgetembed/?symbol=${clean}&interval=5&theme=dark&style=1&timezone=Etc%2FUTC&studies=%5B%5D&hide_side_toolbar=0&allow_symbol_change=1&save_image=1&calendar=1&hotlist=1`
+    const timezone = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } catch { return 'UTC' } })()
+    const chartUrl = `https://www.tradingview.com/widgetembed/?symbol=${clean}&interval=5&theme=dark&style=1&timezone=${encodeURIComponent(timezone)}&studies=%5B%5D&hide_side_toolbar=0&allow_symbol_change=1&save_image=1&calendar=1&hotlist=1`
     const popout = new BrowserWindow({
       width: 1200,
       height: 800,
