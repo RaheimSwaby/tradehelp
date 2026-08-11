@@ -103,7 +103,7 @@ export function ImportCenterModal({ onClose, onReview, onRollback, accounts = []
           <button type="button" onClick={onClose} style={{ color: T.faint }} aria-label="Close"><X size={18} /></button>
         </div>
         <div className="px-5 pt-3 flex gap-1" style={{ borderBottom: `1px solid ${T.line}` }}>
-          {TABS.map(([key, Icon, label]) => <button key={key} type="button" onClick={() => setTab(key)} className="flex items-center gap-1.5 px-3 py-2 text-xs" style={{ color: tab === key ? T.accent : T.dim, borderBottom: `2px solid ${tab === key ? T.accent : 'transparent'}` }}>
+          {TABS.map(([key, Icon, label]) => <button key={key} type="button" onClick={() => setTab(key)} className="flex items-center gap-1.5 px-3 py-2 text-xs" style={{ color: tab === key ? T.accentText : T.dim, borderBottom: `2px solid ${tab === key ? T.accent : 'transparent'}` }}>
             <Icon size={14} /> {label}{key === 'inbox' && inbox.length ? ` (${inbox.length})` : ''}
           </button>)}
         </div>
@@ -111,7 +111,7 @@ export function ImportCenterModal({ onClose, onReview, onRollback, accounts = []
           {tab === 'inbox' && <div className="space-y-2">
             {!inbox.length && <Empty icon={CheckCircle2} title="Inbox clear" text="New CSV exports from watched folders will appear here." />}
             {inbox.map((item) => <div key={item.id} className="p-3 rounded-lg flex items-center gap-3" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
-              <Inbox size={17} style={{ color: T.accent }} />
+              <Inbox size={17} style={{ color: T.accentText }} />
               <div className="min-w-0 grow"><div className="text-sm font-medium truncate">{item.fileName}</div><div className="text-xs mt-0.5" style={{ color: T.faint }}>{item.sourceName || 'Watched folder'} · {when(item.modifiedAt)} · {(Number(item.size) / 1024).toFixed(1)} KB</div>{item.error && <div className="text-xs mt-1" style={{ color: T.down }}>{item.error}</div>}</div>
               <button type="button" onClick={() => dismiss(item)} className="px-2 py-1.5 text-xs" style={{ color: T.dim }}>Dismiss</button>
               <button type="button" disabled={busy === `review:${item.id}`} onClick={() => review(item)} className="rounded-md px-3 py-1.5 text-xs font-semibold" style={{ background: T.accent, color: '#17120A' }}>Review</button>
@@ -121,7 +121,7 @@ export function ImportCenterModal({ onClose, onReview, onRollback, accounts = []
           {tab === 'history' && <div className="space-y-2">
             {!batches.length && <Empty icon={History} title="No import history yet" text="Completed CSV imports will be recorded here." />}
             {batches.map((batch) => <div key={batch.id} className="p-3 rounded-lg" style={{ background: T.surface2, border: `1px solid ${T.line}`, opacity: batch.status === 'rolled_back' ? 0.65 : 1 }}>
-              <div className="flex items-center gap-3"><Clock3 size={16} style={{ color: batch.status === 'rolled_back' ? T.faint : T.accent }} />
+              <div className="flex items-center gap-3"><Clock3 size={16} style={{ color: batch.status === 'rolled_back' ? T.faint : T.accentText }} />
                 <div className="grow min-w-0"><div className="text-sm font-medium truncate">{batch.fileName}</div><div className="text-xs mt-0.5" style={{ color: T.faint }}>{when(batch.createdAt)} · {batch.brokerLabel || 'Generic CSV'}{batch.account ? ` · ${batch.account}` : ''}</div></div>
                 <div className="text-right text-xs" style={mono}><div style={{ color: batch.status === 'rolled_back' ? T.faint : T.up }}>{batch.status === 'rolled_back' ? 'Rolled back' : `${batch.importedCount} imported`}</div><div style={{ color: T.faint }}>{batch.duplicateCount} duplicate · {batch.skippedCount} skipped</div></div>
                 {batch.status !== 'rolled_back' && Number(batch.remainingCount) > 0 && <button type="button" title="Roll back this import" disabled={busy === `rollback:${batch.id}`} onClick={() => rollback(batch)} className="p-2 rounded-md" style={{ color: T.down, border: `1px solid ${T.line}` }}><RotateCcw size={15} /></button>}
@@ -143,7 +143,7 @@ export function ImportCenterModal({ onClose, onReview, onRollback, accounts = []
             {!sources.length && !draft && <Empty icon={FolderPlus} title="No watched folders" text="Add the folder where your broker saves CSV exports." />}
             {sources.map((source) => <div key={source.id} className="p-3 rounded-lg space-y-3" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
               <div className="flex items-start gap-3"><div className="grow min-w-0"><div className="text-sm font-medium">{source.name}</div><div className="text-xs truncate mt-0.5" title={source.folderPath} style={{ color: T.faint }}>{source.folderPath}</div></div>
-                <button type="button" disabled={busy === `scan:${source.id}`} onClick={() => scan(source)} className="p-2 rounded-md" title="Scan existing CSV files" style={{ color: T.accent, border: `1px solid ${T.line}` }}><RefreshCw size={14} className={busy === `scan:${source.id}` ? 'animate-spin' : ''} /></button>
+                <button type="button" disabled={busy === `scan:${source.id}`} onClick={() => scan(source)} className="p-2 rounded-md" title="Scan existing CSV files" style={{ color: T.accentText, border: `1px solid ${T.line}` }}><RefreshCw size={14} className={busy === `scan:${source.id}` ? 'animate-spin' : ''} /></button>
                 <button type="button" onClick={() => removeSource(source)} className="p-2 rounded-md" title="Remove watched folder" style={{ color: T.down, border: `1px solid ${T.line}` }}><Trash2 size={14} /></button></div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2"><BrokerSelect value={source.brokerKey} onChange={(brokerKey) => updateSource(source, { brokerKey })} className={fieldClass} /><AccountSelect value={source.account} accounts={accounts} onChange={(account) => updateSource(source, { account })} className={fieldClass} /><ZoneSelect value={source.timezone} onChange={(timezone) => updateSource(source, { timezone })} className={fieldClass} /></div>
               <div className="flex flex-wrap gap-5"><label className="flex items-center gap-2 text-xs" style={{ color: T.dim }}><input type="checkbox" checked={source.enabled} onChange={(event) => updateSource(source, { enabled: event.target.checked })} /> Watch this folder</label><label className="flex items-center gap-2 text-xs" style={{ color: T.dim }}><input type="checkbox" checked={source.trusted} onChange={(event) => updateSource(source, { trusted: event.target.checked })} /> Auto-import recognized files</label></div>

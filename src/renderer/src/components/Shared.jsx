@@ -122,8 +122,8 @@ export function Stat({ label, value, sub, tone, spark, feedback, animateOnMount 
   const pulseColor = Number(feedback?.delta) >= 0 ? T.up : T.down
   const feedbackClass = feedback ? ` th-pnl-feedback th-pnl-feedback-${Number(feedback.delta) >= 0 ? 'win' : 'loss'}` : ''
   return (
-    <div className={`rounded-lg p-3 th-card${feedbackClass}`} style={{ background: T.surface, border: `1px solid ${T.line}`, '--pnl-pulse': pulseColor, '--pnl-settle': color }}>
-      <div className="text-xs uppercase tracking-wider" style={{ color: T.faint }}>{label}</div>
+    <div className={`th-stat rounded-lg p-3 th-card${feedbackClass}`} style={{ background: T.surface, border: `1px solid ${T.line}`, '--pnl-pulse': pulseColor, '--pnl-settle': color }}>
+      <div className="th-stat-label text-xs uppercase tracking-wider" style={{ color: T.faint }}>{label}</div>
       <div className="mt-1 text-xl font-semibold th-pnl-number" style={{ ...mono, color }}>
         <AnimatedValue value={value} from={feedback?.from} animationKey={feedback?.id} animateOnMount={animateOnMount} />
       </div>
@@ -134,17 +134,17 @@ export function Stat({ label, value, sub, tone, spark, feedback, animateOnMount 
 }
 export function Field({ label, children }) {
   return (
-    <label className="block">
+    <label className="th-field block">
       <span className="text-xs" style={{ color: T.dim }}>{label}</span>
       <div className="mt-1">{children}</div>
     </label>
   )
 }
-export function Panel({ title, right, children }) {
+export function Panel({ title, right, children, className = '', id }) {
   return (
-    <div className="rounded-xl p-4" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
+    <div id={id} className={`th-panel rounded-xl p-4 ${className}`.trim()} style={{ background: T.surface, border: `1px solid ${T.line}` }}>
       <div className="flex items-center justify-between mb-3">
-        <div className="text-sm font-semibold">{title}</div>
+        <div className="th-panel-title text-sm font-semibold">{title}</div>
         {right}
       </div>
       {children}

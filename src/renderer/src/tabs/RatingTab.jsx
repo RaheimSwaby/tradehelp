@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react'
 import { Brain, Lock, BadgeCheck, X } from 'lucide-react'
-import { T, mono } from '../theme.js'
+import { T, mono, withAlpha } from '../theme.js'
 import { computeRating, computeAchievements, computeSelfGrade, computeMedals, ACH_TIERS } from '../stats.js'
 import { thisWeekKey, nextWeekKey } from '../utils.js'
 import { Panel } from '../components/Shared.jsx'
@@ -11,14 +11,29 @@ const TIER_COLOR = ['#5A6478', '#CD7F32', '#C0C0C0', '#FFD54A', '#7FD8E8', '#B9F
 function MedalCoin({ m }) {
   const c = (m.tierColors || TIER_COLOR)[m.tier]
   const Icon = m.Icon
+  const earned = Boolean(m.tier)
+  const next = Number(m.next)
+  const pct = next > 0 ? Math.min(100, (Number(m.value) / next) * 100) : 100
   return (
-    <div className="rounded-lg p-3 text-center" style={{ background: T.surface2, border: `1px solid ${m.tier ? c : T.line}`, opacity: m.tier ? 1 : 0.8 }} title={m.desc}>
-      <div className="mx-auto rounded-full flex items-center justify-center" style={{ width: 46, height: 46, background: m.tier ? `radial-gradient(circle at 35% 28%, ${c}, ${c}66)` : T.surface, border: `2px solid ${m.tier ? c : T.line}`, boxShadow: m.tier >= 4 ? `0 0 12px ${c}99` : 'none' }}>
-        <Icon size={20} style={{ color: m.tier ? '#1A1306' : T.faint }} />
+    // Was a glossy coin: radial-gradient fill plus a coloured glow at platinum and
+    // above. Both are on the slop list, and both contradict the "no glow or lift"
+    // rule the rest of this app follows. The tier now reads from flat colour, and
+    // the progress to the next tier is a bar instead of a number to decode.
+    <div className="th-medal rounded-lg p-3" style={{ background: T.surface2, border: `1px solid ${earned ? c : T.line}` }} title={m.desc}>
+      <div className="flex items-center gap-2.5">
+        <span className="shrink-0 rounded-md flex items-center justify-center"
+          style={{ width: 34, height: 34, background: earned ? withAlpha(c, 0.16) : T.surface, border: `1px solid ${earned ? c : T.line}` }}>
+          <Icon size={17} style={{ color: earned ? c : T.faint }} />
+        </span>
+        <div className="min-w-0">
+          <div className="text-sm font-semibold truncate" style={{ color: earned ? T.text : T.dim }}>{m.name}</div>
+          <div className="text-[11px]" style={{ color: earned ? c : T.faint }}>{m.tierName}</div>
+        </div>
       </div>
-      <div className="text-sm font-semibold mt-1.5" style={{ color: m.tier ? T.text : T.dim }}>{m.name}</div>
-      <div className="text-xs" style={{ color: m.tier ? c : T.faint }}>{m.tierName}</div>
-      <div className="text-[11px] mt-0.5" style={{ color: T.faint, ...mono }}>{m.value}{m.unit}{m.next ? ` / ${m.next}${m.unit}` : ' · max'}</div>
+      <div className="mt-2.5 h-1 rounded-full overflow-hidden" style={{ background: T.surface }}>
+        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: earned ? c : T.line, transition: 'width .4s' }} />
+      </div>
+      <div className="text-[11px] mt-1" style={{ color: T.faint, ...mono }}>{m.value}{m.unit}{m.next ? ` / ${m.next}${m.unit}` : ' · max'}</div>
     </div>
   )
 }
@@ -52,9 +67,9 @@ export function Rating({ trades, stats, achievements, unlockedAt, settings, onSa
     ['Consistency', r.attrs.consistency], ['Patience', r.attrs.patience]
   ]
   return (
-    <div className="space-y-5">
-    <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-5">
-      <div className="rounded-xl p-5" style={{ background: `linear-gradient(160deg, ${T.surface2}, ${T.surface})`, border: `1px solid ${T.line}` }}>
+    <div className="th-page th-page-rating space-y-5">
+    <div className="th-rating-overview grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-5">
+      <div className="th-rating-score rounded-xl p-5" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
         <div className="flex items-center justify-between">
           <span className="text-xs uppercase tracking-wider" style={{ color: T.faint }}>Overall</span>
           <span className="text-xs px-1.5 py-0.5 rounded inline-flex items-center gap-1" style={{ color: verified ? T.up : T.faint, border: `1px solid ${verified ? T.up : T.line}` }}><VIcon size={11} /> {vLabel}</span>
@@ -63,7 +78,7 @@ export function Rating({ trades, stats, achievements, unlockedAt, settings, onSa
           <div style={{ fontSize: 64, lineHeight: 1, fontWeight: 800, ...mono, color: ovrColor }}>{r.ovr}</div>
           <div className="pb-2">
             <div className="text-sm font-semibold">{tier}</div>
-            <div className="text-xs" style={{ color: T.accent }}>{r.archetype}</div>
+            <div className="text-xs" style={{ color: T.accentText }}>{r.archetype}</div>
           </div>
         </div>
         {r.provisional && <div className="mt-2 text-xs" style={{ color: T.faint }}>Provisional · {r.sampleN}/20 trades. The rating settles as you log more.</div>}
@@ -75,7 +90,7 @@ export function Rating({ trades, stats, achievements, unlockedAt, settings, onSa
         </div>
       </div>
 
-      <div className="space-y-4">
+      <div className="th-rating-detail space-y-4">
         <Panel title="Attributes">
           <div className="space-y-3">
             {ATTRS.map(([label, v]) => (
@@ -102,18 +117,20 @@ export function Rating({ trades, stats, achievements, unlockedAt, settings, onSa
       </div>
     </div>
       <Panel title="Medals" right={
-        <button type="button" onClick={toggleBreak} className="text-xs px-2.5 py-1 rounded-md" style={{ background: m.onBreak ? T.accentSoft : T.surface2, color: m.onBreak ? T.accent : T.dim, border: `1px solid ${T.line}` }}>
+        <button type="button" onClick={toggleBreak} className="text-xs px-2.5 py-1 rounded-md" style={{ background: m.onBreak ? T.accentSoft : T.surface2, color: m.onBreak ? T.accentText : T.dim, border: `1px solid ${T.line}` }}>
           {m.onBreak ? '▶ Back from break' : '⏸ Take a break'}
         </button>
       }>
         {m.onBreak
-          ? <div className="text-xs mb-3" style={{ color: T.accent }}>On a break — your weekly streak is frozen. Hit "Back from break" (or just log a trade) to pick up where you left off.</div>
+          ? <div className="text-xs mb-3" style={{ color: T.accentText }}>On a break — your weekly streak is frozen. Hit "Back from break" (or just log a trade) to pick up where you left off.</div>
           : <div className="text-xs mb-3" style={{ color: T.dim }}>Journaling streak: <span style={{ color: T.text, ...mono }}>{m.streak}</span> week{m.streak === 1 ? '' : 's'}. Taking time off? Hit "Take a break" so it freezes instead of resetting.</div>}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+        {/* Six medals across five columns left one stranded on a row of its own. */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
           {m.medals.map((md) => <MedalCoin key={md.id} m={md} />)}
         </div>
       </Panel>
-      <Panel title="Self-graded" right={<span className="text-xs inline-flex items-center gap-1 px-2 py-0.5 rounded" style={{ color: T.faint, border: `1px solid ${T.line}` }}>your call · not verified</span>}>
+      <div className="th-rating-lower grid gap-3">
+      <Panel title="Self-graded" right={<span className="text-xs" style={{ color: T.faint }}>{self.count} graded trades</span>}>
         {self.count === 0 ? (
           <div className="text-sm" style={{ color: T.dim }}>Grade your own <span style={{ color: T.text }}>setup</span> and <span style={{ color: T.text }}>execution</span> when you log a trade — your honest read, kept separate from the app's grade above. A losing trade can still be an A+ setup.</div>
         ) : (
@@ -135,6 +152,7 @@ export function Rating({ trades, stats, achievements, unlockedAt, settings, onSa
         )}
       </Panel>
       <AchievementShelf achievements={achievements} unlockedAt={unlockedAt} />
+      </div>
     </div>
   )
 }
@@ -149,17 +167,12 @@ export function AchievementShelf({ achievements, unlockedAt }) {
           const u = a.unlocked
           const tier = ACH_TIERS[a.tier] || ACH_TIERS.bronze
           const c = tier.color
-          // Harder badge → cooler medal: tier-colored border/icon when unlocked,
-          // a glow for gold, and a full shine + gradient for diamond.
-          const glow = !u ? 'none'
-            : a.tier === 'diamond' ? `0 0 18px ${c}66, inset 0 0 14px ${c}22`
-            : a.tier === 'gold' ? `0 0 12px ${c}44`
-            : 'none'
-          const bg = u && a.tier === 'diamond'
-            ? `linear-gradient(150deg, ${T.surface2}, ${c}1F)`
-            : u && a.tier === 'gold' ? `linear-gradient(150deg, ${T.surface2}, ${c}14)` : T.surface2
+          // Rank is already carried by the tier pill, the border and the icon colour.
+          // Stacking a glow and a gradient on the higher tiers on top of that made the
+          // rarest badges the loudest objects on the page without adding information.
+          const bg = u ? withAlpha(c, 0.07) : T.surface2
           return (
-            <div key={a.id} className="rounded-lg p-3" style={{ background: bg, border: `1px solid ${u ? c : T.line}`, boxShadow: glow, opacity: u ? 1 : 0.7 }}>
+            <div key={a.id} className="rounded-lg p-3" style={{ background: bg, border: `1px solid ${u ? c : T.line}`, opacity: u ? 1 : 0.7 }}>
               <div className="flex items-center gap-2">
                 <Icon size={18} style={{ color: u ? c : T.faint, flexShrink: 0 }} />
                 <span className="text-sm font-semibold" style={{ color: u ? T.text : T.dim }}>{a.name}</span>
@@ -189,17 +202,15 @@ export function AchievementToast({ a, onClose }) {
   const Icon = a.Icon
   const tier = ACH_TIERS[a.tier] || ACH_TIERS.bronze
   const c = tier.color
-  const high = a.tier === 'gold' || a.tier === 'diamond'
   return (
     <div className="ach-toast fixed top-4 right-4 z-[90] rounded-xl p-3.5 flex items-center gap-3.5"
-      style={{ background: T.surface, border: `1px solid ${c}`, minWidth: 272, maxWidth: 344, boxShadow: `0 14px 36px rgba(0,0,0,0.5)${high ? `, 0 0 22px ${c}55` : ''}` }}>
-      <div className="relative" style={{ width: 54, height: 54, flexShrink: 0 }}>
-        <div className="ach-burst absolute rounded-full" style={{ inset: 0, border: `2px solid ${c}` }} />
-        <div className={`ach-medal relative rounded-full flex items-center justify-center overflow-hidden ${high ? 'ach-glow' : ''}`}
-          style={{ width: 54, height: 54, background: `radial-gradient(circle at 35% 28%, ${c}, ${c}66)`, border: `2px solid ${c}`, '--ach-c': `${c}99` }}>
-          <Icon size={24} style={{ color: '#1A1306' }} />
-          <div className="ach-shine absolute" style={{ top: -4, bottom: -4, width: '45%', background: 'linear-gradient(90deg, transparent, rgba(255,255,255,.8), transparent)' }} />
-        </div>
+      style={{ background: T.surface, border: `1px solid ${c}`, minWidth: 272, maxWidth: 344, boxShadow: '0 14px 36px rgba(0,0,0,0.5)' }}>
+      {/* The burst ring, glow and sweeping shine were dropped from the stylesheet but
+          left in the markup, so the shine's inline white gradient still painted as a
+          static streak across the medal. Removed here to match the flat treatment. */}
+      <div className="shrink-0 rounded-md flex items-center justify-center"
+        style={{ width: 46, height: 46, background: withAlpha(c, 0.16), border: `1px solid ${c}` }}>
+        <Icon size={22} style={{ color: c }} />
       </div>
       <div className="flex-1 min-w-0">
         <div className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: a.troll ? T.down : c }}>{a.troll ? 'Troll achievement unlocked' : `Achievement unlocked · ${tier.label}`}</div>

@@ -29,7 +29,6 @@ import {
   Newspaper,
   Pencil,
   Plus,
-  Quote,
   RefreshCw,
   RotateCcw,
   Save,
@@ -119,7 +118,6 @@ import {
   formatHoldDuration,
   tradeHoldMinutes
 } from './src/stats'
-import { getDailyQuote } from './src/quotes'
 import { palette, Palette, ThemeMode } from './src/theme'
 
 type CameraPermission = { granted: boolean; canAskAgain: boolean }
@@ -169,12 +167,12 @@ type DailyReview = {
 const primaryTabs: Array<{ key: Tab; label: string; icon: LucideIcon }> = [
   { key: 'home', label: 'Home', icon: House },
   { key: 'history', label: 'History', icon: HistoryIcon },
-  { key: 'insights', label: 'Insights', icon: BarChart3 }
+  { key: 'vault', label: 'Vault', icon: ImagePlus }
 ]
 
 const moreTabs: Array<{ key: Tab; label: string; icon: LucideIcon }> = [
   { key: 'accounts', label: 'Accounts', icon: Landmark },
-  { key: 'vault', label: 'Vault', icon: ImagePlus },
+  { key: 'insights', label: 'Insights', icon: BarChart3 },
   { key: 'news', label: 'News', icon: Newspaper },
   { key: 'settings', label: 'Settings', icon: SettingsIcon }
 ]
@@ -586,21 +584,6 @@ function PnlCurve({
   )
 }
 
-function TraderQuoteBanner({ colors, styles }: { colors: Palette; styles: ReturnType<typeof createStyles> }) {
-  const dailyQuote = useMemo(() => getDailyQuote(), [])
-  return (
-    <View style={styles.quoteCard}>
-      <View style={styles.actionRow}>
-        <Quote color={colors.accent} size={18} strokeWidth={2} />
-        <View style={styles.flexOne}>
-          <Text style={styles.quoteText}>"{dailyQuote.quote}"</Text>
-          <Text style={styles.quoteAuthor}>— {dailyQuote.author}</Text>
-        </View>
-      </View>
-    </View>
-  )
-}
-
 function ShareStatModal({
   trades,
   onClose,
@@ -620,7 +603,7 @@ function ShareStatModal({
 
   function copySummary() {
     triggerHaptic('success')
-    const summary = `📈 TradeHelp Session Recap\nDate: ${today}\nDaily P&L: ${money(todayPnl)}\nTrades: ${todayTrades.length}\nWin Rate: ${percent(stats.winRate)}\nGrade: ${todayGrade}\nTop Setup: ${stats.topSetup}`
+    const summary = `TradeHelp Session Recap\nDate: ${today}\nDaily P&L: ${money(todayPnl)}\nTrades: ${todayTrades.length}\nWin Rate: ${percent(stats.winRate)}\nGrade: ${todayGrade}\nTop Setup: ${stats.topSetup}`
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
       navigator.clipboard.writeText(summary)
     }
@@ -1366,8 +1349,6 @@ function Home({
       </LinearGradient>
 
       <WatchlistSection watchlist={watchlist} onAdd={onAddWatchlist} onDelete={onDeleteWatchlist} colors={colors} styles={styles} />
-
-      <TraderQuoteBanner colors={colors} styles={styles} />
 
       <View style={styles.syncCard}>
         <View style={[styles.featureIcon, { backgroundColor: paired ? colors.upSoft : colors.accentSoft }]}>
@@ -2885,7 +2866,7 @@ function History({
                 </Text>
                 {trade.reasons && trade.reasons.length ? (
                   <Text style={[styles.muted, { color: colors.accent, marginTop: 2 }]} numberOfLines={1}>
-                    💡 {trade.reasons.join(', ')}
+                    {trade.reasons.join(', ')}
                   </Text>
                 ) : null}
               </View>
@@ -4071,6 +4052,7 @@ function OnboardingWizard({
   const [startMode, setStartMode] = useState<'sample' | 'empty'>('sample')
   const [finishing, setFinishing] = useState(false)
   const lastStep = step === 3
+  const dark = colors.statusBar === 'light-content'
 
   useEffect(() => {
     if (visible) setStep(0)
@@ -4093,7 +4075,7 @@ function OnboardingWizard({
           resizeMode="cover"
           style={styles.onboardingBackdrop}
         />
-        <View style={styles.onboardingShade} />
+        <View style={[styles.onboardingShade, { backgroundColor: dark ? 'rgba(5, 9, 14, 0.58)' : 'rgba(240, 244, 250, 0.88)' }]} />
         <View style={styles.onboardingContent}>
           <View style={[styles.actionRow, styles.centeredRow]}>
             <View style={styles.onboardingLogo}>
@@ -4879,7 +4861,7 @@ function createStyles(colors: Palette) {
       flexDirection: 'row', gap: 5,
       backgroundColor: colors.accentSoft, borderWidth: 1, borderColor: colors.accent
     },
-    demoBannerButtonText: { color: colors.accent, fontSize: 12, fontWeight: '800' },
+    demoBannerButtonText: { color: colors.accent, fontSize: 12, fontWeight: '700' },
     eyebrow: { color: colors.accent, fontSize: 11, fontWeight: '800' },
     title: { color: colors.text, fontSize: 26, lineHeight: 32, fontWeight: '800' },
     copy: { color: colors.dim, fontSize: 14, lineHeight: 21 },
@@ -4905,7 +4887,7 @@ function createStyles(colors: Palette) {
     heroMetric: { flex: 1, justifyContent: 'center' },
     heroMetricBorder: { borderLeftWidth: 1, borderLeftColor: colors.line, paddingLeft: 16 },
     heroMetricLabel: { color: colors.faint, fontSize: 10, fontWeight: '800' },
-    heroMetricValue: { color: colors.text, fontSize: 19, fontWeight: '800', marginTop: 5 },
+    heroMetricValue: { color: colors.text, fontSize: 19, fontWeight: '700', marginTop: 5 },
     accountHero: {
       minHeight: 238, borderWidth: 1, borderColor: colors.lineStrong, borderRadius: 8,
       padding: 18, gap: 8, overflow: 'hidden',
@@ -4922,8 +4904,8 @@ function createStyles(colors: Palette) {
       paddingTop: 15, marginTop: 12, gap: 8
     },
     accountMetric: { flex: 1, minWidth: 0 },
-    accountMetricValue: { color: colors.text, fontSize: 17, lineHeight: 23, fontWeight: '800', marginTop: 5 },
-    accountSavedCapital: { color: colors.text, fontSize: 24, lineHeight: 30, fontWeight: '800' },
+    accountMetricValue: { color: colors.text, fontSize: 17, lineHeight: 23, fontWeight: '700', marginTop: 5 },
+    accountSavedCapital: { color: colors.text, fontSize: 24, lineHeight: 30, fontWeight: '700' },
     accountPicker: { gap: 8, paddingVertical: 2, paddingRight: 4 },
     accountPickerPill: {
       maxWidth: 180, minHeight: 40, justifyContent: 'center',
@@ -4931,7 +4913,7 @@ function createStyles(colors: Palette) {
       borderRadius: 10, paddingHorizontal: 13
     },
     accountPickerPillActive: { backgroundColor: colors.accentSoft, borderColor: colors.accent },
-    accountPickerText: { color: colors.dim, fontSize: 12, fontWeight: '800' },
+    accountPickerText: { color: colors.dim, fontSize: 12, fontWeight: '700' },
     accountTemplateBar: { flexDirection: 'row', alignItems: 'center', gap: 7 },
     accountTemplateMini: {
       minHeight: 32, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 3,
@@ -4947,7 +4929,7 @@ function createStyles(colors: Palette) {
     accountStatus: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 5 },
     accountStatusText: { fontSize: 10, fontWeight: '800' },
     accountPnlRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 },
-    accountTargetText: { color: colors.dim, fontSize: 12, lineHeight: 18, fontWeight: '700', paddingBottom: 4 },
+    accountTargetText: { color: colors.dim, fontSize: 12, lineHeight: 18, fontWeight: '600', paddingBottom: 4 },
     accountProgressTrack: {
       height: 8, borderRadius: 4, backgroundColor: colors.surface2, overflow: 'hidden'
     },
@@ -4957,12 +4939,12 @@ function createStyles(colors: Palette) {
       flex: 1, minWidth: 0, minHeight: 76, borderRadius: 8, alignItems: 'center', justifyContent: 'center',
       backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 4
     },
-    templateSize: { color: colors.accent, fontSize: 18, fontWeight: '800' },
-    templateCaption: { color: colors.dim, fontSize: 9, lineHeight: 13, fontWeight: '700', marginTop: 4, textAlign: 'center' },
+    templateSize: { color: colors.accent, fontSize: 18, fontWeight: '700' },
+    templateCaption: { color: colors.dim, fontSize: 9, lineHeight: 13, fontWeight: '600', marginTop: 4, textAlign: 'center' },
     sectionHeadingRow: {
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8
     },
-    sectionTitle: { color: colors.text, fontSize: 19, fontWeight: '800' },
+    sectionTitle: { color: colors.text, fontSize: 19, fontWeight: '700' },
     statsRow: { flexDirection: 'row', gap: 12 },
     holdGrid: {
       flexDirection: 'row', flexWrap: 'wrap', columnGap: 12, rowGap: 14,
@@ -4972,7 +4954,7 @@ function createStyles(colors: Palette) {
       width: '47%', minWidth: 0, borderLeftWidth: 2, borderLeftColor: colors.lineStrong,
       paddingLeft: 10, paddingVertical: 2
     },
-    holdValue: { color: colors.text, fontSize: 21, lineHeight: 26, fontWeight: '800', marginTop: 5 },
+    holdValue: { color: colors.text, fontSize: 21, lineHeight: 26, fontWeight: '700', marginTop: 5 },
     stat: {
       flex: 1, minWidth: 0, minHeight: 84, padding: 14, backgroundColor: colors.surface,
       borderWidth: 1, borderColor: colors.line, borderRadius: 8,
@@ -4980,7 +4962,7 @@ function createStyles(colors: Palette) {
     },
     kicker: { color: colors.dim, fontSize: 10, fontWeight: '800' },
     sectionLabel: { color: colors.dim, fontSize: 11, fontWeight: '800', marginTop: 4 },
-    statValue: { color: colors.text, fontSize: 22, fontWeight: '800', marginTop: 8 },
+    statValue: { color: colors.text, fontSize: 22, fontWeight: '700', marginTop: 8 },
     statValueWide: { fontSize: 19, lineHeight: 24 },
     snapshotPanel: {
       minHeight: 74, flexDirection: 'row', alignItems: 'stretch', backgroundColor: colors.surface,
@@ -4988,12 +4970,12 @@ function createStyles(colors: Palette) {
     },
     snapshotItem: { flex: 1, minWidth: 0, justifyContent: 'center', paddingHorizontal: 11 },
     snapshotDivider: { width: 1, backgroundColor: colors.line },
-    snapshotValue: { color: colors.text, fontSize: 15, lineHeight: 20, fontWeight: '800', marginTop: 5 },
+    snapshotValue: { color: colors.text, fontSize: 15, lineHeight: 20, fontWeight: '700', marginTop: 5 },
     topSetupRow: {
       minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
       gap: 12, paddingHorizontal: 4
     },
-    topSetupValue: { color: colors.text, flex: 1, textAlign: 'right', fontSize: 14, lineHeight: 19, fontWeight: '700' },
+    topSetupValue: { color: colors.text, flex: 1, textAlign: 'right', fontSize: 14, lineHeight: 19, fontWeight: '600' },
     panel: {
       backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: 8,
       padding: 18, gap: 14, marginTop: 4,
@@ -5004,7 +4986,7 @@ function createStyles(colors: Palette) {
       borderRadius: 8, padding: 16, paddingHorizontal: 12, gap: 10, marginTop: 4, overflow: 'hidden',
       shadowColor: colors.shadow, shadowOpacity: 0.1, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }
     },
-    chartValue: { fontSize: 28, lineHeight: 34, fontWeight: '800', marginTop: 4 },
+    chartValue: { fontSize: 28, lineHeight: 34, fontWeight: '700', marginTop: 4 },
     chartComparison: { fontSize: 11, lineHeight: 16, fontWeight: '700', marginTop: 2 },
     chart: { width: '100%', height: 175, overflow: 'hidden', marginVertical: 2 },
     chartRanges: {
@@ -5016,7 +4998,7 @@ function createStyles(colors: Palette) {
     },
     chartRangeActive: { backgroundColor: colors.accentSoft },
     chartRangeText: { color: colors.dim, fontSize: 11, fontWeight: '800' },
-    panelTitle: { color: colors.text, fontSize: 16, lineHeight: 22, fontWeight: '700' },
+    panelTitle: { color: colors.text, fontSize: 16, lineHeight: 22, fontWeight: '600' },
     rowText: { color: colors.text, fontSize: 14, lineHeight: 20 },
     adaptiveCard: {
       backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: 8,
@@ -5026,7 +5008,7 @@ function createStyles(colors: Palette) {
       minHeight: 36, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
       paddingHorizontal: 2
     },
-    textActionLabel: { color: colors.accent, fontSize: 13, fontWeight: '700' },
+    textActionLabel: { color: colors.accent, fontSize: 13, fontWeight: '600' },
     insightCard: {
       minHeight: 112, flexDirection: 'row', alignItems: 'flex-start', gap: 13,
       backgroundColor: colors.surface, borderWidth: 1, borderRadius: 8, padding: 16
@@ -5048,7 +5030,7 @@ function createStyles(colors: Palette) {
     warning: { color: colors.down, fontSize: 12, lineHeight: 18 },
     pill: { backgroundColor: colors.accentSoft, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5 },
     pillText: { color: colors.accent, fontSize: 10, fontWeight: '800' },
-    label: { color: colors.dim, fontSize: 12, fontWeight: '700', marginTop: 5 },
+    label: { color: colors.dim, fontSize: 12, fontWeight: '600', marginTop: 5 },
     input: {
       minHeight: 50, backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.line,
       borderRadius: 14, color: colors.text, paddingHorizontal: 15, fontSize: 15
@@ -5073,14 +5055,14 @@ function createStyles(colors: Palette) {
       backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 12
     },
     accountTagActive: { backgroundColor: colors.accentSoft, borderColor: colors.accent },
-    accountTagText: { color: colors.dim, fontSize: 12, fontWeight: '800' },
+    accountTagText: { color: colors.dim, fontSize: 12, fontWeight: '700' },
     notes: { minHeight: 96, paddingTop: 14, textAlignVertical: 'top' },
     detailsToggle: {
       minHeight: 62, flexDirection: 'row', alignItems: 'center', gap: 12,
       borderWidth: 1, borderColor: colors.line, borderRadius: 14,
       backgroundColor: colors.surface, paddingHorizontal: 15, paddingVertical: 10
     },
-    detailsToggleTitle: { color: colors.text, fontSize: 14, fontWeight: '800' },
+    detailsToggleTitle: { color: colors.text, fontSize: 14, fontWeight: '700' },
     optionalDetails: { gap: 14, paddingTop: 2 },
     reasonWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginBottom: 2 },
     primaryButton: {
@@ -5095,7 +5077,7 @@ function createStyles(colors: Palette) {
       paddingHorizontal: 16, marginTop: 3
     },
     disabledButton: { opacity: 0.5 },
-    secondaryButtonText: { color: colors.text, fontSize: 15, fontWeight: '700' },
+    secondaryButtonText: { color: colors.text, fontSize: 15, fontWeight: '600' },
     dangerButton: { borderColor: colors.downSoft },
     compactButton: {
       minWidth: 44, minHeight: 44, borderRadius: 10, borderWidth: 1, borderColor: colors.line,
@@ -5105,7 +5087,7 @@ function createStyles(colors: Palette) {
       width: 44, height: 44, borderRadius: 12, borderWidth: 1, borderColor: colors.lineStrong,
       backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center'
     },
-    compactButtonText: { color: colors.text, fontSize: 12, fontWeight: '700' },
+    compactButtonText: { color: colors.text, fontSize: 12, fontWeight: '600' },
     buttonContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
     actionRow: { flexDirection: 'row', gap: 10 },
     backAction: { minHeight: 44, alignItems: 'center', alignSelf: 'flex-start' },
@@ -5125,7 +5107,7 @@ function createStyles(colors: Palette) {
     },
     segmentOption: { flex: 1, minWidth: 0, borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
     segmentActive: { backgroundColor: colors.accentSoft, borderWidth: 1, borderColor: colors.accent },
-    segmentText: { color: colors.dim, fontSize: 13, fontWeight: '700' },
+    segmentText: { color: colors.dim, fontSize: 13, fontWeight: '600' },
     compactSegment: {
       minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 5
     },
@@ -5133,7 +5115,7 @@ function createStyles(colors: Palette) {
       minWidth: 62, minHeight: 44, borderRadius: 8, alignItems: 'center', justifyContent: 'center',
       paddingHorizontal: 10
     },
-    resultCount: { color: colors.faint, flex: 1, textAlign: 'right', fontSize: 11, fontWeight: '700' },
+    resultCount: { color: colors.faint, flex: 1, textAlign: 'right', fontSize: 11, fontWeight: '600' },
     ruleCard: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: 16, padding: 16, gap: 12 },
     answerRow: { flexDirection: 'row', gap: 10 },
     answerButton: {
@@ -5142,7 +5124,7 @@ function createStyles(colors: Palette) {
     },
     answerYes: { borderColor: colors.up, backgroundColor: colors.upSoft },
     answerNo: { borderColor: colors.down, backgroundColor: colors.downSoft },
-    answerText: { color: colors.dim, fontSize: 13, fontWeight: '700' },
+    answerText: { color: colors.dim, fontSize: 13, fontWeight: '600' },
     checkSummary: {
       backgroundColor: colors.accentSoft, borderRadius: 14, borderWidth: 1,
       borderColor: colors.accent, padding: 16, gap: 4
@@ -5154,7 +5136,7 @@ function createStyles(colors: Palette) {
     previewImage: { width: 88, height: 58, borderRadius: 8, resizeMode: 'cover', flex: 1 },
     empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 36, gap: 12 },
     emptyMark: {
-      color: colors.accent, fontSize: 30, fontWeight: '800', borderWidth: 1,
+      color: colors.accent, fontSize: 30, fontWeight: '700', borderWidth: 1,
       borderColor: colors.line, paddingHorizontal: 18, paddingVertical: 12, borderRadius: 14
     },
     tradeCard: {
@@ -5165,11 +5147,11 @@ function createStyles(colors: Palette) {
     tradeRow: { minHeight: 92, flexDirection: 'row', alignItems: 'center', gap: 10, padding: 13 },
     tradeOutcomeRail: { width: 4, height: 48, borderRadius: 2 },
     tradeTitleRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginBottom: 5 },
-    tradeSymbol: { color: colors.text, fontSize: 17, fontWeight: '800' },
+    tradeSymbol: { color: colors.text, fontSize: 17, fontWeight: '700' },
     tradeMeta: { color: colors.dim, fontSize: 12 },
     tradeSummary: { lineHeight: 17 },
     tradeRight: { alignItems: 'flex-end', gap: 6 },
-    tradePnl: { fontSize: 16, fontWeight: '800' },
+    tradePnl: { fontSize: 16, fontWeight: '700' },
     pnlPill: { borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 },
     syncLabel: { fontSize: 9, fontWeight: '800', letterSpacing: 0.8 },
     historyThumbnail: { width: 44, height: 44, borderRadius: 6, backgroundColor: colors.surface2 },
@@ -5186,7 +5168,7 @@ function createStyles(colors: Palette) {
       paddingHorizontal: 12
     },
     dangerAction: { borderColor: colors.downSoft },
-    historyActionText: { color: colors.text, fontSize: 13, fontWeight: '700' },
+    historyActionText: { color: colors.text, fontSize: 13, fontWeight: '600' },
     historyMonthLabel: {
       color: colors.faint, fontSize: 11, fontWeight: '800', letterSpacing: 0.7,
       marginTop: 5, marginBottom: -4
@@ -5203,7 +5185,7 @@ function createStyles(colors: Palette) {
     centerText: { textAlign: 'center' },
     newsStatusBlock: { gap: 10, borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 12 },
     newsStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-    newsStatusTitle: { color: colors.text, fontSize: 13, lineHeight: 18, fontWeight: '700' },
+    newsStatusTitle: { color: colors.text, fontSize: 13, lineHeight: 18, fontWeight: '600' },
     eventCard: {
       backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line,
       borderLeftWidth: 4, borderRadius: 8, padding: 16, gap: 10,
@@ -5214,7 +5196,7 @@ function createStyles(colors: Palette) {
     },
     impactText: { fontSize: 9, fontWeight: '800', letterSpacing: 0.8 },
     eventCountdown: { flex: 1, textAlign: 'right', fontSize: 12, fontWeight: '800' },
-    eventTitle: { color: colors.text, fontSize: 15, lineHeight: 21, fontWeight: '700' },
+    eventTitle: { color: colors.text, fontSize: 15, lineHeight: 21, fontWeight: '600' },
     eventNumbers: { flexDirection: 'row', gap: 14, flexWrap: 'wrap' },
     eventNumber: { color: colors.dim, fontSize: 11, fontWeight: '600' },
     settingsSection: { gap: 12, marginTop: 4, marginBottom: 2 },
@@ -5244,7 +5226,7 @@ function createStyles(colors: Palette) {
       minHeight: 40, paddingHorizontal: 10, borderTopWidth: 1, borderTopColor: colors.line,
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'
     },
-    themeChoiceLabel: { color: colors.dim, fontSize: 12, fontWeight: '700' },
+    themeChoiceLabel: { color: colors.dim, fontSize: 12, fontWeight: '600' },
     radio: {
       width: 16, height: 16, borderRadius: 8, borderWidth: 1, borderColor: colors.lineStrong,
       alignItems: 'center', justifyContent: 'center'
@@ -5261,39 +5243,39 @@ function createStyles(colors: Palette) {
       width: 44, height: 44, borderRadius: 8, borderWidth: 1, borderColor: colors.line,
       backgroundColor: colors.surface2, alignItems: 'center', justifyContent: 'center'
     },
-    removeRuleText: { color: colors.down, fontSize: 12, fontWeight: '800' },
+    removeRuleText: { color: colors.down, fontSize: 12, fontWeight: '700' },
     scannerScreen: { flex: 1, backgroundColor: colors.bg },
     modalScreen: { flex: 1, backgroundColor: colors.bg },
-    onboardingScreen: { flex: 1, backgroundColor: '#080D13' },
+    onboardingScreen: { flex: 1, backgroundColor: colors.bg },
     onboardingBackdrop: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, width: '100%', height: '100%' },
-    onboardingShade: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(5, 9, 14, 0.58)' },
+    onboardingShade: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
     onboardingContent: {
       flex: 1, width: '100%', maxWidth: 640, alignSelf: 'center',
       paddingHorizontal: 20, paddingTop: 18, paddingBottom: 22, gap: 18
     },
     onboardingLogo: {
-      width: 36, height: 36, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)',
+      width: 36, height: 36, borderRadius: 8, borderWidth: 1, borderColor: colors.lineStrong,
       flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 2.5,
-      backgroundColor: 'rgba(14,20,32,0.82)'
+      backgroundColor: colors.surface2
     },
-    onboardingBrand: { color: '#F5F7FA', fontSize: 20, fontWeight: '800' },
+    onboardingBrand: { color: colors.text, fontSize: 20, fontWeight: '800' },
     onboardingProgress: { flexDirection: 'row', gap: 7 },
-    onboardingProgressBar: { flex: 1, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.16)' },
+    onboardingProgressBar: { flex: 1, height: 4, borderRadius: 2, backgroundColor: colors.line },
     onboardingProgressActive: { backgroundColor: colors.accent },
     onboardingBody: { flex: 1, justifyContent: 'center', gap: 14 },
     onboardingIcon: {
       width: 58, height: 58, borderRadius: 16, alignItems: 'center', justifyContent: 'center',
-      backgroundColor: 'rgba(245,158,11,0.14)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.30)'
+      backgroundColor: colors.accentSoft, borderWidth: 1, borderColor: colors.lineStrong
     },
     onboardingEyebrow: { color: colors.accent, fontSize: 11, fontWeight: '800', letterSpacing: 0.8 },
-    onboardingTitle: { color: '#F5F7FA', fontSize: 30, lineHeight: 37, fontWeight: '800', maxWidth: 520 },
-    onboardingCopy: { color: '#B4BECE', fontSize: 15, lineHeight: 23, maxWidth: 540 },
+    onboardingTitle: { color: colors.text, fontSize: 30, lineHeight: 37, fontWeight: '800', maxWidth: 520 },
+    onboardingCopy: { color: colors.dim, fontSize: 15, lineHeight: 23, maxWidth: 540 },
     onboardingNote: {
       minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 12,
-      borderWidth: 1, borderColor: 'rgba(255,255,255,0.13)', borderRadius: 8,
-      backgroundColor: 'rgba(13,20,30,0.78)', paddingHorizontal: 14, paddingVertical: 11
+      borderWidth: 1, borderColor: colors.line, borderRadius: 8,
+      backgroundColor: colors.surface, paddingHorizontal: 14, paddingVertical: 11
     },
-    onboardingNoteText: { flex: 1, color: '#D3DAE5', fontSize: 13, lineHeight: 19 },
+    onboardingNoteText: { flex: 1, color: colors.dim, fontSize: 13, lineHeight: 19 },
     onboardingChoice: {
       minHeight: 82, borderWidth: 1, borderColor: colors.lineStrong, borderRadius: 8,
       backgroundColor: colors.surface, padding: 14, gap: 4
@@ -5330,7 +5312,7 @@ function createStyles(colors: Palette) {
     tabGlyph: { width: 34, height: 30, alignItems: 'center', justifyContent: 'center', borderRadius: 8 },
     tabGlyphActive: { backgroundColor: colors.accentSoft },
     tabGlyphText: { color: colors.dim, fontSize: 13, fontWeight: '800' },
-    tabLabel: { color: colors.dim, fontSize: 9.5, fontWeight: '700' },
+    tabLabel: { color: colors.dim, fontSize: 9.5, fontWeight: '600' },
     tabActiveText: { color: colors.accent },
     captureTab: {
       width: 62, alignItems: 'center', justifyContent: 'center', gap: 3,
@@ -5352,7 +5334,7 @@ function createStyles(colors: Palette) {
       position: 'absolute', top: 0, right: 0, bottom: 0, left: 0,
       backgroundColor: 'rgba(5, 8, 14, 0.62)'
     },
-    sheetTitle: { color: colors.text, fontSize: 21, lineHeight: 27, fontWeight: '800' },
+    sheetTitle: { color: colors.text, fontSize: 21, lineHeight: 27, fontWeight: '700' },
     moreList: {
       position: 'absolute', right: 10, bottom: 82, alignItems: 'flex-end', gap: 9
     },
@@ -5365,7 +5347,7 @@ function createStyles(colors: Palette) {
       shadowOffset: { width: 0, height: 5 }, elevation: 5
     },
     moreOptionActive: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
-    moreOptionLabel: { color: colors.text, fontSize: 13, fontWeight: '800' },
+    moreOptionLabel: { color: colors.text, fontSize: 13, fontWeight: '700' },
     moreOptionIcon: {
       width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center',
       backgroundColor: colors.surface2
@@ -5382,14 +5364,14 @@ function createStyles(colors: Palette) {
       borderWidth: 1, borderColor: colors.line, borderRadius: 8, backgroundColor: colors.surface
     },
     symbolSelect: { flex: 1, minHeight: 54, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14 },
-    symbolName: { color: colors.text, fontSize: 16, fontWeight: '800' },
+    symbolName: { color: colors.text, fontSize: 16, fontWeight: '700' },
     symbolSelected: { color: colors.accent, fontSize: 9, fontWeight: '800', letterSpacing: 0.7 },
     symbolStar: { width: 50, height: 50, alignItems: 'center', justifyContent: 'center' },
     useSymbolButton: {
       minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
       borderWidth: 1, borderColor: colors.accent, borderRadius: 8, backgroundColor: colors.accentSoft
     },
-    useSymbolText: { color: colors.accent, fontSize: 14, fontWeight: '800' },
+    useSymbolText: { color: colors.accent, fontSize: 14, fontWeight: '700' },
     monthPickerSheet: {
       backgroundColor: colors.surfaceElevated, borderTopWidth: 1, borderTopColor: colors.lineStrong,
       borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 18, gap: 14
@@ -5412,22 +5394,22 @@ function createStyles(colors: Palette) {
       backgroundColor: colors.surface2, borderRadius: 16, padding: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.line
     },
     timeDisplayBig: {
-      color: colors.accent, fontSize: 30, fontWeight: '800', letterSpacing: 0.5
+      color: colors.accent, fontSize: 30, fontWeight: '700', letterSpacing: 0.5
     },
     presetRow: { gap: 8, paddingVertical: 2 },
     presetPill: {
       minHeight: 44, backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.line, borderRadius: 12,
       paddingHorizontal: 12, paddingVertical: 8, justifyContent: 'center'
     },
-    presetText: { color: colors.text, fontSize: 12, fontWeight: '700' },
+    presetText: { color: colors.text, fontSize: 12, fontWeight: '600' },
     pickerColumnsRow: { flexDirection: 'row', gap: 10, height: 170 },
     pickerCol: { flex: 1, backgroundColor: colors.surface2, borderRadius: 14, padding: 8, borderWidth: 1, borderColor: colors.line },
     pickerColLabel: { color: colors.faint, fontSize: 10, fontWeight: '800', textAlign: 'center', marginBottom: 6 },
     pickerScroll: { flex: 1 },
     pickerItem: { height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
     pickerItemActive: { backgroundColor: colors.accentSoft },
-    pickerItemText: { color: colors.dim, fontSize: 14, fontWeight: '700' },
-    pickerItemTextActive: { color: colors.accent, fontWeight: '800' },
+    pickerItemText: { color: colors.dim, fontSize: 14, fontWeight: '600' },
+    pickerItemTextActive: { color: colors.accent, fontWeight: '700' },
     vaultGrid: {
       flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 6, alignItems: 'flex-start'
     },
@@ -5439,11 +5421,11 @@ function createStyles(colors: Palette) {
     vaultImage: { width: '100%', height: 118, backgroundColor: colors.surface2 },
     vaultPlaceholder: { width: '100%', height: 118, justifyContent: 'center', alignItems: 'center', gap: 10, padding: 12 },
     vaultPlaceholderChart: { height: 36, flexDirection: 'row', alignItems: 'flex-end', gap: 5 },
-    vaultPlaceholderText: { color: colors.dim, fontSize: 11, fontWeight: '700' },
+    vaultPlaceholderText: { color: colors.dim, fontSize: 11, fontWeight: '600' },
     vaultOverlayHeader: { position: 'absolute', top: 8, left: 8 },
     vaultFooter: { padding: 11, borderTopWidth: 1, borderTopColor: colors.line, gap: 3 },
-    vaultTitle: { color: colors.text, fontSize: 15, fontWeight: '800' },
-    vaultPnl: { maxWidth: '58%', fontSize: 13, fontWeight: '800' },
+    vaultTitle: { color: colors.text, fontSize: 15, fontWeight: '700' },
+    vaultPnl: { maxWidth: '58%', fontSize: 13, fontWeight: '700' },
     vaultMeta: { color: colors.dim, fontSize: 11, lineHeight: 15, fontWeight: '600' },
     vaultDate: { color: colors.faint, fontSize: 10, lineHeight: 14 },
     vaultEmpty: { width: '100%' },
@@ -5464,12 +5446,6 @@ function createStyles(colors: Palette) {
       width: '100%', height: 200, borderRadius: 14, backgroundColor: colors.surface2,
       borderWidth: 1, borderColor: colors.line, justifyContent: 'center', alignItems: 'center', gap: 10, padding: 16
     },
-    quoteCard: {
-      backgroundColor: colors.surface, borderRadius: 16, borderWidth: 1, borderColor: colors.line,
-      padding: 14, marginTop: 4, shadowColor: colors.shadow, shadowOpacity: 0.08, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }
-    },
-    quoteText: { color: colors.text, fontSize: 13, fontStyle: 'italic', lineHeight: 19 },
-    quoteAuthor: { color: colors.accent, fontSize: 11, fontWeight: '700', marginTop: 4 },
     shareCard: {
       backgroundColor: colors.surface, borderRadius: 24, borderWidth: 1, borderColor: colors.line, padding: 20, gap: 16, maxWidth: 500, alignSelf: 'center', width: '100%'
     },
@@ -5479,7 +5455,7 @@ function createStyles(colors: Palette) {
     gradeBadge: {
       borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4, alignItems: 'center', justifyContent: 'center'
     },
-    gradeText: { fontSize: 16, fontWeight: '800' },
+    gradeText: { fontSize: 16, fontWeight: '700' },
     gradeBadgeSmall: {
       borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, alignItems: 'center', justifyContent: 'center', marginLeft: 6
     },
@@ -5499,7 +5475,7 @@ function createStyles(colors: Palette) {
     calendarCell: {
       width: '12%', aspectRatio: 1, borderRadius: 10, padding: 4, justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: colors.line
     },
-    calendarDayNum: { color: colors.text, fontSize: 11, fontWeight: '700' },
+    calendarDayNum: { color: colors.text, fontSize: 11, fontWeight: '600' },
     calendarPnlText: { fontSize: 9, fontWeight: '800' },
     edgeItem: {
       backgroundColor: colors.surface2, borderRadius: 14, borderWidth: 1, borderColor: colors.line, padding: 12, gap: 4

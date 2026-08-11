@@ -93,14 +93,14 @@ export function ImportModal({ onClose, onImport, existing = [], accounts = [], i
     <div className="th-overlay fixed inset-0 flex items-center justify-center p-4 z-50" style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)' }} onClick={onClose}>
       <div className="rounded-lg w-full max-w-2xl max-h-[88vh] overflow-y-auto" style={{ background: T.surface, border: `1px solid ${T.line}` }} onClick={(event) => event.stopPropagation()}>
         <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${T.line}` }}>
-          <div className="flex items-center gap-2"><Upload size={18} style={{ color: T.accent }} /><span className="text-sm font-semibold">Import trades from CSV</span></div>
+          <div className="flex items-center gap-2"><Upload size={18} style={{ color: T.accentText }} /><span className="text-sm font-semibold">Import trades from CSV</span></div>
           <button type="button" onClick={onClose} style={{ color: T.faint }} aria-label="Close"><X size={18} /></button>
         </div>
         <div className="px-5 py-4 space-y-4">
           {!data ? (
             <div onClick={() => fileRef.current?.click()} onDrop={(event) => { event.preventDefault(); onFile(event.dataTransfer?.files?.[0]) }} onDragOver={(event) => event.preventDefault()}
               className="rounded-lg py-10 text-center cursor-pointer" style={{ background: T.surface2, border: `1px dashed ${T.line}` }}>
-              <Upload size={22} style={{ color: T.accent, display: 'inline' }} />
+              <Upload size={22} style={{ color: T.accentText, display: 'inline' }} />
               <div className="text-sm mt-2" style={{ color: T.dim }}>Drop your broker's CSV export here, or click to choose</div>
               <div className="text-xs mt-1" style={{ color: T.faint }}>NinjaTrader, Tradovate, TopstepX, or another CSV with headers</div>
               <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(event) => onFile(event.target.files?.[0])} />
@@ -142,7 +142,7 @@ export function ImportModal({ onClose, onImport, existing = [], accounts = [], i
                 <div className="text-xs mt-1" style={{ color: T.faint }}>Choose the timezone used by the CSV timestamps. Preview times are converted to your local timezone.</div>
               </Field>
               {dupeCount > 0 && <div className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
-                <span style={{ color: T.dim }}><span style={{ color: T.accent }}>{dupeCount} duplicate{dupeCount === 1 ? '' : 's'}</span> will be skipped.</span>
+                <span style={{ color: T.dim }}><span style={{ color: T.accentText }}>{dupeCount} duplicate{dupeCount === 1 ? '' : 's'}</span> will be skipped.</span>
                 <label className="flex items-center gap-1.5 cursor-pointer" style={{ color: T.dim }}><input type="checkbox" checked={includeDupes} onChange={(event) => setIncludeDupes(event.target.checked)} /> import anyway</label>
               </div>}
               <div>

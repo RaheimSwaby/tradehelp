@@ -149,12 +149,13 @@ function registerVideoProtocol() {
 
 function createWindow(rendererPort) {
   win = new BrowserWindow({
-    width: 1200,
-    height: 800,
+    width: 1536,
+    height: 900,
     minWidth: 900,
     minHeight: 600,
     backgroundColor: '#0E1117',
     title: 'TradeHelp',
+    autoHideMenuBar: true,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -450,50 +451,65 @@ function registerIpc() {
   ipcMain.handle('videos:delete', (_e, id) => { db.deleteTradeVideo(id); return { ok: true } })
   ipcMain.handle('videos:rename', (_e, id, name) => { db.renameTradeVideo(id, String(name || '').trim()); return { ok: true } })
 
+  // Start day asks for the capture list before arming. desktopCapturer is main-only,
+  // so this is the one piece of the recording flow that belongs here; the capture
+  // itself runs in the renderer via MediaRecorder (see sessionRecorder.js).
+  // 320x180 matches the picker's 16:9 tile: big enough to recognise a window at a
+  // glance, small enough that a dozen PNGs crossing IPC stays cheap.
+  ipcMain.handle('capture:sources', async () => {
+    const sources = await desktopCapturer.getSources({
+      types: ['screen', 'window'],
+      thumbnailSize: { width: 320, height: 180 }
+    })
+    return sources.map((source) => ({
+      id: source.id,
+      name: source.name || 'Untitled',
+      kind: source.id.startsWith('screen:') ? 'screen' : 'window',
+      // A minimised window yields an empty bitmap; the picker falls back to an icon.
+      thumbnail: source.thumbnail && !source.thumbnail.isEmpty() ? source.thumbnail.toDataURL() : ''
+    }))
+  })
+
+  // These were registered as 'sessions:add' against db.addTradingSession, which does
+  // not exist — while the preload invokes 'sessions:create'/'active'/'finish', which
+  // nothing handled. Names now match the preload, and the db functions they call.
   ipcMain.handle('sessions:list', () => db.listTradingSessions())
   ipcMain.handle('sessions:get', (_e, id) => db.getTradingSession(id))
-  ipcMain.handle('sessions:add', (_e, session) => db.addTradingSession(session))
-  ipcMain.handle('sessions:update', (_e, session) => db.updateTradingSession(session))
+  ipcMain.handle('sessions:active', () => db.getActiveTradingSession())
+  ipcMain.handle('sessions:create', (_e, input) => db.createTradingSession(input))
+  ipcMain.handle('sessions:finish', (_e, id, input) => db.finishTradingSession(id, input))
+  ipcMain.handle('sessions:update', (_e, id, input) => db.updateTradingSession(id, input))
   ipcMain.handle('sessions:delete', (_e, id) => db.deleteTradingSession(id))
-  ipcMain.handle('sessions:recording:start', async (event, id) => {
+  // The renderer owns the capture: it holds the MediaStream and the MediaRecorder,
+  // and streams encoded chunks here to be written. Main's only job is the file. The
+  // previous version called navigator.mediaDevices.getUserMedia() in this process,
+  // where `navigator` does not exist, so starting a recording always threw.
+  ipcMain.handle('sessions:recording:start', async (event, id, input = {}) => {
     const sessionId = String(id)
     const session = db.getTradingSession(sessionId)
     if (!session) throw new Error('Session not found')
     if (activeSessionRecordings.has(sessionId)) throw new Error('Already recording this session')
-    const sources = await desktopCapturer.getSources({ types: ['screen', 'window'], thumbnailSize: { width: 1, height: 1 } })
-    if (!sources.length) throw new Error('No screen or window available to record')
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: false,
-      video: {
-        mandatory: {
-          chromeMediaSource: 'desktop',
-          chromeMediaSourceId: sources[0].id,
-          minWidth: 1,
-          maxWidth: 3840,
-          minHeight: 1,
-          maxHeight: 2160,
-          minFrameRate: 1,
-          maxFrameRate: 30
-        }
-      }
+    const file = `${randomUUID()}.webm`
+    const path = db.tradingSessionRecordingPath(file)
+    const stream = createWriteStream(path)
+    await new Promise((resolve, reject) => {
+      stream.once('open', resolve)
+      stream.once('error', reject)
     })
-    const path = db.startTradingSessionRecording(sessionId)
-    const recording = {
-      ownerId: event.sender.id,
-      stream,
-      path,
-      bytes: 0
-    }
+    db.beginTradingSessionRecording(sessionId, { file, mimeType: input?.mimeType })
+    const recording = { ownerId: event.sender.id, stream, path, bytes: 0 }
     activeSessionRecordings.set(sessionId, recording)
-    recording.stream.on('error', (error) => {
-      try { recording.stream.destroy() } catch {}
+    stream.on('error', (error) => {
+      try { stream.destroy() } catch {}
       activeSessionRecordings.delete(sessionId)
       try { db.failTradingSessionRecording(sessionId) } catch {}
-      console.error('[session-recording] stream error:', error?.message || error)
+      console.error('[session-recording] write error:', error?.message || error)
     })
-    return { ok: true, path }
+    return { ok: true, file }
   })
-  ipcMain.handle('sessions:recording:write', async (event, id, chunk) => {
+  // Channel is 'append': the preload calls appendSessionRecording, and this was
+  // registered as ':write', so every chunk the recorder produced went nowhere.
+  ipcMain.handle('sessions:recording:append', async (event, id, chunk) => {
     const sessionId = String(id)
     const recording = activeSessionRecordings.get(sessionId)
     if (!recording) throw new Error('No active recording for this session')
@@ -518,6 +534,18 @@ function registerIpc() {
     activeSessionRecordings.delete(sessionId)
     const size = existsSync(recording.path) ? statSync(recording.path).size : recording.bytes
     return db.completeTradingSessionRecording(sessionId, size)
+  })
+
+  // The recorder calls this when a write fails mid-session, so the half-written file
+  // is closed and removed rather than left behind as a broken recording.
+  ipcMain.handle('sessions:recording:discard', async (_e, id) => {
+    const sessionId = String(id)
+    const recording = activeSessionRecordings.get(sessionId)
+    if (recording) {
+      activeSessionRecordings.delete(sessionId)
+      await new Promise((resolve) => { try { recording.stream.end(resolve) } catch { resolve() } })
+    }
+    return db.discardTradingSessionRecording(sessionId)
   })
 
   ipcMain.handle('plans:list', () => db.listTradePlans())

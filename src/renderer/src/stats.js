@@ -315,8 +315,8 @@ export function computeStats(trades) {
 export const LEAK_DEFS = [
   { id: 'revenge', label: 'Revenge trades', blurb: 'trading to win it back', emotions: ['Revenge'], reasons: ['Revenge trade'] },
   { id: 'fomo', label: 'FOMO / chasing', blurb: 'chasing entries you missed', emotions: ['FOMO'], reasons: ['FOMO / chased'] },
-  { id: 'greed', label: 'Greed', blurb: 'overstaying or oversizing winners', emotions: ['Greedy'], reasons: ['Greed — overstayed/oversized'] },
-  { id: 'impatience', label: 'Impatience', blurb: 'forcing trades before the setup', emotions: [], reasons: ['Impatient — forced it'] },
+  { id: 'greed', label: 'Greed', blurb: 'overstaying or oversizing winners', emotions: ['Greedy'], reasons: ['Greed: overstayed/oversized'] },
+  { id: 'impatience', label: 'Impatience', blurb: 'forcing trades before the setup', emotions: [], reasons: ['Impatient, forced it'] },
   { id: 'movedstop', label: 'Moving your stop', blurb: 'letting losers run past plan', emotions: [], reasons: ['Moved / ignored my stop'] },
   { id: 'oversized', label: 'Oversizing', blurb: 'risking more than planned', emotions: [], reasons: ['Oversized'] },
   { id: 'bored', label: 'Boredom trades', blurb: 'trading just to be in the market', emotions: ['Bored'], reasons: [] }

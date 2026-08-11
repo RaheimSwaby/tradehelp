@@ -6,6 +6,10 @@ const { autoUpdater } = electronUpdater
 export function initUpdater(getWindow) {
   ipcMain.handle('update:install', () => { try { autoUpdater.quitAndInstall() } catch {} })
   ipcMain.handle('update:check', async () => { try { return await autoUpdater.checkForUpdates() } catch { return null } })
+  // The preload exposes downloadUpdate(); without this it rejected with "No handler
+  // registered". autoDownload is on below, so this only matters when a check has run
+  // with autoDownload disabled, or the user retries a download that failed.
+  ipcMain.handle('update:download', async () => { try { return await autoUpdater.downloadUpdate() } catch { return null } })
 
   if (!app.isPackaged) return
 

@@ -79,7 +79,7 @@ export function PlaybookShareModal({ entry, images = [], onClose }) {
             <Copy size={14} /> Copy card
           </button>
         </div>
-        <button type="button" onClick={exportJson} className="w-full flex items-center justify-center gap-1.5 rounded-lg py-2 text-sm" style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}` }}>
+        <button type="button" onClick={exportJson} className="w-full flex items-center justify-center gap-1.5 rounded-lg py-2 text-sm" style={{ background: T.surface2, color: T.accentText, border: `1px solid ${T.line}` }}>
           <FileJson size={14} /> Export setup file (.json)
         </button>
 

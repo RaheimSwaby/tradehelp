@@ -1,19 +1,19 @@
 /* Shared styles for TradeHelp subpages (comparison, SEO and import guides).
    Mirrors the palette and components of index.html — dark theme only. */
 :root{
-  --bg:#0E1117; --surface:#151B26; --surface2:#1C2433; --line:#2A3344;
-  --text:#E6EAF2; --dim:#8A94A6; --faint:#5A6478; --accent:#F5B642; --up:#34D399; --down:#FB7185;
+  --bg:#0b0b0c; --surface:#141417; --surface2:#1a1a1d; --line:rgba(255,255,255,.08);
+  --text:#e0ddd6; --dim:#b5b0a8; --faint:#666; --accent:#d4a853; --up:#34D399; --down:#FB7185;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.65;-webkit-font-smoothing:antialiased}
+body{background:var(--bg);color:var(--text);font-family:"Inter","system-ui","Segoe UI","Roboto","Helvetica Neue",sans-serif;line-height:1.65;-webkit-font-smoothing:antialiased}
 #bg-matrix{position:fixed;inset:0;width:100%;height:100%;z-index:-2;pointer-events:none;display:block}
-body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;background:radial-gradient(72% 55% at 50% 0%, rgba(245,182,66,.10), transparent 70%)}
 .wrap{max-width:820px;margin:0 auto;padding:0 24px}
 a{color:var(--accent);text-decoration:none}
 a:hover{text-decoration:underline}
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 
-.topbar{position:sticky;top:0;z-index:50;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);background:rgba(14,17,23,.72);border-bottom:1px solid rgba(42,51,68,.55)}
+/* sticky top bar — frosted glass, matching home page */
+.topbar{position:sticky;top:0;z-index:50;background:rgba(11,11,12,.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid rgba(255,255,255,.06)}
 nav{display:flex;align-items:center;justify-content:space-between;padding:14px 0}
 .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:17px;letter-spacing:-.01em;color:var(--text)}
 .brand:hover{text-decoration:none}
@@ -24,14 +24,37 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:14px 0
 .nav-links a:hover{color:var(--text);text-decoration:none}
 @media (max-width:720px){.nav-links{display:none}}
 
-.btn{display:inline-flex;align-items:center;gap:8px;background:var(--accent);color:#1A1306;font-weight:600;padding:10px 16px;border-radius:10px;border:none;cursor:pointer;font-size:14px;transition:transform .15s ease,box-shadow .15s ease,filter .15s ease}
-.btn:hover{filter:brightness(1.05);transform:translateY(-1px);box-shadow:0 10px 24px rgba(245,182,66,.22);text-decoration:none}
-.btn.ghost{background:var(--surface2);color:var(--text);border:1px solid var(--line)}
+/* Chamfered cut-corner buttons — top-right + bottom-left sliced at 45° */
+.btn{
+  display:inline-flex;align-items:center;gap:8px;
+  background:linear-gradient(135deg,#d4a853 0%,#c49a3f 100%);
+  color:#0b0b0c;font-weight:600;padding:10px 18px;
+  border-radius:4px;border:none;cursor:pointer;font-size:14px;
+  transition:filter .15s ease,box-shadow .15s ease;
+  clip-path:polygon(
+    8px 0%,
+    calc(100% - 8px) 0%,
+    100% 8px,
+    100% calc(100% - 8px),
+    calc(100% - 8px) 100%,
+    8px 100%,
+    0% calc(100% - 8px),
+    0% 8px
+  );
+  box-shadow:0 2px 8px rgba(212,168,83,.18);
+}
+.btn:hover{filter:brightness(1.08);text-decoration:none;box-shadow:0 4px 14px rgba(212,168,83,.28)}
+.btn.ghost{
+  background:var(--surface2);color:var(--text);
+  border:1px solid var(--line);
+  box-shadow:none;
+}
+.btn.ghost:hover{box-shadow:0 2px 10px rgba(255,255,255,.08)}
 
 article{padding:44px 0 20px}
-h1{font-size:clamp(28px,4.4vw,40px);line-height:1.15;letter-spacing:-.02em;font-weight:700;margin-bottom:14px}
+h1{font-family:'Inter',"system-ui","Segoe UI","Roboto","Helvetica Neue",sans-serif;font-size:clamp(28px,4.4vw,40px);line-height:1.15;letter-spacing:-.02em;font-weight:700;margin-bottom:14px}
 h1 .accent{color:var(--accent)}
-h2{font-size:22px;letter-spacing:-.01em;font-weight:700;margin:36px 0 10px}
+h2{font-family:'Inter',"system-ui","Segoe UI","Roboto","Helvetica Neue",sans-serif;font-size:22px;letter-spacing:-.01em;font-weight:700;margin:36px 0 10px}
 h3{font-size:16px;font-weight:600;margin:22px 0 6px}
 p{color:var(--dim);margin:10px 0}
 article b, article strong{color:var(--text)}
@@ -39,8 +62,17 @@ ul,ol{color:var(--dim);padding-left:22px;margin:10px 0}
 li{margin:5px 0}
 .lede{font-size:17px}
 
+/* features — alternating horizontal rows, no boxes (shared with index.html) */
+.features{display:flex;flex-direction:column}
+.feature-row{padding:32px 0;border-bottom:1px solid var(--line);max-width:680px}
+.feature-row:last-child{border-bottom:none}
+.feature-row:nth-child(even){margin-left:auto;text-align:right}
+.feature-row h3{font-size:18px;font-weight:600;margin:0 0 6px;color:var(--text)}
+.feature-row p{color:var(--dim);font-size:15px;line-height:1.6}
+@media (max-width:560px){.feature-row{max-width:100%}.feature-row:nth-child(even){margin-left:0;text-align:left}}
+
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
-.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;transition:border-color .16s ease}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:20px;transition:border-color .16s ease}
 .card:hover{border-color:var(--faint)}
 .card h3{margin:0 0 6px}
 .card p{margin:0}
@@ -56,25 +88,25 @@ td:first-child{color:var(--text)}
 .meh{color:var(--faint)}
 .us{color:var(--text)}
 
-.callout{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:10px;padding:14px 18px;margin:18px 0;color:var(--dim);font-size:14.5px}
+.callout{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:4px;padding:14px 18px;margin:18px 0;color:var(--dim);font-size:14.5px}
 code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13.5px}
-code{background:var(--surface2);border:1px solid var(--line);border-radius:6px;padding:1px 7px;color:var(--accent)}
-pre{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow-x:auto;margin:12px 0;color:var(--text)}
+code{background:var(--surface2);border:1px solid var(--line);border-radius:4px;padding:1px 7px;color:var(--accent)}
+pre{background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:14px 16px;overflow-x:auto;margin:12px 0;color:var(--text)}
 pre code{background:none;border:none;padding:0}
 
 .steps{counter-reset:step;list-style:none;padding:0}
 .steps li{counter-increment:step;position:relative;padding:0 0 0 44px;margin:14px 0}
-.steps li::before{content:counter(step);position:absolute;left:0;top:1px;width:28px;height:28px;border-radius:8px;background:var(--surface2);border:1px solid var(--line);color:var(--accent);font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center}
+.steps li::before{content:counter(step);position:absolute;left:0;top:1px;width:28px;height:28px;border-radius:4px;background:var(--surface2);border:1px solid var(--line);color:var(--accent);font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center}
 
 .faq{margin:14px 0}
-.faq details{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:0 16px;margin:8px 0}
+.faq details{background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:0 16px;margin:8px 0}
 .faq summary{cursor:pointer;padding:13px 0;font-weight:600;color:var(--text);list-style:none;font-size:15px}
 .faq summary::-webkit-details-marker{display:none}
 .faq summary::before{content:"▸ ";color:var(--accent)}
 .faq details[open] summary::before{content:"▾ "}
 .faq details p{padding-bottom:13px;margin:0;font-size:14.5px}
 
-.cta-box{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:30px;text-align:center;margin:40px 0 28px}
+.cta-box{background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:30px;text-align:center;margin:40px 0 28px}
 .cta-box h2{margin:0 0 8px}
 .cta-box p{max-width:520px;margin:8px auto 18px}
 .cta-box .note{color:var(--faint);font-size:13px;margin-top:12px}
@@ -82,11 +114,11 @@ pre code{background:none;border:none;padding:0}
 footer .links{display:flex;flex-wrap:wrap;gap:6px 18px;margin-bottom:10px}
 footer a{color:var(--dim)}
 
-/* Sleek Animated Navigation Dropdown Menu */
+/* Navigation Dropdown Menu — simple, no staggered animations */
 .dropdown{position:relative;display:inline-block}
 .dropdown-trigger{color:var(--dim);cursor:pointer;display:flex;align-items:center;gap:4px;font-size:14px;background:none;border:none;font-family:inherit;padding:6px 0;transition:color .2s ease}
 .dropdown-trigger:hover, .dropdown.is-open .dropdown-trigger{color:var(--text)}
-.dropdown-trigger::after{content:"▾";color:var(--faint);font-size:15px;margin-left:5px;display:inline-block;vertical-align:middle;line-height:1;transition:transform .25s cubic-bezier(0.16, 1, 0.3, 1), color .2s ease}
+.dropdown-trigger::after{content:"▾";color:var(--faint);font-size:15px;margin-left:5px;display:inline-block;vertical-align:middle;line-height:1;transition:transform .2s ease,color .2s ease}
 body:not(.has-active-click) .dropdown:hover:not(.is-closed) .dropdown-trigger::after, .dropdown.is-open .dropdown-trigger::after{transform:rotate(180deg);color:var(--accent)}
 .dropdown-content{
   display:block;
@@ -96,18 +128,16 @@ body:not(.has-active-click) .dropdown:hover:not(.is-closed) .dropdown-trigger::a
   position:absolute;
   top:100%;
   left:50%;
-  transform:translateX(-50%) translateY(10px) scale(0.96);
+  transform:translateX(-50%) translateY(6px);
   min-width:215px;
-  background:rgba(21, 27, 38, 0.94);
-  backdrop-filter:blur(16px);
-  -webkit-backdrop-filter:blur(16px);
-  border:1px solid rgba(245, 182, 66, 0.25);
-  border-radius:12px;
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:4px;
   padding:6px;
-  box-shadow:0 20px 48px rgba(0,0,0,0.55), 0 0 24px rgba(245,182,66,0.08);
+  box-shadow:0 4px 16px rgba(0,0,0,.35);
   z-index:100;
   margin-top:8px;
-  transition:opacity .22s cubic-bezier(0.16, 1, 0.3, 1), transform .22s cubic-bezier(0.16, 1, 0.3, 1), visibility .22s;
+  transition:opacity .15s ease,transform .15s ease,visibility .15s;
 }
 
 body:not(.has-active-click) .dropdown:hover:not(.is-closed) .dropdown-content,
@@ -115,36 +145,22 @@ body:not(.has-active-click) .dropdown:hover:not(.is-closed) .dropdown-content,
   opacity:1;
   visibility:visible;
   pointer-events:auto;
-  transform:translateX(-50%) translateY(0) scale(1);
+  transform:translateX(-50%) translateY(0);
 }
 
-/* Sub-Item Waterfall Cascade Animation */
 .dropdown-content a{
   display:block;
   padding:8.5px 13px;
   font-size:13.5px;
   color:var(--dim);
-  border-radius:7px;
-  opacity:0;
-  transform:translateY(-8px);
-  transition:opacity .22s cubic-bezier(0.16, 1, 0.3, 1), transform .22s cubic-bezier(0.16, 1, 0.3, 1), background .15s ease, color .15s ease;
+  border-radius:4px;
+  transition:background .15s ease,color .15s ease;
 }
 
-body:not(.has-active-click) .dropdown:hover:not(.is-closed) .dropdown-content a,
-.dropdown.is-open .dropdown-content a {
-  opacity:1;
-  transform:translateY(0);
-}
+.dropdown-content a:hover{background:var(--surface2);color:var(--accent);text-decoration:none}
 
-.dropdown-content a:hover{background:var(--surface2);color:var(--accent);text-decoration:none;transform:translateX(3px)!important}
-
-/* Single fast fade-in for the page chrome. No staggered cascade: content should
-   appear together, not queue up one element at a time. */
-@keyframes pageFade {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-.topbar, article > .wrap > h1, header.hero h1 { animation: pageFade .3s ease both; }
+/* no page-fade animation — content is visible on load */
+.topbar, article > .wrap > h1, header.hero h1 { animation: none; }
 
 @media (prefers-reduced-motion: reduce) {
   .topbar, article > .wrap > h1, header.hero h1 { animation: none !important; }

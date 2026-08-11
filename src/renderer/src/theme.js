@@ -1,13 +1,19 @@
 export const BASE = {
   bg: '#0E1117', surface: '#151B26', surface2: '#1C2433', line: '#2A3344',
-  text: '#E6EAF2', dim: '#8A94A6', faint: '#5A6478',
-  up: '#34D399', down: '#FB7185', accent: '#F5B642', accentSoft: '#3A3018'
+  // dim/faint are tuned against surface2 (the lightest raised surface), not bg —
+  // that's the worst case, and faint sits on cards more often than on the page.
+  text: '#E6EAF2', dim: '#9AA4B6', faint: '#7E8BA3',
+  // accentText === accent on dark surfaces; applyTheme() re-derives it per palette.
+  up: '#34D399', down: '#FB7185', accent: '#F5B642', accentSoft: '#3A3018', accentText: '#F5B642'
 }
 // Light mode. up/down are darker than BASE so they hold contrast on white surfaces.
 export const LIGHT = {
   bg: '#F3F5F9', surface: '#FFFFFF', surface2: '#EBEFF5', line: '#D6DCE7',
-  text: '#1B2432', dim: '#5B6575', faint: '#98A2B3',
-  up: '#0A9E76', down: '#E23A5F', accent: '#F5B642', accentSoft: 'rgba(245,182,66,0.16)'
+  // faint is darker than it looks like it needs to be: it also lands on surface2
+  // (#EBEFF5), which is the worst case for contrast. This clears 4.5:1 on all three.
+  text: '#1B2432', dim: '#556173', faint: '#626D7E',
+  up: '#0A9E76', down: '#E23A5F', accent: '#F5B642', accentSoft: 'rgba(245,182,66,0.16)',
+  accentText: '#896623'
 }
 // Trade Mode ("go time"): warmer, darker ambient + an urgent accent. Surfaces and
 // text stay close to BASE so the journal is still readable while you're live.
@@ -25,7 +31,7 @@ const PRESET_PALETTES = {
     accentKey: 'blue',
     palette: {
       bg: '#080D14', surface: '#101827', surface2: '#172235', line: '#26364E',
-      text: '#EAF1FF', dim: '#91A0B8', faint: '#61708A',
+      text: '#EAF1FF', dim: '#A1AEC2', faint: '#7A8AA5',
       up: '#34D399', down: '#FB7185', accent: '#60A5FA', accentSoft: '#14243C'
     }
   },
@@ -36,7 +42,7 @@ const PRESET_PALETTES = {
     accentKey: 'emerald',
     palette: {
       bg: '#06100B', surface: '#0B1710', surface2: '#102318', line: '#20402D',
-      text: '#E7FFF0', dim: '#8AB99B', faint: '#567A63',
+      text: '#E7FFF0', dim: '#9BC7AA', faint: '#70947C',
       up: '#22C55E', down: '#F97373', accent: '#86EFAC', accentSoft: '#12351F'
     }
   },
@@ -46,7 +52,7 @@ const PRESET_PALETTES = {
     accentKey: 'red',
     palette: {
       bg: '#120B0E', surface: '#1B1116', surface2: '#251820', line: '#3B2630',
-      text: '#F7E9EE', dim: '#B794A0', faint: '#775B66',
+      text: '#F7E9EE', dim: '#C1A2AC', faint: '#9B7B87',
       up: '#34D399', down: '#FB7185', accent: '#F8544F', accentSoft: '#3A1614'
     }
   },
@@ -56,7 +62,7 @@ const PRESET_PALETTES = {
     accentKey: 'silver',
     palette: {
       bg: '#111214', surface: '#181A1D', surface2: '#202328', line: '#32363D',
-      text: '#ECEFF3', dim: '#A1A7B0', faint: '#6B7280',
+      text: '#ECEFF3', dim: '#ABB1BA', faint: '#828A98',
       up: '#A7F3D0', down: '#FDA4AF', accent: '#CBD5E1', accentSoft: '#262E3C'
     }
   }
@@ -86,6 +92,37 @@ export const FONT_OPTIONS = [
   { key: 'numeric', label: 'Clean numbers' },
   { key: 'soft', label: 'Soft UI' }
 ]
+
+// WCAG relative luminance / contrast, used to derive a readable accent for light themes.
+function srgbLum(hex) {
+  const n = parseInt(String(hex).slice(1), 16)
+  const ch = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => {
+    const c = v / 255
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+  })
+  return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2]
+}
+function contrastRatio(a, b) {
+  const la = srgbLum(a)
+  const lb = srgbLum(b)
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
+}
+// The accents are tuned to glow on near-black. On a light surface the same amber is
+// 1.6:1 as text, which is unreadable. Darken it until the label clears AA and expose
+// that separately as accentText, so fills, underlines and borders keep the brand color.
+export function readableAccent(accent, bg, target = 4.5) {
+  if (srgbLum(bg) < 0.5 || contrastRatio(accent, bg) >= target) return accent
+  const n = parseInt(String(accent).slice(1), 16)
+  let [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+  for (let i = 0; i < 40; i++) {
+    const hex = `#${[r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')}`
+    if (contrastRatio(hex, bg) >= target) return hex
+    r = Math.floor(r * 0.94)
+    g = Math.floor(g * 0.94)
+    b = Math.floor(b * 0.94)
+  }
+  return '#000000'
+}
 
 // hex (#RRGGBB) → rgba string, for translucent glass surfaces that still track the theme.
 export function withAlpha(hex, a) {
@@ -153,6 +190,8 @@ export function applyTheme(live, accentKey, mode, settings = {}) {
   const liveAccent = goTimeAccent(settings.goTimeAccent)
   const palette = live ? { ...LIVE, ...liveAccent } : normal
   Object.assign(T, applyPnlStyle(palette, settings.pnlStyle))
+  // Derived after the palette lands so it tracks the chosen accent and surface.
+  T.accentText = readableAccent(T.accent, T.surface2)
   mono = {
     fontFamily: FONT_STYLES[settings.fontStyle] || FONT_STYLES.default,
     fontVariantNumeric: 'tabular-nums'

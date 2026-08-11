@@ -65,7 +65,7 @@ export function ShareReportModal({ trades, accountLabel, accent, onClose, payout
     <div ref={modalRef} role="dialog" aria-modal="true" aria-label="Share performance report" tabIndex={-1} className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: 'rgba(5,8,12,0.82)' }} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
       <div className="w-full max-w-6xl max-h-[94vh] rounded-lg overflow-hidden flex flex-col" style={{ background: T.surface, color: T.text, border: `1px solid ${T.line}`, boxShadow: '0 24px 70px rgba(0,0,0,0.55)' }}>
         <header className="flex items-center gap-3 px-4 py-3" style={{ borderBottom: `1px solid ${T.line}` }}>
-          <Share2 size={17} style={{ color: T.accent }} />
+          <Share2 size={17} style={{ color: T.accentText }} />
           <div>
             <div className="text-sm font-semibold">Share performance report</div>
             <div className="text-xs" style={{ color: T.faint }}>Preview exactly what leaves your computer.</div>

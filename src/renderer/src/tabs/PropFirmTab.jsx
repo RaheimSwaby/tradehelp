@@ -82,12 +82,14 @@ function PayoutPanel({ payouts = [], accounts = [], accountId, onAdd, onDelete, 
 /* ───────── prop firm ───────── */
 export function Meter({ pct, color, top, bottom }) {
   return (
+    // The caption rows are omitted rather than rendered empty: the overview table
+    // passes neither, and two blank lines of leading were padding every meter.
     <div>
-      <div className="text-xs mb-1" style={{ ...mono, color: T.text }}>{top}</div>
+      {top && <div className="text-xs mb-1" style={{ ...mono, color: T.text }}>{top}</div>}
       <div className="h-2.5 rounded-full overflow-hidden" style={{ background: T.surface2 }}>
         <div className="h-full rounded-full" style={{ width: `${clamp(pct, 0, 1) * 100}%`, background: color, transition: 'width .4s' }} />
       </div>
-      <div className="text-xs mt-1" style={{ color: T.faint }}>{bottom}</div>
+      {bottom && <div className="text-xs mt-1" style={{ color: T.faint }}>{bottom}</div>}
     </div>
   )
 }
@@ -113,7 +115,7 @@ export function PropFirmForm({ account, onSave, onCancel, canCancel }) {
     <div className="max-w-xl">
       <Panel title={editing ? 'Edit account' : 'Add prop firm account'}>
         <div className="flex flex-wrap gap-1.5 mb-3">
-          {Object.keys(PROP_PRESETS).map((n) => <button key={n} type="button" onClick={() => preset(n)} className="text-xs px-2 py-1 rounded-md" style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}` }}>{n} template</button>)}
+          {Object.keys(PROP_PRESETS).map((n) => <button key={n} type="button" onClick={() => preset(n)} className="text-xs px-2 py-1 rounded-md" style={{ background: T.surface2, color: T.accentText, border: `1px solid ${T.line}` }}>{n} template</button>)}
         </div>
         <Field label="Label"><input style={inputStyle} className={inp} value={f.label} onChange={set('label')} placeholder="e.g. Topstep 50K #2" /></Field>
         <div className="grid grid-cols-2 gap-3 mt-3">
@@ -141,7 +143,7 @@ export function PropFirmForm({ account, onSave, onCancel, canCancel }) {
 }
 
 export function AccountCard({ acc, r, tight, cash, onClick }) {
-  const status = r.status === 'passed' ? { label: 'PASSED', color: T.up } : r.status === 'failed' ? { label: 'FAILED', color: T.down } : { label: 'ACTIVE', color: T.accent }
+  const status = r.status === 'passed' ? { label: 'PASSED', color: T.up } : r.status === 'failed' ? { label: 'FAILED', color: T.down } : { label: 'ACTIVE', color: T.accentText }
   const ddPct = r.maxDD > 0 ? r.ddBuffer / r.maxDD : 1
   const ddColor = r.floorBreached ? T.down : ddPct > 0.5 ? T.up : ddPct > 0.2 ? T.accent : T.down
   const tgtPct = r.target > 0 ? clamp(r.netProfit / r.target, 0, 1) : 0
@@ -185,7 +187,7 @@ export function PropFirmDetail({ trades, acc, onBack, onEdit, onDelete, payouts 
   const ddColor = r.floorBreached ? T.down : ddPct > 0.5 ? T.up : ddPct > 0.2 ? T.accent : T.down
   const tgtPct = r.target > 0 ? r.netProfit / r.target : 0
   const dailyPct = r.maxDaily > 0 ? r.dailyRemaining / r.maxDaily : 1
-  const status = r.status === 'passed' ? { label: 'PASSED', color: T.up } : r.status === 'failed' ? { label: 'FAILED', color: T.down } : { label: 'IN PROGRESS', color: T.accent }
+  const status = r.status === 'passed' ? { label: 'PASSED', color: T.up } : r.status === 'failed' ? { label: 'FAILED', color: T.down } : { label: 'IN PROGRESS', color: T.accentText }
   const Req = ({ ok, label }) => (
     <div className="flex items-center gap-2 text-sm">{ok ? <CheckSquare size={16} style={{ color: T.up }} /> : <Square size={16} style={{ color: T.faint }} />}<span style={{ color: ok ? T.text : T.dim }}>{label}</span></div>
   )
@@ -282,17 +284,54 @@ function PropAccounts({ trades, accounts, onSave, payouts = [], onAddPayout, onD
   const active = rows.filter((x) => x.r.status === 'active').length
   const failed = rows.filter((x) => x.r.status === 'failed').length
   const tight = rows.filter((x) => x.r.status === 'active' && x.r.maxDD > 0).sort((a, b) => a.r.ddBuffer - b.r.ddBuffer)[0]
-  const chip = (val, label, color) => <span className="text-xs px-2 py-0.5 rounded" style={{ color, border: `1px solid ${T.line}` }}>{val} {label}</span>
+  const statusMeta = (status) => status === 'passed'
+    ? { label: 'Passed', color: T.up }
+    : status === 'failed'
+      ? { label: 'Failed', color: T.down }
+      : { label: 'Active', color: T.up }
   return (
     <div className="space-y-4">
-      <Panel title={`Accounts · ${accounts.length}`} right={<button type="button" onClick={() => setView('add')} className="text-xs px-2 py-1 rounded-md" style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}` }}>+ Add account</button>}>
-        <div className="flex flex-wrap gap-2">{chip(passing, 'passing', T.up)}{chip(active, 'active', T.accent)}{chip(failed, 'failed', T.down)}</div>
-        {tight && <div className="text-sm mt-3" style={{ color: T.dim }}>Tightest: <span style={{ color: T.text }}>{tight.acc.label}</span> — <span style={{ ...mono, color: T.down }}>{fmt$(tight.r.ddBuffer)}</span> before breach. That's your real limit today.</div>}
+      <Panel title={`Prop overview · ${accounts.length} account${accounts.length === 1 ? '' : 's'}`} right={<button type="button" onClick={() => setView('add')} className="text-xs px-2 py-1 rounded-md" style={{ background: T.surface2, color: T.accentText, border: `1px solid ${T.line}` }}>+ Add account</button>}>
+        <div className="th-prop-summary grid grid-cols-2 lg:grid-cols-7">
+          <Stat label="Passing" value={passing} tone={passing ? 'up' : 'none'} />
+          <Stat label="Active" value={active} tone={active ? 'up' : 'none'} />
+          <Stat label="Failed" value={failed} tone={failed ? 'down' : 'none'} />
+          <Stat label="Tightest drawdown" value={tight ? fmt$(tight.r.ddBuffer) : '—'} tone={tight ? 'down' : 'none'} sub={tight?.acc.label || 'No active account'} />
+          <Stat label="Total spent" value={fmt$(cash.overall.spent)} tone={cash.overall.spent ? 'down' : 'none'} />
+          <Stat label="Gross payouts" value={fmt$(cash.overall.payouts)} tone={cash.overall.payouts ? 'up' : 'none'} />
+          <Stat label="Net prop cash" value={fmt$(cash.overall.net)} tone={cash.overall.net >= 0 ? 'up' : 'down'} sub={cash.overall.roi == null ? 'No ROI yet' : `ROI ${fmtN(cash.overall.roi, 1)}%`} />
+        </div>
+        <div className="th-prop-table-wrap mt-3 overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead><tr style={{ color: T.faint }}>
+              <th className="text-left font-normal">Account</th><th className="text-left font-normal">Status</th><th className="text-left font-normal">Type</th>
+              <th className="text-left font-normal">Balance</th><th className="text-left font-normal">Drawdown cushion</th><th className="text-left font-normal">Profit target</th>
+              <th className="text-left font-normal">Daily loss room</th><th className="text-left font-normal">Pass requirements</th><th className="text-right font-normal">Actions</th>
+            </tr></thead>
+            <tbody>
+              {rows.map(({ acc, r }) => {
+                const status = statusMeta(r.status)
+                const ddPct = r.maxDD > 0 ? clamp(r.ddBuffer / r.maxDD, 0, 1) : 1
+                const targetPct = r.target > 0 ? clamp(r.netProfit / r.target, 0, 1) : 0
+                const dailyPct = r.maxDaily > 0 ? clamp(r.dailyRemaining / r.maxDaily, 0, 1) : 1
+                return (
+                  <tr key={acc.id} style={{ borderTop: `1px solid ${T.line}` }}>
+                    <td><button type="button" onClick={() => setView({ detail: acc.id })} className="text-left"><strong>{acc.label || 'Account'}</strong><span className="block text-[10px]" style={{ color: T.faint }}>{acc.scope === 'own' ? 'Tagged trades' : 'Copy-trade'}</span></button></td>
+                    <td><span className="inline-flex px-2 py-1 rounded" style={{ color: status.color, border: `1px solid ${status.color}` }}>{status.label}</span></td>
+                    <td>{acc.ddType === 'trailing' ? 'Trailing drawdown' : 'Static drawdown'}</td>
+                    <td style={mono}><strong>{fmt$(r.bal)}</strong><span className="block text-[10px]" style={{ color: T.faint }}>{fmt$(r.start)} start</span></td>
+                    <td><span style={{ ...mono, color: ddPct < .2 ? T.down : T.text }}>{fmt$(r.ddBuffer)}</span><Meter pct={ddPct} color={ddPct < .2 ? T.down : T.accent} /></td>
+                    <td><span style={mono}>{fmt$(r.netProfit)} / {fmt$(r.target)}</span><Meter pct={targetPct} color={r.targetHit ? T.up : T.up} /></td>
+                    <td><span style={mono}>{fmt$(r.dailyRemaining)}</span><Meter pct={dailyPct} color={dailyPct < .2 ? T.down : T.up} /></td>
+                    <td>{r.targetHit ? 'Target hit' : `${fmt$(Math.max(0, r.target - r.netProfit))} to target`}<span className="block text-[10px]" style={{ color: T.faint }}>{r.daysTraded}/{r.minDays} trading days</span></td>
+                    <td className="text-right"><button type="button" onClick={() => setView({ detail: acc.id })} className="px-2 py-1 rounded" style={{ color: T.text, border: `1px solid ${T.line}` }}>Open</button></td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
       </Panel>
-      <CashSummary cash={cash.overall} />
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {rows.map(({ acc, r }) => <AccountCard key={acc.id} acc={acc} r={r} tight={tight?.acc.id === acc.id} cash={cash.byAccount[acc.id]} onClick={() => setView({ detail: acc.id })} />)}
-      </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <PayoutPanel payouts={payouts} accounts={accounts} onAdd={onAddPayout} onDelete={onDeletePayout} />
         <ExpensePanel expenses={expenses} accounts={accounts} onAdd={onAddExpense} onDelete={onDeleteExpense} />
@@ -446,13 +485,13 @@ function LiveAccount({ trades, accounts = [], settings = {}, onSaveSettings, pay
     setCapitalMode(null)
   }
   return (
-    <div className="space-y-4">
-      <Panel title="Live / personal account" right={capital > 0 && <button type="button" onClick={() => setCapitalMode('add')} className="text-xs px-2 py-1 rounded-md font-semibold" style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}` }}>+ Add funds</button>}>
+    <div className="th-account-live space-y-4">
+      <Panel title="Live / personal account" right={capital > 0 && <button type="button" onClick={() => setCapitalMode('add')} className="text-xs px-2 py-1 rounded-md font-semibold" style={{ background: T.surface2, color: T.accentText, border: `1px solid ${T.line}` }}>+ Add funds</button>}>
         {capitalMode ? (
           <CapitalAction mode={capitalMode} capital={capital} onSave={saveCapital} onCancel={() => setCapitalMode(null)} />
         ) : capital > 0 ? (
           <div className="flex flex-wrap items-center gap-3 rounded-lg px-3 py-2" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
-            <Wallet size={16} style={{ color: T.accent }} />
+            <Wallet size={16} style={{ color: T.accentText }} />
             <div>
               <div className="text-xs uppercase tracking-wider" style={{ color: T.faint }}>Saved account capital</div>
               <div className="text-lg font-bold" style={{ ...mono, color: T.text }}>{fmt$(capital)}</div>
@@ -482,19 +521,18 @@ export function PropFirm({ trades, accounts = [], onSave, payouts = [], onAddPay
   const [sub, setSub] = useState('live')
   const tabs = [['live', 'Live'], ['prop', accounts.length ? `Prop · ${accounts.length}` : 'Prop']]
   return (
-    <div className="space-y-4">
+    <div className="th-page th-page-accounts space-y-4">
       <div className="flex items-center gap-1.5">
         {tabs.map(([k, label]) => (
-          <button key={k} type="button" onClick={() => setSub(k)} className="text-xs px-3 py-1.5 rounded-md font-semibold"
-            style={{ background: sub === k ? T.surface2 : 'transparent', color: sub === k ? T.accent : T.dim, border: `1px solid ${sub === k ? T.line : 'transparent'}` }}>
+          <button key={k} type="button" onClick={() => { setSub(k); document.getElementById(`accounts-${k}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }} className="text-xs px-3 py-1.5 rounded-md font-semibold"
+            style={{ background: sub === k ? T.surface2 : 'transparent', color: sub === k ? T.accentText : T.dim, border: `1px solid ${sub === k ? T.line : 'transparent'}` }}>
             {label}
           </button>
         ))}
         <span className="text-xs ml-1" style={{ color: T.faint }}>{sub === 'live' ? 'your personal account' : 'prop-firm challenges'}</span>
       </div>
-      {sub === 'live'
-        ? <LiveAccount trades={trades} accounts={accounts} settings={settings} onSaveSettings={onSaveSettings} payouts={payouts} onAddPayout={onAddPayout} onDeletePayout={onDeletePayout} />
-        : <PropAccounts trades={trades} accounts={accounts} onSave={onSave} payouts={payouts} onAddPayout={onAddPayout} onDeletePayout={onDeletePayout} expenses={expenses} onAddExpense={onAddExpense} onDeleteExpense={onDeleteExpense} />}
+      <div id="accounts-live"><LiveAccount trades={trades} accounts={accounts} settings={settings} onSaveSettings={onSaveSettings} payouts={payouts} onAddPayout={onAddPayout} onDeletePayout={onDeletePayout} /></div>
+      <div id="accounts-prop"><PropAccounts trades={trades} accounts={accounts} onSave={onSave} payouts={payouts} onAddPayout={onAddPayout} onDeletePayout={onDeletePayout} expenses={expenses} onAddExpense={onAddExpense} onDeleteExpense={onDeleteExpense} /></div>
     </div>
   )
 }

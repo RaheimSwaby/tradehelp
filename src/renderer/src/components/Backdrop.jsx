@@ -544,13 +544,13 @@ const SCENES = {
 
 export const BACKDROP_OPTIONS = [
   ['skyClock', 'Sun / Moon'],
-  ['constellation', '🌌 Constellation'],
-  ['matrix', '💻 Matrix'],
-  ['orbs', '🫧 Orbs'],
-  ['embers', '🔥 Flames'],
-  ['candles', '🕯️ Candles'],
-  ['equalizer', '🎚️ Equalizer'],
-  ['money', '$ Money Rain'],
+  ['constellation', 'Constellation'],
+  ['matrix', 'Matrix'],
+  ['orbs', 'Orbs'],
+  ['embers', 'Flames'],
+  ['candles', 'Candles'],
+  ['equalizer', 'Equalizer'],
+  ['money', 'Money Rain'],
   ['off', 'Off']
 ]
 

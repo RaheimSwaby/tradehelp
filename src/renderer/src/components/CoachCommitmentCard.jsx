@@ -75,7 +75,7 @@ function CommitmentModal({ onClose, onSave }) {
     <div className="th-overlay fixed inset-0 z-[75] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)' }} onClick={onClose}>
       <div className="w-full max-w-xl rounded-2xl p-5" style={{ background: T.surface, border: `1px solid ${T.line}` }} onClick={(event) => event.stopPropagation()}>
         <div className="flex items-start gap-2">
-          <Target size={18} style={{ color: T.accent }} />
+          <Target size={18} style={{ color: T.accentText }} />
           <div>
             <div className="text-sm font-semibold">Start a trading commitment</div>
             <div className="text-xs mt-0.5" style={{ color: T.faint }}>Choose one behavior to measure over your next trades. Starting a new focus archives the current one.</div>
@@ -86,7 +86,7 @@ function CommitmentModal({ onClose, onSave }) {
         <div className="grid grid-cols-2 gap-2 mt-4">
           {Object.entries(COMMITMENT_RULE_META).map(([key, rule]) => (
             <button key={key} type="button" onClick={() => chooseRule(key)} className="rounded-lg p-3 text-left text-xs"
-              style={{ background: ruleType === key ? T.accentSoft : T.surface2, color: ruleType === key ? T.accent : T.dim, border: `1px solid ${ruleType === key ? T.accent : T.line}` }}>
+              style={{ background: ruleType === key ? T.accentSoft : T.surface2, color: ruleType === key ? T.accentText : T.dim, border: `1px solid ${ruleType === key ? T.accent : T.line}` }}>
               <span className="font-semibold">{rule.label}</span>
             </button>
           ))}
@@ -151,7 +151,7 @@ export function CommitmentFocus({ commitment }) {
   return (
     <Panel title="Current coach focus">
       <div className="flex items-start gap-2">
-        <Target size={16} style={{ color: T.accent }} />
+        <Target size={16} style={{ color: T.accentText }} />
         <div className="min-w-0">
           <div className="text-sm font-semibold">{commitment.title}</div>
           <div className="text-xs mt-0.5" style={{ color: T.faint }}>{meta?.result(commitment.ruleValue) || commitment.ruleValue}</div>
@@ -184,16 +184,16 @@ export function CoachCommitmentCard({ commitments = [], trades = [], scopeLabel 
               <div className="text-sm">Turn a goal into one behavior you can measure.</div>
               <div className="text-xs mt-1" style={{ color: T.faint }}>Choose a trade limit, risk limit, time cutoff, or allowed setup for your next trades.</div>
             </div>
-            {history.length > 0 && <button type="button" onClick={() => setShowDetails((value) => !value)} className="rounded-md px-2.5 py-1.5 text-xs" style={{ color: T.accent, border: `1px solid ${T.line}` }}>{showDetails ? 'See less' : `See past (${history.length})`}</button>}
-            <button type="button" onClick={onOpenCoach} className="rounded-md px-3 py-1.5 text-xs" style={{ border: `1px solid ${T.line}`, color: T.accent }}>Ask AI Coach</button>
+            {history.length > 0 && <button type="button" onClick={() => setShowDetails((value) => !value)} className="rounded-md px-2.5 py-1.5 text-xs" style={{ color: T.accentText, border: `1px solid ${T.line}` }}>{showDetails ? 'See less' : `See past (${history.length})`}</button>}
+            <button type="button" onClick={onOpenCoach} className="rounded-md px-3 py-1.5 text-xs" style={{ border: `1px solid ${T.line}`, color: T.accentText }}>Ask AI Coach</button>
           </div>
         ) : (
           <div className="flex flex-wrap xl:flex-nowrap items-center gap-3">
-            <Target size={18} className="shrink-0" style={{ color: current.status === 'completed' ? T.up : T.accent }} />
+            <Target size={18} className="shrink-0" style={{ color: current.status === 'completed' ? T.up : T.accentText }} />
             <div className="grow min-w-[220px]">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-sm font-semibold">{current.title}</span>
-                <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded-full" style={{ color: current.status === 'completed' ? T.up : T.accent, border: `1px solid ${current.status === 'completed' ? T.up : T.accent}` }}>{current.status}</span>
+                <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded-full" style={{ color: current.status === 'completed' ? T.up : T.accentText, border: `1px solid ${current.status === 'completed' ? T.up : T.accent}` }}>{current.status}</span>
               </div>
               <div className="text-xs mt-0.5 truncate" style={{ color: T.faint }}>{COMMITMENT_RULE_META[current.ruleType]?.result(current.ruleValue) || current.ruleValue}</div>
             </div>
@@ -203,7 +203,7 @@ export function CoachCommitmentCard({ commitments = [], trades = [], scopeLabel 
               {current.evaluatedCount ? `${fmtN(current.adherenceRate, 0)}% followed` : 'Waiting for a trade'}
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
-              <button type="button" onClick={() => setShowDetails((value) => !value)} className="rounded-md px-2.5 py-1.5 text-xs font-semibold" style={{ color: T.accent, border: `1px solid ${T.line}` }}>{showDetails ? 'See less' : 'See more'}</button>
+              <button type="button" onClick={() => setShowDetails((value) => !value)} className="rounded-md px-2.5 py-1.5 text-xs font-semibold" style={{ color: T.accentText, border: `1px solid ${T.line}` }}>{showDetails ? 'See less' : 'See more'}</button>
               {active && (
                 <button type="button" onClick={() => window.confirm('Archive this commitment? Its results will stay in your history.') && onUpdate({ ...active, status: 'archived' })} className="flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs" style={{ color: T.dim, border: `1px solid ${T.line}` }}>
                   <Archive size={12} /> Archive

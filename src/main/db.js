@@ -406,6 +406,19 @@ export function initDb() {
   if (!commitmentCols.has('baselineTradeIds')) db.exec("ALTER TABLE coach_commitments ADD COLUMN baselineTradeIds TEXT DEFAULT '[]'")
   const eventCols = new Set(db.prepare('PRAGMA table_info(economic_events)').all().map((c) => c.name))
   if (!eventCols.has('actual')) db.exec("ALTER TABLE economic_events ADD COLUMN actual TEXT DEFAULT ''")
+  // The preset win/loss reasons lost their em dashes. Trades already tagged with the
+  // old wording have to move with them: REASONS is keyed by the exact label, so a
+  // stale value silently stops scoring against its rating attribute and stops
+  // matching the leak rules. Idempotent — a second run matches nothing.
+  const renamedReasons = [
+    ['Patient — waited for setup', 'Patient, waited for setup'],
+    ['Just variance — good trade', 'Just variance, good trade'],
+    ['Impatient — forced it', 'Impatient, forced it'],
+    ['Greed — overstayed/oversized', 'Greed: overstayed/oversized']
+  ]
+  const renameReason = db.prepare('UPDATE trades SET reason = ? WHERE reason = ?')
+  for (const [from, to] of renamedReasons) renameReason.run(to, from)
+
   const restartedAt = new Date().toISOString()
   db.prepare("UPDATE trading_sessions SET status = 'interrupted', endedAt = ?, updatedAt = ? WHERE status = 'active'")
     .run(restartedAt, restartedAt)
@@ -455,17 +468,17 @@ function seedDemoTrades() {
   const day = 86_400_000
   const at = (daysAgo, time) => `${localStamp(new Date(Date.now() - daysAgo * day)).slice(0, 10)} ${time}`
   const demo = [
-    { d: 12, t: '09:42', symbol: 'NQ', dir: 'Long', pnl: 420, emotion: 'Disciplined', reason: 'Patient — waited for setup', setup: 'VWAP reclaim', notes: 'Waited for the retest instead of chasing the first push.' },
-    { d: 12, t: '11:15', symbol: 'NQ', dir: 'Short', pnl: -180, emotion: 'Neutral', reason: 'Just variance — good trade', setup: 'Range fade', notes: 'Good setup, it just did not work. Stop respected.' },
+    { d: 12, t: '09:42', symbol: 'NQ', dir: 'Long', pnl: 420, emotion: 'Disciplined', reason: 'Patient, waited for setup', setup: 'VWAP reclaim', notes: 'Waited for the retest instead of chasing the first push.' },
+    { d: 12, t: '11:15', symbol: 'NQ', dir: 'Short', pnl: -180, emotion: 'Neutral', reason: 'Just variance, good trade', setup: 'Range fade', notes: 'Good setup, it just did not work. Stop respected.' },
     { d: 11, t: '10:05', symbol: 'ES', dir: 'Long', pnl: 310, emotion: 'Confident', reason: 'Followed my plan', setup: 'Break & retest', notes: 'Textbook. Sized properly, took the first target.' },
-    { d: 9, t: '09:35', symbol: 'NQ', dir: 'Long', pnl: -240, emotion: 'Anxious', reason: 'Just variance — good trade', setup: 'Opening drive', notes: 'Stopped out on the open. Fine trade, wrong day.' },
+    { d: 9, t: '09:35', symbol: 'NQ', dir: 'Long', pnl: -240, emotion: 'Anxious', reason: 'Just variance, good trade', setup: 'Opening drive', notes: 'Stopped out on the open. Fine trade, wrong day.' },
     { d: 9, t: '09:58', symbol: 'NQ', dir: 'Long', pnl: -560, emotion: 'Revenge', reason: 'Revenge trade', setup: 'None', notes: 'Straight back in after the stop. No setup, just wanted it back.' },
     { d: 9, t: '10:20', symbol: 'NQ', dir: 'Long', pnl: -390, emotion: 'Revenge', reason: 'Revenge trade', setup: 'None', notes: 'Doubled down. Should have shut the platform after the first one.' },
     { d: 8, t: '10:47', symbol: 'ES', dir: 'Short', pnl: 265, emotion: 'Disciplined', reason: 'Proper risk & sizing', setup: 'Failed breakout', notes: 'Back to the plan. Half size after yesterday.' },
     { d: 5, t: '11:30', symbol: 'MES', dir: 'Long', pnl: -150, emotion: 'FOMO', reason: 'FOMO / chased', setup: 'None', notes: 'Chased an extended move because it was running without me.' },
     { d: 4, t: '09:40', symbol: 'NQ', dir: 'Long', pnl: 480, emotion: 'Disciplined', reason: 'Let my winner run', setup: 'VWAP reclaim', notes: 'Held to the second target for once.' },
     { d: 3, t: '10:12', symbol: 'ES', dir: 'Long', pnl: 195, emotion: 'Confident', reason: 'Clean setup / good read', setup: 'Break & retest', notes: 'Clean read on the reclaim.' },
-    { d: 2, t: '13:05', symbol: 'NQ', dir: 'Short', pnl: -210, emotion: 'Greedy', reason: 'Greed — overstayed/oversized', setup: 'Range fade', notes: 'Was green, held for a home run, gave it all back.' },
+    { d: 2, t: '13:05', symbol: 'NQ', dir: 'Short', pnl: -210, emotion: 'Greedy', reason: 'Greed: overstayed/oversized', setup: 'Range fade', notes: 'Was green, held for a home run, gave it all back.' },
     { d: 1, t: '09:48', symbol: 'NQ', dir: 'Long', pnl: 355, emotion: 'Disciplined', reason: 'Followed my plan', setup: 'VWAP reclaim', notes: 'Stuck to the checklist. Boring and profitable.' }
   ]
 

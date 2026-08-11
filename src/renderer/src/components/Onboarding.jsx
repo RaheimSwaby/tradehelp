@@ -35,7 +35,7 @@ export function Onboarding({ settings, accounts = [], onSaveSettings, onImport, 
       <div className="rounded-xl w-full max-w-lg" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
         <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${T.line}` }}>
           <div className="flex items-center gap-2">
-            <Sparkles size={18} style={{ color: T.accent }} />
+            <Sparkles size={18} style={{ color: T.accentText }} />
             <span className="text-sm font-semibold">Welcome to TradeHelp</span>
           </div>
           <div className="flex items-center gap-1.5"><Dot i={0} /><Dot i={1} /><Dot i={2} /></div>
@@ -44,14 +44,14 @@ export function Onboarding({ settings, accounts = [], onSaveSettings, onImport, 
         <div className="px-6 py-5">
           {step === 0 && (
             <div className="space-y-4">
-              <div className="text-lg font-semibold">Your journal. Your machine. <span style={{ color: T.accent }}>Your edge.</span></div>
+              <div className="text-lg font-semibold">Your journal. Your machine. <span style={{ color: T.accentText }}>Your edge.</span></div>
               {[
                 [Lock, 'Private by design', 'Trades, notes and screenshots live in a local database. Nothing leaves this computer.'],
                 [Gauge, 'Grades your process, not your luck', 'A trader rating built from discipline, risk and patience — plus achievements that reward not tilting.'],
                 [Zap, 'Trade Mode has your back', 'A pre-trade checklist, daily goal, and a full-screen max-loss alarm when you cross your limit.']
               ].map(([Icon, title, desc]) => (
                 <div key={title} className="flex gap-3 items-start">
-                  <Icon size={18} className="mt-0.5 shrink-0" style={{ color: T.accent }} />
+                  <Icon size={18} className="mt-0.5 shrink-0" style={{ color: T.accentText }} />
                   <div>
                     <div className="text-sm font-semibold">{title}</div>
                     <div className="text-xs mt-0.5" style={{ color: T.dim }}>{desc}</div>
@@ -64,7 +64,7 @@ export function Onboarding({ settings, accounts = [], onSaveSettings, onImport, 
 
           {step === 1 && (
             <div className="space-y-4">
-              <div className="flex items-center gap-2 text-sm font-semibold"><ShieldCheck size={16} style={{ color: T.accent }} /> Set your guardrails</div>
+              <div className="flex items-center gap-2 text-sm font-semibold"><ShieldCheck size={16} style={{ color: T.accentText }} /> Set your guardrails</div>
               <div className="text-xs" style={{ color: T.dim }}>These power Trade Mode — the pre-flight checklist you confirm before going live, and the max-loss alarm that fires if the day goes wrong. You can change them anytime in Trade Mode.</div>
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Daily profit goal ($)">
@@ -85,7 +85,7 @@ export function Onboarding({ settings, accounts = [], onSaveSettings, onImport, 
               <div className="text-sm font-semibold">Bring in your trades</div>
               <button type="button" onClick={() => setImporting(true)}
                 className="w-full text-left rounded-lg p-4 th-card flex gap-3 items-start" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
-                <Upload size={18} className="mt-0.5 shrink-0" style={{ color: T.accent }} />
+                <Upload size={18} className="mt-0.5 shrink-0" style={{ color: T.accentText }} />
                 <div>
                   <div className="text-sm font-semibold">Import your broker CSV <span className="text-xs font-normal px-1.5 py-0.5 rounded ml-1" style={{ color: T.up, border: `1px solid ${T.line}` }}>recommended</span></div>
                   <div className="text-xs mt-0.5" style={{ color: T.dim }}>NinjaTrader, Tradovate and TopstepX exports are recognized automatically — any other CSV maps in a click. Imported trades count as Verified on your rating.</div>
@@ -93,7 +93,7 @@ export function Onboarding({ settings, accounts = [], onSaveSettings, onImport, 
               </button>
               <button type="button" onClick={() => onDone('journal')}
                 className="w-full text-left rounded-lg p-4 th-card flex gap-3 items-start" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
-                <PencilLine size={18} className="mt-0.5 shrink-0" style={{ color: T.accent }} />
+                <PencilLine size={18} className="mt-0.5 shrink-0" style={{ color: T.accentText }} />
                 <div>
                   <div className="text-sm font-semibold">Start logging manually</div>
                   <div className="text-xs mt-0.5" style={{ color: T.dim }}>Head to the Journal and log your next trade — there's a simple mode that takes under a minute per trade.</div>
@@ -104,7 +104,7 @@ export function Onboarding({ settings, accounts = [], onSaveSettings, onImport, 
                 Trading a prop-firm challenge? Add your account in the Prop Firm tab — targets, drawdown and payouts are tracked per account.
               </div>
               <button type="button" onClick={() => window.api?.openExternal?.('https://discord.gg/ATfcXSD4j')}
-                className="w-full rounded-lg p-3 flex gap-2 items-center justify-center text-sm font-semibold th-card" style={{ background: T.accentSoft, border: `1px solid ${T.accent}`, color: T.accent }}>
+                className="w-full rounded-lg p-3 flex gap-2 items-center justify-center text-sm font-semibold th-card" style={{ background: T.accentSoft, border: `1px solid ${T.accent}`, color: T.accentText }}>
                 <MessagesSquare size={16} /> Join the TradeHelp Discord
               </button>
             </div>

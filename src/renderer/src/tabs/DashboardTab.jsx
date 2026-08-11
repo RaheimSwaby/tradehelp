@@ -1,12 +1,12 @@
 import React, { useState, useMemo } from 'react'
-import { Share2, GitCompareArrows, Quote, Flame, CalendarDays, Snowflake, TrendingDown } from 'lucide-react'
+import { Share2, GitCompareArrows, Flame, CalendarDays, Snowflake, TrendingDown, X } from 'lucide-react'
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, ReferenceLine, Tooltip, Cell } from 'recharts'
 import { T, mono, withAlpha } from '../theme.js'
 import { fmt$, fmtN } from '../utils.js'
 import { computeStats, computeLeaks } from '../stats.js'
 import { Stat, Panel, EmptyChart } from '../components/Shared.jsx'
 import { PnlCalendar } from './JournalTab.jsx'
-import { buildDataAwareGreeting, quoteOfTheDay } from '../quotes.js'
+import { buildDataAwareGreeting } from '../quotes.js'
 import { formatClockMinute } from '../sessionClock.js'
 import { CoachBriefCard } from '../components/CoachBriefCard.jsx'
 import { PreflightStatus } from '../components/PreflightStatus.jsx'
@@ -21,42 +21,44 @@ function LeakFinder({ trades }) {
   if (!leak.taggedCount) return null // no emotion/reason tags yet — nothing to analyze
   if (!leak.worst) {
     return (
-      <div className="rounded-lg p-4" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
-        <div className="text-xs uppercase tracking-wider" style={{ color: T.faint }}>💸 Leak finder</div>
-        <div className="text-sm mt-1" style={{ color: T.up }}>No behavioral leaks detected — the trades where you flagged an emotion or reason are net positive. Keep it disciplined. 🧊</div>
+      <div className="th-dashboard-priority rounded-lg p-4" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
+        <div className="th-dashboard-priority-kicker">Current focus</div>
+        <div className="text-lg font-semibold mt-1" style={{ color: T.text }}>No behavioral leak is costing you right now.</div>
+        <div className="text-sm mt-1" style={{ color: T.dim }}>Tagged trades are net positive. Keep following the same process.</div>
       </div>
     )
   }
   const worst = leak.worst
   const max = Math.abs(leak.leaks[0].pnl) || 1
   return (
-    <div className="rounded-xl p-4" style={{ background: `linear-gradient(150deg, ${T.surface2}, ${withAlpha(T.down, 0.09)})`, border: `1px solid ${withAlpha(T.down, 0.4)}` }}>
-      <div className="text-xs uppercase tracking-wider font-semibold" style={{ color: T.down }}>💸 Your biggest leak</div>
-      <div className="mt-1.5 flex items-end justify-between gap-3 flex-wrap">
-        <div>
-          <div className="text-lg font-semibold" style={{ color: T.text }}>{worst.label} <span className="text-xs font-normal" style={{ color: T.dim }}>— {worst.blurb}</span></div>
-          <div className="text-xs mt-0.5" style={{ color: T.faint }}>{worst.n} trades tagged</div>
+    <section className="th-dashboard-priority rounded-xl p-4" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
+      <div className="th-dashboard-priority-kicker">Current focus</div>
+      <div className="mt-1.5 flex items-start justify-between gap-5 flex-wrap">
+        <div className="min-w-0">
+          <h2 className="th-dashboard-priority-title">{worst.label}</h2>
+          <div className="text-sm mt-1" style={{ color: T.dim }}>{worst.blurb}</div>
+          <div className="text-xs mt-1" style={{ color: T.faint }}>{worst.n} tagged trade{worst.n === 1 ? '' : 's'}</div>
         </div>
-        <div className="text-3xl font-extrabold" style={{ ...mono, color: T.down }}>{fmt$(worst.pnl)}</div>
+        <div className="th-dashboard-priority-value" style={{ ...mono, color: T.down }}>{fmt$(worst.pnl)}</div>
       </div>
       {leak.leaks.length > 1 && (
-        <div className="mt-3 space-y-1.5">
+        <div className="th-leak-ranking mt-4">
           {leak.leaks.slice(0, 4).map((c) => (
-            <div key={c.id} className="flex items-center gap-2">
-              <div className="text-xs w-28 shrink-0 truncate" style={{ color: T.dim }}>{c.label}</div>
-              <div className="h-2 rounded-full grow overflow-hidden" style={{ background: T.surface }}>
+            <div key={c.id} className="th-leak-row">
+              <div className="text-xs truncate" style={{ color: T.dim }}>{c.label}</div>
+              <div className="h-1.5 rounded-full grow overflow-hidden" style={{ background: T.surface2 }}>
                 <div className="h-full rounded-full" style={{ width: `${(Math.abs(c.pnl) / max) * 100}%`, background: T.down, transition: 'width .4s' }} />
               </div>
-              <div className="text-xs w-16 text-right shrink-0" style={{ ...mono, color: T.down }}>{fmt$(c.pnl)}</div>
+              <div className="text-xs text-right shrink-0" style={{ ...mono, color: T.down }}>{fmt$(c.pnl)}</div>
             </div>
           ))}
         </div>
       )}
       <div className="text-xs mt-3" style={{ color: T.dim }}>
-        {leak.totalLeaked < 0 && <>Trades where tilt showed up have cost you <b style={{ color: T.down }}>{fmt$(leak.totalLeaked)}</b> in total. </>}
-        Every dollar here is fixable — that's the whole point.
+        {leak.totalLeaked < 0 && <>Tagged leaks total <strong style={{ color: T.down }}>{fmt$(leak.totalLeaked)}</strong>. </>}
+        Use this as the first behavior to review, not as a verdict on the session.
       </div>
-    </div>
+    </section>
   )
 }
 
@@ -70,20 +72,20 @@ function TimeframePerformance({ stats }) {
   if (!hasData) return null
   return (
     <Panel title="Performance by timeframe">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="th-timeframe-groups">
         {groups.map(([label, rows]) => (
-          <div key={label}>
-            <div className="text-[10px] uppercase font-semibold mb-1.5" style={{ color: T.faint }}>{label}</div>
-            <div className="space-y-1">
+          <section key={label} className="th-timeframe-group">
+            <div className="th-timeframe-label" style={{ color: T.faint }}>{label}</div>
+            <div>
               {(rows || []).filter((row) => row.name !== '—').slice(0, 5).map((row) => (
-                <div key={row.name} className="grid grid-cols-[44px_1fr_auto] items-center gap-2 text-xs py-1" style={{ borderBottom: `1px solid ${T.line}` }}>
+                <div key={row.name} className="th-timeframe-row" style={{ borderBottom: `1px solid ${T.line}` }}>
                   <strong style={{ color: T.text }}>{row.name}</strong>
-                  <span style={{ color: T.dim }}>{row.n} trades · {fmtN(row.wr, 0)}%</span>
-                  <span style={{ ...mono, color: row.pnl >= 0 ? T.up : T.down }}>{fmt$(row.pnl)}</span>
+                  <span className="th-timeframe-sample" style={{ color: T.dim }}>{row.n} trades · {fmtN(row.wr, 0)}% win</span>
+                  <span className="th-timeframe-pnl" style={{ ...mono, color: row.pnl >= 0 ? T.up : T.down }}>{fmt$(row.pnl)}</span>
                 </div>
               ))}
             </div>
-          </div>
+          </section>
         ))}
       </div>
     </Panel>
@@ -98,24 +100,13 @@ function SymbolPerformance({ stats }) {
   const sortedSymbols = [...rows].sort((a, b) => b.n - a.n).slice(0, 6)
 
   return (
-    <Panel title="Performance by Symbol" right={<span className="text-[10px]" style={{ color: T.faint }}>{rows.length} traded symbol{rows.length === 1 ? '' : 's'}</span>}>
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+    <Panel title="Performance by symbol" right={<span className="text-[10px]" style={{ color: T.faint }}>{rows.length} traded symbol{rows.length === 1 ? '' : 's'}</span>}>
+      <div className="th-symbol-ranking">
         {sortedSymbols.map((s) => (
-          <div key={s.name} className="p-3 rounded-lg flex items-center justify-between" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
-            <div>
-              <div className="font-bold text-sm" style={{ color: T.text, ...mono }}>{s.name}</div>
-              <div className="text-xs mt-0.5" style={{ color: T.dim }}>
-                {s.n} trade{s.n === 1 ? '' : 's'} · <span style={{ color: s.wr >= 50 ? T.up : T.down }}>{fmtN(s.wr, 0)}% WR</span>
-              </div>
-            </div>
-            <div className="text-right" style={mono}>
-              <div className="font-bold text-sm" style={{ color: s.pnl >= 0 ? T.up : T.down }}>
-                {fmt$(s.pnl)}
-              </div>
-              <div className="text-[10px]" style={{ color: T.faint }}>
-                {s.n ? `${fmt$(s.pnl / s.n)}/trade` : ''}
-              </div>
-            </div>
+          <div key={s.name} className="th-symbol-row" style={{ borderBottom: `1px solid ${T.line}` }}>
+            <strong style={{ color: T.text, ...mono }}>{s.name}</strong>
+            <span style={{ color: T.dim }}>{s.n} trade{s.n === 1 ? '' : 's'} · {fmtN(s.wr, 0)}% win</span>
+            <span className="text-right" style={{ ...mono, color: s.pnl >= 0 ? T.up : T.down }}>{fmt$(s.pnl)}</span>
           </div>
         ))}
       </div>
@@ -127,7 +118,7 @@ function RiskConsistency({ stats }) {
   if (!stats.riskSample) return null
   return (
     <Panel title="Risk consistency" right={<span className="text-[10px]" style={{ color: T.faint }}>{stats.riskSample} trades with risk</span>}>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         <Stat label="Average risk" value={fmt$(stats.avgRisk)} />
         <Stat label="Median risk" value={fmt$(stats.medianRisk)} tone="accent" />
         <Stat label="Inside band" value={`${stats.riskConsistentCount}/${stats.riskSample}`} sub={`${fmtN(stats.riskConsistency, 0)}% consistent`} />
@@ -169,8 +160,8 @@ function TimingTooltip({ active, payload, kind }) {
           <div style={{ color: T.dim }}>{fmtN(row.wr, 0)}% win rate</div>
         </>
       )}
-      {row.rCount > 0 && <div style={{ color: T.accent }}>Average realized R {row.avgR >= 0 ? '+' : ''}{fmtN(row.avgR, 2)}R · {row.rCount} risk-tagged</div>}
-      <div className="mt-0.5" style={{ color: row.total >= 8 ? T.accent : T.faint }}>
+      {row.rCount > 0 && <div style={{ color: T.accentText }}>Average realized R {row.avgR >= 0 ? '+' : ''}{fmtN(row.avgR, 2)}R · {row.rCount} risk-tagged</div>}
+      <div className="mt-0.5" style={{ color: row.total >= 8 ? T.accentText : T.faint }}>
         {row.total} trade{row.total === 1 ? '' : 's'} · {row.total >= 8 ? 'confirmed sample' : 'building sample'}
       </div>
     </div>
@@ -197,7 +188,7 @@ export function TimingPerformance({ stats, onDrilldown }) {
   const summaryLine = (row, kind) => `${kind === 'hour' ? `${fmtHour(row.k)}–${fmtHour(Number(row.k) + 1)}` : row.day}: ${row.total} trades, ${fmtN(row.wr, 0)}% wins, ${fmt$(row.expectancy)}/trade${row.rCount ? `, ${row.avgR >= 0 ? '+' : ''}${fmtN(row.avgR, 2)}R average` : ''}`
 
   return (
-    <Panel title="Timing performance" right={<span className="text-[10px]" style={{ color: T.faint }}>{coverage}</span>}>
+    <Panel className="th-chart-timing" title="Timing performance" right={<span className="text-[10px]" style={{ color: T.faint }}>{coverage}</span>}>
       {summaries.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2 mb-4">
           {summaries.map(({ key, Icon, label, value, stat, color, bg, border }) => (
@@ -215,7 +206,7 @@ export function TimingPerformance({ stats, onDrilldown }) {
 
       {timingSample > 0 && summaries.length === 0 && (
         <div className="mb-4 rounded-lg px-3 py-2 text-xs" role="status" style={{ background: T.surface2, border: `1px solid ${T.line}`, color: T.dim }}>
-          <strong style={{ color: T.accent }}>Confidence building.</strong> Confirmed best/worst guidance appears after {timingMinSample} trades in a bucket. When at least {timingRMinSample} have recorded risk, signed realized R leads the ranking so one oversized winner cannot create a false edge.
+          <strong style={{ color: T.accentText }}>Confidence building.</strong> Confirmed best/worst guidance appears after {timingMinSample} trades in a bucket. When at least {timingRMinSample} have recorded risk, signed realized R leads the ranking so one oversized winner cannot create a false edge.
         </div>
       )}
 
@@ -289,6 +280,7 @@ export function Dashboard({ stats, trades, accounts = [], settings, journalData,
   const [shareOpen, setShareOpen] = useState(false)
   const [selectedDay, setSelectedDay] = useState(null)
   const [compareOpen, setCompareOpen] = useState(false)
+  const [calendarOpen, setCalendarOpen] = useState(false)
   const hasProp = accounts.length > 0
   const propIds = useMemo(() => new Set(accounts.map((a) => a.id)), [accounts])
   const viewTrades = useMemo(() => {
@@ -318,7 +310,6 @@ export function Dashboard({ stats, trades, accounts = [], settings, journalData,
   const vStats = useMemo(() => (view === 'all' || !hasProp ? stats : computeStats(viewTrades)), [view, hasProp, stats, viewTrades])
   const empty = vStats.n === 0
   const currentDate = new Date(now)
-  const dailyQuote = quoteOfTheDay(currentDate)
   const greeting = buildDataAwareGreeting({ now: currentDate, personalClock, cleanStreak: vStats.nonTiltStreak, name: settings?.traderName })
   const inferredWindows = personalSchedule?.windows || []
   const windowSummary = inferredWindows.map((window) => `${formatClockMinute(window.start)}–${formatClockMinute(window.end)}`).join(' · ')
@@ -331,11 +322,11 @@ export function Dashboard({ stats, trades, accounts = [], settings, journalData,
   }
 
   return (
-    <div className="space-y-4">
+    <div className="th-page th-page-dashboard space-y-4">
       {demoCount > 0 && (
         <div className="rounded-xl px-4 py-3 flex items-center gap-3" style={{ background: T.surface, border: `1px solid ${T.accent}` }}>
           <div className="flex-1">
-            <div className="text-sm font-semibold" style={{ color: T.accent }}>Sample trades</div>
+            <div className="text-sm font-semibold" style={{ color: T.accentText }}>Sample trades</div>
             <div className="text-xs mt-1" style={{ color: T.dim }}>
               These {demoCount} trades are examples so you can see how the dashboard, leak finder and coach look with a filled-in journal. They disappear the moment you log a real trade or import a CSV.
             </div>
@@ -349,48 +340,28 @@ export function Dashboard({ stats, trades, accounts = [], settings, journalData,
         </div>
       )}
 
-      <PreflightStatus rules={rules} todayNet={todayNet} maxLoss={maxLoss} live={live} onBreak={settings?.onBreak === 'true'} onAction={onOpenTradeMode} />
-
-      <div className="rounded-xl px-4 py-3" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
-        <div className="text-sm font-semibold" style={{ color: T.text }}>{greeting}</div>
-        {windowSummary && (
-          <div className="text-xs mt-1" style={{ color: T.dim }}>
-            Personal windows: <span style={{ ...mono, color: T.accent }}>{windowSummary}</span> · {scheduleSource}
-          </div>
-        )}
-        {personalSchedule?.metadata?.confidence?.state === 'building' && (
-          <div className="text-xs mt-1" role="status" style={{ color: T.faint }}>{personalSchedule.metadata.confidence.message}</div>
-        )}
-        {personalSchedule?.scheduleShift?.message && (
-          <div className="text-xs mt-1" role="status" style={{ color: T.accent }}>{personalSchedule.scheduleShift.message}</div>
-        )}
-      </div>
-      <div className="rounded-xl px-4 py-2.5 flex items-start gap-2.5" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
-        <Quote size={14} style={{ color: T.accent, flexShrink: 0, marginTop: 3 }} />
-        <div className="min-w-0 leading-snug">
-          <div><span className="text-sm" style={{ color: T.dim }}>{dailyQuote.text}</span><span className="text-xs ml-1.5" style={{ color: T.faint }}>— {dailyQuote.author}</span></div>
-          <div className="text-[10px] mt-1" style={{ color: T.faint }}>{dailyQuote.source} · attribution: {dailyQuote.attribution}</div>
+      <div className="th-dashboard-preflight-grid">
+        <PreflightStatus rules={rules} todayNet={todayNet} maxLoss={maxLoss} live={live} onBreak={settings?.onBreak === 'true'} onAction={onOpenTradeMode} />
+        <div className="th-dashboard-greeting px-4 py-3">
+          <div className="text-sm font-semibold" style={{ color: T.text }}>{greeting}</div>
+          {windowSummary && <div className="text-xs mt-1" style={{ color: T.dim }}>Usual window <span style={{ ...mono, color: T.text }}>{windowSummary}</span> · {scheduleSource}</div>}
+          {personalSchedule?.metadata?.confidence?.state === 'building' && <div className="text-xs mt-1" role="status" style={{ color: T.faint }}>{personalSchedule.metadata.confidence.message}</div>}
+          {personalSchedule?.scheduleShift?.message && <div className="text-xs mt-1" role="status" style={{ color: T.accentText }}>{personalSchedule.scheduleShift.message}</div>}
+        </div>
+        <div className="th-dashboard-controls flex items-center justify-end gap-2 px-3">
+          {hasProp && <div className="flex items-center gap-1">
+            {[['all', 'All accounts'], ['live', 'Live'], ['prop', 'Prop']].map(([k, label]) => (
+              <button key={k} type="button" onClick={() => setView(k)} className="text-xs px-2.5 py-1.5"
+                style={{ color: view === k ? T.accentText : T.dim, borderBottom: `2px solid ${view === k ? T.accent : 'transparent'}` }}>{label}</button>
+            ))}
+          </div>}
+          <button type="button" onClick={() => setShareOpen(true)} disabled={empty} className="flex items-center gap-1.5 px-3 py-2 rounded-md text-xs font-semibold"
+            style={{ color: empty ? T.faint : T.text, border: `1px solid ${T.line}` }}><Share2 size={14} /> Share report</button>
         </div>
       </div>
+      <LeakFinder trades={viewTrades} />
       <CoachBriefCard trades={viewTrades} stats={vStats} settings={settings} journalData={journalData} onSaveSettings={onSaveSettings} onOpenCoach={onOpenCoach} />
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        {hasProp ? <div className="flex items-center gap-1.5">
-          {[['all', 'All'], ['live', 'Live'], ['prop', 'Prop']].map(([k, label]) => (
-            <button key={k} type="button" onClick={() => setView(k)} className="text-xs px-3 py-1.5 rounded-md font-semibold"
-              style={{ background: view === k ? T.surface2 : 'transparent', color: view === k ? T.accent : T.dim, border: `1px solid ${view === k ? T.line : 'transparent'}` }}>
-              {label}
-            </button>
-          ))}
-          <span className="text-xs ml-1" style={{ color: T.faint }}>
-            {view === 'prop' ? 'prop-tagged trades only' : view === 'live' ? 'live / personal trades only' : 'live + prop combined'}
-          </span>
-        </div> : <span />}
-        <button type="button" onClick={() => setShareOpen(true)} disabled={empty} className="flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-semibold"
-          style={{ background: empty ? T.surface2 : T.accent, color: empty ? T.faint : '#1A1306' }}>
-          <Share2 size={15} /> Share report
-        </button>
-      </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="th-dashboard-summary grid grid-cols-2 md:grid-cols-4 gap-3">
         <Stat label="Net P&L" value={fmt$(vStats.totalPnl)} tone={vStats.totalPnl >= 0 ? 'up' : 'down'} sub={vStats.totalFees > 0 ? `${vStats.n} trades · ${fmt$(vStats.totalFees)} fees paid` : `${vStats.n} trades`} spark={vStats.equity.map((e) => e.equity)} feedback={view === 'all' ? pnlFeedback : null} />
         <Stat label="Win rate" value={`${fmtN(vStats.winRate, 1)}%`} sub={`expectancy ${fmt$(vStats.expectancy)}/trade`} />
         <Stat label="Profit factor" value={vStats.profitFactor === Infinity ? '∞' : fmtN(vStats.profitFactor, 2)} tone="accent" sub="gross win ÷ gross loss" />
@@ -401,24 +372,34 @@ export function Dashboard({ stats, trades, accounts = [], settings, journalData,
         <Stat label="Streaks" value={String(vStats.currentStreak)} sub={`best ${vStats.bestWin}W · worst ${vStats.worstLoss}L`} />
       </div>
 
-      <RiskConsistency stats={vStats} />
-      <SymbolPerformance stats={vStats} />
-      <TimeframePerformance stats={vStats} />
-      <LeakFinder trades={viewTrades} />
+      <div className="th-dashboard-insights">
+        <RiskConsistency stats={vStats} />
+        <SymbolPerformance stats={vStats} />
+        <TimeframePerformance stats={vStats} />
+      </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl px-3 py-2.5" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
+      <div className="th-session-review flex flex-wrap items-center gap-5 rounded-xl px-3 py-2.5" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
         <div>
           <div className="text-sm font-semibold">Session review</div>
-          <div className="text-xs mt-0.5" style={{ color: T.faint }}>Select a calendar day to replay it, or compare two trade days side by side.</div>
+          <div className="text-xs mt-0.5" style={{ color: T.faint }}>Review sessions to reinforce habits and improve outcomes.</div>
         </div>
-        <button type="button" onClick={() => setCompareOpen(true)} className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-semibold"
-          style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}` }}>
+        <div className="th-session-review-metrics flex flex-1 items-center justify-around gap-4 text-xs">
+          <span>Total sessions <strong>{vStats.daily?.length || 0}</strong></span>
+          <span>Winning <strong style={{ color: T.up }}>{(vStats.daily || []).filter((day) => day.pnl > 0).length}</strong></span>
+          <span>Losing <strong style={{ color: T.down }}>{(vStats.daily || []).filter((day) => day.pnl < 0).length}</strong></span>
+          <span>Best <strong style={{ color: T.up }}>{fmt$(Math.max(0, ...(vStats.daily || []).map((day) => day.pnl)))}</strong></span>
+          <span>Worst <strong style={{ color: T.down }}>{fmt$(Math.min(0, ...(vStats.daily || []).map((day) => day.pnl)))}</strong></span>
+        </div>
+        <button type="button" onClick={() => setCompareOpen(true)} className="flex items-center gap-1.5 rounded-md px-3 py-2 text-xs font-semibold"
+          style={{ background: T.surface2, color: T.accentText, border: `1px solid ${T.line}` }}>
           <GitCompareArrows size={15} /> Compare sessions
         </button>
+        <button type="button" onClick={() => setCalendarOpen(true)} className="flex items-center gap-1.5 rounded-md px-3 py-2 text-xs font-semibold"
+          style={{ background: T.surface2, color: T.text, border: `1px solid ${T.line}` }}><CalendarDays size={15} /> P&amp;L calendar</button>
       </div>
-      <PnlCalendar trades={viewTrades} plans={viewPlans} dayLogs={journalData?.dayLogs || []} onSelectDay={setSelectedDay} />
 
-      <Panel title="Equity curve">
+      <div className="th-dashboard-charts">
+      <Panel className="th-chart-equity" title="Equity curve">
         {empty ? <EmptyChart /> : (
           <ResponsiveContainer width="100%" height={240}>
             <AreaChart data={vStats.equity} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
@@ -438,7 +419,7 @@ export function Dashboard({ stats, trades, accounts = [], settings, journalData,
         )}
       </Panel>
 
-      <Panel title="Daily P&L (last 14 active days)">
+      <Panel className="th-chart-daily" title="Daily P&L (last 14 active days)">
         {empty ? <EmptyChart /> : (
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={vStats.daily} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
@@ -453,6 +434,7 @@ export function Dashboard({ stats, trades, accounts = [], settings, journalData,
       </Panel>
 
       <TimingPerformance stats={vStats} onDrilldown={openTimingDrilldown} />
+      </div>
       {compareOpen && (
         <SessionCompareModal
           trades={viewTrades}
@@ -460,6 +442,14 @@ export function Dashboard({ stats, trades, accounts = [], settings, journalData,
           onOpenTrade={(trade) => { setCompareOpen(false); onOpenTrade?.(trade) }}
           onClose={() => setCompareOpen(false)}
         />
+      )}
+      {calendarOpen && (
+        <div className="th-overlay fixed inset-0 z-[80] flex items-center justify-center p-5" style={{ background: 'rgba(0,0,0,.72)' }} onMouseDown={(event) => { if (event.target === event.currentTarget) setCalendarOpen(false) }}>
+          <div className="w-full max-w-6xl max-h-[90vh] overflow-auto rounded-xl p-4" style={{ background: T.bg, border: `1px solid ${T.line}` }}>
+            <div className="flex items-center justify-between mb-3"><strong>P&amp;L calendar</strong><button type="button" onClick={() => setCalendarOpen(false)} style={{ color: T.dim }}><X size={18} /></button></div>
+            <PnlCalendar trades={viewTrades} plans={viewPlans} dayLogs={journalData?.dayLogs || []} onSelectDay={(day) => { setCalendarOpen(false); setSelectedDay(day) }} />
+          </div>
+        </div>
       )}
       {selectedDay && (
         <DayReplayModal

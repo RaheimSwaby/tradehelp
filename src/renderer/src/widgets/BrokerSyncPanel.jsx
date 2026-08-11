@@ -107,7 +107,7 @@ export function BrokerSyncPanel({ accounts = [], onReload }) {
           <div className="text-sm font-semibold">Development simulator</div>
           <div className="text-xs mt-1" style={{ color: T.faint }}>Local test data only. This connector cannot view an account or place an order.</div>
         </div>
-        <span className="text-[10px] uppercase font-semibold px-2 py-1 rounded" style={{ color: T.accent, border: `1px solid ${T.accent}` }}>Dev only</span>
+        <span className="text-[10px] uppercase font-semibold px-2 py-1 rounded" style={{ color: T.accentText, border: `1px solid ${T.accent}` }}>Dev only</span>
       </div>
 
       {!connections.length && (
@@ -152,7 +152,7 @@ export function BrokerSyncPanel({ accounts = [], onReload }) {
                     <>
                       <button type="button" title="Sync now" disabled={Boolean(busy)} onClick={() => sync(connection)}
                         className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold"
-                        style={{ color: T.accent, border: `1px solid ${T.line}`, opacity: busy && !syncing ? 0.5 : 1 }}>
+                        style={{ color: T.accentText, border: `1px solid ${T.line}`, opacity: busy && !syncing ? 0.5 : 1 }}>
                         <RefreshCw size={13} className={syncing ? 'animate-spin' : ''} /> Sync now
                       </button>
                       {connection.lastCursor && (
@@ -170,7 +170,7 @@ export function BrokerSyncPanel({ accounts = [], onReload }) {
                   ) : (
                     <button type="button" disabled={Boolean(busy)} onClick={() => connect(connection)}
                       className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold"
-                      style={{ color: T.accent, border: `1px solid ${T.line}` }}>
+                      style={{ color: T.accentText, border: `1px solid ${T.line}` }}>
                       <Link2 size={13} /> Reconnect
                     </button>
                   )}

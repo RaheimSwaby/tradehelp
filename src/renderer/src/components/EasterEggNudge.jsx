@@ -10,7 +10,7 @@ export function EasterEggNudge({ nudge, onClose, onBreak }) {
       <div className="flex items-center gap-2 px-4 py-3" style={{ borderBottom: `1px solid ${T.line}` }}>
         {nudge.action === 'break'
           ? <PauseCircle size={17} style={{ color: T.down }} />
-          : <Sparkles size={17} style={{ color: T.accent }} />}
+          : <Sparkles size={17} style={{ color: T.accentText }} />}
         <div className="text-sm font-semibold">{nudge.title}</div>
         <button type="button" onClick={onClose} className="ml-auto p-1 rounded hover:opacity-70" style={{ color: T.faint }} title="Close"><X size={16} /></button>
       </div>

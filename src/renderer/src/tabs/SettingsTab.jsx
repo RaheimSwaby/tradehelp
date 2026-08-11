@@ -13,6 +13,12 @@ const COACH_VOICE_VALUES = new Set(['supportive', 'balanced', 'tough-love'])
 const COACH_CONTEXT_MODES = new Set(['fast', 'balanced', 'deep'])
 const PERSONAL_CLOCK_SOURCES = new Set(['auto', 'manual'])
 const CLOCK_TIME = /^(?:[01]\d|2[0-3]):[0-5]\d$/
+const SETTINGS_SECTIONS = [
+  'License', 'Data & backup', 'Broker sync', 'Mobile sync', 'Instrument profiles',
+  'Chart data', "What's new", 'Appearance 2.0', 'Coach & personal clock',
+  'Model provider', 'Getting Ollama running', 'Market data & ticker',
+  'Economic calendar & news', 'Feedback & support'
+]
 
 export function parsePersonalClockWindows(value) {
   let parsed
@@ -53,7 +59,7 @@ export function normalizeSettingsForDisplay(settings = {}) {
 export function TrialBanner({ days }) {
   return (
     <div className="w-full" style={{ background: T.accentSoft, borderBottom: `1px solid ${T.line}` }}>
-      <div className="max-w-6xl mx-auto px-4 py-1.5 text-xs flex items-center gap-2" style={{ color: T.accent }}>
+      <div className="max-w-6xl mx-auto px-4 py-1.5 text-xs flex items-center gap-2" style={{ color: T.accentText }}>
         <span>Free trial — <strong>{days} day{days === 1 ? '' : 's'}</strong> left</span>
         <button type="button" onClick={() => window.api.openExternal(CHECKOUT_URL)} className="ml-auto px-2.5 py-0.5 rounded-md font-semibold" style={{ background: T.accent, color: '#1A1306' }}>Get it — $50</button>
       </div>
@@ -108,7 +114,7 @@ export function LicensePanel({ license, onChange }) {
     <Panel title="License">
       <div className="text-sm mb-3">
         {st === 'active' ? <span style={{ color: T.up }}>● Licensed — full version unlocked.</span>
-          : st === 'trial' ? <span style={{ color: T.accent }}>● Free trial — {license.daysLeft} day{license.daysLeft === 1 ? '' : 's'} left.</span>
+          : st === 'trial' ? <span style={{ color: T.accentText }}>● Free trial — {license.daysLeft} day{license.daysLeft === 1 ? '' : 's'} left.</span>
           : <span style={{ color: T.down }}>● Trial ended — enter a key to unlock.</span>}
       </div>
       {st === 'active' ? (
@@ -368,7 +374,7 @@ function ReleaseNotesPanel() {
                 <span className="flex items-center gap-2 text-sm font-semibold" style={{ color: T.text, ...mono }}>
                   v{v}
                   {isCurrent && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold" style={{ background: T.accentSoft, color: T.accent }}>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold" style={{ background: T.accentSoft, color: T.accentText }}>
                       you have this
                     </span>
                   )}
@@ -485,21 +491,21 @@ function ModelSelect({ value, onChange, placeholder }) {
           value={value} onChange={onChange} placeholder={placeholder} />
         <button type="button" onClick={browse} disabled={loading}
           className="rounded px-2.5 py-1.5 text-xs font-medium whitespace-nowrap"
-          style={{ background: T.surface2, border: `1px solid ${T.line}`, color: loading ? T.faint : T.accent }}>
+          style={{ background: T.surface2, border: `1px solid ${T.line}`, color: loading ? T.faint : T.accentText }}>
           {loading ? 'Loading…' : 'Browse'}
         </button>
       </div>
       {err && <div className="text-xs" style={{ color: T.down }}>{err} — is Ollama running?</div>}
       {models !== null && !err && (
         models.length === 0
-          ? <div className="text-xs" style={{ color: T.faint }}>No models found. Run: <span style={{ ...mono, color: T.accent }}>ollama pull llama3.2</span></div>
+          ? <div className="text-xs" style={{ color: T.faint }}>No models found. Run: <span style={{ ...mono, color: T.accentText }}>ollama pull llama3.2</span></div>
           : <div className="flex flex-wrap gap-1.5">
               {models.map((m) => (
                 <button key={m} type="button" onClick={() => onChange({ target: { value: m } })}
                   className="text-xs px-2 py-0.5 rounded-full"
                   style={{
                     background: value === m ? T.accentSoft : T.surface2,
-                    color: value === m ? T.accent : T.dim,
+                    color: value === m ? T.accentText : T.dim,
                     border: `1px solid ${value === m ? T.accent : T.line}`
                   }}>
                   {m}
@@ -523,7 +529,7 @@ function TestKey({ type, value, url }) {
   }
   return (
     <div className="mt-1.5 flex items-center gap-2">
-      <button type="button" onClick={run} disabled={r?.loading} className="text-xs px-2 py-1 rounded-md" style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}` }}>{r?.loading ? 'Testing…' : 'Test key'}</button>
+      <button type="button" onClick={run} disabled={r?.loading} className="text-xs px-2 py-1 rounded-md" style={{ background: T.surface2, color: T.accentText, border: `1px solid ${T.line}` }}>{r?.loading ? 'Testing…' : 'Test key'}</button>
       {r && !r.loading && <span className="text-xs" style={{ color: r.ok ? T.up : T.down }}>{r.msg}</span>}
     </div>
   )
@@ -534,7 +540,7 @@ function PillButton({ active, children, onClick, title }) {
   return (
     <button type="button" title={title} onClick={onClick}
       className="text-xs px-3 py-1.5 rounded-md font-semibold"
-      style={{ background: active ? T.surface2 : 'transparent', color: active ? T.accent : T.dim, border: `1px solid ${active ? T.accent : T.line}` }}>
+      style={{ background: active ? T.surface2 : 'transparent', color: active ? T.accentText : T.dim, border: `1px solid ${active ? T.accent : T.line}` }}>
       {children}
     </button>
   )
@@ -566,10 +572,42 @@ function ThemePreview({ preset, active, onClick }) {
   )
 }
 
+function AppearanceLivePreview({ settings }) {
+  // Mixed symbols and directions so the sample exercises both P&L colours and reads
+  // like a journal rather than one instrument copied five times.
+  const rows = [
+    ['2026-07-30 11:10', 'MES', 'Long', '-$75.00', 'C', '1:1.0', '3m', 'Double bottom'],
+    ['2026-07-29 14:20', 'EURUSD', 'Short', '$128.40', 'A', '1:2.0', '20m', 'Liquidity sweep'],
+    ['2026-07-28 09:50', 'NQ', 'Long', '$100.00', 'A', '1:1.2', '1h 3m', 'Wick'],
+    ['2026-07-27 09:50', 'MES', 'Short', '-$37.50', 'C', '—', '5m', 'Neutral'],
+    ['2026-07-24 10:15', 'BTC', 'Long', '$46.25', 'B', '1:1.5', '5m', 'Break + retest']
+  ]
+  const backdrop = !settings.backdrop || settings.backdrop === 'on' ? 'constellation' : settings.backdrop
+  return (
+    <Panel title="Live preview" className="th-settings-preview-panel" right={<span className="text-xs" style={{ color: T.faint }}>Current settings</span>}>
+      {/* The backdrop is a full-screen animated canvas and isn't reproduced in here,
+          so this no longer claims to preview it. */}
+      <p className="text-xs mb-3" style={{ color: T.dim }}>A compact journal preview using the active palette and number style.</p>
+      <div className="th-settings-preview-surface" data-backdrop={backdrop}>
+        <div className="th-preview-window">
+          <div className="th-preview-toolbar flex gap-2"><button type="button" tabIndex={-1}>Simple journal</button><button type="button" tabIndex={-1}>No-trade day</button><button type="button" tabIndex={-1}>Undo delete</button><button type="button" tabIndex={-1}>Import CSV</button></div>
+          <div className="th-preview-fields grid grid-cols-4 gap-3">
+            <Field label="Symbol"><div>MES</div></Field><Field label="Direction"><div style={{ color: T.up }}>Long</div></Field><Field label="Account"><div>Live / personal</div></Field><Field label="Setup / strategy"><div>Double bottom</div></Field>
+          </div>
+          <table className="w-full text-xs mt-4"><thead><tr><th className="text-left">Time</th><th>Symbol</th><th>Dir</th><th>P&amp;L</th><th>Grade</th><th>R:R</th><th>Held</th><th className="text-left">Setup</th></tr></thead>
+            <tbody>{rows.map((row) => <tr key={row[0]}>{row.map((cell, index) => <td key={index} className={index === 0 || index === 7 ? 'text-left' : 'text-center'} style={index === 3 ? { color: cell.startsWith('-') ? T.down : T.up, ...mono } : index === 2 ? { color: cell === 'Long' ? T.up : T.down } : undefined}>{cell}</td>)}</tr>)}</tbody>
+          </table>
+        </div>
+      </div>
+    </Panel>
+  )
+}
+
 export function SettingsTab({ settings, onSave, license, onLicenseChange, onReload, accounts = [], profiles = [], onAddProfile, onUpdateProfile, onDeleteProfile }) {
   const [s, setS] = useState(() => normalizeSettingsForDisplay(settings))
   const [manualWindows, setManualWindows] = useState(() => parsePersonalClockWindows(settings?.personalClockManualWindows))
   const [test, setTest] = useState(null)
+  const [settingsSection, setSettingsSection] = useState('Appearance 2.0')
   useEffect(() => {
     const normalized = normalizeSettingsForDisplay(settings)
     setS(normalized)
@@ -651,8 +689,27 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
     }
   }
 
+  function openSettingsSection(title) {
+    setSettingsSection(title)
+    const panels = document.querySelectorAll('.th-page-settings > .th-panel')
+    const target = [...panels].find((panel) => {
+      const heading = panel.querySelector(':scope > div:first-child > div:first-child')
+      return heading?.textContent?.trim().startsWith(title)
+    })
+    target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className={`th-page th-page-settings grid grid-cols-1 md:grid-cols-2 gap-4${settingsSection === 'Appearance 2.0' ? ' th-settings-focus-appearance' : ''}`}>
+      <aside className="th-settings-nav" aria-label="Settings sections">
+        <div className="th-settings-nav-title">Settings</div>
+        {SETTINGS_SECTIONS.map((title) => (
+          <button key={title} type="button" onClick={() => openSettingsSection(title)}
+            className={settingsSection === title ? 'th-settings-nav-on' : ''}>
+            <span aria-hidden="true" />{title.replace(' 2.0', '')}
+          </button>
+        ))}
+      </aside>
       <LicensePanel license={license} onChange={onLicenseChange} />
       <DataPanel onReload={onReload} />
       <BrokerSyncPanel accounts={accounts} onReload={onReload} />
@@ -660,35 +717,30 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
       <InstrumentProfilesPanel profiles={profiles} onAdd={onAddProfile} onUpdate={onUpdateProfile} onDelete={onDeleteProfile} />
       <PriceBarsPanel />
       <ReleaseNotesPanel />
-      <Panel title="Appearance 2.0">
-        <Field label="Theme presets">
-          <div className="grid grid-cols-2 gap-2 mt-1">
-            {THEME_PRESETS.map((p) => (
-              <ThemePreview key={p.key} preset={p} active={(s.themePreset || 'classic') === p.key}
-                onClick={() => saveNext({ ...s, themePreset: p.key, themeMode: p.mode, accentColor: p.accentKey })} />
-            ))}
-          </div>
-        </Field>
-        <div className="mt-3" />
-        <Field label="Theme mode">
-          <div className="flex flex-wrap gap-1.5 mt-1">
-            {[['dark', 'Dark'], ['light', 'Light']].map(([k, label]) => (
-              <PillButton key={k} active={(s.themeMode || 'dark') === k}
-                onClick={() => saveNext({ ...s, themeMode: k, themePreset: 'custom' })}>
-                {label}
-              </PillButton>
-            ))}
-          </div>
-        </Field>
+      <Panel title="Appearance 2.0" className="th-settings-appearance-panel">
+        <div className="grid grid-cols-[1fr_154px] gap-3">
+          <Field label="Theme presets">
+            <select style={inputStyle} className={inp} value={s.themePreset || 'classic'} onChange={(event) => {
+              const preset = THEME_PRESETS.find((item) => item.key === event.target.value)
+              if (preset) saveNext({ ...s, themePreset: preset.key, themeMode: preset.mode, accentColor: preset.accentKey })
+              else saveNext({ ...s, themePreset: event.target.value })
+            }}>
+              {THEME_PRESETS.map((preset) => <option key={preset.key} value={preset.key}>{preset.name}</option>)}
+              {!THEME_PRESETS.some((preset) => preset.key === s.themePreset) && <option value="custom">Custom</option>}
+            </select>
+          </Field>
+          <Field label="Mode"><div className="th-settings-mode flex">{[['dark', 'Dark'], ['light', 'Light']].map(([k, label]) => <PillButton key={k} active={(s.themeMode || 'dark') === k} onClick={() => saveNext({ ...s, themeMode: k, themePreset: 'custom' })}>{label}</PillButton>)}</div></Field>
+        </div>
         <div className="mt-3" />
         <Field label="Animated backdrop">
-          <div className="flex flex-wrap gap-1.5 mt-1">
+          <div className="th-backdrop-options grid grid-cols-4 gap-2 mt-1">
             {BACKDROP_OPTIONS.map(([k, label]) => {
               const cur = !s.backdrop || s.backdrop === 'on' ? 'constellation' : s.backdrop
               return (
-                <PillButton key={k} active={cur === k} onClick={() => saveNext({ ...s, backdrop: k })}>
-                  {label}
-                </PillButton>
+                <button key={k} type="button" data-backdrop={k} className="th-backdrop-choice" onClick={() => saveNext({ ...s, backdrop: k })}
+                  style={{ color: cur === k ? T.accentText : T.dim, border: `1px solid ${cur === k ? T.accent : T.line}` }}>
+                  <span className="th-backdrop-swatch" /><span>{label}</span>
+                </button>
               )
             })}
           </div>
@@ -705,38 +757,13 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
           </div>
         </Field>
         <div className="mt-3" />
-        <Field label="Go-Time color">
-          <div className="flex flex-wrap gap-1.5 mt-1">
-            {GO_TIME_OPTIONS.map((o) => (
-              <PillButton key={o.key} active={(s.goTimeAccent || 'orange') === o.key}
-                onClick={() => saveNext({ ...s, goTimeAccent: o.key })}>
-                <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ background: o.accent }} />{o.label}</span>
-              </PillButton>
-            ))}
-          </div>
-        </Field>
+        <Field label="Go-Time color"><select style={inputStyle} className={inp} value={s.goTimeAccent || 'orange'} onChange={(event) => saveNext({ ...s, goTimeAccent: event.target.value })}>{GO_TIME_OPTIONS.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}</select></Field>
         <div className="mt-3" />
-        <Field label="Profit / loss style">
-          <div className="flex flex-wrap gap-1.5 mt-1">
-            {PNL_STYLE_OPTIONS.map((o) => (
-              <PillButton key={o.key} active={(s.pnlStyle || 'classic') === o.key}
-                onClick={() => saveNext({ ...s, pnlStyle: o.key })}>
-                {o.label}
-              </PillButton>
-            ))}
-          </div>
-        </Field>
+        <div className="grid grid-cols-2 gap-3">
+        <Field label="Profit / loss style"><select style={inputStyle} className={inp} value={s.pnlStyle || 'classic'} onChange={(event) => saveNext({ ...s, pnlStyle: event.target.value })}>{PNL_STYLE_OPTIONS.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}</select></Field>
         <div className="mt-3" />
-        <Field label="Number font">
-          <div className="flex flex-wrap gap-1.5 mt-1">
-            {FONT_OPTIONS.map((o) => (
-              <PillButton key={o.key} active={(s.fontStyle || 'default') === o.key}
-                onClick={() => saveNext({ ...s, fontStyle: o.key })}>
-                {o.label}
-              </PillButton>
-            ))}
-          </div>
-        </Field>
+        <Field label="Number font"><select style={inputStyle} className={inp} value={s.fontStyle || 'default'} onChange={(event) => saveNext({ ...s, fontStyle: event.target.value })}>{FONT_OPTIONS.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}</select></Field>
+        </div>
         <div className="mt-4 rounded-lg p-3" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -774,6 +801,7 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
           )}
         </div>
       </Panel>
+      {settingsSection === 'Appearance 2.0' && <AppearanceLivePreview settings={s} />}
       {false && (
       <Panel title="Appearance">
         <Field label="Theme">
@@ -784,7 +812,7 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
                 <button key={k} type="button"
                   onClick={() => { const next = { ...s, themeMode: k }; setS(next); onSave(next) }}
                   className="text-xs px-3 py-1.5 rounded-md font-semibold"
-                  style={{ background: active ? T.surface2 : 'transparent', color: active ? T.accent : T.dim, border: `1px solid ${active ? T.accent : T.line}` }}>
+                  style={{ background: active ? T.surface2 : 'transparent', color: active ? T.accentText : T.dim, border: `1px solid ${active ? T.accent : T.line}` }}>
                   {label}
                 </button>
               )
@@ -801,7 +829,7 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
                 <button key={k} type="button"
                   onClick={() => { const next = { ...s, backdrop: k }; setS(next); onSave(next) }}
                   className="text-xs px-3 py-1.5 rounded-md font-semibold"
-                  style={{ background: active ? T.surface2 : 'transparent', color: active ? T.accent : T.dim, border: `1px solid ${active ? T.accent : T.line}` }}>
+                  style={{ background: active ? T.surface2 : 'transparent', color: active ? T.accentText : T.dim, border: `1px solid ${active ? T.accent : T.line}` }}>
                   {label}
                 </button>
               )
@@ -897,7 +925,7 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
                 </button>
               </div>
             ))}
-            <button type="button" onClick={() => setManualWindows((current) => [...current, { start: '', end: '' }])} className="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-semibold" style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}` }}>
+            <button type="button" onClick={() => setManualWindows((current) => [...current, { start: '', end: '' }])} className="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-semibold" style={{ background: T.surface2, color: T.accentText, border: `1px solid ${T.line}` }}>
               <Plus size={13} /> Add window
             </button>
             {!manualWindowsComplete && <div className="text-xs" style={{ color: T.down }}>Manual mode needs at least one complete window with different start and end times.</div>}
@@ -970,8 +998,8 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
       <Panel title="Getting Ollama running">
         <ol className="text-sm space-y-2" style={{ color: T.dim }}>
           <li>1. Install Ollama from ollama.com</li>
-          <li>2. In a terminal: <span style={{ color: T.accent, ...mono }}>ollama pull llama3.2</span></li>
-          <li>3. For chart analysis: <span style={{ color: T.accent, ...mono }}>ollama pull llama3.2-vision</span></li>
+          <li>2. In a terminal: <span style={{ color: T.accentText, ...mono }}>ollama pull llama3.2</span></li>
+          <li>3. For chart analysis: <span style={{ color: T.accentText, ...mono }}>ollama pull llama3.2-vision</span></li>
           <li>4. Ollama serves on localhost:11434 automatically</li>
           <li>5. Hit "Test model" to load it once and confirm, then use the AI Coach tab</li>
         </ol>
@@ -985,7 +1013,7 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
         </label>
         <div className="space-y-3 mt-3">
           <Field label="Ticker symbols (comma-separated)">
-            <input style={inputStyle} className={inp} value={s.tickerSymbols ?? ''} onChange={set('tickerSymbols')} placeholder="SPY,QQQ,BTC,ETH" />
+            <input style={inputStyle} className={inp} value={s.tickerSymbols ?? ''} onChange={set('tickerSymbols')} placeholder="SPY,QQQ,EURUSD,BTC" />
           </Field>
           <Field label="Finnhub API key (optional — real-time stocks)">
             <input type="password" style={inputStyle} className={inp} value={s.finnhubKey ?? ''} onChange={set('finnhubKey')} placeholder="leave blank for keyless / delayed" />
@@ -1036,16 +1064,16 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
           <button type="button" onClick={() => window.api.openExternal(SITE_URL)}
             className="rounded-md px-3 py-2.5 text-sm font-semibold flex items-center justify-center gap-2"
             style={{ background: T.surface2, color: T.text, border: `1px solid ${T.line}` }}>
-            <Globe size={16} style={{ color: T.accent }} /> Website
+            <Globe size={16} style={{ color: T.accentText }} /> Website
           </button>
           <button type="button" onClick={() => window.api.openExternal('https://instagram.com/tradehelp.app')}
             className="rounded-md px-3 py-2.5 text-sm font-semibold flex items-center justify-center gap-2"
             style={{ background: T.surface2, color: T.text, border: `1px solid ${T.line}` }}>
-            <Instagram size={16} style={{ color: T.accent }} /> Instagram
+            <Instagram size={16} style={{ color: T.accentText }} /> Instagram
           </button>
         </div>
         <p className="mt-3 text-xs" style={{ color: T.faint }}>
-          Join the <span style={{ color: T.accent }}>Discord</span> to report bugs, request features and talk trades — or DM <span style={{ color: T.accent }}>@tradehelp.app</span> on Instagram. <span style={{ color: T.accent }}>trade-help.app</span> has the install and broker-import guides, plus the latest download.
+          Join the <span style={{ color: T.accentText }}>Discord</span> to report bugs, request features and talk trades — or DM <span style={{ color: T.accentText }}>@tradehelp.app</span> on Instagram. <span style={{ color: T.accentText }}>trade-help.app</span> has the install and broker-import guides, plus the latest download.
         </p>
       </Panel>
     </div>

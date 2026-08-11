@@ -10,7 +10,7 @@ export function FeedbackPrompt({ onShare, onDismiss }) {
       style={{ background: T.surface, border: `1px solid ${T.accent}`, boxShadow: '0 16px 44px rgba(0,0,0,0.5)' }}>
       <button type="button" onClick={onDismiss} title="Dismiss" className="absolute top-2.5 right-2.5 p-1 rounded hover:opacity-70" style={{ color: T.faint }}><X size={15} /></button>
       <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: T.text }}>
-        <MessagesSquare size={16} style={{ color: T.accent }} /> How's TradeHelp treating you?
+        <MessagesSquare size={16} style={{ color: T.accentText }} /> How's TradeHelp treating you?
       </div>
       <p className="text-xs mt-1.5 leading-relaxed" style={{ color: T.dim }}>
         You've journaled a good stretch of trades now. TradeHelp is built by one trader — a quick word on what's working, or what's missing, genuinely shapes what ships next.

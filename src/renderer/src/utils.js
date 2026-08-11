@@ -24,19 +24,19 @@ export const TILT = ['FOMO', 'Greedy', 'Revenge']
 
 // Self-diagnosed cause of a win/loss. Each maps to the rating attribute it should move
 // (good = nudge up, bad = nudge down). attr:null = honest-but-neutral (lucky win / good loss) — moves nothing.
-export const WIN_REASONS = ['Patient — waited for setup', 'Followed my plan', 'Clean setup / good read', 'Proper risk & sizing', 'Let my winner run', 'Got lucky (no real edge)']
-export const LOSS_REASONS = ['Just variance — good trade', 'Impatient — forced it', 'FOMO / chased', 'Greed — overstayed/oversized', 'Revenge trade', 'Moved / ignored my stop', 'Oversized', 'Bad setup']
+export const WIN_REASONS = ['Patient, waited for setup', 'Followed my plan', 'Clean setup / good read', 'Proper risk & sizing', 'Let my winner run', 'Got lucky (no real edge)']
+export const LOSS_REASONS = ['Just variance, good trade', 'Impatient, forced it', 'FOMO / chased', 'Greed: overstayed/oversized', 'Revenge trade', 'Moved / ignored my stop', 'Oversized', 'Bad setup']
 export const REASONS = {
-  'Patient — waited for setup': { attr: 'patience', good: true },
+  'Patient, waited for setup': { attr: 'patience', good: true },
   'Followed my plan': { attr: 'discipline', good: true },
   'Clean setup / good read': { attr: 'edge', good: true },
   'Proper risk & sizing': { attr: 'risk', good: true },
   'Let my winner run': { attr: 'discipline', good: true },
   'Got lucky (no real edge)': { attr: null, good: false },
-  'Just variance — good trade': { attr: null, good: true },
-  'Impatient — forced it': { attr: 'patience', good: false },
+  'Just variance, good trade': { attr: null, good: true },
+  'Impatient, forced it': { attr: 'patience', good: false },
   'FOMO / chased': { attr: 'discipline', good: false },
-  'Greed — overstayed/oversized': { attr: 'discipline', good: false },
+  'Greed: overstayed/oversized': { attr: 'discipline', good: false },
   'Revenge trade': { attr: 'discipline', good: false },
   'Moved / ignored my stop': { attr: 'risk', good: false },
   'Oversized': { attr: 'risk', good: false },

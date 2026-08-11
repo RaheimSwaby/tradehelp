@@ -11,7 +11,7 @@ export function UpdateAvailableBanner({ info, onClose }) {
 
   return (
     <div className="w-full" style={{ background: T.accentSoft, borderBottom: `1px solid ${T.line}` }}>
-      <div className="max-w-6xl mx-auto px-4 py-1.5 text-xs flex items-center gap-2" style={{ color: T.accent }}>
+      <div className="max-w-6xl mx-auto px-4 py-1.5 text-xs flex items-center gap-2" style={{ color: T.accentText }}>
         <ArrowUpCircle size={14} />
         <span>TradeHelp <strong>v{info.version}</strong> is available — you're on v{info.current}.</span>
         <button
@@ -20,7 +20,7 @@ export function UpdateAvailableBanner({ info, onClose }) {
           className="ml-auto px-2.5 py-0.5 rounded-md font-semibold"
           style={{ background: T.accent, color: '#1A1306' }}
         >{label}</button>
-        <button type="button" onClick={onClose} title="Dismiss" style={{ color: T.accent }}><X size={14} /></button>
+        <button type="button" onClick={onClose} title="Dismiss" style={{ color: T.accentText }}><X size={14} /></button>
       </div>
     </div>
   )

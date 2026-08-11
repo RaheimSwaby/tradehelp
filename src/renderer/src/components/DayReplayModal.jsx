@@ -77,7 +77,7 @@ export function PlanScreenshot({ plan }) {
 }
 
 function eventMeta(kind) {
-  if (kind === 'plan') return { label: 'Plan', color: T.accent, Icon: ClipboardList }
+  if (kind === 'plan') return { label: 'Plan', color: T.accentText, Icon: ClipboardList }
   if (kind === 'entry') return { label: 'Entry', color: T.text, Icon: LogIn }
   if (kind === 'exit') return { label: 'Exit', color: T.up, Icon: LogOut }
   return { label: 'No-trade log', color: T.dim, Icon: CalendarOff }

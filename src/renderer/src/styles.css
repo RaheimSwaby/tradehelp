@@ -1,169 +1,202 @@
 @import "tailwindcss";
 
-html, body, #root { height: 100%; }
-body { margin: 0; background: #0E1117; transition: background .3s ease; }
-
-/* tighten default scrollbars to match the desk theme (var tracks light/dark) */
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb { background: var(--th-line, #2A3344); border-radius: 6px; }
-::-webkit-scrollbar-thumb:hover { background: var(--th-accent, #F5B642); }
-::-webkit-scrollbar-track { background: transparent; }
-
-/* lift + accent-glow on interactive cards (stat tiles, account & playbook cards) */
-.th-card { transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease; }
-.th-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.38);
-  border-color: var(--th-accent, #F5B642) !important;
+:root {
+  --th-space-1: 4px;
+  --th-space-2: 8px;
+  --th-space-3: 12px;
+  --th-space-4: 16px;
+  --th-space-5: 24px;
+  --th-radius-control: 3px;
+  --th-radius-panel: 5px;
+  --th-surface-base: var(--th-bg, #0E1117);
+  --th-surface-panel: var(--th-surface, #151B26);
+  --th-surface-inset: var(--th-surface-2, #1C2433);
+  --th-border-quiet: color-mix(in srgb, var(--th-line, #2A3344) 70%, transparent);
+  --th-border-strong: color-mix(in srgb, var(--th-line, #2A3344) 86%, var(--th-text, #E6EAF2));
 }
 
-/* ── polish pass ── */
-/* tactile press feedback on every button */
-button { transition: opacity .12s ease, transform .1s ease, background .15s ease, color .15s ease, border-color .15s ease; }
-button:not(:disabled):active { transform: scale(0.97); }
+html, body, #root { min-height: 100%; }
+body {
+  margin: 0;
+  background: #0E1117;
+  color: var(--th-text, #E6EAF2);
+  font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-feature-settings: "kern" 1;
+  text-rendering: optimizeLegibility;
+  line-height: 1.45;
+  transition: background .3s ease;
+}
 
-/* Tailwind v4 dropped cursor:pointer from its button reset, so every button here was
-   showing the plain arrow. A disabled control keeps the default cursor on purpose. */
+/* Quiet scrollbars keep long workspaces usable without adding another visual rail. */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--th-line, #2A3344) 58%, var(--th-dim, #768096));
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover { background-color: color-mix(in srgb, var(--th-line, #2A3344) 32%, var(--th-dim, #768096)); }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* The shell is intentionally wide: TradeHelp is a workstation, not a centered blog. */
+.th-app-shell { width: min(100%, 1680px); }
+
+.th-app-header {
+  padding: 10px 12px;
+  border-radius: 10px;
+  box-shadow: 0 12px 34px color-mix(in srgb, var(--th-bg, #0E1117) 58%, transparent);
+}
+
+.th-brand { min-width: max-content; }
+.th-header-readouts { min-width: 0; }
+
+/* cards: subtle transition, no lift or glow on hover */
+.th-card { transition: background .15s ease, border-color .15s ease; }
+
+/* buttons: clean transition, no scale press */
+button { transition: opacity .12s ease, background .15s ease, color .15s ease, border-color .15s ease; }
+
+/* Tailwind v4 dropped cursor:pointer from its button reset */
 button:not(:disabled), [role="button"]:not([aria-disabled="true"]) { cursor: pointer; }
 button:disabled { cursor: default; }
 
-/* accent focus ring on inputs — replaces the browser default outline */
+/* accent focus ring on inputs */
 input:focus-visible, select:focus-visible, textarea:focus-visible {
   outline: none;
   border-color: var(--th-accent, #F5B642) !important;
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--th-accent, #F5B642) 25%, transparent);
 }
 
-/* Same ring for buttons and links, which previously had no visible focus at all —
-   tabbing through the app left you with no idea where you were. Offset so the ring
-   sits outside the control rather than crowding its label. */
+/* focus ring for buttons and links */
 button:focus-visible, a:focus-visible, [role="button"]:focus-visible, summary:focus-visible {
   outline: 2px solid var(--th-accent, #F5B642);
-  /* Kept tight: several cards use overflow-hidden, which clips anything drawn far
-     outside the control. 1px still reads as a ring without getting cropped. */
   outline-offset: 1px;
 }
 
-/* nav tabs: slight lift + glow when the mouse floats over them */
+/* nav tabs: clean hover with subtle background shift, no glow or lift */
 .th-tab {
   position: relative;
-  isolation: isolate;
+  flex: 0 0 auto;
+  min-height: 34px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  font-weight: 520;
+  transition: background .18s ease, color .18s ease;
+}
+.th-tab svg { transition: color .18s ease; }
+.th-tab:hover { background: color-mix(in srgb, var(--th-surface-2, #171D27) 72%, transparent) !important; }
+.th-tab-on::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: -7px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--th-accent, #F5B642);
+}
+
+.th-tabpanel { min-width: 0; }
+
+/* Journal: a stable capture rail beside a much roomier evidence table. */
+.th-journal-workspace { align-items: start; }
+.th-journal-entry-panel,
+.th-journal-history { box-shadow: 0 14px 38px color-mix(in srgb, var(--th-bg, #0E1117) 55%, transparent); }
+.th-panel-title { min-height: 28px; }
+
+.th-form-section {
+  padding: 13px 0 15px;
+  border-top: 1px solid color-mix(in srgb, var(--th-line, #2A3344) 74%, transparent);
+}
+.th-form-section:first-of-type { padding-top: 8px; }
+.th-section-label {
+  margin-bottom: 9px;
+  color: var(--th-faint, #768096);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .11em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.th-history-toolbar {
+  background: color-mix(in srgb, var(--th-surface, #111722) 90%, transparent);
+}
+
+.th-journal-summary > div {
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--th-line, #2A3344);
+  border-radius: 7px;
+  background: var(--th-surface-2, #171D27);
+}
+.th-journal-summary span,
+.th-journal-summary strong { display: block; }
+.th-journal-summary span {
+  margin-bottom: 3px;
+  color: var(--th-faint, #768096);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.th-journal-summary strong {
   overflow: hidden;
-  transition: transform .24s ease, box-shadow .35s ease, background .24s ease, color .24s ease, border-color .24s ease;
+  color: var(--th-text, #E6EAF2);
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.th-tab::before {
-  content: "";
-  position: absolute;
-  inset: 1px;
-  z-index: -1;
-  border-radius: inherit;
-  background: linear-gradient(135deg, color-mix(in srgb, var(--th-accent, #F5B642) 18%, transparent), transparent 58%);
-  opacity: 0;
-  transform: translateX(-8px);
-  transition: opacity .35s ease, transform .35s ease;
-}
-.th-tab svg { transition: filter .45s ease, transform .24s ease; }
-.th-tab:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 8px 18px rgba(0, 0, 0, .18);
-}
-.th-tab:hover::before {
-  opacity: 1;
-  transform: translateX(0);
-}
-.th-tab:hover svg {
-  filter: drop-shadow(0 0 6px var(--th-accent, #F5B642));
-  transform: translateY(-1px) scale(1.05);
-}
-.th-tab-on svg {
-  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--th-accent, #F5B642) 60%, transparent));
-  animation: th-tab-sprite-glow 1.25s ease both;
-}
-@keyframes th-tab-sprite-glow {
-  0% {
-    filter: drop-shadow(0 0 0 color-mix(in srgb, var(--th-accent, #F5B642) 0%, transparent));
-    transform: translateY(0) scale(1);
-  }
-  28% {
-    filter: drop-shadow(0 0 10px color-mix(in srgb, var(--th-accent, #F5B642) 85%, transparent));
-    transform: translateY(-1px) scale(1.08);
-  }
-  100% {
-    filter: drop-shadow(0 0 5px color-mix(in srgb, var(--th-accent, #F5B642) 60%, transparent));
-    transform: translateY(0) scale(1);
+
+.th-journal-history tbody tr { transition: background .12s ease; }
+.th-journal-history tbody tr:hover { background: color-mix(in srgb, var(--th-accent, #F5B642) 5%, transparent); }
+
+@media (min-width: 1024px) {
+  .th-journal-workspace { grid-template-columns: minmax(410px, .82fr) minmax(0, 1.75fr); }
+  .th-journal-entry-panel {
+    position: sticky;
+    top: 10px;
+    max-height: calc(100vh - 24px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .th-tab,
-  .th-tab::before,
-  .th-tab svg {
-    transition: none;
-    animation: none;
-  }
-  .th-tab:hover,
-  .th-tab:hover svg,
-  .th-tab:hover::before {
-    transform: none;
-  }
+@media (min-width: 1440px) {
+  .th-journal-workspace { grid-template-columns: minmax(470px, .88fr) minmax(0, 1.9fr); }
 }
 
-/* tab content: a restrained perspective settle with one accent-light pass */
+@media (max-width: 760px) {
+  .th-app-header { align-items: flex-start; }
+  .th-header-readouts { justify-content: flex-start; width: 100%; }
+  .th-journal-summary { grid-template-columns: 1fr !important; }
+}
+
+/* tab content: simple fade-in, no perspective or light sweep */
 .th-cinematic {
-  position: relative;
-  transform-origin: 50% 0;
-  backface-visibility: hidden;
-  animation: th-cinematic-in .58s cubic-bezier(.16, 1, .3, 1) both;
+  animation: th-fade-in .28s ease both;
 }
-.th-cinematic::after {
-  content: "";
-  display: none;
-  position: absolute;
-  top: -1px;
-  left: 0;
-  right: 0;
-  height: 1px;
-  pointer-events: none;
-  background: linear-gradient(90deg, transparent 0%, var(--th-accent, #F5B642) 48%, transparent 100%);
-  box-shadow: 0 0 7px color-mix(in srgb, var(--th-accent, #F5B642) 70%, transparent);
-  will-change: transform, opacity;
-  transform: scaleX(.08) translateY(-3px);
-  opacity: 0;
+@keyframes th-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
-@keyframes th-cinematic-in {
-  0% { opacity: 0; transform: perspective(1100px) rotateX(-4deg) translateY(10px) scale(.995); }
-  58% { opacity: 1; }
-  100% { opacity: 1; transform: perspective(1100px) rotateX(0) translateY(0) scale(1); }
-}
-/* Start Day arms with a compact control flip; Go Live follows with a focus-lock reveal. */
+
+/* Go Time trigger: clean, no 3D flip */
 .th-go-trigger {
-  transform-style: preserve-3d;
-  backface-visibility: hidden;
-  will-change: transform, filter;
+  transition: opacity .12s ease, filter .15s ease;
 }
-.th-go-trigger-on {
-  animation: th-go-trigger-flip .36s cubic-bezier(.34, 1.56, .64, 1) both;
-}
-@keyframes th-go-trigger-flip {
-  0% { transform: perspective(500px) rotateX(0) scale(1); filter: brightness(1); }
-  46% { transform: perspective(500px) rotateX(82deg) scale(.96); filter: brightness(1.3); }
-  52% { transform: perspective(500px) rotateX(-76deg) scale(.96); filter: brightness(1.35); }
-  100% { transform: perspective(500px) rotateX(0) scale(1); filter: brightness(1); }
-}
+
+/* Go Time transition: simple fade overlay, no curtain or scan line */
 .th-go-mode-transition {
   overflow: hidden;
   display: grid;
   place-items: center;
-  animation: th-go-overlay .76s ease both;
+  animation: th-go-fade .5s ease both;
 }
 .th-go-curtain {
   position: absolute;
   inset: 0;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--th-accent, #FF6A3D) 24%, #090B10), rgba(9, 11, 16, .94)),
-    #090B10;
-  transform-origin: center;
-  animation: th-go-curtain-open .76s cubic-bezier(.16, 1, .3, 1) both;
+  background: color-mix(in srgb, var(--th-accent, #FF6A3D) 18%, #090B10);
 }
 .th-go-lock {
   position: relative;
@@ -172,8 +205,7 @@ button:focus-visible, a:focus-visible, [role="button"]:focus-visible, summary:fo
   justify-items: center;
   gap: 5px;
   color: var(--th-accent, #FF6A3D);
-  letter-spacing: 0;
-  animation: th-go-lock-in .76s cubic-bezier(.16, 1, .3, 1) both;
+  animation: th-go-fade .5s ease both;
 }
 .th-go-lock-icon {
   width: 64px;
@@ -183,103 +215,13 @@ button:focus-visible, a:focus-visible, [role="button"]:focus-visible, summary:fo
 }
 .th-go-lock strong { font-size: 18px; line-height: 1; }
 .th-go-lock > span:last-child { font: 10px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: #E6EAF2; }
-.th-go-scan {
-  position: absolute;
-  z-index: 3;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: 1px;
-  background: var(--th-accent, #FF6A3D);
-  box-shadow: 0 0 18px 5px color-mix(in srgb, var(--th-accent, #FF6A3D) 45%, transparent);
-  will-change: transform, opacity;
-  animation: th-go-scan .76s cubic-bezier(.16, 1, .3, 1) both;
-}
-@keyframes th-go-overlay {
+@keyframes th-go-fade {
   0% { opacity: 0; }
-  12%, 72% { opacity: 1; }
+  20%, 80% { opacity: 1; }
   100% { opacity: 0; }
 }
-@keyframes th-go-curtain-open {
-  0% { transform: perspective(900px) rotateX(86deg) scaleX(.86); }
-  24% { transform: perspective(900px) rotateX(0) scaleX(1); }
-  72% { transform: perspective(900px) rotateX(0) scaleX(1); }
-  100% { transform: perspective(900px) rotateX(-86deg) scaleX(.92); }
-}
-@keyframes th-go-lock-in {
-  0%, 14% { opacity: 0; transform: scale(.72); }
-  34%, 70% { opacity: 1; transform: scale(1); }
-  100% { opacity: 0; transform: scale(1.08); }
-}
-@keyframes th-go-scan {
-  0%, 12% { transform: translateX(0); opacity: 0; }
-  28% { opacity: .9; }
-  82% { transform: translateX(calc(100vw - 1px)); opacity: .5; }
-  100% { transform: translateX(calc(100vw - 1px)); opacity: 0; }
-}
 
-.th-logo-ignite {
-  filter: drop-shadow(0 0 13px color-mix(in srgb, var(--th-accent, #FF6A3D) 62%, transparent));
-  animation: th-logo-ignite .76s cubic-bezier(.16, 1, .3, 1) both;
-}
-.th-logo-ignite .th-logo-candle {
-  transform-box: fill-box;
-  transform-origin: center bottom;
-  opacity: 0;
-  animation: th-candle-light .23s cubic-bezier(.34, 1.56, .64, 1) both;
-}
-.th-logo-ignite .th-logo-candle-1 { animation-delay: .08s; }
-.th-logo-ignite .th-logo-candle-2 { animation-delay: .15s; }
-.th-logo-ignite .th-logo-candle-3 { animation-delay: .22s; }
-@keyframes th-logo-ignite {
-  0% { transform: scale(.82); opacity: 0; filter: drop-shadow(0 0 0 transparent); }
-  38%, 76% { transform: scale(1); opacity: 1; filter: drop-shadow(0 0 16px color-mix(in srgb, var(--th-accent, #FF6A3D) 72%, transparent)); }
-  100% { transform: scale(1.04); opacity: 0; filter: drop-shadow(0 0 5px color-mix(in srgb, var(--th-accent, #FF6A3D) 20%, transparent)); }
-}
-@keyframes th-candle-light {
-  from { opacity: 0; transform: translateY(4px) scaleY(.15); filter: brightness(1.8); }
-  to { opacity: 1; transform: translateY(0) scaleY(1); filter: brightness(1); }
-}
-
-/* Two quiet pulses, then a rest. It lives only on the tiny header mark while live. */
-.th-logo-live {
-  transform-origin: center;
-  animation: th-live-heartbeat 2.6s ease-in-out infinite;
-}
-@keyframes th-live-heartbeat {
-  0%, 8%, 18%, 100% { transform: scale(1); filter: drop-shadow(0 0 0 transparent); }
-  4% { transform: scale(1.055); filter: drop-shadow(0 0 5px color-mix(in srgb, var(--th-accent, #FF6A3D) 48%, transparent)); }
-  13% { transform: scale(1.035); filter: drop-shadow(0 0 3px color-mix(in srgb, var(--th-accent, #FF6A3D) 34%, transparent)); }
-}
-
-/* The user's own session window sets a quiet background mood; cards stay untouched. */
-.th-session-ambience {
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 1.2s ease, background 1.2s ease;
-}
-.th-session-opening {
-  opacity: .24;
-  background: radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--th-accent, #F5B642) 34%, transparent), transparent 58%);
-  animation: th-session-breathe 4.8s ease-in-out infinite;
-}
-.th-session-focus {
-  opacity: .15;
-  background: radial-gradient(ellipse at 70% 18%, color-mix(in srgb, var(--th-accent, #F5B642) 30%, transparent), transparent 54%);
-}
-.th-session-wind-down {
-  opacity: .12;
-  background: linear-gradient(180deg, transparent 35%, color-mix(in srgb, var(--th-accent, #F5B642) 22%, transparent));
-}
-@keyframes th-session-breathe {
-  0%, 100% { opacity: .17; }
-  50% { opacity: .27; }
-}
-
-/* modals: fade the backdrop, scale-in pop its dialog child */
+/* modals: fade backdrop, scale-in dialog */
 .th-overlay { animation: th-overlay .15s ease both; }
 @keyframes th-overlay { from { opacity: 0; } to { opacity: 1; } }
 .th-overlay > div { animation: th-pop .18s cubic-bezier(0.16, 1, 0.3, 1) both; }
@@ -288,277 +230,29 @@ button:focus-visible, a:focus-visible, [role="button"]:focus-visible, summary:fo
   to { opacity: 1; transform: none; }
 }
 
-/* achievement unlock — the medal slides in from the side, pops, and catches a shine */
+/* achievement toast: simple fade-in, no burst/shine/glow */
 @keyframes ach-in {
-  0% { opacity: 0; transform: translateX(120%) scale(0.92); }
-  55% { opacity: 1; transform: translateX(-7%) scale(1.03); }
-  100% { opacity: 1; transform: translateX(0) scale(1); }
+  from { opacity: 0; transform: translateX(60px); }
+  to { opacity: 1; transform: translateX(0); }
 }
-.ach-toast { animation: ach-in .5s cubic-bezier(0.16, 1, 0.3, 1) both; }
-@keyframes ach-medal-pop {
-  0% { transform: scale(0) rotate(-35deg); }
-  70% { transform: scale(1.18) rotate(8deg); }
-  100% { transform: scale(1) rotate(0); }
-}
-.ach-medal { animation: ach-medal-pop .55s cubic-bezier(0.34, 1.56, 0.64, 1) .12s both; }
-@keyframes ach-burst {
-  0% { opacity: .55; transform: scale(0.5); }
-  100% { opacity: 0; transform: scale(1.9); }
-}
-.ach-burst { animation: ach-burst .7s ease-out .18s both; }
-@keyframes ach-shine {
-  0% { transform: translateX(-140%) skewX(-18deg); opacity: 0; }
-  35% { opacity: .85; }
-  100% { transform: translateX(260%) skewX(-18deg); opacity: 0; }
-}
-.ach-shine { animation: ach-shine 1.1s ease .4s 1; }
-@keyframes ach-glow {
-  0%, 100% { box-shadow: 0 0 9px var(--ach-c, #FFD54A); }
-  50% { box-shadow: 0 0 20px var(--ach-c, #FFD54A); }
-}
-.ach-glow { animation: ach-glow 1.9s ease-in-out infinite; }
-@media (prefers-reduced-motion: reduce) {
-  .ach-toast, .ach-medal, .ach-burst, .ach-shine, .ach-glow { animation: none; }
-  .th-cinematic, .th-cinematic::after { animation: none; }
-  .th-go-trigger-on, .th-session-ambience, .th-logo-live { animation: none; }
-  .th-pnl-feedback, .th-pnl-feedback .th-pnl-number { animation: none !important; }
-  .th-go-mode-transition { display: none; }
-}
+.ach-toast { animation: ach-in .35s ease both; }
 
-/* stat values animate only when their target changes; trade P&L gets one restrained outcome pulse. */
+/* stat values: subtle fade-up on change */
 .th-val { display: inline-block; animation: th-val .3s ease both; }
-.th-count { display: inline-block; min-width: 1ch; position: relative; font-variant-numeric: tabular-nums; }
-.th-pnl-feedback .th-pnl-number {
-  display: inline-block;
-  transform-origin: center;
-  animation: th-pnl-number-win 1.25s cubic-bezier(.16, 1, .3, 1) both;
-}
-.th-pnl-feedback-loss .th-pnl-number { animation-name: th-pnl-number-loss; }
-.th-card.th-pnl-feedback-win { animation: th-pnl-card-win 1.1s ease-out both; }
-.th-card.th-pnl-feedback-loss { animation: th-pnl-card-loss 1.1s ease-out both; }
-@keyframes th-pnl-number-win {
-  0%, 100% { color: var(--pnl-settle); transform: scale(1); text-shadow: none; }
-  24% { color: var(--pnl-pulse); transform: scale(1.055); text-shadow: 0 0 11px var(--pnl-pulse); }
-  52% { color: var(--pnl-pulse); transform: scale(1.015); text-shadow: 0 0 4px var(--pnl-pulse); }
-}
-@keyframes th-pnl-number-loss {
-  0%, 100% { color: var(--pnl-settle); transform: scale(1); text-shadow: none; }
-  25% { color: var(--pnl-pulse); transform: scale(1.025); text-shadow: 0 0 6px var(--pnl-pulse); }
-  48% { color: var(--pnl-pulse); transform: scale(1.008); text-shadow: 0 0 2px var(--pnl-pulse); }
-}
-@keyframes th-pnl-card-win {
-  0%, 100% { box-shadow: none; }
-  28% { box-shadow: 0 0 0 1px var(--pnl-pulse), 0 8px 24px color-mix(in srgb, var(--pnl-pulse) 18%, transparent); }
-}
-@keyframes th-pnl-card-loss {
-  0%, 100% { box-shadow: none; }
-  28% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--pnl-pulse) 60%, transparent), 0 6px 18px color-mix(in srgb, var(--pnl-pulse) 10%, transparent); }
-}
 @keyframes th-val {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: none; }
 }
 
-/* Terminal Green easter egg: animated numbers briefly resolve through signal slices. */
-html[data-theme-preset="terminal"] .th-counting {
-  isolation: isolate;
-  animation: th-matrix-number .18s steps(2, end) infinite;
-}
-html[data-theme-preset="terminal"] .th-counting::before,
-html[data-theme-preset="terminal"] .th-counting::after {
-  content: attr(data-value);
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  overflow: hidden;
-  opacity: .7;
-}
-html[data-theme-preset="terminal"] .th-counting::before {
-  color: #B7FFD0;
-  clip-path: inset(12% 0 55% 0);
-  animation: th-matrix-slice-a .13s steps(2, end) infinite;
-}
-html[data-theme-preset="terminal"] .th-counting::after {
-  color: var(--th-accent, #86EFAC);
-  clip-path: inset(58% 0 8% 0);
-  animation: th-matrix-slice-b .17s steps(2, end) infinite reverse;
-}
-@keyframes th-matrix-number {
-  0%, 100% { transform: translate(0); filter: brightness(1); text-shadow: 0 0 0 transparent; }
-  32% { transform: translate(-.5px, .5px); filter: brightness(1.3); text-shadow: 0 0 5px color-mix(in srgb, var(--th-accent, #86EFAC) 48%, transparent); }
-  66% { transform: translate(.5px, 0); filter: brightness(.92); }
-}
-@keyframes th-matrix-slice-a {
-  0%, 100% { transform: translate(0); }
-  50% { transform: translate(1px, -1px); }
-}
-@keyframes th-matrix-slice-b {
-  0%, 100% { transform: translate(0); }
-  50% { transform: translate(-1px, 1px); }
-}
+/* counting numbers: tabular, no glitch effects */
+.th-count { display: inline-block; min-width: 1ch; position: relative; font-variant-numeric: tabular-nums; }
 
-/* Preset motion signatures. Interaction timing stays consistent; only character changes. */
-
-/* Midnight Desk: deep focus, a cool trace, and one fading numeric echo. */
-html[data-theme-preset="midnight"] .th-cinematic {
-  animation: th-midnight-depth .52s cubic-bezier(.16, 1, .3, 1) both;
-}
-html[data-theme-preset="midnight"] .th-cinematic::after {
-  display: none;
-}
-html[data-theme-preset="midnight"] .th-counting {
-  animation: th-midnight-number .72s ease both;
-}
-html[data-theme-preset="midnight"] .th-counting::after {
-  content: attr(data-value);
-  position: absolute;
-  inset: 0;
-  color: #93C5FD;
-  pointer-events: none;
-  animation: th-midnight-number-echo .72s ease-out both;
-}
-@keyframes th-midnight-depth {
-  0% { opacity: 0; transform: perspective(1200px) translateY(8px) translateZ(-34px); }
-  58% { opacity: 1; }
-  100% { opacity: 1; transform: perspective(1200px) translateY(0) translateZ(0); }
-}
-@keyframes th-midnight-number {
-  0% { text-shadow: 0 0 0 transparent; }
-  35% { text-shadow: 0 0 8px rgba(96, 165, 250, .58); }
-  100% { text-shadow: 0 0 0 transparent; }
-}
-@keyframes th-midnight-number-echo {
-  0% { opacity: .5; transform: translate(2px, 1px); filter: blur(1px); }
-  45% { opacity: .22; transform: translate(1px, 0); }
-  100% { opacity: 0; transform: translate(0); filter: blur(0); }
-}
-
-/* Clean Light: quick sheet settle and restrained odometer motion. */
-html[data-theme-preset="clean"] .th-cinematic {
-  animation: th-clean-sheet .32s cubic-bezier(.16, 1, .3, 1) both;
-}
-html[data-theme-preset="clean"] .th-cinematic::after { display: none; }
-html[data-theme-preset="clean"] .th-counting {
-  animation: th-clean-odometer .14s steps(2, end) infinite;
-}
-@keyframes th-clean-sheet {
-  from { opacity: 0; transform: translateY(5px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-@keyframes th-clean-odometer {
-  0%, 100% { transform: translateY(0); opacity: 1; }
-  50% { transform: translateY(-.8px); opacity: .86; }
-}
-
-/* Terminal Green: stepped digital tab reveal. Trade Mode uses the shared sequence. */
-html[data-theme-preset="terminal"] .th-cinematic {
-  animation: th-terminal-tab-in .44s steps(1, end) both;
-}
-html[data-theme-preset="terminal"] .th-cinematic::after {
-  display: none;
-}
-@keyframes th-terminal-tab-in {
-  0% { opacity: 0; transform: translateX(-3px); }
-  16% { opacity: .78; transform: translateX(2px); }
-  28% { opacity: .45; transform: translateX(-1px); }
-  40% { opacity: 1; transform: translateX(1px); }
-  100% { opacity: 1; transform: translateX(0); }
-}
-/* Red Session: a sharper page lock and a two-beat count while values rise. */
-html[data-theme-preset="redSession"] .th-cinematic {
-  animation: th-red-snap .38s cubic-bezier(.2, .9, .2, 1) both;
-}
-html[data-theme-preset="redSession"] .th-cinematic::after {
-  display: none;
-}
-html[data-theme-preset="redSession"] .th-counting {
-  transform-origin: center;
-  animation: th-red-number-heart .72s ease-out both;
-}
-html[data-theme-preset="redSession"] .th-counting::after {
-  content: attr(data-value);
-  position: absolute;
-  inset: 0;
-  color: #B3001B;
-  pointer-events: none;
-  animation: th-red-blood-echo .72s ease-out both;
-}
-@keyframes th-red-snap {
-  0% { opacity: 0; transform: scale(.992) translateY(4px); }
-  42% { opacity: 1; transform: scale(1.002) translateY(0); }
-  100% { opacity: 1; transform: scale(1); }
-}
-@keyframes th-red-number-heart {
-  0%, 17%, 37%, 100% { transform: scale(1); text-shadow: 0 0 0 transparent; filter: brightness(1); }
-  9% {
-    transform: scale(1.06);
-    filter: brightness(1.18);
-    text-shadow: 0 0 2px #FFD3D7, 0 0 8px rgba(218, 0, 31, .98), 0 0 19px rgba(116, 0, 16, .9), 0 0 32px rgba(48, 0, 8, .72);
-  }
-  27% {
-    transform: scale(1.038);
-    filter: brightness(1.1);
-    text-shadow: 0 0 2px #FF9DA6, 0 0 7px rgba(179, 0, 27, .9), 0 0 17px rgba(82, 0, 13, .76);
-  }
-}
-@keyframes th-red-blood-echo {
-  0%, 100% { opacity: 0; transform: scale(1); filter: blur(0); }
-  8% { opacity: .78; transform: scale(1.065); filter: blur(1.4px); }
-  17% { opacity: 0; transform: scale(1.09); filter: blur(3px); }
-  26% { opacity: .52; transform: scale(1.045); filter: blur(1px); }
-  39% { opacity: 0; transform: scale(1.07); filter: blur(3px); }
-}
-
-/* Minimal Gray: a quiet opacity fade with no spatial movement. */
-html[data-theme-preset="minimal"] .th-cinematic {
-  animation: th-minimal-fade .46s ease-out both;
-}
-html[data-theme-preset="minimal"] .th-cinematic::after {
-  display: none;
-}
-html[data-theme-preset="minimal"] .th-counting {
-  isolation: isolate;
-  transform-origin: center;
-  animation: th-minimal-teleport .72s cubic-bezier(.16, 1, .3, 1) both;
-}
-html[data-theme-preset="minimal"] .th-counting::before {
-  content: attr(data-value);
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  color: #000;
-  pointer-events: none;
-  animation: th-minimal-black-flash .72s ease-out both;
-}
-@keyframes th-minimal-fade {
-  0% { opacity: 0; }
-  55% { opacity: .72; }
-  100% { opacity: 1; }
-}
-@keyframes th-minimal-teleport {
-  0% { opacity: 1; transform: translateY(0) scale(1); filter: brightness(1) blur(0); }
-  10% { opacity: .72; transform: translateY(-1px) scale(.96); filter: brightness(0) blur(1px); }
-  19% { opacity: 0; transform: translateY(-5px) scaleX(.16); filter: brightness(0) blur(3px); }
-  31% { opacity: 0; transform: translateY(4px) scaleX(.16); filter: brightness(0) blur(3px); }
-  44% { opacity: 1; transform: translateY(0) scale(1.045); filter: brightness(1.9) blur(.5px); }
-  62%, 100% { opacity: 1; transform: translateY(0) scale(1); filter: brightness(1) blur(0); }
-}
-@keyframes th-minimal-black-flash {
-  0%, 4%, 42%, 100% { opacity: 0; transform: translate(0) scale(1); filter: blur(0); }
-  11% { opacity: 1; transform: translate(-2px, 2px) scale(1.04); filter: blur(.5px); text-shadow: 0 0 5px #000, 0 0 18px #000, 0 0 34px rgba(0, 0, 0, .95); }
-  25% { opacity: .72; transform: translate(3px, -2px) scaleX(.7); filter: blur(2px); text-shadow: 0 0 7px #000, 0 0 24px rgba(0, 0, 0, .92); }
-}
+/* P&L feedback: simple color transition, no pulse or glow */
+.th-pnl-number { transition: color .3s ease; }
 
 @media (prefers-reduced-motion: reduce) {
-  html[data-theme-preset] .th-cinematic,
-  html[data-theme-preset] .th-counting,
-  html[data-theme-preset="terminal"] .th-logo-ignite { animation: none !important; transform: none; filter: none; }
-  html[data-theme-preset] .th-cinematic::after,
-  html[data-theme-preset="midnight"] .th-counting::after,
-  html[data-theme-preset="redSession"] .th-counting::after,
-  html[data-theme-preset="minimal"] .th-counting::before,
-  html[data-theme-preset="terminal"] .th-counting::before,
-  html[data-theme-preset="terminal"] .th-counting::after { display: none !important; }
+  .th-cinematic, .th-overlay, .th-overlay > div, .th-ach-toast, .th-val { animation: none; }
+  .th-go-mode-transition { display: none; }
 }
 
 /* ticker tape marquee: two identical segments scrolled -50% for a seamless loop */
@@ -566,3 +260,596 @@ html[data-theme-preset="minimal"] .th-counting::before {
 .ticker-track:hover { animation-play-state: paused; }
 .ticker-seg { display: inline-flex; flex: none; }
 @keyframes ticker-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+/* Approved workstation redesign -------------------------------------------------
+   The reference screens use one flat application frame. Pages stay dense and
+   comparable while the existing theme variables continue to own every color. */
+.th-app {
+  min-width: 900px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--th-bg) 86%, transparent), transparent 180px);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.th-app-shell {
+  width: 100%;
+  max-width: none;
+  padding: 0 !important;
+}
+
+.th-app-header {
+  min-height: 52px;
+  padding: 0 18px;
+  border-radius: 0;
+  background: color-mix(in srgb, var(--th-bg) 92%, transparent);
+  box-shadow: none;
+}
+
+.th-brand > span:nth-child(2) { font-size: 18px; }
+.th-local-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-left: 18px;
+  white-space: nowrap;
+}
+.th-local-status::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--th-up);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--th-up) 12%, transparent);
+}
+
+.th-header-readouts {
+  min-height: 52px;
+  gap: 0 !important;
+  font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif !important;
+}
+.th-header-readouts > * {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 14px;
+  border-left: 1px solid var(--th-line);
+}
+.th-header-readouts > .th-header-readout-group { border-left: 0; }
+.th-header-readout-group { gap: 16px; }
+.th-header-readouts .th-go-trigger {
+  min-height: 32px;
+  margin-left: 10px;
+  border-left: 0;
+  border-radius: 4px;
+  padding-inline: 16px;
+}
+.th-header-readouts > button:not(.th-go-trigger) {
+  min-height: 30px;
+  margin-left: 8px;
+  border-radius: 4px;
+}
+.th-dev-shortcuts { display: none !important; }
+
+/* All fourteen tools stay on one line. A narrow window scrolls the rail rather than
+   breaking the primary navigation into two unrelated rows. The edge fades below are
+   driven by the rail's own scroll position, so they appear only when tabs are
+   actually cut off — a hidden scrollbar otherwise leaves no sign there's more. */
+@property --th-tabs-fade-l { syntax: '<length>'; inherits: false; initial-value: 0px; }
+@property --th-tabs-fade-r { syntax: '<length>'; inherits: false; initial-value: 0px; }
+
+.th-primary-tabs {
+  min-height: 48px;
+  margin: 0;
+  padding: 0 18px;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  scroll-behavior: smooth;
+  border-bottom: 1px solid;
+  background: color-mix(in srgb, var(--th-bg) 89%, transparent);
+  mask-image: linear-gradient(to right,
+    transparent 0, #000 var(--th-tabs-fade-l),
+    #000 calc(100% - var(--th-tabs-fade-r)), transparent 100%);
+  animation: th-tabs-edge-fade linear both;
+  animation-timeline: scroll(self inline);
+}
+/* An unscrollable rail has an inactive timeline, so no fade is applied at all. */
+@keyframes th-tabs-edge-fade {
+  from { --th-tabs-fade-l: 0px; --th-tabs-fade-r: 26px; }
+  to { --th-tabs-fade-l: 26px; --th-tabs-fade-r: 0px; }
+}
+.th-primary-tabs::-webkit-scrollbar { display: none; }
+.th-primary-tabs .th-tab {
+  flex: 1 0 auto;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 0;
+  font-size: 13px;
+  font-weight: 500;
+}
+.th-primary-tabs .th-tab:hover { color: var(--th-text) !important; }
+.th-primary-tabs .th-tab-on::after {
+  left: 8px;
+  right: 8px;
+  bottom: 0;
+  height: 2px;
+  border-radius: 0;
+}
+
+.th-tabpanel {
+  min-width: 0;
+  padding: 12px 16px 16px;
+}
+
+.th-app .th-panel,
+.th-app .th-stat,
+.th-app .th-journal-entry-panel,
+.th-app .th-journal-history {
+  border-radius: var(--th-radius-panel) !important;
+  box-shadow: none !important;
+}
+.th-app .th-panel { padding: 14px; }
+.th-app .th-stat { padding: 12px 14px; }
+.th-app .rounded-2xl { border-radius: 6px; }
+.th-app .rounded-xl { border-radius: 5px; }
+.th-app .rounded-lg { border-radius: 4px; }
+.th-app .rounded-md { border-radius: 4px; }
+
+.th-field > span {
+  color: var(--th-dim) !important;
+  font-size: 12px;
+}
+.th-app input,
+.th-app select,
+.th-app textarea {
+  border-radius: 3px !important;
+}
+.th-app input:not([type="checkbox"]):not([type="radio"]),
+.th-app select {
+  min-height: 32px;
+}
+.th-app textarea { line-height: 1.45; }
+
+/* Type hierarchy: page labels recede, panel titles orient, and values carry weight. */
+.th-page .th-panel-title {
+  color: var(--th-text);
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: -.012em;
+}
+.th-page .th-stat-label {
+  font-size: 10.5px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+.th-page .text-xs { line-height: 1.45; }
+.th-page h2 { font-size: 18px; line-height: 1.25; }
+.th-compact-markdown { max-width: 78ch; }
+.th-compact-markdown .th-markdown-heading {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--th-border-quiet);
+  letter-spacing: -.005em;
+}
+.th-compact-markdown .th-markdown-heading:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.th-compact-markdown li::marker { color: var(--th-dim); }
+
+/* News keeps the calendar and the performance read-out stacked: side by side, the
+   Calendar / My performance toggle had nothing left to scroll to. */
+.th-news-calendar,
+.th-news-performance { min-width: 0; }
+
+/* Psychology "Why you win / lose": the card and its rows carried no rules, so the
+   heading and the rank column sat flush against the border and the row dividers ran
+   the full width of the card. Padding matches the Panel component next to it. */
+.th-reason-section {
+  padding: 16px;
+  border-radius: var(--th-radius-panel);
+}
+.th-reason-section > h2 { margin-bottom: 2px; }
+.th-reason-head,
+.th-reason-row {
+  gap: 12px;
+  padding: 7px 0;
+}
+/* The header rule reads as part of the table; the row rules separate entries. */
+.th-reason-head {
+  padding-top: 0;
+  border-bottom: 1px solid var(--th-line);
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+/* The head already draws a rule, so the first row must not draw a second one.
+   (:first-of-type would match nothing here — the head is itself the first div.) */
+.th-reason-head + .th-reason-row { border-top: 0 !important; }
+.th-reason-head > :last-child,
+.th-reason-row > :last-child { text-align: right; }
+.th-reason-row > :nth-child(2) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Settings live preview: every one of these class names was referenced without a
+   single rule, so the preview rendered as unstyled markup. It borrows the journal's
+   own surfaces rather than inventing a second visual language to look at. */
+.th-settings-preview-surface {
+  position: relative;
+  overflow: hidden;
+  padding: 12px;
+  border: 1px solid var(--th-line);
+  border-radius: var(--th-radius-panel);
+  background: var(--th-bg);
+}
+.th-preview-window {
+  padding: 12px;
+  border: 1px solid var(--th-line);
+  border-radius: var(--th-radius-panel);
+  background: var(--th-surface);
+}
+/* Inert: it is a picture of the journal, not a second copy of its controls. */
+.th-preview-toolbar button {
+  padding: 5px 9px;
+  border: 1px solid var(--th-line);
+  border-radius: var(--th-radius-control);
+  background: var(--th-surface-2);
+  color: var(--th-dim);
+  font-size: 11px;
+  pointer-events: none;
+}
+.th-preview-fields { margin-top: 12px; }
+.th-preview-fields > div { min-width: 0; }
+.th-settings-preview-panel th {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--th-line);
+  color: var(--th-faint);
+  font-weight: 500;
+}
+.th-settings-preview-panel td {
+  padding: 6px 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--th-line) 55%, transparent);
+}
+.th-settings-preview-panel tbody tr:last-child td { border-bottom: 0; }
+
+.th-backdrop-choice {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 9px;
+  border-radius: var(--th-radius-control);
+  background: var(--th-surface-2);
+  font-size: 11px;
+  text-align: left;
+}
+.th-backdrop-swatch {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--th-line);
+  border-radius: 3px;
+  background: var(--th-bg);
+}
+
+/* Calendar days shift background on hover like every other row in the app, rather
+   than lifting off the page — the lift was the one surviving hover transform. */
+.th-cal-cell { transition: background .15s ease, border-color .15s ease; }
+.th-cal-cell:hover { border-color: var(--th-accent, #F5B642); }
+
+/* Prop overview: nine columns of figures with no cell padding at all, so numbers,
+   meters and captions ran together. Top alignment keeps the values on one baseline
+   even though only some cells carry a meter underneath. */
+.th-prop-table-wrap th,
+.th-prop-table-wrap td {
+  padding: 10px 16px 10px 0;
+  vertical-align: top;
+}
+.th-prop-table-wrap th:last-child,
+.th-prop-table-wrap td:last-child { padding-right: 0; }
+/* Breathing room between a value and the meter that qualifies it. */
+.th-prop-table-wrap td > span + div { margin-top: 6px; }
+
+.th-app table { border-collapse: collapse; }
+.th-app thead { background: color-mix(in srgb, var(--th-surface-2) 38%, transparent); }
+.th-app th { font-size: 11px; letter-spacing: .02em; }
+.th-app tbody tr { transition: background .12s ease; }
+.th-app tbody tr:hover { background: color-mix(in srgb, var(--th-accent) 5%, transparent); }
+
+@media (min-width: 1360px) {
+  .th-primary-tabs .th-tab { white-space: nowrap; }
+}
+
+@media (max-width: 1180px) {
+  .th-primary-tabs { justify-content: flex-start; }
+  .th-primary-tabs .th-tab { padding-inline: 10px; }
+  /* Drop the two softest figures first; NET and WIN carry the most at a glance. */
+  .th-header-readout-group > *:nth-child(n+4) { display: none; }
+}
+
+/* Journal reference: 46/54 capture-and-evidence workstation. */
+.th-journal-workspace { gap: 4px !important; }
+.th-journal-entry-panel { padding: 0 !important; overflow-x: hidden; }
+.th-journal-actions {
+  min-height: 54px;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--th-line);
+  background: color-mix(in srgb, var(--th-surface) 92%, transparent);
+}
+.th-journal-actions button { min-height: 32px; background: transparent; }
+.th-editing-trade {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--th-line);
+  color: var(--th-text);
+  font-size: 12px;
+}
+.th-journal-entry-panel .th-form-section {
+  margin: 0;
+  padding: 10px 14px 12px;
+  border-top: 0;
+  border-bottom: 1px solid var(--th-line);
+}
+.th-journal-entry-panel .th-section-label {
+  margin: 0 0 10px;
+  color: var(--th-text);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.2;
+  text-transform: none;
+}
+.th-journal-entry-panel .th-section-label::after {
+  content: "⌃";
+  float: right;
+  color: var(--th-dim);
+  font-size: 12px;
+}
+.th-journal-entry-panel .th-inline-section {
+  grid-column: 1 / -1 !important;
+  margin: 4px -14px 0;
+  padding: 10px 14px 0;
+  border-top: 1px solid var(--th-line);
+  color: var(--th-text);
+  font-size: 14px;
+  font-weight: 600;
+}
+.th-journal-entry-panel .th-form-section > .mt-3,
+.th-journal-entry-panel .th-form-section > .grid.mt-3 { margin-top: 10px; }
+.th-direction-switch,
+.th-grade-switch { overflow: hidden; border-radius: 3px; }
+.th-direction-switch button + button,
+.th-grade-switch button + button { margin-left: -1px; }
+/* That -1px overlap collapses the shared edge, but it also lets the later sibling
+   paint over the selected button's border — so an active "Long" lost the right side
+   of its green outline. Lifting the pressed button restores the full box. */
+.th-direction-switch button,
+.th-grade-switch button { position: relative; }
+.th-direction-switch button[aria-pressed="true"],
+.th-grade-switch button[aria-pressed="true"] { z-index: 1; }
+.th-risk-mode-switch {
+  width: min(100%, 260px);
+  grid-column: 1 / -1 !important;
+}
+.th-context-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.th-journal-entry-panel > .flex.items-center.justify-between { padding-inline: 14px; }
+.th-journal-entry-panel > .flex.gap-2 { padding: 0 14px 10px; }
+.th-journal-entry-panel > .flex.gap-2 button { min-height: 34px; }
+.th-journal-entry-panel > .text-xs,
+.th-journal-entry-panel > :not(section):not(.th-journal-actions):not(.th-editing-trade):not(.flex) { margin-inline: 14px; }
+
+.th-journal-history { min-width: 0; }
+.th-history-toolbar { padding: 12px 16px !important; }
+.th-history-toolbar > .flex:first-child { min-height: 25px; }
+.th-journal-history table { table-layout: auto; }
+.th-journal-history th,
+.th-journal-history td { padding-block: 10px !important; }
+.th-journal-history tbody tr { height: 41px; }
+
+@media (min-width: 1024px) {
+  .th-page-journal {
+    height: calc(100vh - 128px);
+    min-height: 520px;
+    overflow: hidden;
+  }
+  .th-page-journal.th-journal-workspace {
+    height: 100%;
+    min-height: 0;
+    align-items: stretch;
+    grid-template-columns: minmax(560px, 46.5fr) minmax(0, 53.5fr) !important;
+  }
+  .th-journal-entry-panel {
+    position: static;
+    height: 100%;
+    min-height: 0;
+    max-height: none;
+    overflow-y: auto;
+  }
+  .th-journal-history {
+    height: 100%;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .th-journal-entry-panel,
+  .th-journal-history {
+    scrollbar-color: color-mix(in srgb, var(--th-dim) 54%, transparent) transparent;
+    scrollbar-width: thin;
+  }
+}
+
+@media (min-width: 1320px) {
+  .th-journal-entry-panel .th-form-section:first-of-type > .grid-cols-2 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .th-journal-entry-panel .th-form-section:first-of-type > .col-span-2 { grid-column: span 2 / span 2; }
+  .th-journal-entry-panel .th-form-section:nth-of-type(2) > .grid-cols-2 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .th-context-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+
+/* Full-page workstation layouts ------------------------------------------------
+   Each tool keeps its existing data and controls, while page composition follows
+   the approved desktop references: dense tables, shallow control rails, and one
+   obvious reading path on screen. */
+.th-page {
+  width: 100%;
+  max-width: 1660px;
+  margin-inline: auto;
+}
+
+.th-page > * { min-width: 0; }
+.th-page .th-panel > .flex:first-child {
+  min-height: 24px;
+  margin-bottom: 10px;
+}
+.th-page .th-panel-title,
+.th-page h2 { letter-spacing: -.01em; }
+.th-page .th-stat > :first-child {
+  font-size: 10px;
+  letter-spacing: .055em;
+}
+.th-page .th-stat .text-xl { font-size: 18px; line-height: 1.25; }
+
+/* Trade mode */
+.th-page-trade { --th-page-gap: 12px; }
+.th-page-trade > .th-panel:first-child { padding-block: 10px; }
+.th-page-trade .th-trade-workspace { gap: var(--th-page-gap) !important; }
+.th-page-trade .th-trade-workspace > div { gap: var(--th-page-gap) !important; }
+.th-page-trade .th-trade-workspace > div:last-child {
+  position: sticky;
+  top: 0;
+  align-self: start;
+}
+@media (min-width: 1120px) {
+  .th-page-trade .th-trade-workspace {
+    grid-template-columns: minmax(0, 1.62fr) minmax(350px, 1fr) !important;
+  }
+}
+
+/* Dashboard */
+.th-preflight-status {
+  min-height: 62px;
+  overflow: hidden;
+  border-radius: 5px;
+}
+.th-preflight-label,
+.th-preflight-segment {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  border-right: 1px solid var(--th-line);
+}
+.th-preflight-label { min-width: 105px; }
+.th-preflight-action { margin-right: 10px; }
+.th-dashboard-preflight-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(260px, .72fr) minmax(310px, .8fr);
+  overflow: hidden;
+  border: 1px solid var(--th-line);
+  border-radius: 5px;
+  background: var(--th-surface);
+}
+.th-dashboard-preflight-grid .th-preflight-status { border: 0 !important; border-radius: 0; }
+.th-dashboard-preflight-grid > * + * { border-left: 1px solid var(--th-line); }
+.th-dashboard-summary {
+  overflow: hidden;
+  gap: 0 !important;
+  border: 1px solid var(--th-line);
+  border-radius: 5px;
+  background: var(--th-surface);
+}
+.th-dashboard-controls { min-height: 34px; }
+.th-coach-brief > div:last-child { grid-template-columns: minmax(0, 1.15fr) minmax(360px, 1fr) !important; }
+.th-coach-brief-actions { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+.th-dashboard-summary .th-stat {
+  min-height: 78px;
+  border: 0 !important;
+  border-right: 1px solid var(--th-line) !important;
+  border-radius: 0 !important;
+}
+.th-dashboard-summary .th-stat:last-child { border-right: 0 !important; }
+/* Risk consistency and Performance by symbol sit side by side; Performance by
+   timeframe runs the full width beneath them rather than leaving half a row blank. */
+.th-dashboard-insights {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+}
+.th-dashboard-insights > *:nth-child(3) { grid-column: 1 / -1; }
+
+/* Timing performance is roughly twice the height of either chart, and three equal
+   stretched columns forced both charts to match it — the charts have fixed pixel
+   heights, so all that extra height was dead space. Stacking them against Timing as
+   a rail makes the two sides land at comparable heights instead. */
+.th-dashboard-charts {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  grid-template-areas:
+    "equity timing"
+    "daily  timing";
+  align-items: start;
+  gap: 10px;
+}
+.th-chart-equity { grid-area: equity; }
+.th-chart-daily { grid-area: daily; }
+.th-chart-timing { grid-area: timing; }
+
+@media (max-width: 1180px) {
+  .th-dashboard-charts {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "equity" "daily" "timing";
+  }
+}
+.th-dashboard-insights .th-panel { height: 100%; }
+
+/* These class names are referenced by the dashboard panels but had no rules at all,
+   so each row collapsed into one run of text: "MES152 trades · 43% win$335.75". */
+.th-symbol-row,
+.th-timeframe-row {
+  display: grid;
+  grid-template-columns: minmax(48px, auto) minmax(0, 1fr) minmax(72px, auto);
+  align-items: baseline;
+  gap: 4px 14px;
+  padding: 7px 0;
+  font-size: 12px;
+}
+.th-symbol-row:last-child,
+.th-timeframe-row:last-child { border-bottom: 0 !important; }
+.th-timeframe-pnl { text-align: right; }
+.th-timeframe-sample { font-size: 11px; }
+
+.th-timeframe-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 4px 22px;
+}
+.th-timeframe-label {
+  margin-bottom: 2px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+/* The bar between label and figure needs a track of its own; the children ask to
+   grow and shrink, which does nothing until the row is actually laid out. */
+.th-leak-ranking { display: grid; gap: 8px; }
+.th-leak-row {
+  display: grid;
+  grid-template-columns: minmax(90px, 150px) minmax(0, 1fr) minmax(64px, auto);
+  align-items: center;
+  gap: 10px;
+}
+
+@media (max-width: 1180px) {
+  .th-dashboard-insights { grid-template-columns: minmax(0, 1fr); }
+}
+.th-dashboard-priority {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}

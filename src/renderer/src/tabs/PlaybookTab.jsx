@@ -132,7 +132,7 @@ export function PlaybookTab({ entries, trades, onAdd, onUpdate, onDelete, onPlan
   const toggle = (id) => setExpanded((p) => (p === id ? null : id))
 
   return (
-    <div className="space-y-4">
+    <div className="th-page th-page-playbook space-y-4">
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -145,7 +145,7 @@ export function PlaybookTab({ entries, trades, onAdd, onUpdate, onDelete, onPlan
           <button
             onClick={() => importRef.current?.click()}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm"
-            style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}` }}
+            style={{ background: T.surface2, color: T.accentText, border: `1px solid ${T.line}` }}
             title="Import a setup file shared by another TradeHelp user"
           >
             <Upload size={14} /> Import
@@ -220,7 +220,7 @@ export function PlaybookTab({ entries, trades, onAdd, onUpdate, onDelete, onPlan
                 <div className="flex items-center gap-2 shrink-0 ml-1">
                   <button
                     onClick={(ev) => { ev.stopPropagation(); onPlan?.(e) }}
-                    className="p-1 rounded" style={{ color: T.accent }}
+                    className="p-1 rounded" style={{ color: T.accentText }}
                     title="Plan a trade from this setup"
                   ><ClipboardList size={13} /></button>
                   <button
@@ -266,7 +266,7 @@ export function PlaybookTab({ entries, trades, onAdd, onUpdate, onDelete, onPlan
                   {(e.criteria || e.invalidation || e.targets || e.notes) && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 px-4 py-3">
                       {[
-                        { label: 'Entry criteria', value: e.criteria, color: T.accent },
+                        { label: 'Entry criteria', value: e.criteria, color: T.accentText },
                         { label: 'Invalidation',   value: e.invalidation, color: T.down },
                         { label: 'Targets',        value: e.targets, color: T.up },
                         { label: 'Notes',          value: e.notes, color: T.dim },
@@ -317,12 +317,12 @@ export function PlaybookTab({ entries, trades, onAdd, onUpdate, onDelete, onPlan
       {/* Add / Edit modal */}
       {editing && (
         <div
-          className="fixed inset-0 flex items-end sm:items-center justify-center p-4 z-50"
+          className="th-playbook-editor-shell fixed inset-0 flex items-end sm:items-center justify-center p-4 z-50"
           style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}
           onClick={() => setEditing(null)}
         >
           <div
-            className="w-full max-w-lg rounded-2xl p-5 space-y-3"
+            className="th-playbook-editor w-full max-w-lg rounded-2xl p-5 space-y-3"
             style={{ background: T.surface, border: `1px solid ${T.line}` }}
             onClick={(ev) => ev.stopPropagation()}
           >
@@ -382,7 +382,7 @@ export function PlaybookTab({ entries, trades, onAdd, onUpdate, onDelete, onPlan
                   className="w-full rounded-lg px-3 py-3 text-center"
                   style={{ background: T.surface2, border: `1px dashed ${T.line}` }}
                 >
-                  <ImagePlus size={16} style={{ color: T.accent, display: 'inline', verticalAlign: 'middle' }} />
+                  <ImagePlus size={16} style={{ color: T.accentText, display: 'inline', verticalAlign: 'middle' }} />
                   <span className="text-xs ml-2" style={{ color: T.dim }}>
                     {editImages.length ? 'Add another example' : 'Choose or drop chart screenshots'}
                   </span>

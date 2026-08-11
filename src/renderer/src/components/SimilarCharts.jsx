@@ -213,10 +213,10 @@ export function SimilarCharts({ trades = [], onOpenTrade }) {
               <div className="p-2.5">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-semibold truncate">{record.trade?.symbol || 'Trade'}</span>
-                  <span className="text-xs font-semibold" style={{ ...mono, color: T.accent }}>{record.similarity.toFixed(1)}%</span>
+                  <span className="text-xs font-semibold" style={{ ...mono, color: T.accentText }}>{record.similarity.toFixed(1)}%</span>
                 </div>
                 <div className="text-[10px] truncate mt-0.5" style={{ color: T.dim }}>{dateLabel(record.trade?.entryTime || record.trade?.timestamp)}{record.tag ? ` · ${record.tag}` : ''}</div>
-                <button type="button" onClick={() => onOpenTrade?.(record.trade)} className="mt-2 flex items-center gap-1 text-xs font-semibold" style={{ color: T.accent }}>
+                <button type="button" onClick={() => onOpenTrade?.(record.trade)} className="mt-2 flex items-center gap-1 text-xs font-semibold" style={{ color: T.accentText }}>
                   <ExternalLink size={12} /> Open trade
                 </button>
               </div>

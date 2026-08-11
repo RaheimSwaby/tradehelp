@@ -199,7 +199,7 @@ function TradePickerCombobox({ trades = [], selectedId, onSelectTrade, barMatche
                       <div style={{ color: isWin ? T.up : T.down }}>
                         {isWin ? '+' : ''}{fmt$(Number(t.pnl) || 0)}
                       </div>
-                      {isSelected && <Check size={12} className="ml-auto mt-0.5" style={{ color: T.accent }} />}
+                      {isSelected && <Check size={12} className="ml-auto mt-0.5" style={{ color: T.accentText }} />}
                     </div>
                   </div>
                 )
@@ -386,12 +386,12 @@ function ChartTabContent({ trades = [], onOpenTrade, onUpdateTrade }) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="th-page th-page-chart space-y-4">
       {/* Top Header / Mode Switcher */}
       <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-xl" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <LineChart size={20} style={{ color: T.accent }} />
+            <LineChart size={20} style={{ color: T.accentText }} />
             <span className="font-semibold text-base">Chart Workstation</span>
           </div>
 
@@ -481,7 +481,7 @@ function ChartTabContent({ trades = [], onOpenTrade, onUpdateTrade }) {
                 onClick={handleOpenDetached}
                 title="Pop out chart into a separate floating window for multi-monitor setups"
                 className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-opacity hover:opacity-80"
-                style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}` }}
+                style={{ background: T.surface2, color: T.accentText, border: `1px solid ${T.line}` }}
               >
                 <Maximize2 size={12} /> Pop Out Window
               </button>
@@ -628,11 +628,11 @@ function ChartTabContent({ trades = [], onOpenTrade, onUpdateTrade }) {
                   className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all"
                   style={{
                     background: isSolidifying ? 'rgba(96, 165, 250, 0.2)' : T.surface2,
-                    color: isSolidifying ? T.accent : T.text,
+                    color: isSolidifying ? T.accentText : T.text,
                     border: `1px solid ${isSolidifying ? T.accent : T.line}`
                   }}
                 >
-                  <Lock size={13} style={{ color: T.accent }} />
+                  <Lock size={13} style={{ color: T.accentText }} />
                   {isSolidifying ? 'Close Execution Solidifier' : 'Solidify Execution Table'}
                 </button>
               </div>
@@ -640,7 +640,7 @@ function ChartTabContent({ trades = [], onOpenTrade, onUpdateTrade }) {
               {/* Inline Execution Solidifier Form */}
               {isSolidifying && (
                 <div className="p-3 rounded-lg space-y-2.5 border mt-2 text-xs" style={{ background: T.surface2, borderColor: T.line }}>
-                  <div className="font-semibold flex items-center gap-1" style={{ color: T.accent }}>
+                  <div className="font-semibold flex items-center gap-1" style={{ color: T.accentText }}>
                     <Edit3 size={13} /> Solidify Trade Parameters
                   </div>
 
@@ -774,7 +774,7 @@ function ChartTabContent({ trades = [], onOpenTrade, onUpdateTrade }) {
                   type="button"
                   onClick={() => onOpenTrade(selectedTrade)}
                   className="w-full py-2 rounded-lg text-xs font-semibold mt-2 transition-opacity hover:opacity-80"
-                  style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}` }}
+                  style={{ background: T.surface2, color: T.accentText, border: `1px solid ${T.line}` }}
                 >
                   Edit Full Trade Details & Screenshots
                 </button>

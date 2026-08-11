@@ -123,7 +123,7 @@ export function AnnotateModal({ src, onSave, onClose }) {
   const TOOLS = [['pen', 'Pen', Pencil], ['line', 'Line', Minus], ['rect', 'Box', Square], ['arrow', 'Arrow', ArrowUpRight], ['text', 'Text', Type]]
   const btn = (active) => ({
     display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, padding: '6px 9px', borderRadius: 8, cursor: 'pointer',
-    background: active ? T.accentSoft : T.surface2, color: active ? T.accent : T.dim, border: `1px solid ${active ? T.accent : T.line}`
+    background: active ? T.accentSoft : T.surface2, color: active ? T.accentText : T.dim, border: `1px solid ${active ? T.accent : T.line}`
   })
 
   return createPortal(

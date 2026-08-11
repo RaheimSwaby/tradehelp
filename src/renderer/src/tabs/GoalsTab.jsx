@@ -17,8 +17,8 @@ export function Goals({ goals = {}, onSave, trades = [], now = new Date(), commi
   useEffect(() => { setW(String(goals.weekly ?? 0)); setM(String(goals.monthly ?? 0)) }, [goals])
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="th-page th-page-goals space-y-4">
+      <div className="th-goals-overview grid grid-cols-1 md:grid-cols-2 gap-4">
         <Panel title="Targets">
           <div className="grid grid-cols-2 gap-3">
             <Field label="Weekly $"><input style={inputStyle} className="w-full rounded px-2 py-1.5 text-sm" value={w} onChange={(e) => setW(e.target.value)} inputMode="decimal" /></Field>

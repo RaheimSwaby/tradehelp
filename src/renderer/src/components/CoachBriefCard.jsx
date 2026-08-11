@@ -51,11 +51,11 @@ export function CoachBriefCard({ trades, stats, settings, journalData = {}, onSa
   }, [snapshot, settings?.proactiveCoachEnabled, settings?.provider, settings?.cloudKey, settings?.ollamaModel])
 
   return (
-    <section className="rounded-lg overflow-hidden" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
+    <section className="th-coach-brief rounded-lg overflow-hidden" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
       <div className="px-4 py-3 flex items-center gap-2" style={{ borderBottom: `1px solid ${T.line}` }}>
-        <Bot size={16} style={{ color: T.accent }} />
+        <Bot size={16} style={{ color: T.dim }} />
         <span className="text-sm font-semibold">Coach brief</span>
-        <span className="text-xs ml-auto" style={{ color: aiText ? T.up : T.faint }}>{aiText ? 'AI enhanced' : 'Always available'}</span>
+        <span className="text-xs ml-auto" style={{ color: aiText ? T.up : T.faint }}>{aiText ? 'AI summary' : 'Journal summary'}</span>
       </div>
       <div className="p-4 grid grid-cols-1 lg:grid-cols-[1.2fr_1fr] gap-4">
         <div>
@@ -65,20 +65,20 @@ export function CoachBriefCard({ trades, stats, settings, journalData = {}, onSa
             : <p className="text-sm mt-1 leading-relaxed" style={{ color: T.dim }}>{brief.summary}</p>}
           <div className="flex flex-wrap gap-2 mt-3">
             {aiConfigured(settings) && (
-              <button type="button" onClick={() => enhance(true)} disabled={loading} className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md" style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}` }}>
-                {loading ? <RefreshCw size={13} className="animate-spin" /> : <Sparkles size={13} />} {loading ? 'Reviewing...' : aiText ? 'Refresh AI read' : 'Add AI read'}
+              <button type="button" onClick={() => enhance(true)} disabled={loading} className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md" style={{ background: T.surface2, color: T.text, border: `1px solid ${T.line}` }}>
+                {loading ? <RefreshCw size={13} className="animate-spin" /> : <Sparkles size={13} />} {loading ? 'Reviewing...' : aiText ? 'Refresh summary' : 'Generate summary'}
               </button>
             )}
             <button type="button" onClick={onOpenCoach} className="text-xs px-2.5 py-1.5 rounded-md" style={{ color: T.dim, border: `1px solid ${T.line}` }}>Open coach</button>
           </div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-2">
+        <div className="th-coach-brief-actions grid grid-cols-1 sm:grid-cols-2 gap-2">
           <div className="rounded-md p-3" style={{ background: T.surface2 }}>
             <div className="text-xs uppercase" style={{ color: T.up }}>Keep</div>
             <div className="text-sm mt-1" style={{ color: T.text }}>{brief.strength}</div>
           </div>
           <div className="rounded-md p-3" style={{ background: T.surface2 }}>
-            <div className="text-xs uppercase" style={{ color: T.accent }}>Next focus</div>
+            <div className="text-xs uppercase" style={{ color: T.dim }}>Next focus</div>
             <div className="text-sm mt-1" style={{ color: T.text }}>{brief.focus}</div>
           </div>
         </div>

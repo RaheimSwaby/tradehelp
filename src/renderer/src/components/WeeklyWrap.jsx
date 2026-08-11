@@ -41,9 +41,9 @@ export function WeeklyWrapContent({ wrap, hideFocus = false }) {
       </div>
       {!hideFocus && (
         <div className="rounded-lg p-3.5 flex gap-3" style={{ background: T.accentSoft, border: `1px solid ${T.accent}55` }}>
-          <Target size={18} style={{ color: T.accent, flexShrink: 0, marginTop: 1 }} />
+          <Target size={18} style={{ color: T.accentText, flexShrink: 0, marginTop: 1 }} />
           <div>
-            <div className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: T.accent }}>One focus for next {noun}</div>
+            <div className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: T.accentText }}>One focus for next {noun}</div>
             <div className="text-sm mt-1" style={{ color: T.text }}>{wrap.focus}</div>
           </div>
         </div>
@@ -91,7 +91,7 @@ export function WeeklyWrapModal({ wrap, settings = {}, onClose, onOpenReview, on
         <div className="p-5 sm:p-6" style={{ borderBottom: `1px solid ${T.line}` }}>
           <div className="flex items-start justify-between gap-4">
             <div>
-              <div className="text-[10px] uppercase tracking-[.24em] font-semibold" style={{ color: T.accent }}>Your {noun} in review</div>
+              <div className="text-[10px] uppercase tracking-[.24em] font-semibold" style={{ color: T.accentText }}>Your {noun} in review</div>
               <h2 className="text-2xl sm:text-3xl font-semibold mt-1">{periodLabel(wrap.weekKey, noun)}</h2>
               <p className="text-sm mt-2" style={{ color: T.dim }}>{wrap.headline}</p>
             </div>
@@ -113,8 +113,8 @@ export function WeeklyWrapModal({ wrap, settings = {}, onClose, onOpenReview, on
 
           <div className="rounded-lg p-3.5 mt-4" style={{ background: T.accentSoft, border: `1px solid ${T.accent}55` }}>
             <div className="flex items-center gap-2">
-              <Target size={16} style={{ color: T.accent }} />
-              <span className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: T.accent }}>One focus for next {noun}</span>
+              <Target size={16} style={{ color: T.accentText }} />
+              <span className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: T.accentText }}>One focus for next {noun}</span>
             </div>
             <textarea
               value={focus}
@@ -142,7 +142,7 @@ export function WeeklyWrapModal({ wrap, settings = {}, onClose, onOpenReview, on
             </div>
           )}
           <div className="flex flex-wrap justify-between gap-2 mt-5">
-            <button type="button" onClick={addCoachNote} disabled={coach?.loading} className="rounded-md px-3 py-2 text-sm flex items-center gap-1.5" style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}` }}><Sparkles size={14} /> Add optional Coach note</button>
+            <button type="button" onClick={addCoachNote} disabled={coach?.loading} className="rounded-md px-3 py-2 text-sm flex items-center gap-1.5" style={{ background: T.surface2, color: T.accentText, border: `1px solid ${T.line}` }}><Sparkles size={14} /> Add optional Coach note</button>
             <div className="flex gap-2">
               <button type="button" onClick={onClose} className="rounded-md px-3 py-2 text-sm" style={{ color: T.dim }}>Done</button>
               <button type="button" onClick={onOpenReview} className="rounded-md px-3 py-2 text-sm font-semibold flex items-center gap-1.5" style={{ background: T.accent, color: '#1A1306' }}>Open {noun}ly review <ArrowRight size={14} /></button>

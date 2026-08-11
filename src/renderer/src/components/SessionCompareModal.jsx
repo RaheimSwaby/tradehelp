@@ -122,7 +122,7 @@ export function SessionCompareModal({ trades = [], plans = [], onClose, onOpenTr
     <div className="th-overlay fixed inset-0 z-[75] flex items-center justify-center p-3 sm:p-4" style={{ background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)' }} onClick={onClose}>
       <div className="w-full max-w-6xl max-h-[92vh] overflow-y-auto rounded-2xl" style={{ background: T.surface, border: `1px solid ${T.line}` }} onClick={(event) => event.stopPropagation()}>
         <div className="sticky top-0 z-10 flex items-center gap-3 px-4 sm:px-5 py-4" style={{ background: T.surface, borderBottom: `1px solid ${T.line}` }}>
-          <GitCompareArrows size={18} style={{ color: T.accent }} />
+          <GitCompareArrows size={18} style={{ color: T.accentText }} />
           <div><div className="text-sm font-semibold">Compare sessions</div><div className="text-xs" style={{ color: T.dim }}>Side-by-side observations from recorded trade days</div></div>
           <button type="button" onClick={onClose} className="ml-auto" style={{ color: T.faint }} aria-label="Close session comparison"><X size={18} /></button>
         </div>
@@ -174,13 +174,13 @@ export function SessionCompareModal({ trades = [], plans = [], onClose, onOpenTr
                       </ResponsiveContainer>
                     </div>
                     <div className="flex flex-wrap gap-4 text-xs mt-1">
-                      <span style={{ color: T.accent }}>● {dateLabel(left.date)}</span>
+                      <span style={{ color: T.accentText }}>● {dateLabel(left.date)}</span>
                       <span style={{ color: T.up }}>● {dateLabel(right.date)}</span>
                     </div>
                   </div>
 
                   <div className="rounded-xl p-3 sm:p-4" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
-                    <div className="text-xs uppercase tracking-wider font-semibold" style={{ color: T.accent }}>Observed differences</div>
+                    <div className="text-xs uppercase tracking-wider font-semibold" style={{ color: T.accentText }}>Observed differences</div>
                     <ul className="mt-2 space-y-1.5 text-sm" style={{ color: T.dim }}>{callouts.map((text) => <li key={text}>• {text}</li>)}</ul>
                     <div className="text-[11px] mt-3" style={{ color: T.faint }}>These are numeric differences in your records; they do not establish what caused either result.</div>
                   </div>

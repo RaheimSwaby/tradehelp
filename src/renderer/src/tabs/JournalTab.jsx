@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { Plus, Trash2, Upload, Paperclip, X, Pencil, ImagePlus, Video, ChevronLeft, ChevronRight, Search, CalendarOff, Check, Coffee, Bookmark, ArrowUp, ArrowDown, Inbox, RotateCcw } from 'lucide-react'
-import { T, mono, inputStyle } from '../theme.js'
+import { T, mono, inputStyle, withAlpha } from '../theme.js'
 import { fmt$, fmtN, nowLocalInput, parseLocal, holdMs, fmtDuration, EMOTIONS, SETUPS, WIN_REASONS, LOSS_REASONS, SELF_GRADES, pad2, MONTHS, downscale, fileToDataUrl } from '../utils.js'
 import { Field, Panel, GradeChip } from '../components/Shared.jsx'
 import { ImportModal } from '../widgets/ImportModal.jsx'
@@ -464,33 +464,90 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
 
   const inp = 'w-full rounded px-2 py-1.5 text-sm'
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-5">
-      <div className="rounded-xl p-4" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
-        <div className="flex items-center gap-2 mb-3">
-          {editing ? <Pencil size={16} style={{ color: T.accent }} /> : <Plus size={16} style={{ color: T.accent }} />}
-          <h2 className="text-sm font-semibold">{editing ? `Edit trade · ${editing.symbol}` : 'Log a trade'}</h2>
-          {editing
-            ? <button type="button" onClick={cancelEdit} className="ml-auto text-xs" style={{ color: T.dim }}>Cancel</button>
-            : (
-              <button type="button" onClick={toggleSimple} title="Simple journal hides the advanced price/risk fields for a faster log"
-                className="ml-auto flex items-center gap-1.5 text-xs px-2 py-1 rounded-md"
-                style={{ background: simple ? T.accentSoft : T.surface2, color: simple ? T.accent : T.dim, border: `1px solid ${simple ? T.accent : T.line}` }}>
-                <span style={{ width: 9, height: 9, borderRadius: 3, background: simple ? T.accent : 'transparent', border: `1px solid ${simple ? T.accent : T.faint}`, display: 'inline-block' }} />
-                Simple journal
-              </button>
-            )}
+    <div className="th-page th-page-journal th-journal-workspace grid grid-cols-1 gap-4">
+      <div className="th-journal-entry-panel rounded-xl" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
+        <div className="th-journal-actions flex flex-wrap items-center gap-2">
+          <button type="button" onClick={toggleSimple} title="Simple journal hides advanced price and risk fields"
+            className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md"
+            style={{ background: simple ? T.accentSoft : 'transparent', color: simple ? T.accentText : T.dim, border: `1px solid ${simple ? T.accent : T.line}` }}>
+            <span style={{ width: 9, height: 9, borderRadius: 2, background: simple ? T.accent : 'transparent', border: `1px solid ${simple ? T.accent : T.faint}`, display: 'inline-block' }} />
+            Simple journal
+          </button>
+          <button type="button" onClick={() => setNoTradeOpen(true)} className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md" style={{ color: T.dim, border: `1px solid ${T.line}` }}><Coffee size={13} /> No-trade day</button>
+          <button type="button" onClick={undoDelete} disabled={!pendingDelete} className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md" style={{ color: pendingDelete ? T.accentText : T.faint, border: `1px solid ${T.line}`, opacity: pendingDelete ? 1 : 0.55 }}><RotateCcw size={13} /> Undo delete{pendingDelete ? ` (${undoSeconds}s)` : ''}</button>
+          <button type="button" onClick={() => setImportCenterOpen(true)} className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md" style={{ color: importInboxCount ? T.accentText : T.dim, border: `1px solid ${T.line}` }}><Inbox size={13} /> Inbox{importInboxCount ? ` ${importInboxCount}` : ''}</button>
+          <button type="button" onClick={() => { setPendingImport(null); setImportOpen(true) }} className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md" style={{ color: T.dim, border: `1px solid ${T.line}` }}><Upload size={13} /> Import CSV</button>
         </div>
+        {editing && <div className="th-editing-trade flex items-center gap-2"><Pencil size={14} style={{ color: T.accentText }} /><strong>Edit {editing.symbol}</strong><button type="button" onClick={cancelEdit} className="ml-auto text-xs" style={{ color: T.dim }}>Cancel</button></div>}
+        <section className="th-form-section">
+          <div className="th-section-label">1. Basics</div>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Symbol"><input style={inputStyle} className={inp} value={f.symbol} onChange={setSymbol} placeholder="ES, BTC, AAPL" /></Field>
+          <Field label="Symbol"><input style={inputStyle} className={inp} value={f.symbol} onChange={setSymbol} placeholder="ES, EURUSD, BTC, AAPL" /></Field>
           <Field label="Direction">
-            <select style={inputStyle} className={inp} value={f.direction} onChange={set('direction')}><option>Long</option><option>Short</option></select>
+            <div className="th-direction-switch flex">
+              {['Long', 'Short'].map((direction) => (
+                <button key={direction} type="button" onClick={() => setF((current) => ({ ...current, direction }))}
+                  aria-pressed={f.direction === direction}
+                  className="flex-1 px-3 py-1.5 text-sm"
+                  style={{ color: f.direction === direction ? (direction === 'Long' ? T.up : T.down) : T.dim, background: f.direction === direction ? T.surface2 : 'transparent', border: `1px solid ${f.direction === direction ? (direction === 'Long' ? T.up : T.down) : T.line}` }}>
+                  {direction}
+                </button>
+              ))}
+            </div>
           </Field>
+          <Field label="Account">
+            <select style={inputStyle} className={inp} value={f.account} onChange={set('account')}>
+              <option value="">Live / personal</option>
+              {accounts.map((a) => <option key={a.id} value={a.id}>{a.label || 'Account'}</option>)}
+            </select>
+          </Field>
+          <Field label="Setup / strategy">
+            <div className="flex gap-1.5">
+              <select style={inputStyle} className={inp} value={f.setup} onChange={set('setup')}>
+                {!setupOptions.includes(f.setup) && f.setup && <option value={f.setup}>{f.setup}</option>}
+                {setupOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <button type="button" onClick={() => { setAddingSetup((v) => !v); setAddingEmotion(false) }} title="Add a custom setup or strategy" className="shrink-0 rounded px-2" style={{ background: T.surface2, border: `1px solid ${T.line}`, color: T.accentText }}><Plus size={14} /></button>
+            </div>
+            {addingSetup && (
+              <div className="flex gap-1.5 mt-1.5">
+                <input autoFocus style={inputStyle} className={inp} value={newSetup} onChange={(e) => setNewSetup(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSetup() } if (e.key === 'Escape') setAddingSetup(false) }} placeholder="New setup or strategy" />
+                <button type="button" onClick={addSetup} className="shrink-0 rounded px-2" style={{ background: T.accent, color: '#1A1306' }}><Check size={14} /></button>
+              </div>
+            )}
+          </Field>
+          <Field label="Emotion">
+            <div className="flex gap-1.5">
+              <select style={inputStyle} className={inp} value={f.emotion} onChange={set('emotion')}>
+                {f.emotion && !allEmotions.includes(f.emotion) && <option value={f.emotion}>{f.emotion}</option>}
+                {allEmotions.map((e) => <option key={e}>{e}</option>)}
+              </select>
+              <button type="button" onClick={() => { setAddingEmotion((v) => !v); setAddingSetup(false) }} title="Add a custom emotion" className="shrink-0 rounded px-2" style={{ background: T.surface2, border: `1px solid ${T.line}`, color: T.accentText }}><Plus size={14} /></button>
+            </div>
+            {addingEmotion && (
+              <div className="flex gap-1.5 mt-1.5">
+                <input autoFocus style={inputStyle} className={inp} value={newEmotion} onChange={(e) => setNewEmotion(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addEmotion() } if (e.key === 'Escape') setAddingEmotion(false) }} placeholder="New emotion" />
+                <button type="button" onClick={addEmotion} className="shrink-0 rounded px-2" style={{ background: T.accent, color: '#1A1306' }}><Check size={14} /></button>
+              </div>
+            )}
+          </Field>
+          <Field label={isWin === false ? 'Why did it lose?' : 'Why did it win?'}>
+            <select style={inputStyle} className={inp} value={f.reason} onChange={set('reason')}>
+              <option value="">— optional, nudges your rating —</option>
+              {reasonOptions.map((rr) => <option key={rr} value={rr}>{rr}</option>)}
+            </select>
+          </Field>
+        </div>
+        </section>
+        <section className="th-form-section">
+          <div className="th-section-label">2. Prices &amp; risk</div>
+        <div className="grid grid-cols-2 gap-3">
           {!compact && <>
-            <div className="col-span-2 flex items-center gap-1 rounded-md p-1" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
+            <div className="th-risk-mode-switch col-span-2 flex items-center gap-1 rounded-md p-1" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
               {[['price', 'Price levels'], ['points', 'Points']].map(([mode, label]) => (
                 <button key={mode} type="button" onClick={() => setF((current) => ({ ...current, riskMode: mode }))}
                   className="flex-1 rounded px-2 py-1.5 text-xs font-semibold"
-                  style={{ background: f.riskMode === mode ? T.surface : 'transparent', color: f.riskMode === mode ? T.accent : T.dim, border: `1px solid ${f.riskMode === mode ? T.line : 'transparent'}` }}>
+                  style={{ background: f.riskMode === mode ? T.surface : 'transparent', color: f.riskMode === mode ? T.accentText : T.dim, border: `1px solid ${f.riskMode === mode ? T.line : 'transparent'}` }}>
                   {label}
                 </button>
               ))}
@@ -527,87 +584,49 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
             </div>
           </div>
         )}
-        {!compact && <div className="grid grid-cols-3 gap-2 mt-3">
-          <Field label="Analysis TF"><input list="tradehelp-timeframes" style={inputStyle} className={inp} value={f.analysisTimeframe} onChange={set('analysisTimeframe')} placeholder="4h" /></Field>
-          <Field label="Entry TF"><input list="tradehelp-timeframes" style={inputStyle} className={inp} value={f.entryTimeframe} onChange={set('entryTimeframe')} placeholder="1m" /></Field>
-          <Field label="Manage TF"><input list="tradehelp-timeframes" style={inputStyle} className={inp} value={f.managementTimeframe} onChange={set('managementTimeframe')} placeholder="5m" /></Field>
-          <datalist id="tradehelp-timeframes">{TIMEFRAMES.map((timeframe) => <option key={timeframe} value={timeframe} />)}</datalist>
-        </div>}
-        <div className="grid grid-cols-2 gap-3 mt-3">
-          <Field label={compact ? 'Date & time' : 'Entry time'}><input type="datetime-local" style={inputStyle} className={inp} value={f.entryTime} onChange={set('entryTime')} /></Field>
-          {!compact && <Field label="Exit time"><input type="datetime-local" style={inputStyle} className={inp} value={f.exitTime} onChange={set('exitTime')} /></Field>}
-        </div>
-        <div className="grid grid-cols-2 gap-3 mt-3">
-          <Field label="Emotion">
-            <div className="flex gap-1.5">
-              <select style={inputStyle} className={inp} value={f.emotion} onChange={set('emotion')}>
-                {f.emotion && !allEmotions.includes(f.emotion) && <option value={f.emotion}>{f.emotion}</option>}
-                {allEmotions.map((e) => <option key={e}>{e}</option>)}
-              </select>
-              <button type="button" onClick={() => { setAddingEmotion((v) => !v); setAddingSetup(false) }} title="Add a custom emotion" className="shrink-0 rounded px-2" style={{ background: T.surface2, border: `1px solid ${T.line}`, color: T.accent }}><Plus size={14} /></button>
-            </div>
-            {addingEmotion && (
-              <div className="flex gap-1.5 mt-1.5">
-                <input autoFocus style={inputStyle} className={inp} value={newEmotion} onChange={(e) => setNewEmotion(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addEmotion() } if (e.key === 'Escape') setAddingEmotion(false) }} placeholder="New emotion" />
-                <button type="button" onClick={addEmotion} className="shrink-0 rounded px-2" style={{ background: T.accent, color: '#1A1306' }}><Check size={14} /></button>
-              </div>
-            )}
-          </Field>
-          <Field label="Setup / strategy">
-            <div className="flex gap-1.5">
-              <select style={inputStyle} className={inp} value={f.setup} onChange={set('setup')}>
-                {!setupOptions.includes(f.setup) && f.setup && <option value={f.setup}>{f.setup}</option>}
-                {setupOptions.map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
-              <button type="button" onClick={() => { setAddingSetup((v) => !v); setAddingEmotion(false) }} title="Add a custom setup or strategy" className="shrink-0 rounded px-2" style={{ background: T.surface2, border: `1px solid ${T.line}`, color: T.accent }}><Plus size={14} /></button>
-            </div>
-            {addingSetup && (
-              <div className="flex gap-1.5 mt-1.5">
-                <input autoFocus style={inputStyle} className={inp} value={newSetup} onChange={(e) => setNewSetup(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSetup() } if (e.key === 'Escape') setAddingSetup(false) }} placeholder="New setup or strategy" />
-                <button type="button" onClick={addSetup} className="shrink-0 rounded px-2" style={{ background: T.accent, color: '#1A1306' }}><Check size={14} /></button>
-              </div>
-            )}
-          </Field>
-        </div>
-        <div className="mt-3">
-          <Field label={isWin === false ? 'Why did it lose?' : 'Why did it win?'}>
-            <select style={inputStyle} className={inp} value={f.reason} onChange={set('reason')}>
-              <option value="">— optional, nudges your rating —</option>
-              {reasonOptions.map((rr) => <option key={rr} value={rr}>{rr}</option>)}
-            </select>
-          </Field>
-        </div>
+        </section>
+        <section className="th-form-section">
+          <div className="th-section-label">3. Context</div>
         {!compact && (
-          <div className="grid grid-cols-2 gap-3 mt-3">
-            <Field label="Setup grade (self)">
-              <select style={inputStyle} className={inp} value={f.selfSetup} onChange={set('selfSetup')}>
-                <option value="">— ungraded —</option>
-                {SELF_GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
-              </select>
-            </Field>
-            <Field label="Execution grade (self)">
-              <select style={inputStyle} className={inp} value={f.selfExec} onChange={set('selfExec')}>
-                <option value="">— ungraded —</option>
-                {SELF_GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
-              </select>
-            </Field>
+          <div className="th-context-grid grid gap-3">
+            <Field label="Analysis TF"><input list="tradehelp-timeframes" style={inputStyle} className={inp} value={f.analysisTimeframe} onChange={set('analysisTimeframe')} placeholder="4h" /></Field>
+            <Field label="Entry TF"><input list="tradehelp-timeframes" style={inputStyle} className={inp} value={f.entryTimeframe} onChange={set('entryTimeframe')} placeholder="1m" /></Field>
+            <Field label="Manage TF"><input list="tradehelp-timeframes" style={inputStyle} className={inp} value={f.managementTimeframe} onChange={set('managementTimeframe')} placeholder="5m" /></Field>
+            <Field label="Entry time"><input type="datetime-local" style={inputStyle} className={inp} value={f.entryTime} onChange={set('entryTime')} /></Field>
+            <Field label="Exit time"><input type="datetime-local" style={inputStyle} className={inp} value={f.exitTime} onChange={set('exitTime')} /></Field>
+            <datalist id="tradehelp-timeframes">{TIMEFRAMES.map((timeframe) => <option key={timeframe} value={timeframe} />)}</datalist>
           </div>
         )}
-        {accounts.length > 0 && (
+        {compact && (
           <div className="mt-3">
-            <Field label="Account — Live or which prop account">
-              <select style={inputStyle} className={inp} value={f.account} onChange={set('account')}>
-                <option value="">Live / personal</option>
-                {accounts.map((a) => <option key={a.id} value={a.id}>{a.label || 'Account'}</option>)}
-              </select>
-            </Field>
+            <Field label="Date & time"><input type="datetime-local" style={inputStyle} className={inp} value={f.entryTime} onChange={set('entryTime')} /></Field>
           </div>
         )}
+        {!compact && (
+          <div className="th-grade-grid grid grid-cols-2 gap-3 mt-3">
+            {[['Setup grade', 'selfSetup'], ['Execution grade', 'selfExec']].map(([label, key]) => (
+              <Field key={key} label={label}>
+                <div className="th-grade-switch flex">
+                  {SELF_GRADES.map((grade) => (
+                    <button key={grade} type="button" onClick={() => setF((current) => ({ ...current, [key]: current[key] === grade ? '' : grade }))}
+                      className="flex-1 px-2 py-1.5 text-xs"
+                      style={{ color: f[key] === grade ? T.accentText : T.dim, background: f[key] === grade ? T.accentSoft : 'transparent', border: `1px solid ${f[key] === grade ? T.accent : T.line}` }}>
+                      {grade}
+                    </button>
+                  ))}
+                </div>
+              </Field>
+            ))}
+          </div>
+        )}
+        </section>
+        <section className="th-form-section">
+          <div className="th-section-label">4. Execution details</div>
         {!compact && (
           <div className="mt-3 rounded-lg p-3" style={{ background: T.surface2, border: `1px solid ${fillsEnabled ? T.accent : T.line}` }}>
             <div className="flex flex-wrap items-center gap-2">
-              <button type="button" onClick={toggleFills} className="rounded-md px-2.5 py-1.5 text-xs font-semibold" style={{ background: fillsEnabled ? T.accentSoft : T.surface, color: fillsEnabled ? T.accent : T.dim, border: `1px solid ${fillsEnabled ? T.accent : T.line}` }}>{fillsEnabled ? 'Use multiple fills: on' : 'Use multiple fills'}</button>
-              {fillsEnabled && <button type="button" onClick={addFill} className="ml-auto flex items-center gap-1 text-xs" style={{ color: T.accent }}><Plus size={12} /> Add fill</button>}
+              <button type="button" onClick={toggleFills} className="rounded-md px-2.5 py-1.5 text-xs font-semibold" style={{ background: fillsEnabled ? T.accentSoft : T.surface, color: fillsEnabled ? T.accentText : T.dim, border: `1px solid ${fillsEnabled ? T.accent : T.line}` }}>{fillsEnabled ? 'Use multiple fills: on' : 'Use multiple fills'}</button>
+              {fillsEnabled && <button type="button" onClick={addFill} className="ml-auto flex items-center gap-1 text-xs" style={{ color: T.accentText }}><Plus size={12} /> Add fill</button>}
             </div>
             {fillsEnabled && (
               <div className="space-y-2 mt-3">
@@ -674,6 +693,9 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
             </Field>
           </div>
         )}
+        </section>
+        <section className="th-form-section">
+          <div className="th-section-label">5. Notes and media</div>
         <div className="mt-3">
           <Field label="Notes"><textarea style={inputStyle} className={inp} rows={3} value={f.notes} onChange={set('notes')} placeholder="What did you see? What did you feel?" /></Field>
         </div>
@@ -685,7 +707,7 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
               onDragOver={(e) => e.preventDefault()}
               className="w-full rounded px-3 py-3 text-center cursor-pointer"
               style={{ background: T.surface2, border: `1px dashed ${T.line}` }}>
-              <ImagePlus size={18} style={{ color: T.accent, display: 'inline', verticalAlign: 'middle' }} />
+              <ImagePlus size={18} style={{ color: T.accentText, display: 'inline', verticalAlign: 'middle' }} />
               <span className="text-xs ml-2" style={{ color: T.dim }}>Choose before + after together, paste (Ctrl+V), or drop images</span>
             </button>
             <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { addImageFiles([...(e.target.files || [])]); e.target.value = '' }} />
@@ -697,7 +719,7 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
                   <div className="relative">
                     <img src={im.dataUrl} alt="" className="w-full h-20 object-cover" />
                     <button type="button" onClick={() => removeImage(im.tmpId)} className="absolute top-1 right-1 rounded p-0.5" style={{ background: 'rgba(0,0,0,0.6)', color: '#fff' }}><X size={13} /></button>
-                    <button type="button" onClick={() => setAnnotating(im)} className="absolute bottom-1 left-1 rounded px-1.5 py-0.5 text-[10px] font-semibold flex items-center gap-1" style={{ background: 'rgba(0,0,0,0.6)', color: T.accent }}><Pencil size={10} /> Mark up</button>
+                    <button type="button" onClick={() => setAnnotating(im)} className="absolute bottom-1 left-1 rounded px-1.5 py-0.5 text-[10px] font-semibold flex items-center gap-1" style={{ background: 'rgba(0,0,0,0.6)', color: T.accentText }}><Pencil size={10} /> Mark up</button>
                     {im.labels?.length > 0 && <span className="absolute bottom-1 right-1 rounded px-1.5 py-0.5 text-[10px]" style={{ background: 'rgba(0,0,0,0.6)', color: T.up }}>{im.labels.join(' · ')}</span>}
                   </div>
                   <input style={inputStyle} className="w-full px-2 py-1 text-xs" value={im.tag} onChange={(e) => setTag(im.tmpId, e.target.value)} placeholder="tag (e.g. Before)" />
@@ -710,7 +732,7 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
           <Field label={editing ? 'Add screen recordings' : 'Screen recordings'}>
             <button type="button" onClick={pickVideoFiles} className="w-full rounded px-3 py-3 text-center"
               style={{ background: T.surface2, border: `1px dashed ${T.line}`, color: T.dim }}>
-              <Video size={18} style={{ color: T.accent, display: 'inline', verticalAlign: 'middle' }} />
+              <Video size={18} style={{ color: T.accentText, display: 'inline', verticalAlign: 'middle' }} />
               <span className="text-xs ml-2">Choose MP4, WebM, MOV, or M4V files</span>
             </button>
             <div className="text-[10px] mt-1" style={{ color: T.faint }}>Up to 10 recordings, 2 GB each. Files are copied into TradeHelp and stay on this machine.</div>
@@ -719,7 +741,7 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
             <div className="space-y-2 mt-2">
               {videos.map((video) => (
                 <div key={video.token} className="flex items-center gap-2 rounded-lg px-3 py-2" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
-                  <Video size={16} className="shrink-0" style={{ color: T.accent }} />
+                  <Video size={16} className="shrink-0" style={{ color: T.accentText }} />
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-xs" title={video.name} style={{ color: T.text }}>{video.name}</div>
                     <div className="text-[10px]" style={{ color: T.faint }}>{formatFileSize(video.size)}</div>
@@ -730,6 +752,7 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
             </div>
           )}
         </div>
+        </section>
         <div className="flex items-center justify-between mt-3 text-xs" style={{ color: T.dim }}>
           {!compact && <span>R:R {derivedRR != null ? `1:${fmtN(derivedRR, 1)}` : '—'}</span>}
           {!compact && <span>Held {derivedHold != null ? fmtDuration(derivedHold) || '0m' : '—'}</span>}
@@ -737,15 +760,12 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
         </div>
         <div className="flex gap-2 mt-3">
           <button type="button" onClick={submit} disabled={submitting || !f.symbol.trim() || (fillsEnabled && !fillPreview?.valid)} className="flex-1 rounded-md py-2 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306', opacity: submitting || !f.symbol.trim() || (fillsEnabled && !fillPreview?.valid) ? 0.5 : 1 }}>{submitting ? 'Saving…' : editing ? 'Update trade' : 'Save trade'}</button>
-          {editing && <button type="button" onClick={cancelEdit} disabled={submitting} className="rounded-md px-3 py-2 text-sm" style={{ background: T.surface2, color: T.text, border: `1px solid ${T.line}`, opacity: submitting ? 0.5 : 1 }}>Cancel</button>}
+          <button type="button" onClick={cancelEdit} disabled={submitting} className="flex-1 rounded-md px-3 py-2 text-sm" style={{ background: 'transparent', color: T.accentText, border: `1px solid ${T.line}`, opacity: submitting ? 0.5 : 1 }}>{editing ? 'Cancel' : 'Reset'}</button>
         </div>
         {submitError && <div className="text-xs mt-2" style={{ color: T.down }}>{submitError}</div>}
 
         {!editing && (
           <>
-            <button type="button" onClick={() => setNoTradeOpen(true)} className="w-full mt-2 flex items-center justify-center gap-1.5 rounded-md py-2 text-sm" style={{ background: 'transparent', color: T.dim, border: `1px dashed ${T.line}` }}>
-              <Coffee size={14} /> Log a no-trade day
-            </button>
             {dayLogs.length > 0 && (
               <div className="mt-3">
                 <div className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: T.dim }}><CalendarOff size={12} /> No-trade days · {dayLogs.length}</div>
@@ -767,23 +787,14 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
         )}
       </div>
 
-      <div className="rounded-xl overflow-hidden" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
-        <div className="px-4 py-3" style={{ borderBottom: `1px solid ${T.line}` }}>
+      <div className="th-journal-history rounded-xl overflow-hidden" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
+        <div className="th-history-toolbar px-4 py-3" style={{ borderBottom: `1px solid ${T.line}` }}>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-sm font-semibold">Trade history <span style={{ color: T.faint }}>· {filtered.length === trades.length ? trades.length : `${filtered.length} of ${trades.length}`}</span></span>
-            <div className="flex flex-wrap items-center gap-2">
-              <button type="button" onClick={undoDelete} disabled={!pendingDelete} title={pendingDelete ? `Restore ${pendingDelete.symbol}` : 'No recently deleted trade'}
-                className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-md"
-                style={{ background: T.surface2, color: pendingDelete ? T.accent : T.faint, border: `1px solid ${T.line}`, opacity: pendingDelete ? 1 : 0.55, cursor: pendingDelete ? 'pointer' : 'not-allowed' }}>
-                <RotateCcw size={13} /> Undo delete{pendingDelete ? ` (${undoSeconds}s)` : ''}
-              </button>
-              <button type="button" onClick={() => setImportCenterOpen(true)} className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-md" style={{ background: T.surface2, color: importInboxCount ? T.accent : T.dim, border: `1px solid ${T.line}` }}><Inbox size={13} /> Inbox{importInboxCount ? ` ${importInboxCount}` : ''}</button>
-              <button type="button" onClick={() => { setPendingImport(null); setImportOpen(true) }} className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-md" style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}` }}><Upload size={13} /> Import CSV</button>
-            </div>
           </div>
           {timingDrilldown && (
             <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs" role="status" style={{ background: T.accentSoft, border: `1px solid ${T.accent}`, color: T.text }}>
-              <span style={{ color: T.accent }}>Timing drilldown</span>
+              <span style={{ color: T.accentText }}>Timing drilldown</span>
               <strong>{describeJournalDrilldown(timingDrilldown)}</strong>
               <span style={{ color: T.dim }}>{filtered.length} matching trade{filtered.length === 1 ? '' : 's'}; add symbol, setup/strategy, account, or outcome filters below.</span>
               <button type="button" onClick={() => setTimingDrilldown(null)} className="ml-auto inline-flex items-center gap-1" style={{ color: T.faint }}>Clear <X size={12} /></button>
@@ -796,7 +807,7 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
                 <input style={inputStyle} className="w-full rounded pl-7 pr-2 py-1.5 text-xs" value={query} onChange={(e) => changeSearch(e.target.value)} placeholder="Try: losing NQ trades last week after 11am" />
               </div>
               {[['all', 'All'], ['win', 'Wins'], ['loss', 'Losses']].map(([k, label]) => (
-                <button key={k} type="button" onClick={() => setOutcome(k)} className="text-xs px-2 py-1 rounded-md" style={{ background: outcome === k ? T.surface2 : 'transparent', color: outcome === k ? T.accent : T.dim, border: `1px solid ${outcome === k ? T.line : 'transparent'}` }}>{label}</button>
+                <button key={k} type="button" onClick={() => setOutcome(k)} className="text-xs px-2 py-1 rounded-md" style={{ background: outcome === k ? T.surface2 : 'transparent', color: outcome === k ? T.accentText : T.dim, border: `1px solid ${outcome === k ? T.line : 'transparent'}` }}>{label}</button>
               ))}
               {accounts.length > 0 && (
                 <select aria-label="Filter by account" style={inputStyle}
@@ -808,7 +819,7 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
                 </select>
               )}
               <div className="basis-full flex flex-wrap items-center gap-2 mt-1 rounded-lg p-2" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
-                <Bookmark size={13} style={{ color: T.accent }} />
+                <Bookmark size={13} style={{ color: T.accentText }} />
                 <select aria-label="Saved searches" style={inputStyle} className="min-w-[150px] flex-1 rounded px-2 py-1 text-xs" value={selectedSearchId} onChange={(event) => applySavedSearch(event.target.value)}>
                   <option value="">Saved searches…</option>
                   {savedSearches.map((search) => <option key={search.id} value={search.id}>{search.name}</option>)}
@@ -816,7 +827,7 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
                 <button type="button" onClick={() => Promise.resolve(onRefreshSavedSearches?.()).catch((error) => setSearchError(error?.message || 'Saved searches could not be refreshed.'))} className="rounded px-2 py-1 text-xs" style={{ color: T.dim, border: `1px solid ${T.line}` }}>Refresh</button>
                 <input aria-label="Saved search name" style={inputStyle} className="min-w-[150px] flex-1 rounded px-2 py-1 text-xs" value={searchName} onChange={(event) => setSearchName(event.target.value)} placeholder="Name this search" />
                 <button type="button" onClick={() => saveCurrentSearch(false)} disabled={!query.trim() || !searchName.trim()} className="rounded px-2 py-1 text-xs font-semibold" style={{ background: T.accent, color: '#1A1306', opacity: query.trim() && searchName.trim() ? 1 : 0.5 }}>Save new</button>
-                {selectedSearchId && <button type="button" onClick={() => saveCurrentSearch(true)} className="rounded px-2 py-1 text-xs" style={{ color: T.accent, border: `1px solid ${T.line}` }}>Update</button>}
+                {selectedSearchId && <button type="button" onClick={() => saveCurrentSearch(true)} className="rounded px-2 py-1 text-xs" style={{ color: T.accentText, border: `1px solid ${T.line}` }}>Update</button>}
                 {selectedSearchId && <button type="button" onClick={removeSavedSearch} title="Delete saved search" style={{ color: T.down }}><Trash2 size={13} /></button>}
                 {searchError && <div className="basis-full text-xs" style={{ color: T.down }}>{searchError}</div>}
               </div>
@@ -828,12 +839,12 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
                       {activeSearchFilters.map((filter) => (
                         <button key={filter.id} type="button" onClick={() => dismissSearchFilter(filter.id)} title={`${filter.detail} Click to remove this condition.`}
                           className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px]"
-                          style={{ background: T.accentSoft, color: T.accent, border: `1px solid ${T.accent}` }}>
+                          style={{ background: T.accentSoft, color: T.accentText, border: `1px solid ${T.accent}` }}>
                           {filter.label}<X size={11} />
                         </button>
                       ))}
                       {activeSearchFilters.length === 0 && <span className="text-xs" style={{ color: T.dim }}>No conditions active.</span>}
-                      {dismissedSearchFilters.length > 0 && <button type="button" onClick={() => setDismissedSearchFilters([])} className="text-[11px] ml-1" style={{ color: T.accent }}>Restore removed</button>}
+                      {dismissedSearchFilters.length > 0 && <button type="button" onClick={() => setDismissedSearchFilters([])} className="text-[11px] ml-1" style={{ color: T.accentText }}>Restore removed</button>}
                       <button type="button" onClick={clearSearch} className="text-[11px] ml-auto" style={{ color: T.faint }}>Clear search</button>
                     </div>
                     <div className="text-[10px] mt-1" style={{ color: T.faint }}>Local, deterministic filters only. Quoted phrases are matched literally; every chip explains what will be applied.</div>
@@ -899,7 +910,7 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
             <div className="flex items-center gap-1.5">
               <span style={{ color: T.faint }}>Per page</span>
               {[20, 40, 50].map((n) => (
-                <button key={n} type="button" onClick={() => setPageSize(n)} className="px-1.5 py-0.5 rounded" style={{ background: pageSize === n ? T.surface2 : 'transparent', color: pageSize === n ? T.accent : T.dim, border: `1px solid ${pageSize === n ? T.line : 'transparent'}` }}>{n}</button>
+                <button key={n} type="button" onClick={() => setPageSize(n)} className="px-1.5 py-0.5 rounded" style={{ background: pageSize === n ? T.surface2 : 'transparent', color: pageSize === n ? T.accentText : T.dim, border: `1px solid ${pageSize === n ? T.line : 'transparent'}` }}>{n}</button>
               ))}
               <span style={{ width: 1, height: 14, background: T.line, margin: '0 4px' }} />
               <button type="button" onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={safePage === 0} style={{ color: T.dim, opacity: safePage === 0 ? 0.4 : 1 }}><ChevronLeft size={15} /></button>
@@ -919,7 +930,7 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
           style={{ background: T.surface, border: `1px solid ${T.line}`, color: T.text }}>
           <Trash2 size={14} style={{ color: T.down }} />
           <span><span className="font-semibold">{pendingDelete.symbol}</span> removed</span>
-          <button type="button" onClick={undoDelete} className="font-semibold px-2 py-0.5 rounded" style={{ color: T.accent, border: `1px solid ${T.line}` }}>Undo delete ({undoSeconds}s)</button>
+          <button type="button" onClick={undoDelete} className="font-semibold px-2 py-0.5 rounded" style={{ color: T.accentText, border: `1px solid ${T.line}` }}>Undo delete ({undoSeconds}s)</button>
         </div>
       )}
     </div>
@@ -938,7 +949,7 @@ function NoTradeModal({ emotions = [], onClose, onSave }) {
     <div className="th-overlay fixed inset-0 flex items-center justify-center p-4 z-[70]" style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }} onClick={onClose}>
       <div className="rounded-2xl w-full max-w-md p-5 space-y-3" style={{ background: T.surface, border: `1px solid ${T.line}` }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-2">
-          <CalendarOff size={16} style={{ color: T.accent }} />
+          <CalendarOff size={16} style={{ color: T.accentText }} />
           <span className="text-sm font-semibold">Log a no-trade day</span>
           <button type="button" onClick={onClose} className="ml-auto" style={{ color: T.dim }}><X size={16} /></button>
         </div>
@@ -1004,10 +1015,13 @@ export function PnlCalendar({ trades, plans = [], dayLogs = [], onSelectDay }) {
   const greenDays = vals.filter((v) => v.n > 0 && v.pnl > 0).length
   const redDays = vals.filter((v) => v.n > 0 && v.pnl < 0).length
   const shift = (delta) => { const d = new Date(y, mo - 1 + delta, 1); setYm(`${d.getFullYear()}-${pad2(d.getMonth() + 1)}`) }
+  // Tint, not a block fill. The old version hard-coded green/red rgba, so the P&L
+  // colour style (colorblind-safe, mono, blue/red) was ignored here, and at 0.85
+  // alpha every trading day became a saturated slab that shouted over the figures.
   const cellBg = (pnl) => {
     if (pnl == null) return T.surface2
-    const a = Math.min(0.85, 0.2 + (Math.abs(pnl) / maxAbs) * 0.6)
-    return pnl >= 0 ? `rgba(52,211,153,${a})` : `rgba(251,113,133,${a})`
+    const a = Math.min(0.3, 0.09 + (Math.abs(pnl) / maxAbs) * 0.21)
+    return withAlpha(pnl >= 0 ? T.up : T.down, a)
   }
   const cells = []
   for (let i = 0; i < startDow; i++) cells.push(null)
@@ -1028,15 +1042,19 @@ export function PnlCalendar({ trades, plans = [], dayLogs = [], onSelectDay }) {
         {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => <div key={d} className="text-center text-xs py-1" style={{ color: T.faint }}>{d}</div>)}
         {cells.map((c, i) => c == null ? <div key={i} /> : (() => {
           const active = Boolean(c.v?.n || c.v?.plans || c.v?.noTrade)
-          const darkText = c.v?.n > 0
+          const traded = c.v?.n > 0
           return (
+            // Text stays on the theme's own colours rather than a hard-coded #0E1117,
+            // which was only ever legible against the dark palette. The border marks
+            // days that traded; outlining every logged day in accent meant the accent
+            // stopped distinguishing anything.
             <button key={c.date} type="button" onClick={() => onSelectDay?.(c.date)} title={active ? 'Open day details and session replay' : 'Open this day'}
-              className="rounded p-1.5 min-h-[62px] text-left transition-transform hover:-translate-y-0.5"
-              style={{ background: c.v?.n ? cellBg(c.v.pnl) : T.surface2, border: `1px solid ${active ? T.accent : T.line}` }}>
-              <div className="text-xs" style={{ color: darkText ? '#0E1117' : T.faint }}>{c.d}</div>
-              {c.v?.n > 0 && <div className="text-xs font-semibold leading-tight" style={{ ...mono, color: '#0E1117' }}>{fmt$(c.v.pnl)}</div>}
-              {c.v?.plans > 0 && <div className="text-[9px] mt-0.5" style={{ color: darkText ? '#0E1117' : T.accent }}>{c.v.plans} plan{c.v.plans === 1 ? '' : 's'}</div>}
-              {c.v?.noTrade && <div className="text-[9px] mt-0.5" style={{ color: darkText ? '#0E1117' : T.dim }}>No-trade log</div>}
+              className="th-cal-cell rounded p-1.5 min-h-[62px] text-left"
+              style={{ background: traded ? cellBg(c.v.pnl) : T.surface2, border: `1px solid ${traded ? withAlpha(c.v.pnl >= 0 ? T.up : T.down, 0.45) : T.line}` }}>
+              <div className="text-xs" style={{ color: T.faint }}>{c.d}</div>
+              {traded && <div className="text-xs font-semibold leading-tight" style={{ ...mono, color: c.v.pnl >= 0 ? T.up : T.down }}>{fmt$(c.v.pnl)}</div>}
+              {c.v?.plans > 0 && <div className="text-[9px] mt-0.5" style={{ color: T.accentText }}>{c.v.plans} plan{c.v.plans === 1 ? '' : 's'}</div>}
+              {c.v?.noTrade && <div className="text-[9px] mt-0.5" style={{ color: T.dim }}>No-trade log</div>}
             </button>
           )
         })())}

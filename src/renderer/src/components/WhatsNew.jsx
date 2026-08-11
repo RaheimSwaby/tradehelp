@@ -8,7 +8,7 @@ export function WhatsNew({ info, onClose }) {
     <div className="th-overlay fixed inset-0 flex items-center justify-center p-4 z-[70]" style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }} onClick={onClose}>
       <div className="rounded-xl w-full max-w-md max-h-[80vh] overflow-y-auto" style={{ background: T.surface, border: `1px solid ${T.line}` }} onClick={(e) => e.stopPropagation()}>
         <div className="px-5 py-4 flex items-center gap-2" style={{ borderBottom: `1px solid ${T.line}` }}>
-          <Sparkles size={18} style={{ color: T.accent }} />
+          <Sparkles size={18} style={{ color: T.accentText }} />
           <div>
             <div className="text-sm font-semibold">What's new</div>
             <div className="text-xs" style={{ color: T.dim }}>You're now on v{info.version}</div>

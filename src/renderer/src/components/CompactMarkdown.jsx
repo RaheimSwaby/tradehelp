@@ -17,10 +17,10 @@ function renderInline(value, keyPrefix) {
   return safeValue.split(INLINE_MARKUP).filter(Boolean).map((part, index) => {
     const key = `${keyPrefix}-${index}`
     if (part.startsWith('`') && part.endsWith('`')) {
-      return <code key={key} className="rounded px-1 py-0.5 text-[0.92em]" style={{ ...mono, color: T.accent, background: T.surface2 }}>{part.slice(1, -1)}</code>
+      return <code key={key} className="rounded px-1 py-0.5 text-[0.92em]" style={{ ...mono, color: T.accentText, background: T.surface2 }}>{part.slice(1, -1)}</code>
     }
     if ((part.startsWith('**') && part.endsWith('**')) || (part.startsWith('__') && part.endsWith('__'))) {
-      return <strong key={key} style={{ color: T.text }}>{part.slice(2, -2)}</strong>
+      return <strong key={key} style={{ color: T.text, fontWeight: 650 }}>{part.slice(2, -2)}</strong>
     }
     if (part.startsWith('*') && part.endsWith('*')) {
       return <em key={key}>{part.slice(1, -1)}</em>
@@ -101,12 +101,11 @@ export function CompactMarkdown({ children, className = '' }) {
   const blocks = parseCompactMarkdown(children)
 
   return (
-    <div className={`space-y-2 text-sm leading-relaxed ${className}`.trim()} style={{ color: T.dim }}>
+    <div className={`th-compact-markdown space-y-2 text-sm leading-relaxed ${className}`.trim()} style={{ color: T.dim }}>
       {blocks.map((block, index) => {
         const key = `${block.type}-${index}`
         if (block.type === 'heading') {
-          const headingClass = block.level <= 2 ? 'text-sm font-semibold pt-1' : 'text-xs font-semibold uppercase tracking-wide pt-1'
-          return <div key={key} className={headingClass} style={{ color: block.level <= 2 ? T.text : T.accent }}>{renderInline(block.text, key)}</div>
+          return <div key={key} className="th-markdown-heading text-sm font-semibold pt-1" style={{ color: T.text }}>{renderInline(block.text, key)}</div>
         }
         if (block.type === 'unordered-list' || block.type === 'ordered-list') {
           const Tag = block.type === 'ordered-list' ? 'ol' : 'ul'

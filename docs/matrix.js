@@ -9,8 +9,8 @@
   if (!canvas || !canvas.getContext) return;
   var ctx = canvas.getContext('2d');
   var css = getComputedStyle(document.documentElement);
-  var accent = (css.getPropertyValue('--accent') || '#F5B642').trim();
-  var text = (css.getPropertyValue('--text') || '#E6EAF2').trim();
+  var accent = (css.getPropertyValue('--accent') || '#d4a853').trim();
+  var text = (css.getPropertyValue('--text') || '#e0ddd6').trim();
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   var GLYPHS = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホ0123456789$¥€£%';
@@ -54,7 +54,7 @@
         var row = head - k;
         if (row < 0 || row >= rows) continue;
         if (!c.chars[row]) c.chars[row] = glyph();
-        ctx.fillStyle = k === 0 ? rgba(text, 0.55) : rgba(accent, (1 - k / c.trail) * 0.32);
+        ctx.fillStyle = k === 0 ? rgba(text, 0.20) : rgba(accent, (1 - k / c.trail) * 0.12);
         ctx.fillText(c.chars[row], c.x, row * CELL + CELL / 2);
       }
     }

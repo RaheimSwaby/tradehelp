@@ -53,14 +53,15 @@ export function MobileSyncPanel() {
 
   return (
     <Panel title="TradeHelp Mobile sync lab">
-      <div className="flex items-start gap-3">
-        <div className="rounded-md p-2" style={{ color: T.accent, background: T.accentSoft }}>
-          <Smartphone size={18} />
-        </div>
+      {/* One row rather than an icon tile above a heading above a paragraph above a
+          button: this is optional, most sessions never start it, and it was claiming
+          five rows of Settings to say so. The detail moves into the summary line. */}
+      <div className="flex items-center gap-2.5">
+        <Smartphone size={16} style={{ color: T.dim, flexShrink: 0 }} />
         <div className="min-w-0 flex-1">
           <div className="text-sm font-semibold">Same-network mobile capture</div>
-          <p className="text-xs mt-1" style={{ color: T.dim }}>
-            Starts a temporary desktop endpoint for TradeHelp Mobile. Mobile trades import into the journal, and the newest rule edits sync in either direction.
+          <p className="text-xs" style={{ color: T.dim }}>
+            A temporary endpoint for TradeHelp Mobile. Trades import into the journal; rule edits sync both ways.
           </p>
         </div>
       </div>
@@ -69,7 +70,7 @@ export function MobileSyncPanel() {
         <div className="text-xs mt-3" style={{ color: T.dim }}>Restart TradeHelp Desktop to load mobile sync.</div>
       ) : (
         <>
-          <div className="flex flex-wrap gap-2 mt-4">
+          <div className="flex flex-wrap gap-2 mt-3">
             {!state?.running ? (
               <button type="button" disabled={busy || state?.available === false} onClick={() => run(window.api.startMobileSync)}
                 className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-semibold"
@@ -102,7 +103,7 @@ export function MobileSyncPanel() {
 
           {code && (
             <div className="mt-3 grid grid-cols-1 sm:grid-cols-[auto_minmax(0,1fr)] gap-3 items-center">
-              {qr && <img src={qr} alt="TradeHelp Mobile pairing QR code" className="w-40 h-40 rounded-md" />}
+              {qr && <img src={qr} alt="TradeHelp Mobile pairing QR code" className="w-28 h-28 rounded-md" />}
               <div className="rounded-md p-2.5 break-all text-xs select-all" style={{ ...mono, color: T.text, background: T.surface2, border: `1px solid ${T.line}` }}>
                 {code}
                 <div className="mt-2" style={{ color: T.faint }}>Scan the QR from Mobile Settings, or copy this code manually.</div>

@@ -168,7 +168,7 @@ export function computeMobileStats(trades: MobileTrade[]): MobileStats {
   }
 
   const streakText = streakType === 'win'
-    ? `🔥 ${streakCount} Win${streakCount > 1 ? 's' : ''}`
+    ? `${streakCount} Win${streakCount > 1 ? 's' : ''}`
     : streakType === 'loss'
       ? `${streakCount} Loss${streakCount > 1 ? 'es' : ''}`
       : '--'

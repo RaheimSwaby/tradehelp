@@ -184,7 +184,7 @@ export function NotesModal({ trade, onClose, onUpdate, onAttachmentsChange }) {
                   </div>
                   {analysis && (
                     <div className="mt-3 rounded-lg p-3 text-sm" style={{ background: T.accentSoft, border: `1px solid ${T.line}`, color: '#F3D9A0' }}>
-                      {analysis.loading ? <span style={{ color: T.accent }}>Reading the chart… local vision models can take a moment.</span>
+                      {analysis.loading ? <span style={{ color: T.accentText }}>Reading the chart… local vision models can take a moment.</span>
                         : analysis.error ? <span style={{ color: T.down }}>⚠︎ {analysis.error}</span>
                         : <div className="whitespace-pre-wrap">{analysis.text}</div>}
                       {!analysis.loading && <div className="text-xs mt-2" style={{ color: T.faint }}>AI chart read · not financial advice</div>}

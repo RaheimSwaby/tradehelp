@@ -1,16 +1,15 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react'
 import {
-  LayoutDashboard, Brain, Target, Settings as SettingsIcon, Gauge, Play,
-  Feather, Landmark, ScrollText, Radar, CalendarClock, AlertTriangle, X, Clock3, TrendingUp, HelpCircle,
-  Newspaper, LineChart
+  Settings as SettingsIcon, Gauge, Play,
+  CalendarClock, AlertTriangle, X, Clock3, TrendingUp, HelpCircle,
+  Waypoints, Wallet, Armchair, Flag, Megaphone, History, Shapes, LineChart, GraduationCap
 } from 'lucide-react'
-import { Whistle, PlayDiagram, CrosshairCandle } from './components/Icons.jsx'
 import { applyTheme, T, mono } from './theme.js'
 import { fmt$, fmtN, parseRules, IMPACT_RANK, ALERT_LEADS, GATE_CONFIGURED, isNewerVersion, thisWeekKey } from './utils.js'
 import { computeStats, computeAchievements } from './stats.js'
 import { RELEASE_NOTES } from './releaseNotes.js'
-import { Readout } from './components/Shared.jsx'
 import { PageAnimationContext } from './pageAnimation.js'
+import { Readout } from './components/Shared.jsx'
 import { NotesModal } from './components/NotesModal.jsx'
 import { WhatsNew } from './components/WhatsNew.jsx'
 import { Journal } from './tabs/JournalTab.jsx'
@@ -46,6 +45,50 @@ import { selectFloatingNotice } from './notificationQueue.js'
 import { tradeDateKey, tradePeriodKey } from './periodRetrospective.js'
 import { startSessionRecorder } from './sessionRecorder.js'
 import { buildWeeklyWrap, monthlyWrapCandidate, previousMonthKey, previousWeekKey, weeklyWrapCandidate } from './weeklyWrap.js'
+
+/* Journal: Lucide's feather, unchanged vane and rib, with the shaft stopping short so
+   it can end in a carved nib instead of a rounded stroke cap. The nib is filled rather
+   than stroked because at 15px an outlined point has no interior left to see. */
+function QuillPen({ size = 24, ...props }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
+      <path d="M12.67 19a2 2 0 0 0 1.416-.588l6.154-6.172a6 6 0 0 0-8.49-8.49L5.586 9.914A2 2 0 0 0 5 11.328V18a1 1 0 0 0 1 1z" />
+      <path d="M17.5 15H9" />
+      <path d="M16 8 5.2 18.8" />
+      <path d="M6.3 19.9 1.7 23.1l1.7-4.9z" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
+/* Trade Mode: a trader at the screen, seen from behind. The figure is filled rather
+   than outlined so it occludes the monitor instead of crossing its edges - outlined,
+   it read as a monitor on a stand. Solid mass also survives 15px better than strokes. */
+function DeskTrader({ size = 24, ...props }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
+      <rect x="2.5" y="2.6" width="19" height="12.4" rx="2" />
+      <circle cx="12" cy="13.4" r="2.9" fill="currentColor" stroke="none" />
+      <path d="M6.4 22.6c0-3.1 2.5-5.6 5.6-5.6s5.6 2.5 5.6 5.6z" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
+/* Dashboard: four columns at a glance. Deliberately not a line chart, since the Charts
+   tab owns that silhouette three places away. Bars are drawn heavier than the 2px nav
+   stroke because solid columns are what keeps this readable at 15px. */
+function GlanceBars({ size = 24, ...props }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2.6" strokeLinecap="round" aria-hidden="true" {...props}>
+      <path d="M4 21v-7.5" />
+      <path d="M10 21V9" />
+      <path d="M16 21V4.5" />
+      <path d="M21 21v-5" />
+    </svg>
+  )
+}
 
 /* ───────── logo mark: three ascending candles, tracks the live theme ───────── */
 function LogoMark({ size = 22, ignite = false, live = false }) {
@@ -86,10 +129,10 @@ function PersonalClockReadout({ clock, schedule, enabled = true }) {
   const title = `${schedule?.source === 'manual' ? 'Manual' : 'Recent inferred'} windows: ${allWindows || clock.windowLabel}. Based on ${sessionCount} session${sessionCount === 1 ? '' : 's'}.${schedule?.scheduleShift?.message ? ` ${schedule.scheduleShift.message}` : ''}`
   return (
     <div className="flex items-center gap-1.5" title={title}>
-      <Clock3 size={13} style={{ color: clock.phase === 'off' ? T.faint : T.accent }} />
+      <Clock3 size={13} style={{ color: clock.phase === 'off' ? T.faint : T.accentText }} />
       <span style={{ color: T.faint }}>CLOCK</span>
       <span style={{ color: T.text }}>{clock.timeLabel}</span>
-      <span style={{ color: clock.phase === 'off' ? T.faint : T.accent }}>{clock.phaseShort}</span>
+      <span style={{ color: clock.phase === 'off' ? T.faint : T.accentText }}>{clock.phaseShort}</span>
     </div>
   )
 }
@@ -847,9 +890,18 @@ export default function App() {
   // Expose live theme values to CSS (card hover borders, focus rings, scrollbars)
   // and keep the body backdrop in sync so overscroll doesn't flash the wrong color.
   useEffect(() => {
-    document.documentElement.style.setProperty('--th-accent', T.accent)
-    document.documentElement.style.setProperty('--th-line', T.line)
-    document.documentElement.dataset.themePreset = settings?.themePreset || 'classic'
+    const root = document.documentElement
+    root.style.setProperty('--th-bg', T.bg)
+    root.style.setProperty('--th-surface', T.surface)
+    root.style.setProperty('--th-surface-2', T.surface2)
+    root.style.setProperty('--th-text', T.text)
+    root.style.setProperty('--th-dim', T.dim)
+    root.style.setProperty('--th-faint', T.faint)
+    root.style.setProperty('--th-accent', T.accent)
+    root.style.setProperty('--th-line', T.line)
+    root.style.setProperty('--th-up', T.up)
+    root.style.setProperty('--th-down', T.down)
+    root.dataset.themePreset = settings?.themePreset || 'classic'
     document.body.style.background = T.bg
   }, [
     tradeMode,
@@ -897,19 +949,19 @@ export default function App() {
   }
 
   const TABS = [
-    ['journal', 'Journal', Feather],
+    ['journal', 'Journal', QuillPen],
     ['chart', 'Charts', LineChart],
-    ['trade', 'Trade Mode', CrosshairCandle],
-    ['propfirm', 'Accounts', Landmark],
-    ['dashboard', 'Dashboard', LayoutDashboard],
-    ['psych', 'Psychology', Brain],
+    ['trade', 'Trade Mode', DeskTrader],
+    ['propfirm', 'Accounts', Wallet],
+    ['dashboard', 'Dashboard', GlanceBars],
+    ['psych', 'Psychology', Armchair],
     ['rating', 'Rating', Gauge],
-    ['goals', 'Goals', Target],
-    ['reviews', 'Reviews', ScrollText],
-    ['coach', 'AI Coach', Whistle],
-    ['patterns', 'Patterns', Radar],
-    ['playbook', 'Playbook', PlayDiagram],
-    ['news', 'News', Newspaper],
+    ['goals', 'Goals', Flag],
+    ['reviews', 'Reviews', History],
+    ['coach', 'AI Coach', GraduationCap],
+    ['patterns', 'Patterns', Shapes],
+    ['playbook', 'Playbook', Waypoints],
+    ['news', 'News', Megaphone],
     ['settings', 'Settings', SettingsIcon]
   ]
 
@@ -942,7 +994,7 @@ export default function App() {
   }, [tab]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div style={{ color: T.text, minHeight: '100vh', borderTop: `3px solid ${tradeMode ? T.accent : 'transparent'}` }}>
+    <div className="th-app" style={{ color: T.text, minHeight: '100vh', borderTop: `3px solid ${tradeMode ? T.accent : 'transparent'}` }}>
       {/* bg lives on <body> (synced above) so the z:-1 particle canvas shows through */}
       <CustomBackground dataUrl={customBg} settings={settings} />
       <Backdrop variant={!settings?.backdrop || settings.backdrop === 'on' ? 'constellation' : settings.backdrop} />
@@ -952,34 +1004,26 @@ export default function App() {
       {GATE_CONFIGURED && license?.state === 'trial' && <TrialBanner days={license.daysLeft} />}
       {imminentEvent && <EventBanner event={imminentEvent} now={now} />}
       {tradeMode && <LiveBanner net={todayNet} goal={dailyGoal} maxLoss={maxLoss} lossHit={lossHit} recordingState={recordingState} elapsed={sessionElapsed} onEnd={endSession} />}
-      <div className="max-w-6xl mx-auto px-4 py-5">
-        <header className="flex flex-wrap items-center justify-between gap-3 pb-4 mb-4" style={{ borderBottom: `1px solid ${T.line}` }}>
-          <div className="flex items-center gap-2">
+      <div className="th-app-shell mx-auto px-3 sm:px-4 py-3 sm:py-4">
+        <header className="th-app-header flex flex-wrap items-center justify-between gap-3" style={{ borderBottom: `1px solid ${T.line}` }}>
+          <div className="th-brand flex items-center gap-2">
             <LogoMark live={tradeMode} />
             <span className="text-lg font-semibold tracking-tight" style={{ color: T.text }}>
-              Trade<span style={{ color: T.accent }}>Help</span>
+              Trade<span style={{ color: T.accentText }}>Help</span>
             </span>
-            <span className="text-xs px-1.5 py-0.5 rounded" style={{ color: tradeMode ? T.accent : T.faint, border: `1px solid ${tradeMode ? T.accent : T.line}` }}>{tradeMode ? 'live' : 'offline'}</span>
+            <span className="th-local-status text-xs" style={{ color: tradeMode ? T.up : T.dim }}>{tradeMode ? 'Live · private' : 'Local · private'}</span>
           </div>
-          <div className="flex items-center gap-5 text-sm" style={mono}>
-            <Readout label="NET" value={fmt$(demoPnlTotal ?? stats.totalPnl)} tone={(demoPnlTotal ?? stats.totalPnl) >= 0 ? 'up' : 'down'} feedback={pnlFeedback} />
-            {import.meta.env.DEV && (
-              <>
-                <button type="button" onClick={demoPnlCount} className="px-2 py-1 rounded text-[10px] font-semibold" title="Preview the P&L count animation without saving a trade" style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}` }}>
-                  Demo +$125
-                </button>
-                <button type="button" onClick={demoPageCounts} className="px-2 py-1 rounded text-[10px] font-semibold" title="Open Dashboard and replay its page-entry count-up animations" style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}` }}>
-                  Demo page counts
-                </button>
-                <button type="button" onClick={demoWeeklyWrap} className="px-2 py-1 rounded text-[10px] font-semibold" title="Preview the latest stats-backed weekly wrap-up (Ctrl+Shift+W)" style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}` }}>
-                  Demo weekly wrap
-                </button>
-              </>
-            )}
-            <Readout label="WIN" value={`${fmtN(stats.winRate, 1)}%`} />
-            <Readout label="PF" value={stats.profitFactor === Infinity ? '∞' : fmtN(stats.profitFactor, 2)} />
-            <Readout label="STREAK" value={String(stats.currentStreak)} tone={String(stats.currentStreak).endsWith('W') ? 'up' : String(stats.currentStreak).endsWith('L') ? 'down' : 'none'} />
-            {stats.n > 0 && <Readout label="CALM" value={String(stats.nonTiltStreak)} tone="up" />}
+          <div className="th-header-readouts flex flex-wrap items-center justify-end gap-x-4 gap-y-2 text-sm">
+            {/* These read the whole book, so they stay useful whatever tab is open.
+                (The slot previously held the last trade's symbol labelled "Account",
+                which was neither the account nor a figure worth carrying up here.) */}
+            <span className="th-header-readout-group flex items-center gap-4" style={mono}>
+              <Readout label="NET" value={fmt$(demoPnlTotal ?? stats.totalPnl)} tone={(demoPnlTotal ?? stats.totalPnl) >= 0 ? 'up' : 'down'} feedback={pnlFeedback} />
+              <Readout label="WIN" value={`${fmtN(stats.winRate, 1)}%`} />
+              <Readout label="PF" value={stats.profitFactor === Infinity ? '∞' : fmtN(stats.profitFactor, 2)} />
+              <Readout label="STREAK" value={String(stats.currentStreak)} tone={String(stats.currentStreak).endsWith('W') ? 'up' : String(stats.currentStreak).endsWith('L') ? 'down' : 'none'} />
+              {stats.n > 0 && <Readout label="CALM" value={String(stats.nonTiltStreak)} tone="up" />}
+            </span>
             <PersonalClockReadout clock={sessionClock} schedule={personalSchedule} enabled={personalClockEnabled} />
             {!tradeMode && (
               <button type="button" onClick={startDay} disabled={goTransition === 'arming'} aria-busy={goTransition === 'arming'} className={`th-go-trigger flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-semibold${goTransition === 'arming' ? ' th-go-trigger-on' : ''}`} style={{ background: T.accent, color: '#1A1306' }}>
@@ -996,13 +1040,20 @@ export default function App() {
                 <HelpCircle size={15} />
               </button>
             )}
+            {import.meta.env.DEV && (
+              <div className="th-dev-shortcuts" aria-hidden="true">
+                <button type="button" onClick={demoPnlCount}>P&amp;L</button>
+                <button type="button" onClick={demoPageCounts}>Counts</button>
+                <button type="button" onClick={demoWeeklyWrap}>Wrap</button>
+              </div>
+            )}
           </div>
         </header>
 
         {/* A tablist is one stop in the tab order, not thirteen: Tab reaches the nav,
             arrows move along it, Tab again drops into the page. Screen readers also
             announce position ("tab 3 of 13") instead of a run of unrelated buttons. */}
-        <nav role="tablist" aria-label="Primary" className="flex flex-wrap gap-1 mb-5" onKeyDown={onTabListKeyDown}>
+        <nav role="tablist" aria-label="Primary" className="th-primary-tabs flex" style={{ borderColor: T.line }} onKeyDown={onTabListKeyDown}>
           {TABS.map(([id, label, Icon], index) => {
             const active = tab === id
             return (
@@ -1011,8 +1062,8 @@ export default function App() {
                 tabIndex={active ? 0 : -1}
                 ref={(node) => { tabRefs.current[index] = node }}
                 onClick={() => setTab(id)}
-                className={`th-tab flex items-center gap-2 px-3 py-2 rounded-md text-sm${active ? ' th-tab-on' : ''}`}
-                style={{ background: active ? T.surface2 : 'transparent', color: active ? T.accent : T.dim, border: `1px solid ${active ? T.line : 'transparent'}` }}>
+                className={`th-tab flex items-center gap-2 px-3 py-2 text-sm${active ? ' th-tab-on' : ''}`}
+                style={{ color: active ? T.accentText : T.dim }}>
                 <Icon size={15} /> {label}
               </button>
             )
@@ -1029,7 +1080,7 @@ export default function App() {
           <Paywall onActivated={refreshLicense} />
         ) : (
           <PageAnimationContext.Provider value={`${tab}-${pageAnimationReplay}`}>
-          <div key={tab} id="th-tabpanel" role="tabpanel" aria-labelledby={`th-tab-${tab}`} className="th-cinematic">
+          <div key={tab} id="th-tabpanel" role="tabpanel" aria-labelledby={`th-tab-${tab}`} className="th-cinematic th-tabpanel">
             {tab === 'journal' && <Journal trades={trades} onAdd={addTrade} onUpdate={updateTrade} onRemove={removeTrade} onNotes={setNotesView} onImport={importTrades} onRollbackImport={rollbackImport} accounts={propFirmAccounts} profiles={instrumentProfiles} savedSearches={savedSearches} onAddSavedSearch={addSavedSearch} onUpdateSavedSearch={updateSavedSearch} onDeleteSavedSearch={deleteSavedSearch} onRefreshSavedSearches={refreshSavedSearches} settings={settings} onSaveSettings={saveSettings} dayLogs={dayLogs} onAddDayLog={addDayLog} onDeleteDayLog={deleteDayLog} drilldown={journalDrilldown} onConsumeDrilldown={() => setJournalDrilldown(null)} />}
             {tab === 'chart' && <ChartTab trades={trades} onOpenTrade={setNotesView} settings={settings} onSaveSettings={saveSettings} />}
             {tab === 'trade' && <TradeModeTab settings={settings} onSave={saveSettings} rules={rules} ruleBreaks={ruleBreaks} onDeleteRuleBreak={deleteRuleBreak} onUpdateSession={updateTradingSession} onDeleteSession={deleteTradingSession} live={tradeMode} arming={goTransition === 'arming'} todayNet={todayNet} todayCount={todayTrades.length} weekNet={weekNet} goal={dailyGoal} maxLoss={maxLoss} onStart={startDay} onEnd={endSession} session={activeSession} recordingState={recordingState} elapsed={sessionElapsed} sessions={tradingSessions} plans={tradePlans} trades={trades} accounts={propFirmAccounts} playbook={playbook} profiles={instrumentProfiles} planPrefill={planPrefill} onConsumePlanPrefill={() => setPlanPrefill(null)} onAddPlan={addTradePlan} onUpdatePlan={updateTradePlan} onDeletePlan={deleteTradePlan} />}

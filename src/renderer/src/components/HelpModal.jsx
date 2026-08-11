@@ -21,7 +21,7 @@ export function HelpModal({ onClose }) {
       <div className="w-full max-w-2xl max-h-[88vh] flex flex-col rounded-2xl" style={{ background: T.surface, border: `1px solid ${T.line}` }} onClick={(event) => event.stopPropagation()}>
 
         <div className="flex items-center gap-2 px-5 pt-5">
-          <HelpCircle size={18} style={{ color: T.accent }} />
+          <HelpCircle size={18} style={{ color: T.accentText }} />
           <div>
             <div className="text-sm font-semibold">Help &amp; FAQ</div>
             <div className="text-xs" style={{ color: T.faint }}>How each feature works — available offline.</div>
@@ -55,7 +55,7 @@ export function HelpModal({ onClose }) {
             </div>
           ) : sections.map((section) => (
             <div key={section.id} className="mt-3">
-              <div className="text-[10px] uppercase tracking-wider font-semibold mb-1.5" style={{ color: T.accent }}>{section.title}</div>
+              <div className="text-[10px] uppercase tracking-wider font-semibold mb-1.5" style={{ color: T.accentText }}>{section.title}</div>
               <div className="space-y-1.5">
                 {section.items.map((item, index) => {
                   const key = `${section.id}:${index}`
@@ -70,7 +70,7 @@ export function HelpModal({ onClose }) {
                         className="w-full flex items-start gap-2 text-left px-3 py-2.5"
                         aria-expanded={Boolean(isOpen)}
                       >
-                        {isOpen ? <ChevronDown size={14} style={{ color: T.accent, flexShrink: 0, marginTop: 2 }} /> : <ChevronRight size={14} style={{ color: T.faint, flexShrink: 0, marginTop: 2 }} />}
+                        {isOpen ? <ChevronDown size={14} style={{ color: T.accentText, flexShrink: 0, marginTop: 2 }} /> : <ChevronRight size={14} style={{ color: T.faint, flexShrink: 0, marginTop: 2 }} />}
                         <span className="text-sm font-medium">{item.q}</span>
                       </button>
                       {isOpen && (
@@ -84,14 +84,14 @@ export function HelpModal({ onClose }) {
           ))}
 
           <div className="mt-5 rounded-lg px-3 py-2.5 flex items-center gap-2" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
-            <MessagesSquare size={15} style={{ color: T.accent, flexShrink: 0 }} />
+            <MessagesSquare size={15} style={{ color: T.accentText, flexShrink: 0 }} />
             <span className="text-xs" style={{ color: T.dim }}>Still stuck, or think something is missing here?</span>
             <button
               type="button"
               onClick={() => window.api?.openExternal?.(SITE_URL)}
               className="ml-auto text-xs px-2.5 py-1 rounded-md whitespace-nowrap flex items-center gap-1.5"
               style={{ background: 'transparent', color: T.text, border: `1px solid ${T.line}` }}
-            ><Globe size={13} style={{ color: T.accent }} /> Guides</button>
+            ><Globe size={13} style={{ color: T.accentText }} /> Guides</button>
             <button
               type="button"
               onClick={() => window.api?.openExternal?.('https://discord.gg/ATfcXSD4j')}

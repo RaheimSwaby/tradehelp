@@ -77,13 +77,13 @@ export function TradeModeTab({ settings, onSave, rules, ruleBreaks = [], onDelet
   const visibleSessions = sessionArchiveActive || showAllSessions ? filteredSessions : filteredSessions.slice(0, 4)
 
   return (
-    <div className="space-y-4">
+    <div className="th-page th-page-trade space-y-4">
       <PreflightStatus rules={rules} todayNet={todayNet} maxLoss={maxLoss} live={live} onBreak={settings?.onBreak === 'true'} />
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-5">
+      <div className="th-trade-workspace grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-5">
         <div className="space-y-4">
         <TradePlansPanel plans={plans} trades={trades} accounts={accounts} playbook={playbook} profiles={profiles} prefill={planPrefill} onConsumePrefill={onConsumePlanPrefill} onAdd={onAddPlan} onUpdate={onUpdatePlan} onDelete={onDeletePlan} />
         <Panel title="Your trading rules" right={
-          <button type="button" onClick={add} className="flex items-center gap-1 text-xs px-2 py-1 rounded-md" style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}` }}><Plus size={13} /> Add rule</button>
+          <button type="button" onClick={add} className="flex items-center gap-1 text-xs px-2 py-1 rounded-md" style={{ background: T.surface2, color: T.accentText, border: `1px solid ${T.line}` }}><Plus size={13} /> Add rule</button>
         }>
           {list.length === 0 ? (
             <div className="text-sm py-3" style={{ color: T.dim }}>No rules yet. Add the checks you want to confirm before every trade.</div>
@@ -98,7 +98,7 @@ export function TradeModeTab({ settings, onSave, rules, ruleBreaks = [], onDelet
               ))}
             </div>
           )}
-          <p className="text-xs mt-3" style={{ color: T.faint }}>These become your pre-flight checklist every time you start a trading day.</p>
+          <p className="text-xs mt-3" style={{ color: T.faint }}>These rules appear in your pre-flight checklist before each trading day.</p>
         </Panel>
 
         <RuleBreakPanel ruleBreaks={ruleBreaks} rules={rules} onDelete={onDeleteRuleBreak} />
@@ -108,7 +108,7 @@ export function TradeModeTab({ settings, onSave, rules, ruleBreaks = [], onDelet
             <Field label="Daily goal $"><input style={inputStyle} className={inp} value={g} onChange={(e) => setG(e.target.value)} inputMode="decimal" /></Field>
             <Field label="Max daily loss $"><input style={inputStyle} className={inp} value={ml} onChange={(e) => setMl(e.target.value)} inputMode="decimal" /></Field>
           </div>
-          <p className="text-xs mt-2" style={{ color: T.faint }}>Cross your max loss and Trade Mode throws a full-screen alarm telling you to walk away. It can't close positions — the call is still yours.</p>
+          <p className="text-xs mt-2" style={{ color: T.faint }}>Trade Mode warns you when today's P&amp;L crosses this loss limit. It cannot close a position.</p>
         </Panel>
 
         <div className="flex items-center gap-3">
@@ -122,7 +122,7 @@ export function TradeModeTab({ settings, onSave, rules, ruleBreaks = [], onDelet
           {live ? (
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-2">
-                <div className="text-sm flex items-center gap-2" style={{ color: T.accent }}><span>●</span> You're live.</div>
+                <div className="text-sm flex items-center gap-2" style={{ color: T.accentText }}><span>●</span> Trading session active</div>
                 <div className="text-xs flex items-center gap-1.5" style={{ ...mono, color: recordingState?.status === 'recording' ? T.down : T.dim }}>
                   {recordingState?.status === 'recording' ? <Video size={13} /> : <Clock3 size={13} />}
                   {recordingState?.status === 'recording' ? 'REC ' : ''}{durationLabel(elapsed)}
@@ -148,34 +148,43 @@ export function TradeModeTab({ settings, onSave, rules, ruleBreaks = [], onDelet
               <button type="button" onClick={onStart} disabled={arming} aria-busy={arming} className={`th-go-trigger w-full rounded-md py-2.5 text-sm font-semibold flex items-center justify-center gap-2${arming ? ' th-go-trigger-on' : ''}`} style={{ background: T.accent, color: '#1A1306' }}>
                 <Play size={16} /> Start trading day
               </button>
-              <p className="text-xs" style={{ color: T.faint }}>Runs your pre-flight checklist, then flips the app into a focused "go time" mode.</p>
+              <p className="text-xs" style={{ color: T.faint }}>Review your pre-flight checks, then enter focused Trade Mode.</p>
             </div>
           )}
           </Panel>
-          {!live && sessions.length > 0 && (
-            <Panel title="Session history" right={<span className="text-xs" style={{ ...mono, color: T.faint }}>{filteredSessions.length}/{sessions.length}</span>}>
-              <div className="flex flex-wrap sm:flex-nowrap gap-2 mb-3">
-                <label className="relative min-w-0 flex-1">
-                  <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: T.faint }} />
-                  <input value={sessionQuery} onChange={(event) => setSessionQuery(event.target.value)} aria-label="Search sessions" placeholder="Search date, note, rule, or why…" className="w-full rounded-md pl-8 pr-8 py-2 text-xs" style={inputStyle} />
-                  {sessionQuery && <button type="button" onClick={() => setSessionQuery('')} aria-label="Clear session search" className="absolute right-2.5 top-1/2 -translate-y-1/2" style={{ color: T.faint }}><X size={13} /></button>}
-                </label>
-                <select value={sessionFilter} onChange={(event) => setSessionFilter(event.target.value)} aria-label="Filter sessions" className="rounded-md px-2.5 py-2 text-xs" style={{ ...inputStyle, width: 'auto' }}>
-                  <option value="all">All sessions</option>
-                  <option value="notes">Has notes</option>
-                  <option value="rule-breaks">Rule breaks</option>
-                  <option value="recordings">Recordings</option>
-                  <option value="clean">Clean sessions</option>
-                </select>
-              </div>
-              <div className="space-y-2">
-                {visibleSessions.map((item) => (
-                  <SessionHistoryItem key={item.id} session={item} ruleBreaks={ruleBreaks} expanded={expandedSessionId === item.id} onToggle={() => setExpandedSessionId(expandedSessionId === item.id ? '' : item.id)} onUpdate={onUpdateSession} onDelete={onDeleteSession} />
-                ))}
-                {visibleSessions.length === 0 && <div className="text-xs py-5 text-center" style={{ color: T.faint }}>No saved sessions match that search.</div>}
-              </div>
-              {!sessionArchiveActive && sessions.length > 4 && (
-                <button type="button" onClick={() => setShowAllSessions((value) => !value)} className="w-full mt-3 text-xs px-2 py-1.5 rounded-md" style={{ color: T.accent, background: T.surface2, border: `1px solid ${T.line}` }}>{showAllSessions ? 'Show recent' : `See all ${sessions.length}`}</button>
+          {!live && (
+            <Panel title="Session history" right={sessions.length > 0 ? <span className="text-xs" style={{ ...mono, color: T.faint }}>{filteredSessions.length}/{sessions.length}</span> : null}>
+              {sessions.length > 0 ? (
+                <>
+                  <div className="flex flex-wrap sm:flex-nowrap gap-2 mb-3">
+                    <label className="relative min-w-0 flex-1">
+                      <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: T.faint }} />
+                      <input value={sessionQuery} onChange={(event) => setSessionQuery(event.target.value)} aria-label="Search sessions" placeholder="Search date, note, rule, or reason…" className="w-full rounded-md pl-8 pr-8 py-2 text-xs" style={inputStyle} />
+                      {sessionQuery && <button type="button" onClick={() => setSessionQuery('')} aria-label="Clear session search" className="absolute right-2.5 top-1/2 -translate-y-1/2" style={{ color: T.faint }}><X size={13} /></button>}
+                    </label>
+                    <select value={sessionFilter} onChange={(event) => setSessionFilter(event.target.value)} aria-label="Filter sessions" className="rounded-md px-2.5 py-2 text-xs" style={{ ...inputStyle, width: 'auto' }}>
+                      <option value="all">All sessions</option>
+                      <option value="notes">Has notes</option>
+                      <option value="rule-breaks">Rule breaks</option>
+                      <option value="recordings">Recordings</option>
+                      <option value="clean">Clean sessions</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    {visibleSessions.map((item) => (
+                      <SessionHistoryItem key={item.id} session={item} ruleBreaks={ruleBreaks} expanded={expandedSessionId === item.id} onToggle={() => setExpandedSessionId(expandedSessionId === item.id ? '' : item.id)} onUpdate={onUpdateSession} onDelete={onDeleteSession} />
+                    ))}
+                    {visibleSessions.length === 0 && <div className="text-xs py-5 text-center" style={{ color: T.faint }}>No sessions match this search and filter.</div>}
+                  </div>
+                  {!sessionArchiveActive && sessions.length > 4 && (
+                    <button type="button" onClick={() => setShowAllSessions((value) => !value)} className="w-full mt-3 text-xs px-2 py-1.5 rounded-md" style={{ color: T.accentText, background: T.surface2, border: `1px solid ${T.line}` }}>{showAllSessions ? 'Show recent' : `See all ${sessions.length}`}</button>
+                  )}
+                </>
+              ) : (
+                <div className="th-session-history-empty py-5">
+                  <div className="text-sm font-semibold">No sessions saved</div>
+                  <p className="text-xs mt-1 max-w-sm" style={{ color: T.dim }}>Finish a Trade Mode session and select Save session. Its review will appear here.</p>
+                </div>
               )}
             </Panel>
           )}
@@ -218,14 +227,14 @@ export function SessionHistoryItem({ session, ruleBreaks = [], expanded = false,
             {session.notes ? ' · note saved' : ''}{breaks.length ? ` · ${breaks.length} rule break${breaks.length === 1 ? '' : 's'}` : ''}
           </div>
         </div>
-        <ChevronDown size={15} style={{ color: expanded ? T.accent : T.faint, transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
+        <ChevronDown size={15} style={{ color: expanded ? T.accentText : T.faint, transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
       </button>
       {expanded && (
         <div className="px-3 pb-3 space-y-3" style={{ borderTop: `1px solid ${T.line}` }}>
           <div className="pt-3">
             <div className="flex items-center justify-between gap-2">
               <div className="text-[10px] uppercase tracking-wider" style={{ color: T.faint }}>Session note</div>
-              {!editing && <button type="button" onClick={() => setEditing(true)} className="flex items-center gap-1 text-[11px]" style={{ color: T.accent }}><Pencil size={11} /> Edit note</button>}
+              {!editing && <button type="button" onClick={() => setEditing(true)} className="flex items-center gap-1 text-[11px]" style={{ color: T.accentText }}><Pencil size={11} /> Edit note</button>}
             </div>
             {editing ? (
               <div className="mt-2 space-y-2">
@@ -285,7 +294,7 @@ export function RuleBreakPanel({ ruleBreaks = [], rules = [], onDelete }) {
             </div>
           </div>
           <details className="mt-3">
-            <summary className="text-xs flex items-center gap-1.5 select-none" style={{ color: T.accent }}><ChevronDown size={13} /> Recent reasons</summary>
+            <summary className="text-xs flex items-center gap-1.5 select-none" style={{ color: T.accentText }}><ChevronDown size={13} /> Recent reasons</summary>
             <div className="mt-2 space-y-2">
               {recent.map((entry) => (
                 <div key={entry.id} className="rounded-md px-2.5 py-2 flex gap-2" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
@@ -301,7 +310,7 @@ export function RuleBreakPanel({ ruleBreaks = [], rules = [], onDelete }) {
           </details>
         </>
       ) : (
-        <div className="text-sm" style={{ color: T.dim }}>No rule breaks logged yet. Session reviews will remember the reason when one happens.</div>
+        <div className="text-sm" style={{ color: T.dim }}>No rule breaks logged. Reasons saved during session review will appear here.</div>
       )}
     </Panel>
   )
@@ -315,7 +324,7 @@ export function Preflight({ rules, checks, setChecks, snapshot, goal, maxLoss, i
     <div className="th-overlay fixed inset-0 flex items-center justify-center p-4 z-50" style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }} onClick={onCancel}>
       <div className="rounded-xl w-full max-w-2xl max-h-[92vh] overflow-y-auto" style={{ background: T.surface, border: `1px solid ${T.line}` }} onClick={(e) => e.stopPropagation()}>
         <div className="px-5 py-4 flex items-center gap-2" style={{ borderBottom: `1px solid ${T.line}` }}>
-          <Zap size={18} style={{ color: T.accent }} />
+          <Zap size={18} style={{ color: T.accentText }} />
           <div>
             <div className="text-sm font-semibold">Pre-flight check</div>
             <div className="text-xs" style={{ color: T.dim }}>{dateLabel}</div>
@@ -323,7 +332,7 @@ export function Preflight({ rules, checks, setChecks, snapshot, goal, maxLoss, i
         </div>
         <div className="px-5 py-4 space-y-4">
           {imminent && (
-            <div className="rounded-lg px-3 py-2 text-xs flex items-center gap-2" style={{ background: T.accentSoft, color: T.accent }}>
+            <div className="rounded-lg px-3 py-2 text-xs flex items-center gap-2" style={{ background: T.accentSoft, color: T.accentText }}>
               <AlertTriangle size={14} style={{ flexShrink: 0 }} />
               <span>High-impact news — {imminent.country} {imminent.title} in {untilLabel(imminent.ts, now)}. Consider waiting for the print.</span>
             </div>
@@ -350,7 +359,7 @@ export function Preflight({ rules, checks, setChecks, snapshot, goal, maxLoss, i
                 <div className="text-xs uppercase tracking-wider" style={{ color: T.faint }}>Session recording</div>
                 <div className="text-xs mt-0.5" style={{ color: T.dim }}>Video only. Saved locally and linked to trades from this session.</div>
               </div>
-              <button type="button" onClick={() => setRecordingEnabled(!recordingEnabled)} className="rounded-md px-2.5 py-1.5 text-xs font-semibold" style={{ background: recordingEnabled ? T.accentSoft : T.surface2, color: recordingEnabled ? T.accent : T.dim, border: `1px solid ${recordingEnabled ? T.accent : T.line}` }}>
+              <button type="button" onClick={() => setRecordingEnabled(!recordingEnabled)} className="rounded-md px-2.5 py-1.5 text-xs font-semibold" style={{ background: recordingEnabled ? T.accentSoft : T.surface2, color: recordingEnabled ? T.accentText : T.dim, border: `1px solid ${recordingEnabled ? T.accent : T.line}` }}>
                 {recordingEnabled ? 'Recording on' : 'No recording'}
               </button>
             </div>
@@ -369,7 +378,7 @@ export function Preflight({ rules, checks, setChecks, snapshot, goal, maxLoss, i
                         <div className="aspect-video flex items-center justify-center overflow-hidden" style={{ background: '#090C12' }}>
                           {source.thumbnail ? <img src={source.thumbnail} alt="" className="w-full h-full object-cover" /> : <Monitor size={22} style={{ color: T.faint }} />}
                         </div>
-                        <div className="px-2 py-1.5 text-[11px] truncate" style={{ color: active ? T.accent : T.dim }}>{source.name}</div>
+                        <div className="px-2 py-1.5 text-[11px] truncate" style={{ color: active ? T.accentText : T.dim }}>{source.name}</div>
                       </button>
                     )
                   })}
@@ -474,7 +483,7 @@ export function SessionEndReview({ session, recordingState, rules = [], ruleBrea
                       </button>
                       {selected && (
                         <div className="pl-6 mt-2">
-                          {prior && <div className="text-[11px] mb-1.5" style={{ color: T.accent }}>Last time: “{prior.reason}”</div>}
+                          {prior && <div className="text-[11px] mb-1.5" style={{ color: T.accentText }}>Last time: “{prior.reason}”</div>}
                           <input value={reasons[index] || ''} onChange={(event) => setReasons((current) => ({ ...current, [index]: event.target.value }))} maxLength={600} placeholder="What pulled you away from this rule?" className="w-full rounded-md px-2.5 py-2 text-xs" style={inputStyle} />
                         </div>
                       )}

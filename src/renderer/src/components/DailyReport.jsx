@@ -46,7 +46,7 @@ export function DailyReport({ trades, date, settings, onClose, onOpenCoach }) {
     <div className="fixed bottom-4 right-4 z-[75] w-[360px] max-w-[calc(100vw-2rem)] rounded-xl overflow-hidden"
       style={{ background: T.surface, border: `1px solid ${T.line}`, boxShadow: '0 16px 44px rgba(0,0,0,0.5)' }}>
       <div className="flex items-center gap-2 px-4 py-3" style={{ borderBottom: `1px solid ${T.line}` }}>
-        <CalendarClock size={16} style={{ color: T.accent }} />
+        <CalendarClock size={16} style={{ color: T.accentText }} />
         <div>
           <div className="text-sm font-semibold">Last session review</div>
           <div className="text-xs" style={{ color: T.faint }}>{dayLabel(report.date)}</div>

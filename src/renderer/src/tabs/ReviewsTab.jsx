@@ -8,11 +8,10 @@ import {
   buildPeriodRetrospective, parsePeriodRetrospective,
   reviewPeriodKeys, serializePeriodRetrospective, tradeDateKey, tradesInPeriod
 } from '../periodRetrospective.js'
-import { Stat, Panel } from '../components/Shared.jsx'
+import { AnimatedValue, Stat, Panel } from '../components/Shared.jsx'
 import { GroupTable, ReasonList } from './PsychologyTab.jsx'
 import { coachVoiceInstruction, shouldIncludeWrittenJournal } from '../coachInsights.js'
 import { buildWeeklyWrap } from '../weeklyWrap.js'
-import { WeeklyWrapContent } from '../components/WeeklyWrap.jsx'
 
 /* ───────── periodic reviews ───────── */
 const REVIEW_SYSTEM = `You are a trading coach writing a short periodic review. Given the trader's aggregated stats and trades for ONE period, summarize how the period went using their real numbers, name 1-2 strengths and 1-2 leaks (revenge, FOMO, overtrading, cutting winners early, oversizing), then give 2 concrete focus points for next period. No price predictions or buy/sell advice. Under ~170 words.`
@@ -35,7 +34,7 @@ function outcomePresentation(status) {
   if (status === 'hit') return { label: 'Hit', color: T.up }
   if (status === 'miss') return { label: 'Miss', color: T.down }
   if (status === 'not-set') return { label: 'Not set', color: T.faint }
-  return { label: 'Not assessed', color: T.accent }
+  return { label: 'Not assessed', color: T.accentText }
 }
 
 function RetrospectiveMetric({ label, value, sub, color = T.text }) {
@@ -44,6 +43,19 @@ function RetrospectiveMetric({ label, value, sub, color = T.text }) {
       <div className="text-xs uppercase tracking-wider" style={{ color: T.faint }}>{label}</div>
       <div className="mt-1 text-lg font-semibold" style={{ ...mono, color }}>{value}</div>
       {sub && <div className="text-xs mt-0.5" style={{ color: T.dim }}>{sub}</div>}
+    </div>
+  )
+}
+
+function RecordMetric({ label, value, sub, tone }) {
+  const color = tone === 'up' ? T.up : tone === 'down' ? T.down : tone === 'accent' ? T.accent : T.text
+  return (
+    <div className="th-reviews-record-metric min-w-0 px-3 py-2 first:pl-0 last:pr-0">
+      <dt className="text-xs uppercase tracking-wider" style={{ color: T.faint }}>{label}</dt>
+      <dd className="mt-1 text-lg font-semibold" style={{ ...mono, color }}>
+        <AnimatedValue value={value} animateOnMount />
+      </dd>
+      {sub && <dd className="text-xs mt-0.5" style={{ color: T.dim }}>{sub}</dd>}
     </div>
   )
 }
@@ -65,6 +77,7 @@ export function Reviews({
     [trades, period, gran]
   )
   const stats = useMemo(() => computeStats(periodTrades), [periodTrades])
+  const sparseEquityDate = periodTrades.length ? tradeDateKey(periodTrades[0]) : ''
   const weeklyWrap = useMemo(
     () => gran === 'week' ? buildWeeklyWrap({ trades, ruleBreaks, weekKey: period }) : null,
     [gran, trades, ruleBreaks, period]
@@ -183,11 +196,15 @@ export function Reviews({
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
+    <div className="th-page th-page-reviews">
+      <div className="th-reviews-toolbar flex flex-wrap items-center gap-3">
+        <div className="mr-auto">
+          <h2 className="text-lg font-semibold">Reviews</h2>
+          <div className="text-xs" style={{ color: T.dim }}>Review performance against your goals</div>
+        </div>
         <div className="flex gap-1">
           {GRANS.map(([g, label]) => (
-            <button key={g} type="button" onClick={() => { setGran(g); setSel('') }} className="px-3 py-1.5 rounded-md text-sm" style={{ background: gran === g ? T.surface2 : 'transparent', color: gran === g ? T.accent : T.dim, border: `1px solid ${gran === g ? T.line : 'transparent'}` }}>{label}</button>
+            <button key={g} type="button" onClick={() => { setGran(g); setSel('') }} className="px-3 py-1.5 rounded-md text-sm" style={{ background: gran === g ? T.surface2 : 'transparent', color: gran === g ? T.accentText : T.dim, border: `1px solid ${gran === g ? T.line : 'transparent'}` }}>{label}</button>
           ))}
         </div>
         {!isAll && (
@@ -198,17 +215,20 @@ export function Reviews({
       </div>
 
       {weeklyWrap && (
-        <Panel title={`Weekly wrap-up · ${pLabel}`} right={
-          <button type="button" onClick={() => onOpenWeeklyWrap?.(period)} className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-md" style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}` }}><CalendarRange size={13} /> Full-screen recap</button>
+        <div className="th-reviews-wrap">
+        <Panel title="Weekly review" right={
+          <button type="button" onClick={() => onOpenWeeklyWrap?.(period)} className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-md" style={{ background: T.surface2, color: T.accentText, border: `1px solid ${T.line}` }}><CalendarRange size={13} /> Open review</button>
         }>
-          <WeeklyWrapContent wrap={weeklyWrap} />
+          <div className="flex items-center gap-2 text-xs" style={{ color: T.dim }}><span style={{ color: T.up }}>●</span> Ready to review · {pLabel}</div>
         </Panel>
+        </div>
       )}
 
-      <Panel title={`Goal-anchored retrospective · ${pLabel}`}>
+      <div className="th-reviews-retrospective">
+      <Panel title={`Goals and process · ${pLabel}`}>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <RetrospectiveMetric label="Target snapshot" value={retrospective.targetSnapshot.amount == null ? 'Not set' : fmt$(retrospective.targetSnapshot.amount)} sub={retrospective.targetSnapshot.source ? retrospective.targetSnapshot.source.replace('goals.', '') : 'No goal for this period type'} />
-          <RetrospectiveMetric label="Actual P&L" value={fmt$(retrospective.actualPnl)} color={retrospective.actualPnl >= 0 ? T.up : T.down} sub={`${retrospective.tradeCount} ${retrospective.tradeCount === 1 ? 'trade' : 'trades'} · automatic`} />
+          <RetrospectiveMetric label="Saved target" value={retrospective.targetSnapshot.amount == null ? 'Not set' : fmt$(retrospective.targetSnapshot.amount)} sub={retrospective.targetSnapshot.source ? retrospective.targetSnapshot.source.replace('goals.', '') : 'No target set for this period'} />
+          <RetrospectiveMetric label="Actual P&L" value={fmt$(retrospective.actualPnl)} color={retrospective.actualPnl >= 0 ? T.up : T.down} sub={`${retrospective.tradeCount} ${retrospective.tradeCount === 1 ? 'trade' : 'trades'} · calculated from trades`} />
           <RetrospectiveMetric label="Goal result" value={goalPresentation.label} color={goalPresentation.color} sub={retrospective.tradeCount === 0 && retrospective.goalOutcome === 'not-assessed' ? 'No trades · abstained' : 'Compared with saved target'} />
         </div>
         <div className="mt-4">
@@ -222,8 +242,9 @@ export function Reviews({
           </div>
         </div>
       </Panel>
+      </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="th-reviews-summary grid grid-cols-2 md:grid-cols-4 gap-3">
         <Stat label="Net P&L" value={fmt$(stats.totalPnl)} tone={stats.totalPnl >= 0 ? 'up' : 'down'} sub={`${stats.n} trades · ${stats.activeDays} days`} />
         <Stat label="Win rate" value={`${fmtN(stats.winRate, 1)}%`} sub={`PF ${stats.profitFactor === Infinity ? '∞' : fmtN(stats.profitFactor, 2)}`} />
         <Stat label="Avg grade" value={periodTrades.length ? letterFor(avgGrade).letter : '—'} tone="accent" sub={periodTrades.length ? `${avgGrade}/100 execution` : 'No trades assessed'} />
@@ -231,36 +252,53 @@ export function Reviews({
       </div>
 
       {records && (
+        <div className="th-reviews-records">
         <Panel title={isAll ? 'Career records' : 'Records'}>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <Stat label="Biggest win" value={fmt$(records.bigWin)} tone="up" />
-            <Stat label="Biggest loss" value={fmt$(records.bigLoss)} tone="down" />
-            <Stat label="Best day" value={fmt$(records.bestDay)} tone="up" />
-            <Stat label="Worst day" value={fmt$(records.worstDay)} tone="down" />
-            <Stat label="Longest non-tilt" value={String(stats.bestNonTilt)} sub="best streak" tone="accent" />
-            <Stat label="Total fees" value={fmt$(records.fees)} sub="paid" />
-            <Stat label="Trades logged" value={String(stats.n)} sub={`${stats.activeDays} active days`} />
-            <Stat label="Win rate" value={`${fmtN(stats.winRate, 1)}%`} sub={`${stats.activeDays ? fmtN(stats.n / stats.activeDays, 1) : 0}/day`} />
-          </div>
+          <dl className="th-reviews-record-grid">
+            <div className="th-reviews-record-row grid grid-cols-2 md:grid-cols-4">
+              <RecordMetric label="Biggest win" value={fmt$(records.bigWin)} tone="up" />
+              <RecordMetric label="Biggest loss" value={fmt$(records.bigLoss)} tone="down" />
+              <RecordMetric label="Best day" value={fmt$(records.bestDay)} tone="up" />
+              <RecordMetric label="Worst day" value={fmt$(records.worstDay)} tone="down" />
+            </div>
+            <div className="th-reviews-record-row grid grid-cols-2 md:grid-cols-4 mt-2 pt-2 border-t" style={{ borderColor: T.line }}>
+              <RecordMetric label="Longest non-tilt" value={String(stats.bestNonTilt)} sub="best streak" tone="accent" />
+              <RecordMetric label="Total fees" value={fmt$(records.fees)} sub="paid" />
+              <RecordMetric label="Trades logged" value={String(stats.n)} sub={`${stats.activeDays} active days`} />
+              <RecordMetric label="Win rate" value={`${fmtN(stats.winRate, 1)}%`} sub={`${stats.activeDays ? fmtN(stats.n / stats.activeDays, 1) : 0}/day`} />
+            </div>
+          </dl>
         </Panel>
+        </div>
       )}
 
       {stats.n > 0 && (
+        <div className="th-reviews-equity">
         <Panel title={`Equity · ${pLabel}`}>
-          <ResponsiveContainer width="100%" height={180}>
-            <LineChart data={stats.equity} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
-              <ReferenceLine y={0} stroke={T.line} />
-              <XAxis dataKey="i" tick={{ fill: T.faint, fontSize: 11 }} stroke={T.line} />
-              <YAxis tick={{ fill: T.faint, fontSize: 11 }} stroke={T.line} tickFormatter={(v) => '$' + v} />
-              <Tooltip contentStyle={{ background: T.surface2, border: `1px solid ${T.line}`, borderRadius: 8, color: T.text }} formatter={(v) => [fmt$(v), 'Equity']} />
-              <Line type="monotone" dataKey="equity" stroke={T.accent} strokeWidth={2.5} dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
+          {stats.equity.length < 2 ? (
+            <div className="th-reviews-equity-sparse flex min-h-[180px] flex-col justify-center" role="status">
+              <div className="text-sm font-semibold" style={{ color: T.text }}>One trading day—trend unavailable</div>
+              <div className="mt-1 text-xs" style={{ color: T.dim }}>
+                {sparseEquityDate || pLabel} · Closing equity {fmt$(stats.equity[0]?.equity ?? stats.totalPnl)}
+              </div>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={180}>
+              <LineChart data={stats.equity} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
+                <ReferenceLine y={0} stroke={T.line} />
+                <XAxis dataKey="i" tick={{ fill: T.faint, fontSize: 11 }} stroke={T.line} />
+                <YAxis tick={{ fill: T.faint, fontSize: 11 }} stroke={T.line} tickFormatter={(v) => '$' + v} />
+                <Tooltip contentStyle={{ background: T.surface2, border: `1px solid ${T.line}`, borderRadius: 8, color: T.text }} formatter={(v) => [fmt$(v), 'Equity']} />
+                <Line type="monotone" dataKey="equity" stroke={T.accent} strokeWidth={2.5} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
         </Panel>
+        </div>
       )}
 
       {periodTrades.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="th-reviews-breakdown grid grid-cols-1 md:grid-cols-2 gap-4">
           <GroupTable title="P&L by setup" rows={stats.bySetup} />
           <div className="space-y-4">
             <ReasonList title="Why you won" rows={stats.reasonsWin} tone="up" />
@@ -269,30 +307,33 @@ export function Reviews({
         </div>
       )}
 
+      <div className="th-reviews-reflection">
       <Panel title="Your reflection" right={
-        <button type="button" onClick={summarize} disabled={ai?.loading || !periodTrades.length} className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-md" style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}`, opacity: periodTrades.length ? 1 : 0.5 }}><Sparkles size={13} /> {ai?.loading ? 'Thinking…' : 'AI summary'}</button>
+        <button type="button" onClick={summarize} disabled={ai?.loading || !periodTrades.length} className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-md" style={{ background: T.surface2, color: T.accentText, border: `1px solid ${T.line}`, opacity: periodTrades.length ? 1 : 0.5 }}><Sparkles size={13} /> {ai?.loading ? 'Thinking…' : 'AI summary'}</button>
       }>
         {ai && (
           <div className="mb-3 rounded-lg p-3 text-sm" style={{ background: T.accentSoft, border: `1px solid ${T.line}`, color: '#F3D9A0' }}>
-            {ai.loading ? <span style={{ color: T.accent }}>Reviewing the period…</span> : ai.error ? <span style={{ color: T.down }}>⚠︎ {ai.error}</span> : <div className="whitespace-pre-wrap">{ai.text}</div>}
+            {ai.loading ? <span style={{ color: T.accentText }}>Reviewing the period…</span> : ai.error ? <span style={{ color: T.down }}>⚠︎ {ai.error}</span> : <div className="whitespace-pre-wrap">{ai.text}</div>}
           </div>
         )}
-        <div className="text-xs mb-1.5" style={{ color: T.faint }}>Written by you; automatic outcomes and AI suggestions never replace this reflection.</div>
+        <div className="text-xs mb-1.5" style={{ color: T.faint }}>Your notes stay separate from calculated results and AI suggestions.</div>
         <textarea style={inputStyle} className="w-full rounded px-3 py-2 text-sm" rows={6} value={text} onChange={(e) => setText(e.target.value)} placeholder={'What worked this period?\nWhat leaked?\nFocus for next period:'} />
         <div className="flex items-center gap-3 mt-2">
-          <button type="button" onClick={save} disabled={!period} className="rounded-md px-4 py-2 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306', opacity: period ? 1 : 0.5 }}>Save retrospective</button>
+          <button type="button" onClick={save} disabled={!period} className="rounded-md px-4 py-2 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306', opacity: period ? 1 : 0.5 }}>Save review</button>
           {saved && <span className="text-xs" style={{ color: T.up }}>Saved ✓</span>}
           {saveError && <span className="text-xs" style={{ color: T.down }}>{saveError}</span>}
         </div>
       </Panel>
+      </div>
 
       {/* Saved reviews were only reachable by guessing which period you wrote in.
           This lists everything actually written, newest first, so notes can be found
           without hunting through the period dropdown. */}
+      <div className="th-reviews-saved">
       <Panel title={`Saved notes · ${savedNotes.length}`}>
         {savedNotes.length === 0 ? (
           <div className="text-sm py-2" style={{ color: T.dim }}>
-            Nothing written yet. Save a retrospective above and it will be listed here.
+            No saved notes yet. Save this review to add one.
           </div>
         ) : (
           <div className="space-y-1 max-h-72 overflow-y-auto">
@@ -318,6 +359,7 @@ export function Reviews({
           </div>
         )}
       </Panel>
+      </div>
     </div>
   )
 }

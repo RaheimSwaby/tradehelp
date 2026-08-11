@@ -101,7 +101,7 @@ function TradePlanModal({ plan, prefill, accounts, playbook, profiles, onClose, 
     <div className="th-overlay fixed inset-0 z-[75] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)' }} onClick={onClose}>
       <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl p-5" style={{ background: T.surface, border: `1px solid ${T.line}` }} onClick={(event) => event.stopPropagation()}>
         <div className="flex items-center gap-2 mb-4">
-          <ClipboardList size={17} style={{ color: T.accent }} />
+          <ClipboardList size={17} style={{ color: T.accentText }} />
           <div>
             <div className="text-sm font-semibold">{plan ? 'Edit pre-trade plan' : 'New pre-trade plan'}</div>
             <div className="text-xs" style={{ color: T.faint }}>Save the intent now; lock it before execution so it cannot be rewritten later.</div>
@@ -110,7 +110,7 @@ function TradePlanModal({ plan, prefill, accounts, playbook, profiles, onClose, 
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Field label="Symbol *"><input autoFocus style={inputStyle} className={inp} value={form.symbol} onChange={changeSymbol} placeholder="ES, NQ, AAPL" /></Field>
+          <Field label="Symbol *"><input autoFocus style={inputStyle} className={inp} value={form.symbol} onChange={changeSymbol} placeholder="ES, NQ, EURUSD, AAPL" /></Field>
           <Field label="Direction"><select style={inputStyle} className={inp} value={form.direction} onChange={set('direction')}><option>Long</option><option>Short</option></select></Field>
           <Field label="Planned date & time"><input type="datetime-local" style={inputStyle} className={inp} value={form.plannedAt} onChange={set('plannedAt')} /></Field>
           <Field label="Account">
@@ -139,7 +139,7 @@ function TradePlanModal({ plan, prefill, accounts, playbook, profiles, onClose, 
           </div>
         </div>
         <div className="mt-3 flex items-center justify-between rounded-lg px-3 py-2 text-xs" style={{ background: T.surface2, border: `1px solid ${T.line}`, color: T.dim }}>
-          <span>Deterministic plan quality · v{scorePreview.version}</span><strong style={{ ...mono, color: scorePreview.score >= 80 ? T.up : scorePreview.score >= 60 ? T.accent : T.down }}>{scorePreview.score}/100</strong>
+          <span>Deterministic plan quality · v{scorePreview.version}</span><strong style={{ ...mono, color: scorePreview.score >= 80 ? T.up : scorePreview.score >= 60 ? T.accentText : T.down }}>{scorePreview.score}/100</strong>
         </div>
         <div className="mt-3"><Field label="Thesis"><textarea style={inputStyle} className={inp} rows={3} value={form.thesis} onChange={set('thesis')} placeholder="What must happen for this trade to make sense?" /></Field></div>
         <div className="mt-3"><Field label="Invalidation"><textarea style={inputStyle} className={inp} rows={2} value={form.invalidation} onChange={set('invalidation')} placeholder="What would prove the idea wrong before or during entry?" /></Field></div>
@@ -148,7 +148,7 @@ function TradePlanModal({ plan, prefill, accounts, playbook, profiles, onClose, 
           <Field label="Before-entry chart (optional)">
             <button type="button" onClick={() => fileRef.current?.click()} className="w-full rounded-lg px-3 py-3 text-xs flex items-center justify-center gap-2"
               style={{ background: T.surface2, border: `1px dashed ${T.line}`, color: T.dim }}>
-              <ImagePlus size={16} style={{ color: T.accent }} /> {screenshot ? 'Replace selected chart' : plan?.hasScreenshot && !removeScreenshot ? 'Replace saved chart' : 'Choose a chart screenshot'}
+              <ImagePlus size={16} style={{ color: T.accentText }} /> {screenshot ? 'Replace selected chart' : plan?.hasScreenshot && !removeScreenshot ? 'Replace saved chart' : 'Choose a chart screenshot'}
             </button>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(event) => { chooseScreenshot(event.target.files?.[0]); event.target.value = '' }} />
           </Field>
@@ -180,7 +180,7 @@ function ScoreBreakdown({ detail }) {
       {entries.map(([key, check]) => (
         <div key={key} className="flex items-center justify-between gap-2" style={{ color: T.faint }}>
           <span>{check.label || key}</span>
-          <span style={{ ...mono, color: Number(check.points) >= Number(check.possible) ? T.up : Number(check.points) > 0 ? T.accent : T.down }}>{fmtN(check.points, 0)}/{check.possible}</span>
+          <span style={{ ...mono, color: Number(check.points) >= Number(check.possible) ? T.up : Number(check.points) > 0 ? T.accentText : T.down }}>{fmtN(check.points, 0)}/{check.possible}</span>
         </div>
       ))}
       {detail?.note && <div className="sm:col-span-2 mt-1" style={{ color: T.faint }}>{detail.note}</div>}
@@ -236,8 +236,8 @@ function PlanCard({ plan, trades, usedTradeIds, onEdit, onUpdate, onDelete }) {
           {Number(plan.plannedQuantity) > 0 && <span>Frozen size <strong style={{ ...mono, color: T.text }}>{fmtN(plan.plannedQuantity, 4)}</strong></span>}
           {Number(plan.sizingRiskPerUnit) > 0 && <span>Risk/unit <strong style={{ ...mono, color: T.text }}>{fmt$(plan.sizingRiskPerUnit)}</strong></span>}
           {Number(plan.sizingTickSize) > 0 && <span>Tick <strong style={{ ...mono, color: T.text }}>{fmtN(plan.sizingTickSize, 6)} / {fmt$(plan.sizingTickValue)}</strong></span>}
-          {Number(plan.planScore) > 0 && <span>Plan score <strong style={{ ...mono, color: T.accent }}>{fmtN(plan.planScore, 0)}/100</strong></span>}
-          {plan.status === 'executed' && <span>Execution <strong style={{ ...mono, color: Number(plan.executionScore) >= 80 ? T.up : T.accent }}>{fmtN(plan.executionScore, 0)}/100</strong></span>}
+          {Number(plan.planScore) > 0 && <span>Plan score <strong style={{ ...mono, color: T.accentText }}>{fmtN(plan.planScore, 0)}/100</strong></span>}
+          {plan.status === 'executed' && <span>Execution <strong style={{ ...mono, color: Number(plan.executionScore) >= 80 ? T.up : T.accentText }}>{fmtN(plan.executionScore, 0)}/100</strong></span>}
         </div>
       )}
       <ScoreBreakdown detail={plan.scoreDetail?.plan} />
@@ -264,7 +264,7 @@ function PlanCard({ plan, trades, usedTradeIds, onEdit, onUpdate, onDelete }) {
               className="rounded-md px-2.5 py-1.5 text-xs font-semibold flex items-center gap-1" style={{ background: T.accent, color: '#1A1306', opacity: linkId ? 1 : 0.45 }}><Link2 size={12} /> Link</button>
           </div>
           <div className="flex gap-2">
-            <button type="button" onClick={() => onUpdate({ ...plan, status: 'skipped' })} className="rounded-md px-2.5 py-1.5 text-xs flex items-center gap-1" style={{ color: T.accent, border: `1px solid ${T.line}` }}><SkipForward size={12} /> Skipped</button>
+            <button type="button" onClick={() => onUpdate({ ...plan, status: 'skipped' })} className="rounded-md px-2.5 py-1.5 text-xs flex items-center gap-1" style={{ color: T.accentText, border: `1px solid ${T.line}` }}><SkipForward size={12} /> Skipped</button>
             <button type="button" onClick={() => onUpdate({ ...plan, status: 'canceled' })} className="rounded-md px-2.5 py-1.5 text-xs flex items-center gap-1" style={{ color: T.faint, border: `1px solid ${T.line}` }}><Ban size={12} /> Canceled</button>
           </div>
         </div>
@@ -306,7 +306,7 @@ export function TradePlansPanel({ plans = [], trades = [], accounts = [], playbo
         )}
         {history.length > 0 && (
           <div className="mt-3">
-            <button type="button" onClick={() => setShowHistory((value) => !value)} className="text-xs" style={{ color: T.accent }}>{showHistory ? 'Hide completed plans' : `Show completed plans (${history.length})`}</button>
+            <button type="button" onClick={() => setShowHistory((value) => !value)} className="text-xs" style={{ color: T.accentText }}>{showHistory ? 'Hide completed plans' : `Show completed plans (${history.length})`}</button>
             {showHistory && <div className="space-y-3 mt-3">{history.slice(0, 12).map((plan) => <PlanCard key={plan.id} plan={plan} trades={trades} usedTradeIds={usedTradeIds} onEdit={setEditing} onUpdate={onUpdate} onDelete={onDelete} />)}</div>}
           </div>
         )}

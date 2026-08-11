@@ -121,8 +121,9 @@ export function Patterns({ trades, onOpenTrade }) {
   )
 
   return (
-    <div className="space-y-4">
+    <div className="th-page th-page-patterns space-y-4">
       <SimilarCharts trades={trades} onOpenTrade={onOpenTrade} />
+      <div className="th-patterns-compare">
       <Panel title="Compare winners vs losers">
         <p className="text-sm mb-3" style={{ color: T.dim }}>
           The AI reads up to {MAX} winning and {MAX} losing charts for a setup, then tells you what visually separates them. Runs on your machine — the read is as good as your vision model (best with llama3.2-vision or a cloud key).
@@ -144,7 +145,9 @@ export function Patterns({ trades, onOpenTrade }) {
         </div>
         {!ready && <div className="text-xs mt-2" style={{ color: T.faint }}>Need at least one winning and one losing trade with a screenshot{setup === 'All setups' ? '' : ' for this setup'}.</div>}
       </Panel>
+      </div>
 
+      <div className="th-patterns-results">
       {state?.wins && (
         <Panel title="Charts compared">
           <div className="space-y-3">
@@ -162,6 +165,7 @@ export function Patterns({ trades, onOpenTrade }) {
           {state.text && <div className="text-xs mt-2" style={{ color: T.faint }}>AI pattern read · not financial advice</div>}
         </Panel>
       )}
+      </div>
 
       {zoom && createPortal(
         <div className="th-overlay fixed inset-0 flex items-center justify-center p-6 z-[80]" style={{ background: 'rgba(0,0,0,0.92)' }} onClick={() => setZoom(null)}>

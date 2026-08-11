@@ -161,18 +161,18 @@ export function NewsTab({ trades = [], settings = {}, events = [] }) {
   const nextUp = visibleEvents.filter((event) => event.ts >= Date.now()).slice(0, 8)
 
   return (
-    <div className="space-y-4">
+    <div className="th-page th-page-news space-y-4">
       <div className="flex flex-wrap items-center gap-3">
         <div>
-          <h2 className="text-base font-semibold flex items-center gap-2"><Newspaper size={16} style={{ color: T.accent }} /> News &amp; events</h2>
+          <h2 className="text-base font-semibold flex items-center gap-2"><Newspaper size={16} style={{ color: T.accentText }} /> News &amp; events</h2>
           <p className="text-xs mt-0.5" style={{ color: T.dim }}>
             The economic calendar, plus how your own trades actually perform around it.
           </p>
         </div>
         <div className="ml-auto flex items-center gap-1">
           {[['calendar', 'Calendar'], ['performance', 'My performance']].map(([id, label]) => (
-            <button key={id} type="button" onClick={() => setSub(id)} className="text-xs px-2.5 py-1.5 rounded-md"
-              style={{ background: sub === id ? T.surface2 : 'transparent', color: sub === id ? T.accent : T.dim, border: `1px solid ${sub === id ? T.line : 'transparent'}` }}>
+            <button key={id} type="button" onClick={() => { setSub(id); document.getElementById(`news-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }} className="text-xs px-2.5 py-1.5 rounded-md"
+              style={{ background: sub === id ? T.surface2 : 'transparent', color: sub === id ? T.accentText : T.dim, border: `1px solid ${sub === id ? T.line : 'transparent'}` }}>
               {label}
             </button>
           ))}
@@ -186,14 +186,14 @@ export function NewsTab({ trades = [], settings = {}, events = [] }) {
         <span style={{ color: T.faint }}>Impact</span>
         {IMPACTS.map((impact) => (
           <button key={impact} type="button" onClick={() => setMinImpact(impact)} className="px-2 py-1 rounded-md"
-            style={{ background: minImpact === impact ? T.surface2 : 'transparent', color: minImpact === impact ? T.accent : T.dim, border: `1px solid ${minImpact === impact ? T.line : 'transparent'}` }}>
+            style={{ background: minImpact === impact ? T.surface2 : 'transparent', color: minImpact === impact ? T.accentText : T.dim, border: `1px solid ${minImpact === impact ? T.line : 'transparent'}` }}>
             {impact}{impact !== 'Low' ? '+' : ''}
           </button>
         ))}
         <span className="ml-2" style={{ color: T.faint }}>Window ±</span>
         {WINDOWS.map((value) => (
           <button key={value} type="button" onClick={() => setWindowMin(value)} className="px-2 py-1 rounded-md"
-            style={{ background: windowMin === value ? T.surface2 : 'transparent', color: windowMin === value ? T.accent : T.dim, border: `1px solid ${windowMin === value ? T.line : 'transparent'}` }}>
+            style={{ background: windowMin === value ? T.surface2 : 'transparent', color: windowMin === value ? T.accentText : T.dim, border: `1px solid ${windowMin === value ? T.line : 'transparent'}` }}>
             {value}m
           </button>
         ))}
@@ -201,8 +201,9 @@ export function NewsTab({ trades = [], settings = {}, events = [] }) {
 
       {loading ? (
         <div className="py-16 text-center text-sm" style={{ color: T.dim }}>Loading the calendar…</div>
-      ) : sub === 'calendar' ? (
-        <>
+      ) : (
+        <div className="th-news-workspace">
+        <section id="news-calendar" className="th-news-calendar space-y-4">
           <Panel title={`${MONTHS[month - 1]} ${year}`} right={
             <div className="flex items-center gap-2 text-sm">
               <button type="button" onClick={() => shiftMonth(-1)} style={{ color: T.dim }}><ChevronLeft size={16} /></button>
@@ -215,7 +216,7 @@ export function NewsTab({ trades = [], settings = {}, events = [] }) {
               ))}
               {cells.map((cell, index) => cell == null ? <div key={`pad-${index}`} /> : (
                 <button key={cell.key} type="button" onClick={() => setSelectedDay(cell.key === selectedDay ? null : cell.key)}
-                  className="rounded p-1.5 min-h-[62px] text-left transition-transform hover:-translate-y-0.5"
+                  className="rounded p-1.5 min-h-[62px] text-left"
                   style={{ background: T.surface2, border: `1px solid ${selectedDay === cell.key ? T.accent : cell.events.length ? T.line : 'transparent'}` }}>
                   <div className="text-xs" style={{ color: T.faint }}>{cell.day}</div>
                   {cell.events.length > 0 && (
@@ -268,9 +269,8 @@ export function NewsTab({ trades = [], settings = {}, events = [] }) {
               </div>
             )}
           </Panel>
-        </>
-      ) : (
-        <>
+        </section>
+        <aside id="news-performance" className="th-news-performance space-y-4">
           {headline && (
             <div className="rounded-xl px-4 py-3 flex flex-wrap items-center gap-3" style={{ background: T.surface, border: `1px solid ${headline.tone === 'up' ? T.up : T.down}` }}>
               {headline.tone === 'up' ? <TrendingUp size={18} style={{ color: T.up }} /> : <TrendingDown size={18} style={{ color: T.down }} />}
@@ -324,18 +324,19 @@ export function NewsTab({ trades = [], settings = {}, events = [] }) {
                 : 'Nothing archived yet — events are saved automatically as the calendar loads.'}
             </div>
             <div className="flex flex-wrap items-center gap-2 mt-3">
-              <History size={14} style={{ color: T.accent }} />
+              <History size={14} style={{ color: T.accentText }} />
               <span className="text-xs" style={{ color: T.dim }}>Backfill past events (needs an FMP key):</span>
               {[30, 90, 365].map((days) => (
                 <button key={days} type="button" disabled={backfill.busy} onClick={() => runBackfill(days)}
-                  className="text-xs px-2 py-1 rounded-md" style={{ background: T.surface2, color: T.accent, border: `1px solid ${T.line}`, opacity: backfill.busy ? 0.5 : 1 }}>
+                  className="text-xs px-2 py-1 rounded-md" style={{ background: T.surface2, color: T.accentText, border: `1px solid ${T.line}`, opacity: backfill.busy ? 0.5 : 1 }}>
                   {days === 365 ? '1 year' : `${days} days`}
                 </button>
               ))}
             </div>
             {backfill.message && <div className="text-xs mt-2" style={{ color: T.dim }}>{backfill.message}</div>}
           </Panel>
-        </>
+        </aside>
+        </div>
       )}
     </div>
   )
