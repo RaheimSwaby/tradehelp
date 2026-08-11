@@ -7,6 +7,14 @@ dist/
 /screenshots/
 .claude/
 
+# Local AI tooling and review artifacts — never publish
+/.github/agents/
+/.github/hooks/
+/.github/skills/
+/browser-screenshots/
+*.odysseus-tmp
+/marketing/
+
 # Personal NinjaTrader strategy — never publish
 /ninjatrader/
 

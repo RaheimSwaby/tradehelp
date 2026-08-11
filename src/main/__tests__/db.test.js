@@ -7,7 +7,8 @@
  * Run with: npm test
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
-import { rmSync } from 'fs'
+import { rmSync, writeFileSync } from 'fs'
+import { join } from 'path'
 
 // vi.hoisted() runs before ESM imports are evaluated, so use require() inside it
 // rather than referencing the top-level import bindings (which aren't ready yet).
@@ -36,6 +37,7 @@ import {
   getSettings, setSettings, getTradeRuleState, mergeMobileTradeRules,
   getMobileAccountState, mergeMobileAccountState,
   addImage, listImages, getImage, deleteImage,
+  addTradeVideoFromPath, listTradeVideos, renameTradeVideo,
   createTradingSession, getActiveTradingSession, getTradingSession, listTradingSessions,
   beginTradingSessionRecording, completeTradingSessionRecording, discardTradingSessionRecording,
   finishTradingSession, updateTradingSession, deleteTradingSession,
@@ -801,5 +803,29 @@ describe('economic event archive', () => {
     expect(backup.economicEvents.some((e) => e.title === 'CPI m/m')).toBe(true)
     restoreData(backup)
     expect(listEconomicEvents({}).find((e) => e.title === 'CPI m/m').actual).toBe('0.4%')
+  })
+})
+
+describe('trade videos - rename', () => {
+  it('updates the displayed recording name and keeps it linked to the trade', () => {
+    const trade = makeTrade()
+    addTrade(trade)
+    const sourcePath = join(tmpDir, 'recording.mp4')
+    writeFileSync(sourcePath, Buffer.from('test video'))
+
+    addTradeVideoFromPath(trade.id, sourcePath)
+    const [video] = listTradeVideos(trade.id)
+    const renamed = renameTradeVideo(video.id, 'Opening range review.mp4')
+
+    expect(renamed).toHaveLength(1)
+    expect(renamed[0]).toMatchObject({
+      id: video.id,
+      tradeId: trade.id,
+      originalName: 'Opening range review.mp4'
+    })
+  })
+
+  it('rejects an empty recording name', () => {
+    expect(() => renameTradeVideo('missing', '   ')).toThrow('Recording name is required')
   })
 })

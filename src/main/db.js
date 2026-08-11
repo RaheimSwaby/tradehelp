@@ -1874,6 +1874,16 @@ export function listTradeVideos(tradeId) {
     FROM trade_videos WHERE tradeId = ? ORDER BY createdAt ASC, rowid ASC`).all(String(tradeId))
 }
 
+export function renameTradeVideo(id, name) {
+  const key = String(id)
+  const originalName = String(name || '').trim().slice(0, 500)
+  if (!originalName) throw new Error('Recording name is required')
+  const row = db.prepare('SELECT tradeId FROM trade_videos WHERE id = ?').get(key)
+  if (!row) throw new Error('Recording not found')
+  db.prepare('UPDATE trade_videos SET originalName = ? WHERE id = ?').run(originalName, key)
+  return listTradeVideos(row.tradeId)
+}
+
 export function getTradeVideoFile(id) {
   const row = db.prepare(`SELECT id,tradeId,file,originalName,mimeType,size,createdAt
     FROM trade_videos WHERE id = ?`).get(String(id))
