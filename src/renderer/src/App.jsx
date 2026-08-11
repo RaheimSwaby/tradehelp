@@ -94,19 +94,14 @@ function GlanceBars({ size = 24, ...props }) {
 function LogoMark({ size = 22, ignite = false, live = false }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" className={`${ignite ? 'th-logo-ignite' : ''}${live ? ' th-logo-live' : ''}`}>
-      <rect x="1" y="1" width="22" height="22" rx="6" fill={T.accentSoft} stroke={T.accent} strokeOpacity="0.35" />
-      <g className="th-logo-candle th-logo-candle-1">
-        <line x1="6" y1="10" x2="6" y2="20" stroke={T.down} strokeWidth="1.2" />
-        <rect x="4.6" y="12" width="2.8" height="5" rx="0.8" fill={T.down} />
-      </g>
-      <g className="th-logo-candle th-logo-candle-2">
-        <line x1="12" y1="6" x2="12" y2="17" stroke={T.accent} strokeWidth="1.2" />
-        <rect x="10.6" y="8" width="2.8" height="6" rx="0.8" fill={T.accent} />
-      </g>
-      <g className="th-logo-candle th-logo-candle-3">
-        <line x1="18" y1="3" x2="18" y2="13" stroke={T.up} strokeWidth="1.2" />
-        <rect x="16.6" y="4.5" width="2.8" height="6" rx="0.8" fill={T.up} />
-      </g>
+      {/* Brand mark, traced from the 512px master and scaled by 24/512. Fills come
+          from the palette rather than fixed hex so it still tracks the theme: the
+          page block follows dim, everything structural follows the accent. */}
+      <rect x="2.3" y="6.4" width="5.5" height="15.9" rx="1.1" fill={T.dim} />
+      <rect x="2.6" y="1.6" width="19" height="1.5" rx="0.7" fill={T.accent} />
+      <rect x="18.2" y="1.6" width="3.4" height="20.7" rx="1.1" fill={T.accent} />
+      <rect x="11.7" y="6.4" width="6.5" height="1.8" fill={T.accent} />
+      <path d="M13.2 12.1 16.1 15.7h-1.6v6.6h-2.7v-6.6h-1.6z" fill={T.accent} />
     </svg>
   )
 }

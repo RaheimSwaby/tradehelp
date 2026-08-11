@@ -410,6 +410,18 @@ export function initDb() {
   // old wording have to move with them: REASONS is keyed by the exact label, so a
   // stale value silently stops scoring against its rating attribute and stops
   // matching the leak rules. Idempotent — a second run matches nothing.
+  // The default theme moved from Classic to Dark Knight. getSettings() merges the
+  // defaults at read time, so anyone who never opened Settings has no themePreset
+  // row and would silently change appearance on update. Pin Classic for any database
+  // that already has settings in it; a genuinely new install has none and gets the
+  // new default. Runs once — after this the row exists.
+  const hasSettings = db.prepare('SELECT 1 FROM settings LIMIT 1').get()
+  if (hasSettings) {
+    const pin = db.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO NOTHING")
+    pin.run('themePreset', 'classic')
+    pin.run('accentColor', 'amber')
+  }
+
   const renamedReasons = [
     ['Patient — waited for setup', 'Patient, waited for setup'],
     ['Just variance — good trade', 'Just variance, good trade'],
@@ -1501,8 +1513,10 @@ const SETTINGS_DEFAULTS = Object.freeze({
   fmpKey: '',
   eventsMinImpact: 'High',
   eventsLeadMin: '15',
-  themePreset: 'classic',
-  accentColor: 'amber',
+  // New installs open on Dark Knight, matching the marketing site. Existing users
+  // keep Classic: the migration below pins it for them before this default applies.
+  themePreset: 'darkKnight',
+  accentColor: 'gold',
   goTimeAccent: 'orange',
   pnlStyle: 'classic',
   fontStyle: 'default',

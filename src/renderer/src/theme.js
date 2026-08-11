@@ -56,6 +56,20 @@ const PRESET_PALETTES = {
       up: '#34D399', down: '#FB7185', accent: '#F8544F', accentSoft: '#3A1614'
     }
   },
+  // The trade-help.app palette: a warm near-black with beige-tinted text and muted
+  // gold, rather than the blue-grey the other dark presets share. Values are taken
+  // straight from the site's stylesheet; only faint is new, since the site has no
+  // equivalent tier and its lightest grey sat too close to dim to read as one.
+  darkKnight: {
+    name: 'Dark Knight',
+    mode: 'dark',
+    accentKey: 'gold',
+    palette: {
+      bg: '#0B0B0C', surface: '#141417', surface2: '#1A1A1D', line: '#26262A',
+      text: '#F0EDE6', dim: '#C5C0B8', faint: '#8A857C',
+      up: '#4ADE80', down: '#F87171', accent: '#D4A853', accentSoft: '#33280F'
+    }
+  },
   minimal: {
     name: 'Minimal Gray',
     mode: 'dark',
@@ -134,6 +148,8 @@ export let inputStyle = { background: T.surface2, border: `1px solid ${T.line}`,
 // User-selectable accent colors (all bright enough that the dark button text reads on them).
 const ACCENTS = {
   amber: { accent: '#F5B642', accentSoft: '#3A3018' },
+  // Muted gold, matching the marketing site rather than the app's brighter amber.
+  gold: { accent: '#D4A853', accentSoft: '#33280F' },
   orange: { accent: '#FB923C', accentSoft: '#3A2412' },
   sky: { accent: '#38BDF8', accentSoft: '#0F2A3C' },
   violet: { accent: '#A78BFA', accentSoft: '#241A3C' },
