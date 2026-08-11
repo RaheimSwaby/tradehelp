@@ -108,9 +108,16 @@
   .topbar .wrap{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;height:var(--topbar-h)}
   .topbar .logo{justify-self:start}
   .topbar nav{justify-self:center}
-  .topbar .nav-cta{justify-self:end}
-  .logo{font-weight:700;font-size:1.25rem;color:#f0ede6;letter-spacing:-0.01em;display:flex;align-items:center;gap:.4rem}
+  .topbar .topbar-cta{justify-self:end;display:flex;align-items:center;gap:.6rem}
+  /* No flex gap here: 'Trade' is a bare text node and <span>Help</span> is another,
+     so a gap sits between them and the wordmark reads 'Trade Help'. The spacing
+     belongs on the mark instead. */
+  .logo{font-weight:700;font-size:1.25rem;color:#f0ede6;letter-spacing:-0.01em;display:flex;align-items:center}
+  .logo img{width:26px;height:26px;display:block;margin-right:.5rem}
   .logo span{color:#d4a853}
+  /* Outlined so the amber Buy button stays the single loudest thing in the bar. */
+  .nav-download{border:1px solid rgba(255,255,255,.18);color:#e0ddd6!important;padding:.45rem 1rem;border-radius:4px;font-size:.9rem;font-weight:600;white-space:nowrap;transition:background .15s,border-color .15s}
+  .nav-download:hover{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.3);text-decoration:none}
   .nav-links{display:flex;align-items:center;gap:1.8rem;list-style:none;margin:0;padding:0}
   .nav-links a{color:#b5b0a8;font-size:.92rem;font-weight:500;transition:color .15s}
   .nav-links a:hover{color:#f0ede6;text-decoration:none}
@@ -131,7 +138,11 @@
   .hero{padding-block:4rem 2.5rem;text-align:center}
   .hero h1{margin-bottom:1rem}
   .hero p{font-size:1.15rem;max-width:620px;margin:0 auto 1.8rem;color:#b5b0a8}
-  .hero-btns{display:flex;gap:1rem;justify-content:center;flex-wrap:wrap}
+  .hero-btns{display:flex;gap:.75rem;justify-content:center;flex-wrap:wrap}
+  /* Demoted to a text link: with three download buttons, a fourth ghost button of
+     equal weight made it unclear which one was the actual next step. */
+  .hero-secondary{margin:1rem 0 0;font-size:.9rem}
+  .hero-secondary a{color:#b5b0a8}
   .btn{padding:.7rem 1.6rem;border-radius:4px;font-weight:600;font-size:.95rem;display:inline-block;transition:background .15s,color .15s}
   .btn-primary{background:#d4a853;color:#0b0b0c}
   .btn-primary:hover{background:#e0b85c;text-decoration:none}
@@ -183,6 +194,8 @@
   .price-card{display:inline-block;background:#141417;border:1px solid rgba(255,255,255,.08);border-radius:4px;padding:2.5rem 3rem;text-align:center}
   .price{font-size:3rem;font-weight:700;color:#f0ede6;letter-spacing:-0.02em}
   .price small{font-size:1rem;color:#888}
+  .price-btns{display:flex;gap:.75rem;justify-content:center;flex-wrap:wrap;margin-top:.25rem}
+  .note-alt{margin:1rem 0 0;font-size:.82rem;color:#888}
   .price-card .btn{margin-top:1.5rem}
 
   /* ── footer ── */
@@ -202,19 +215,27 @@
     .topbar .wrap{grid-template-columns:auto auto;row-gap:.3rem;padding-top:.45rem;padding-bottom:.45rem}
     /* Explicit placement: auto-flow would drop the button onto a third row. */
     .topbar .logo{grid-area:1 / 1;justify-self:start}
-    .topbar .nav-cta{grid-area:1 / 2;justify-self:end}
+    .topbar .topbar-cta{grid-area:1 / 2;justify-self:end}
+    /* A phone can't install a desktop app, so the download drops out of the bar
+       here; the mobile handoff card in the hero covers that case instead. */
+    .nav-download{display:none}
     .topbar nav{grid-area:2 / 1 / 3 / -1;justify-self:center}
     .nav-links{gap:1rem;flex-wrap:wrap;justify-content:center}
     .nav-links a,.dropdown-toggle{font-size:.82rem}
   }
 </style>
+  <link rel="stylesheet" href="lightbox.css">
+<link rel="icon" href="favicon.ico" sizes="any" />
+<link rel="icon" type="image/png" href="logo-mark.png" />
+<link rel="apple-touch-icon" href="logo-mark.png" />
 </head>
 <body>
 
 <!-- ====== top bar ====== -->
 <header class="topbar">
   <div class="wrap">
-    <a href="/" class="logo">Trade<span>Help</span></a>
+    <!-- The mark only: the full lockup carries a tagline unreadable at 26px. -->
+    <a href="/" class="logo"><img src="logo-mark.png" alt="" width="512" height="512" decoding="async">Trade<span>Help</span></a>
     <nav>
       <ul class="nav-links">
         <li><a href="/#features">Features</a></li>
@@ -241,7 +262,10 @@
     </nav>
     <!-- Outside the list so the nav links centre on the page rather than being
          pushed left by the button's width. -->
-    <a href="https://tradehelp.gumroad.com/l/oyftvr" class="nav-cta">Buy for $25</a>
+    <div class="topbar-cta">
+      <a href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.exe" class="nav-download" data-goatcounter-click="download-windows-nav">Download now</a>
+      <a href="https://tradehelp.gumroad.com/l/oyftvr" class="nav-cta" data-goatcounter-click="buy-gumroad-nav">Buy for $25</a>
+    </div>
   </div>
 </header>
 
@@ -251,9 +275,11 @@
   <div class="asset-bar">FUTURES / FOREX / CRYPTO</div>
   <p>TradeHelp stores your trades locally in SQLite. The AI coach runs offline on your own hardware. No account, no subscription, no data leaving your machine. Free 14-day trial, then $50 once.</p>
   <div class="hero-btns">
-    <a href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.exe" class="btn btn-primary">Download for Windows</a>
-    <a href="/#features" class="btn btn-ghost">See what's inside</a>
+    <a href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.exe" class="btn btn-primary" data-goatcounter-click="download-windows-hero">Download for Windows</a>
+    <a href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.dmg" class="btn btn-ghost" data-goatcounter-click="download-mac-hero">Download for macOS</a>
+    <a href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.AppImage" class="btn btn-ghost" data-goatcounter-click="download-linux-hero">Download for Linux</a>
   </div>
+  <p class="hero-secondary"><a href="/#features">See what's inside</a></p>
   <!-- Shown only to phone visitors, who can't install a desktop app where they stand. -->
   <div class="mobile-cta" id="mobileCta">
     <p>This one runs on your desktop. Send yourself the link for when you're back at your computer.</p>
@@ -327,7 +353,16 @@
     <div class="price">$25 <small>once</small></div>
     <p style="color:#888;margin-bottom:.5rem">Launch price. Regular $50</p>
     <p style="color:#888;font-size:.88rem">Free 14-day trial. Windows, macOS &amp; Linux.</p>
-    <a href="https://tradehelp.gumroad.com/l/oyftvr" class="btn btn-primary">Buy on Gumroad</a>
+    <!-- The card advertises a free trial but only offered a Buy button, so anyone
+         wanting to try it first had to scroll back to the hero to find a download. -->
+    <div class="price-btns">
+      <a href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.exe" class="btn btn-primary" data-goatcounter-click="download-windows-pricing">Download now</a>
+      <a href="https://tradehelp.gumroad.com/l/oyftvr" class="btn btn-ghost" data-goatcounter-click="buy-gumroad-pricing">Buy on Gumroad</a>
+    </div>
+    <p class="note-alt">No account, no card. Also on
+      <a href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.dmg" data-goatcounter-click="download-mac">macOS</a> and
+      <a href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.AppImage" data-goatcounter-click="download-linux">Linux</a>.
+    </p>
   </div>
 </section>
 
@@ -404,6 +439,28 @@
   });
 })();
 </script>
+  <script src="lightbox.js"></script>
+<!-- Same endpoint as the rest of the site. The design overhaul (7b057cd) dropped
+     this from the homepage only, so its downloads and buys went uncounted. -->
+<script data-goatcounter="https://kingdd69.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
+<!-- Consent gate for the Reddit Ads pixel, and the "Privacy choices" control the
+     privacy policy promises. The overhaul dropped this from the homepage only, so
+     the main ad landing page had no measurement and no way to opt in or out. -->
+<script src="site-preferences.js"></script>
+
+<!-- PeerPush badge -->
+<div style="text-align:center; padding: 1.5rem 0 2.5rem;">
+  <a href="https://peerpush.com/p/tradehelp"
+    target="_blank"
+    rel="noopener"
+  >
+    <img
+      src="https://peerpush.com/p/tradehelp/badge.png"
+      alt="TradeHelp on PeerPush"
+      style="width: 230px;"
+    />
+  </a>
+</div>
 
 </body>
 </html>
