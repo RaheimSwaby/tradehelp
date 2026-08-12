@@ -86,3 +86,9 @@
 .lb-caption.visible {
   opacity: 1;
 }
+
+/* Signals the screenshots are clickable before the pointer proves it. */
+.feature-visual img,
+img[data-lightbox] {
+  cursor: zoom-in;
+}

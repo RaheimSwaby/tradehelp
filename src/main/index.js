@@ -147,8 +147,21 @@ function registerVideoProtocol() {
   })
 }
 
+// electron-builder embeds the icon into packaged builds, but an unpackaged run is
+// just the electron binary, so dev windows fall back to Electron's default atom in
+// the taskbar and Alt-Tab. build/ ships with the repo but not inside the asar, so
+// this only applies when running unpackaged. Spread it in: an undefined `icon` key
+// is fine, but this keeps the option absent entirely where it isn't wanted.
+function windowIcon() {
+  if (app.isPackaged) return {}
+  const file = process.platform === 'win32' ? 'icon.ico' : 'icon.png'
+  const path = join(app.getAppPath(), 'build', file)
+  return existsSync(path) ? { icon: path } : {}
+}
+
 function createWindow(rendererPort) {
   win = new BrowserWindow({
+    ...windowIcon(),
     width: 1536,
     height: 900,
     minWidth: 900,
@@ -599,6 +612,7 @@ function registerIpc() {
     const timezone = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } catch { return 'UTC' } })()
     const chartUrl = `https://www.tradingview.com/widgetembed/?symbol=${clean}&interval=5&theme=dark&style=1&timezone=${encodeURIComponent(timezone)}&studies=%5B%5D&hide_side_toolbar=0&allow_symbol_change=1&save_image=1&calendar=1&hotlist=1`
     const popout = new BrowserWindow({
+      ...windowIcon(),
       width: 1200,
       height: 800,
       minWidth: 800,

@@ -21,6 +21,9 @@
 <meta name="twitter:description" content="Stop paying monthly subscriptions for trading journals. Store trades locally in SQLite with an offline AI coach." />
 <meta name="twitter:image" content="https://trade-help.app/shots/dashboard.png" />
 
+<!-- PRICE-DRIFT WARNING: When the launch deal ends, update "price":"25.00" (x2 below) to
+     "50.00" and remove priceValidUntil. Also update the visible $25 in the #pricing
+     section and the struck price in the hero (search "PRICE-DRIFT"). -->
 <!-- Google Rich Snippet &amp; Structured Data -->
 <script type="application/ld+json">
 {
@@ -194,6 +197,9 @@
   .price-card{display:inline-block;background:#141417;border:1px solid rgba(255,255,255,.08);border-radius:4px;padding:2.5rem 3rem;text-align:center}
   .price{font-size:3rem;font-weight:700;color:#f0ede6;letter-spacing:-0.02em}
   .price small{font-size:1rem;color:#888}
+  /* Struck price stays muted so the live number is what the eye lands on. */
+  .was-price{color:#8a8a8a;text-decoration-thickness:.09em}
+  .now-price{color:#f0ede6}
   .price-btns{display:flex;gap:.75rem;justify-content:center;flex-wrap:wrap;margin-top:.25rem}
   .note-alt{margin:1rem 0 0;font-size:.82rem;color:#888}
   .price-card .btn{margin-top:1.5rem}
@@ -273,7 +279,7 @@
 <section class="hero wrap">
   <h1>A trading journal that lives on your computer, not in the cloud</h1>
   <div class="asset-bar">FUTURES / FOREX / CRYPTO</div>
-  <p>TradeHelp stores your trades locally in SQLite. The AI coach runs offline on your own hardware. No account, no subscription, no data leaving your machine. Free 14-day trial, then $50 once.</p>
+  <p>TradeHelp stores your trades locally in SQLite. The AI coach runs offline on your own hardware. No account, no subscription, no data leaving your machine. Free 14-day trial, then <s class="was-price">$50</s> <b class="now-price">$25</b> once for the first 100.</p>
   <div class="hero-btns">
     <a href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.exe" class="btn btn-primary" data-goatcounter-click="download-windows-hero">Download for Windows</a>
     <a href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.dmg" class="btn btn-ghost" data-goatcounter-click="download-mac-hero">Download for macOS</a>
@@ -350,6 +356,7 @@
 <section class="pricing wrap" id="pricing">
   <h2>One price. No subscription. No account.</h2>
   <div class="price-card">
+    <!-- PRICE-DRIFT: change $25 to $50 when the launch deal ends -->
     <div class="price">$25 <small>once</small></div>
     <p style="color:#888;margin-bottom:.5rem">Launch price. Regular $50</p>
     <p style="color:#888;font-size:.88rem">Free 14-day trial. Windows, macOS &amp; Linux.</p>
