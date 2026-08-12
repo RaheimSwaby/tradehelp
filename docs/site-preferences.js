@@ -93,14 +93,17 @@
     style.id = 'th-reddit-styles';
     style.textContent =
       '.th-consent{position:fixed;z-index:1000;left:18px;right:18px;bottom:18px;max-width:720px;margin:auto;' +
-      'display:flex;align-items:center;gap:18px;padding:15px 16px;background:#151B26;color:#E6EAF2;' +
-      'border:1px solid #2A3344;border-radius:8px;box-shadow:0 18px 48px rgba(0,0,0,.48);font:14px/1.45 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}' +
-      '.th-consent-copy{flex:1}.th-consent-copy b{display:block;margin-bottom:3px}.th-consent-copy span{color:#A6AFBF}' +
-      '.th-consent-copy a{color:#F5B642;text-decoration:underline}.th-consent-actions{display:flex;gap:8px;flex-shrink:0}' +
-      '.th-consent button,.th-privacy-choices{border:1px solid #39445A;border-radius:7px;padding:9px 12px;' +
-      'font:600 13px ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;cursor:pointer}' +
-      '.th-consent-allow{background:#F5B642;color:#1A1306;border-color:#F5B642!important}.th-consent-decline{background:#1C2433;color:#E6EAF2}' +
-      '.th-privacy-choices{position:fixed;z-index:900;left:12px;bottom:12px;background:rgba(21,27,38,.92);color:#A6AFBF;padding:7px 9px}' +
+      'display:flex;align-items:center;gap:18px;padding:15px 16px;background:#141417;color:#e0ddd6;' +
+      'border:1px solid rgba(255,255,255,.08);border-radius:4px;box-shadow:0 18px 48px rgba(0,0,0,.48);' +
+      'font:14px/1.45 "Inter","system-ui","Segoe UI","Roboto","Helvetica Neue",sans-serif}' +
+      '.th-consent-copy{flex:1}.th-consent-copy b{display:block;margin-bottom:3px}' +
+      '.th-consent-copy span{color:#b5b0a8}' +
+      '.th-consent-copy a{color:#d4a853;text-decoration:underline}.th-consent-actions{display:flex;gap:8px;flex-shrink:0}' +
+      '.th-consent button,.th-privacy-choices{border:1px solid rgba(255,255,255,.08);border-radius:4px;padding:9px 12px;' +
+      'font:600 13px "Inter","system-ui","Segoe UI","Roboto","Helvetica Neue",sans-serif;cursor:pointer}' +
+      '.th-consent-allow{background:#d4a853;color:#0b0b0c;border-color:#d4a853!important}' +
+      '.th-consent-decline{background:#1a1a1d;color:#e0ddd6}' +
+      '.th-privacy-choices{position:fixed;z-index:900;left:12px;bottom:12px;background:rgba(20,20,23,.92);color:#b5b0a8;padding:7px 9px}' +
       '@media(max-width:620px){.th-consent{align-items:stretch;flex-direction:column;gap:12px}.th-consent-actions{justify-content:flex-end}}';
     document.head.appendChild(style);
   }

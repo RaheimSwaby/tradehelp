@@ -27,6 +27,53 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:14px 0
 .nav-links a:hover{color:var(--text);text-decoration:none}
 @media (max-width:720px){.nav-links{display:none}}
 
+/* Hamburger menu button — hidden on desktop, shown on mobile */
+.hamburger{display:none;flex-direction:column;gap:5px;background:none;border:none;cursor:pointer;padding:8px;z-index:60}
+.hamburger span{display:block;width:22px;height:2px;background:var(--text);border-radius:1px;transition:transform .2s ease,opacity .2s ease}
+body.menu-open .hamburger span:nth-child(1){transform:translateY(7px) rotate(45deg)}
+body.menu-open .hamburger span:nth-child(2){opacity:0}
+body.menu-open .hamburger span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
+
+/* Mobile nav panel — .nav-links becomes a vertical dropdown below the topbar */
+@media (max-width:720px){
+  .hamburger{display:flex}
+  .nav-links{
+    display:none;
+    position:absolute;
+    top:100%;
+    left:0;
+    right:0;
+    background:rgba(20,20,23,.97);
+    backdrop-filter:blur(12px);
+    -webkit-backdrop-filter:blur(12px);
+    border-bottom:1px solid var(--line);
+    flex-direction:column;
+    padding:16px 24px;
+    gap:6px;
+    z-index:55;
+  }
+  body.menu-open .nav-links{display:flex}
+  /* Mobile dropdowns inside the panel */
+  .nav-links .dropdown{display:block;position:static}
+  .nav-links .dropdown-trigger{width:100%;justify-content:space-between;padding:8px 0;font-size:14px}
+  .nav-links .dropdown-content{
+    display:none;
+    opacity:1;
+    visibility:visible;
+    pointer-events:auto;
+    position:static;
+    transform:none;
+    background:transparent;
+    border:none;
+    box-shadow:none;
+    padding:0 0 0 14px;
+    margin:0;
+    min-width:0;
+  }
+  .nav-links .dropdown.is-open .dropdown-content{display:block}
+  .nav-links .dropdown-content a{padding:6px 0;font-size:13.5px}
+}
+
 /* Chamfered cut-corner buttons — top-right + bottom-left sliced at 45° */
 .btn{
   display:inline-flex;align-items:center;gap:8px;
