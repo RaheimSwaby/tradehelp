@@ -33,6 +33,13 @@ const V047_NOTES = `- New Chart tab — pull up any trade and see exactly where 
 - NinjaTrader imports no longer leave escape codes in your trade notes, so a strategy name with a pipe in it reads the way you wrote it`
 
 export const RELEASE_NOTES = {
+  '0.48.0': `• New look — refreshed TradeHelp mark across the app, taskbar and installer
+• New theme: Dark Knight — the warm near-black and gold from the website, now a preset (new installs open on it; your current theme is left alone)
+• Start day screen recording works again — picking a screen or window failed to open at all, and recordings could not be saved
+• Text is easier to read everywhere — every theme now meets WCAG AA contrast, and amber labels are legible on the light preset instead of near-invisible
+• Pop-up windows were invisible — dialogs faded in to nothing and stayed blank
+• Layout fixes — Reviews panels no longer sit flush against each other, the AI Coach transcript scrolls instead of pushing the composer off-screen, Psychology fills the page, Accounts figures have room to breathe, and the P&L calendar respects your chosen P&L colours
+• Win/loss reason labels lost their dashes; trades you already tagged were moved across automatically`,
   '0.47.1': `${V047_NOTES}
 - Fixed Live Market View showing nothing in the installed app — it worked while the app ran in development and went blank once packaged
 - Settings now keeps the notes for every release, so you can look back and find features you missed`,
