@@ -66,14 +66,30 @@ body.menu-open .hamburger span:nth-child(3){transform:translateY(-7px) rotate(-4
   }
   .nav-links .dropdown{width:100%}
   /* Submenus sit inline and indented on a phone; a floating panel has nowhere to go. */
-  .nav-links .dropdown-content{
+  /* The desktop submenu is centred with left:50% and translateX(-50%), set at a
+     higher specificity than a plain .nav-links .dropdown-content. On a phone that
+     shifted it half its width off the panel, which is why the items were there but
+     out of view. Matched with .is-open here so this actually wins, and the offsets
+     are unwound rather than merely overridden in part. */
+  .nav-links .dropdown .dropdown-content,
+  .nav-links .dropdown.is-open .dropdown-content{
     position:static;
+    left:auto;
+    right:auto;
+    top:auto;
+    transform:none;
+    opacity:1;
+    visibility:visible;
+    pointer-events:auto;
     border:0;
     box-shadow:none;
     background:transparent;
     padding:0 0 4px 14px;
     min-width:0;
   }
+  /* Collapsed until the trigger opens it; the rule above makes it visible again. */
+  .nav-links .dropdown .dropdown-content{display:none}
+  .nav-links .dropdown.is-open .dropdown-content{display:block}
   .nav-links .dropdown-content a{
     display:block;
     padding:9px 2px;
@@ -263,3 +279,24 @@ body:not(.has-active-click) .dropdown:hover:not(.is-closed) .dropdown-content,
 /* Struck regular price stays muted so the live number is what reads first. */
 .was{color:var(--faint);text-decoration-thickness:.09em;font-weight:400}
 .note-inline{color:var(--faint);font-size:12px}
+
+/* Mobile submenu positioning, last word.
+   The desktop submenu floats centred under its trigger via left:50% and
+   translateX(-50%), and .dropdown.is-open .dropdown-content re-applies that
+   transform. On a phone the panel is full width, so the same transform pushed the
+   items half their width off the left edge: present in the DOM, hittable, and
+   invisible. Two earlier overrides in this file set transform:none at a lower
+   specificity than the .is-open rule, so neither took effect. Forced here rather
+   than escalating selectors again, since this is a media-query override of
+   desktop positioning, which is what !important is for. */
+@media (max-width:720px){
+  .nav-links .dropdown-content,
+  .nav-links .dropdown.is-open .dropdown-content{
+    position: static !important;
+    transform: none !important;
+    left: auto !important;
+    right: auto !important;
+    top: auto !important;
+    min-width: 0 !important;
+  }
+}
