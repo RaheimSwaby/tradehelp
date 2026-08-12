@@ -51,6 +51,34 @@ body.menu-open .hamburger span:nth-child(3){transform:translateY(-7px) rotate(-4
     padding:16px 24px;
     gap:6px;
     z-index:55;
+    align-items:stretch;
+    text-align:left;
+  }
+  /* Full-width rows read as a list rather than centred fragments, and give a tap
+     target that spans the panel instead of just the width of the word. */
+  .nav-links > a,
+  .nav-links .dropdown-trigger{
+    display:block;
+    width:100%;
+    text-align:left;
+    padding:11px 2px;
+    font-size:15px;
+  }
+  .nav-links .dropdown{width:100%}
+  /* Submenus sit inline and indented on a phone; a floating panel has nowhere to go. */
+  .nav-links .dropdown-content{
+    position:static;
+    border:0;
+    box-shadow:none;
+    background:transparent;
+    padding:0 0 4px 14px;
+    min-width:0;
+  }
+  .nav-links .dropdown-content a{
+    display:block;
+    padding:9px 2px;
+    text-align:left;
+    font-size:14px;
   }
   body.menu-open .nav-links{display:flex}
   /* Mobile dropdowns inside the panel */
