@@ -8,6 +8,7 @@ const api = {
   updateTrade: (t) => ipcRenderer.invoke('trades:update', t),
   importTrades: (rows, meta) => ipcRenderer.invoke('trades:import', rows, meta),
   deleteTrade: (id) => ipcRenderer.invoke('trades:delete', id),
+  toggleQuickNote: () => ipcRenderer.invoke('quicknote:toggle'),
   importPriceBars: (sourceZone) => ipcRenderer.invoke('bars:import', sourceZone),
   listPriceSeries: () => ipcRenderer.invoke('bars:series'),
   getPriceBars: (root, from, to) => ipcRenderer.invoke('bars:get', root, from, to),

@@ -1,17 +1,17 @@
-// Bundled patch notes — shown in the "What's new" modal after an update.
+// Bundled patch notes, shown in the "What's new" modal after an update.
 // Add an entry here with every release so users always see real notes.
 
 // 0.35.1–0.35.5 are fix-ups on 0.35.0, so they deliberately show the same 0.35
 // notes rather than announcing themselves. Anyone arriving from 0.34.x still gets
 // the full 0.35 feature list either way.
-const V035_NOTES = `• Position sizing — size a plan from your risk budget (futures, stocks, crypto)
-• Multi-fill trades — log scale-ins and partial exits with average-cost P&L
-• Plan scoring — prefill from your playbook, then score how you executed
-• Reviews → commitments — end a review with one measurable focus
-• Saved searches — keep your go-to journal searches one click away
-• Session comparison — put two trading days side by side
-• Similar charts — find look-alike setups, all on your machine
-• Screen recordings — attach a recording to a trade and play it back`
+const V035_NOTES = `• Position sizing. Size a plan from your risk budget (futures, stocks, crypto)
+• Multi-fill trades. Log scale-ins and partial exits with average-cost P&L
+• Plan scoring. Prefill from your playbook, then score how you executed
+• Reviews → commitments. End a review with one measurable focus
+• Saved searches. Keep your go-to journal searches one click away
+• Session comparison. Put two trading days side by side
+• Similar charts. Find look-alike setups, all on your machine
+• Screen recordings. Attach a recording to a trade and play it back`
 
 const V036_NOTES = `- Cosmetic Refresh - each theme preset now has its own restrained motion style
 - Trade Mode now uses one polished, full-window activation sequence across every preset
@@ -24,24 +24,24 @@ const V036_NOTES = `- Cosmetic Refresh - each theme preset now has its own restr
 // 0.47.1 is a fix-up on 0.47.0, so it repeats the 0.47 feature list with its
 // own fixes appended. Anyone arriving from 0.46 would otherwise see two bug-fix
 // lines and never learn the Chart tab exists.
-const V047_NOTES = `- New Chart tab — pull up any trade and see exactly where your entry, exit, stop and target sat, with trendlines, zones and notes you can draw straight on it, plus a pop-out window for a second screen
+const V047_NOTES = `- New Chart tab, pull up any trade and see exactly where your entry, exit, stop and target sat, with trendlines, zones and notes you can draw straight on it, plus a pop-out window for a second screen
 - TradeHelp stores no market data, so the trade view shows your recorded prices rather than inventing candles around them: the stretch between entry and exit is left dashed, because your journal genuinely does not know what price did in between
-- Import price bars from your own platform and that view becomes real candles with your levels drawn on top — something no live chart can do, since it does not know where your stop was. Works with NinjaTrader 8, TradingView, MetaTrader 4 and 5, Sierra Chart and most other exports (Settings → Chart data)
+- Import price bars from your own platform and that view becomes real candles with your levels drawn on top, something no live chart can do, since it does not know where your stop was. Works with NinjaTrader 8, TradingView, MetaTrader 4 and 5, Sierra Chart and most other exports (Settings → Chart data)
 - Imported bars never leave your machine and keep working offline. The trade picker marks which trades have candles behind them, and "Trim to trades" reclaims the parts of an export you will never look at
 - Live Market View gives you the full TradingView chart for any instrument, one click from the trade you are reviewing
 - Dashboard now breaks your results down by symbol, so you can see at a glance which instruments actually pay you
 - NinjaTrader imports no longer leave escape codes in your trade notes, so a strategy name with a pipe in it reads the way you wrote it`
 
 export const RELEASE_NOTES = {
-  '0.48.0': `• New look — refreshed TradeHelp mark across the app, taskbar and installer
-• New theme: Dark Knight — the warm near-black and gold from the website, now a preset (new installs open on it; your current theme is left alone)
-• Start day screen recording works again — picking a screen or window failed to open at all, and recordings could not be saved
-• Text is easier to read everywhere — every theme now meets WCAG AA contrast, and amber labels are legible on the light preset instead of near-invisible
-• Pop-up windows were invisible — dialogs faded in to nothing and stayed blank
-• Layout fixes — Reviews panels no longer sit flush against each other, the AI Coach transcript scrolls instead of pushing the composer off-screen, Psychology fills the page, Accounts figures have room to breathe, and the P&L calendar respects your chosen P&L colours
-• Win/loss reason labels lost their dashes; trades you already tagged were moved across automatically`,
+  '0.48.0': `• New look. Refreshed TradeHelp mark across the app, taskbar and installer
+• New theme: Dark Knight, the warm near-black and gold from the website. New installs open on it; your current theme is left alone
+• Start day screen recording works again. Picking a screen or window failed to open at all, and recordings could not be saved
+• Text is easier to read everywhere. Every theme now meets WCAG AA contrast, and amber labels are legible on the light preset instead of near-invisible
+• Pop-up windows were invisible: dialogs faded in to nothing and stayed blank
+• Layout fixes. Reviews panels no longer sit flush against each other, the AI Coach transcript scrolls instead of pushing the composer off-screen, Psychology fills the page, Accounts figures have room to breathe, and the P&L calendar respects your chosen P&L colours
+• Win/loss reason labels lost their dashes. Trades you already tagged were moved across automatically`,
   '0.47.1': `${V047_NOTES}
-- Fixed Live Market View showing nothing in the installed app — it worked while the app ran in development and went blank once packaged
+- Fixed Live Market View showing nothing in the installed app, it worked while the app ran in development and went blank once packaged
 - Settings now keeps the notes for every release, so you can look back and find features you missed`,
   '0.47.0': V047_NOTES,
   '0.46.0': `- Weekly and monthly wrap-ups turn your completed trading periods into a clear recap and one focus to carry forward
@@ -51,24 +51,24 @@ export const RELEASE_NOTES = {
 - New reality-check achievements: Rule Breaker, Doing My Own Thing and Casino Connoisseur
 - Share Report now opens directly in view, includes earned discipline badges and keeps troll achievements off public images
 - Better keyboard navigation, visible focus states and clearer Journal labels make the app faster to scan and operate`,
-  '0.45.0': `- New News tab — the economic calendar inside the app, with a month view that puts upcoming releases next to your own P&L for that day
-- See how you actually trade the news — your win rate and P&L within 30 minutes of a high-impact release, compared against quiet markets and broken down per event
+  '0.45.0': `- New News tab, the economic calendar inside the app, with a month view that puts upcoming releases next to your own P&L for that day
+- See how you actually trade the news, your win rate and P&L within 30 minutes of a high-impact release, compared against quiet markets and broken down per event
 - Playbook setups now hold up to four example charts, each with its own label
-- Share a setup — save it as an image to post, or send the file to another TradeHelp user to import straight into their playbook
+- Share a setup, save it as an image to post, or send the file to another TradeHelp user to import straight into their playbook
 - Prop accounts now show win rate, on both the account card and the detail view
 - Pre-flight status is visible on the Dashboard and in Trade Mode, not only once you are live
 - Commitments now live in Goals, as one compact row with archive, delete and a see-more view
 - The AI coach can now see your active commitment and how far along your daily, weekly and monthly goals are
 - Website and guide links added to Settings and the Help panel`,
-  '0.44.0': `- Faster, controllable AI coaching — choose Fast, Balanced, or Deep response depth depending on how much journal detail you want
-- Cleaner coach output — headings, lists, bold labels, and dashboard briefs now render as polished Markdown instead of showing raw formatting marks
-- Optional model reasoning — compatible Ollama models can stream a live reasoning trace in a separate, collapsible panel
-- Better model setup — Test model now verifies the selected model with a real response and warms it for the first coaching question
-- Personal touch — add an optional preferred name for your dashboard greeting
-- Expanded Help & FAQ — includes a step-by-step Ollama model setup guide, speed tips, and troubleshooting for models that do not support reasoning`,
-  '0.43.0': `- Filter your journal by account — a new dropdown in the trade history switches between all accounts, live/personal, and each prop account, and stacks with your search and win/loss filters`,
-  // Nothing here is visible to an existing journal — the sample trades only
-  // appear on a brand-new install — so there is nothing to announce to someone
+  '0.44.0': `- Faster, controllable AI coaching, choose Fast, Balanced, or Deep response depth depending on how much journal detail you want
+- Cleaner coach output, headings, lists, bold labels, and dashboard briefs now render as polished Markdown instead of showing raw formatting marks
+- Optional model reasoning, compatible Ollama models can stream a live reasoning trace in a separate, collapsible panel
+- Better model setup, Test model now verifies the selected model with a real response and warms it for the first coaching question
+- Personal touch, add an optional preferred name for your dashboard greeting
+- Expanded Help & FAQ, includes a step-by-step Ollama model setup guide, speed tips, and troubleshooting for models that do not support reasoning`,
+  '0.43.0': `- Filter your journal by account, a new dropdown in the trade history switches between all accounts, live/personal, and each prop account, and stacks with your search and win/loss filters`,
+  // Nothing here is visible to an existing journal, the sample trades only
+  // appear on a brand-new install, so there is nothing to announce to someone
   // updating.
   '0.42.0': `- Bug fixes and small improvements`,
   // 0.40.2–0.41.1 shipped without entries, so anyone updating from 0.40.1 saw an
@@ -77,9 +77,9 @@ export const RELEASE_NOTES = {
   '0.41.0': `- Prop accounts now track cash profitability alongside your evaluation progress`,
   '0.40.2': `- Deleting a trade can be undone, and the undo survives closing the app`,
   '0.40.1': `- The macOS build now runs natively on both Intel and Apple Silicon Macs`,
-  '0.40.0': `- macOS builds are now signed and notarised by Apple — no more Terminal command to open the app
+  '0.40.0': `- macOS builds are now signed and notarised by Apple, no more Terminal command to open the app
 - macOS updates now install themselves in the background, the same as Windows
-- New Help & FAQ panel — press the ? in the header, searchable and works offline`,
+- New Help & FAQ panel, press the ? in the header, searchable and works offline`,
   '0.39.0': `- Adaptive timing intelligence now focuses on recent trading history and detects schedule shifts
 - Personal trading clock can be inferred automatically or set to custom split and overnight windows
 - CSV imports can convert broker timestamps from a selected source timezone
@@ -98,7 +98,7 @@ export const RELEASE_NOTES = {
 - Saved broker, account, and timezone mappings keep repeat imports consistent
 - Every import records duplicates, skipped rows, and parsing warnings
 - Import history includes one-click whole-batch rollback`,
-  '0.36.1': `• Session clock now flags your strongest and weakest hours as you reach them — learned from your own trade history
+  '0.36.1': `• Session clock now flags your strongest and weakest hours as you reach them, learned from your own trade history
 • Lighter, less frequent background update checks`,
   '0.36.0': V036_NOTES,
   '0.35.5': V035_NOTES,
@@ -109,12 +109,12 @@ export const RELEASE_NOTES = {
   '0.35.0': V035_NOTES,
   '0.34.1': `• Commitment and pre-trade-plan pop-ups now open centered on screen
 • Achievement unlocks now pop in from the side with an animated medal
-• New commitment achievements — Kept My Word, Habit Builder and Ironclad Discipline
-• More commitment rules — minimum R:R, stop-loss required, and a daily loss limit`,
-  '0.34.0': `• Pre-trade plans — lock in your setup, levels and risk before entry, then link the real trade to compare plan vs. execution
-• Session replay — click any day on the calendar to step through the whole session in order
-• Coach commitments — pick one habit to measure, with automatic pass/miss tracking
-• Natural-language journal search — e.g. “losing NQ trades last week after 11am”, shown as removable filter chips
+• New commitment achievements, Kept My Word, Habit Builder and Ironclad Discipline
+• More commitment rules. Minimum R:R, stop-loss required, and a daily loss limit`,
+  '0.34.0': `• Pre-trade plans. Lock in your setup, levels and risk before entry, then link the real trade to compare plan vs. execution
+• Session replay. Click any day on the calendar to step through the whole session in order
+• Coach commitments. Pick one habit to measure, with automatic pass/miss tracking
+• Natural-language journal search. E.g. “losing NQ trades last week after 11am”, shown as removable filter chips
 • Add screenshots when editing an existing trade`,
   '0.33.0': `- Last session review - a floating daily report now recaps your most recent trading day on app launch\n- Basic review works without AI: net P&L, W/L record, trade list, emotions, and one improvement tip\n- Optional AI review - ask your configured model for a short day-specific coaching note\n- Reopen anytime - close the card and bring it back from the top-bar Review button`,
   '0.32.1': `- Accounts tab - Prop Firm is now Accounts, with separate Live and Prop views\n- Live account tracking - set starting capital, track balance, withdrawals, net P&L, win rate, and max drawdown for personal trades\n- AI coach account context - the coach now reads real live-account stats instead of guessing from market prices\n- Tab polish - active tab icons now get a longer, smoother glow pulse`,
@@ -123,33 +123,33 @@ export const RELEASE_NOTES = {
   '0.31.1': `- Minor Pattern Recognition polish - compared charts now show date/P&L and can be opened full-size from the preview`,
   '0.31.0': `- Appearance 2.0 - new theme preset preview cards for Classic, Midnight, Clean Light, Terminal Green, Red Session, and Minimal Gray\n- Custom backgrounds - choose a local PNG/JPG/WEBP and tune opacity, blur, dim, and fill/fit/tile\n- Separate Go-Time colors - Trade Mode can now use its own serious session color\n- Profit/loss color styles - switch between classic, blue/red, green/orange, colorblind-safe, or minimal mono\n- Number font options - keep the default mono feel or switch to cleaner/softer number styling`,
   '0.30.1': `- New Money Rain backdrop - falling bills and dollar marks are now available in Settings -> Appearance\n- Subtle tab hover motion - tabs now lift, glow and nudge their icons when you float over them\n- Cleaner custom tab icons - Trade Mode and AI Coach now use app-specific SVG icons that inherit your accent color\n- Local dev fix - the app now installs the correct Electron SQLite binary before dev starts, preventing the better-sqlite3 NODE_MODULE_VERSION crash`,
-  '0.30.0': `• Leak finder — the Dashboard now puts a dollar figure on your worst habit: "Revenge trades have cost you -$X", ranked across FOMO, greed, impatience, oversizing, moving your stop and more, pulled from your emotion and reason tags\n• Join the community — a TradeHelp Discord link is now in Settings, the welcome wizard, and the website\n• Fixed the "Compare winners vs losers" pattern finder giving a nonsense analysis when your model can't read chart images — it now points you to set a vision model (e.g. llama3.2-vision) instead`,
-  '0.29.0': `• 4 new achievements — 🗓️ Locked In (journal 10 trading days in a row), ☕ Sat On My Hands (log 10 no-trade days), 🌅 Bounce Back (clean tilt-free days right after red days) and 🎯 Defined Risk (25 trades with both stop and target set)\n• Achievements now have difficulty tiers — Bronze, Silver, Gold and Diamond — and the harder the badge, the cooler the medal: gold glows, diamond shines\n• Share report: your unlocked accolades now appear as tier-colored badges (new toggle included)\n• New "Feedback & support" panel in Settings — DM @tradehelp.app on Instagram with bugs and ideas`,
-  '0.28.0': `• Guided setup on first launch — a quick welcome wizard helps new traders set their rules, daily goal and max loss, then import their first trades\n• Smarter CSV import — NinjaTrader 8, Tradovate and TopstepX exports are now recognized automatically, with columns mapped for you (Tradovate's trade direction is worked out from the fill order)\n• Groundwork for the website's new comparison and broker-import guides`,
-  '0.27.0': `• Animated backdrops — pick a vibe in Settings → Appearance: 🌌 Constellation (with shooting stars), 💻 Matrix rain, 🫧 glow Orbs, 🔥 rising Flames, 🕯️ drifting Candles or a 🎚️ bouncing Equalizer — or turn it off\n• Every backdrop re-tints live with your accent color, light/dark theme and Trade Mode\n• Backdrops respect reduced-motion settings and pause while the window is hidden\n• Fixed the light theme not sticking after a restart`,
-  '0.26.0': `• Light theme — switch between Dark and Light in Settings → Appearance\n• Undo delete — removing a trade now shows an Undo toast instead of a confirm popup\n• Smarter CSV import — duplicate trades are detected and skipped, imports can be assigned straight to a prop account, and Fees + Commission columns are read separately (both netted into P&L, shown in the preview)\n• Dashboard: equity sparkline on the Net P&L card and total fees paid in its subtitle\n• Four new accent colors — emerald, blue, lime and silver\n• Visual polish — new logo, smooth tab and modal transitions, button press feedback, and accent focus rings on inputs`,
-  '0.25.3': `• Fixed the AI Coach not actually seeing your journal — Ollama was silently truncating the data before the model read it (raised the context window). The coach now reliably reads your real trades instead of asking you to describe them\n• Added recommended-model guidance in Settings`,
-  '0.25.2': `• AI Coach now reads your FULL journal — trades, written notes, reasons, self-grades, saved reviews, playbook, goals, rules and no-trade logs — so it coaches what you actually wrote instead of guessing from numbers\n• Hard guardrail added so the coach won't invent trades or notes that aren't in your data\n• Warning when your local model is too small (sub-2B) to read your journal reliably\n• Cloud users get a toggle for whether written notes leave the machine (local Ollama always gets everything)`,
+  '0.30.0': `• Leak finder. The Dashboard now puts a dollar figure on your worst habit: "Revenge trades have cost you -$X", ranked across FOMO, greed, impatience, oversizing, moving your stop and more, pulled from your emotion and reason tags\n• Join the community. A TradeHelp Discord link is now in Settings, the welcome wizard, and the website\n• Fixed the "Compare winners vs losers" pattern finder giving a nonsense analysis when your model can't read chart images, it now points you to set a vision model (e.g. llama3.2-vision) instead`,
+  '0.29.0': `• 4 new achievements, 🗓️ Locked In (journal 10 trading days in a row), ☕ Sat On My Hands (log 10 no-trade days), 🌅 Bounce Back (clean tilt-free days right after red days) and 🎯 Defined Risk (25 trades with both stop and target set)\n• Achievements now have difficulty tiers, Bronze, Silver, Gold and Diamond, and the harder the badge, the cooler the medal: gold glows, diamond shines\n• Share report: your unlocked accolades now appear as tier-colored badges (new toggle included)\n• New "Feedback & support" panel in Settings, DM @tradehelp.app on Instagram with bugs and ideas`,
+  '0.28.0': `• Guided setup on first launch. A quick welcome wizard helps new traders set their rules, daily goal and max loss, then import their first trades\n• Smarter CSV import, NinjaTrader 8, Tradovate and TopstepX exports are now recognized automatically, with columns mapped for you (Tradovate's trade direction is worked out from the fill order)\n• Groundwork for the website's new comparison and broker-import guides`,
+  '0.27.0': `• Animated backdrops. Pick a vibe in Settings → Appearance: 🌌 Constellation (with shooting stars), 💻 Matrix rain, 🫧 glow Orbs, 🔥 rising Flames, 🕯️ drifting Candles or a 🎚️ bouncing Equalizer, or turn it off\n• Every backdrop re-tints live with your accent color, light/dark theme and Trade Mode\n• Backdrops respect reduced-motion settings and pause while the window is hidden\n• Fixed the light theme not sticking after a restart`,
+  '0.26.0': `• Light theme. Switch between Dark and Light in Settings → Appearance\n• Undo delete. Removing a trade now shows an Undo toast instead of a confirm popup\n• Smarter CSV import. Duplicate trades are detected and skipped, imports can be assigned straight to a prop account, and Fees + Commission columns are read separately (both netted into P&L, shown in the preview)\n• Dashboard: equity sparkline on the Net P&L card and total fees paid in its subtitle\n• Four new accent colors. Emerald, blue, lime and silver\n• Visual polish. New logo, smooth tab and modal transitions, button press feedback, and accent focus rings on inputs`,
+  '0.25.3': `• Fixed the AI Coach not actually seeing your journal, Ollama was silently truncating the data before the model read it (raised the context window). The coach now reliably reads your real trades instead of asking you to describe them\n• Added recommended-model guidance in Settings`,
+  '0.25.2': `• AI Coach now reads your FULL journal. Trades, written notes, reasons, self-grades, saved reviews, playbook, goals, rules and no-trade logs, so it coaches what you actually wrote instead of guessing from numbers\n• Hard guardrail added so the coach won't invent trades or notes that aren't in your data\n• Warning when your local model is too small (sub-2B) to read your journal reliably\n• Cloud users get a toggle for whether written notes leave the machine (local Ollama always gets everything)`,
   '0.25.1': `• Housekeeping and minor copy updates.`,
-  '0.25.0': `• Proactive coach brief on the Dashboard — an at-a-glance process review that refreshes as your trades change, with an optional AI touch (toggle it in Settings)\n• Share report — export a clean PNG snapshot of your stats to share, with a date range and account label`,
-  '0.24.2': `• Cosmetic polish — gradient-filled equity curve, frosted-glass floating widgets and pop-ups, hover lift on cards, aligned tabular numbers, and green/red accents on trade-history rows`,
-  '0.24.1': `• New prop firm achievements — "First Payout" unlocks on your first one, and a "Payday" medal climbs an 8-tier ladder (Wood → Steel → Bronze → Silver → Gold → Platinum → Diamond → Legendary) as your payout count grows`,
-  '0.24.0': `• Tag each trade as Live or a specific prop account right in the journal\n• Dashboard now has a Live / Prop / All toggle so your prop and live P&L stay separate (letter grade still combines both)\n• Prop accounts now count only the trades you tag to them by default — your live trades no longer leak in\n• Each account card shows two bars: progress toward target AND drawdown cushion\n• Track prop firm payouts — per account and an all-time log`,
-  '0.23.2': `• The floating Trade Mode news widget now always shows while you're live — even when there's no upcoming news (so you know you're clear)`,
-  '0.23.1': `• Economic calendar now floats in the corner while Trade Mode is live, so upcoming news stays in view — imminent high-impact events glow red, and it collapses to a pill when you want it out of the way`,
-  '0.23.0': `• Simple journal mode — toggle it on to hide the price/risk fields and log a trade in under a minute (keeps screenshots)\n• No-trade day tracker — log days you sat out or missed, with a reason and mood, without touching your P&L\n• Add your own custom emotions and setups with a + button\n• Setup is now a clean dropdown instead of free-text`,
-  '0.22.4': `• Update banner now clearly says the new version downloaded in the background — just click Restart to apply, no browser or download page`,
-  '0.22.3': `• Windows updates are fully automatic again — the app downloads in the background and shows a "Restart now" button to update instantly\n• Added Performance heat map and Playbook to the website`,
-  '0.22.2': `• Fixed releases being published as drafts — landing page download and in-app update now work correctly`,
+  '0.25.0': `• Proactive coach brief on the Dashboard. An at-a-glance process review that refreshes as your trades change, with an optional AI touch (toggle it in Settings)\n• Share report. Export a clean PNG snapshot of your stats to share, with a date range and account label`,
+  '0.24.2': `• Cosmetic polish. Gradient-filled equity curve, frosted-glass floating widgets and pop-ups, hover lift on cards, aligned tabular numbers, and green/red accents on trade-history rows`,
+  '0.24.1': `• New prop firm achievements, "First Payout" unlocks on your first one, and a "Payday" medal climbs an 8-tier ladder (Wood → Steel → Bronze → Silver → Gold → Platinum → Diamond → Legendary) as your payout count grows`,
+  '0.24.0': `• Tag each trade as Live or a specific prop account right in the journal\n• Dashboard now has a Live / Prop / All toggle so your prop and live P&L stay separate (letter grade still combines both)\n• Prop accounts now count only the trades you tag to them by default, your live trades no longer leak in\n• Each account card shows two bars: progress toward target AND drawdown cushion\n• Track prop firm payouts. Per account and an all-time log`,
+  '0.23.2': `• The floating Trade Mode news widget now always shows while you're live, even when there's no upcoming news (so you know you're clear)`,
+  '0.23.1': `• Economic calendar now floats in the corner while Trade Mode is live, so upcoming news stays in view, imminent high-impact events glow red, and it collapses to a pill when you want it out of the way`,
+  '0.23.0': `• Simple journal mode. Toggle it on to hide the price/risk fields and log a trade in under a minute (keeps screenshots)\n• No-trade day tracker. Log days you sat out or missed, with a reason and mood, without touching your P&L\n• Add your own custom emotions and setups with a + button\n• Setup is now a clean dropdown instead of free-text`,
+  '0.22.4': `• Update banner now clearly says the new version downloaded in the background, just click Restart to apply, no browser or download page`,
+  '0.22.3': `• Windows updates are fully automatic again. The app downloads in the background and shows a "Restart now" button to update instantly\n• Added Performance heat map and Playbook to the website`,
+  '0.22.2': `• Fixed releases being published as drafts. Landing page download and in-app update now work correctly`,
   '0.22.1': `• Update check interval reduced to 10s for testing`,
-  '0.22.0': `• Update banner now appears on Windows when a new version is available — click to download the latest installer directly`,
+  '0.22.0': `• Update banner now appears on Windows when a new version is available, click to download the latest installer directly`,
   '0.21.8': `• Fixed CI workflow (removed release-notes job that was failing)`,
   '0.21.7': `• Restored original update flow: app silently downloads update and shows a bottom-left 'Restart now' banner`,
   '0.21.6': `• Fixed CI release-notes generation`,
-  '0.21.4': `• Update notifications now work on all platforms — a banner appears when a new version is out with a direct download link\n• Fixed update delivery that was silently broken for Windows users`,
+  '0.21.4': `• Update notifications now work on all platforms. A banner appears when a new version is out with a direct download link\n• Fixed update delivery that was silently broken for Windows users`,
   '0.21.3': `• Update flow is now user-triggered: banner shows when an update is available, click "Update now" to download, then "Restart now" to apply`,
   '0.21.2': `• Heat map advisory now shows best hour and best day as separate chips`,
   '0.21.1': `• Heat map advisory fixed to correctly highlight the single best performing time slot`,
-  '0.21.0': `• Performance heat map on the Dashboard — win rate by hour × day with a fire color scale and advisory\n• Playbook tab — document your setups with entry criteria, invalidation, and targets; trades auto-link by setup name`,
+  '0.21.0': `• Performance heat map on the Dashboard. Win rate by hour × day with a fire color scale and advisory\n• Playbook tab. Document your setups with entry criteria, invalidation, and targets; trades auto-link by setup name`,
   '0.20.3': `• Security: settings write-side key allowlist\n• Security: image upload MIME allowlist blocks SVGs\n• Performance: trade list query rewritten to use a single JOIN\n• Reliability: settings cache invalidated on every write\n• openExternal restricted to http/https URLs only\n• Stream listener cleanup on component unmount\n• getImage returns null on file error instead of crashing\n• Backup errors now logged instead of swallowed`,
 }

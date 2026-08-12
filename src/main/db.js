@@ -1515,6 +1515,7 @@ const SETTINGS_DEFAULTS = Object.freeze({
   eventsLeadMin: '15',
   // New installs open on Dark Knight, matching the marketing site. Existing users
   // keep Classic: the migration below pins it for them before this default applies.
+  quickNote: '',
   themePreset: 'darkKnight',
   accentColor: 'gold',
   goTimeAccent: 'orange',

@@ -880,3 +880,7 @@ button:focus-visible, a:focus-visible, [role="button"]:focus-visible, summary:fo
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
+
+/* Long window titles would otherwise push the live banner's figures off the row. */
+.th-rec-source { min-width: 0; }
+.th-rec-source > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 22ch; }

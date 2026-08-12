@@ -231,3 +231,7 @@ body:not(.has-active-click) .dropdown:hover:not(.is-closed) .dropdown-content,
   .cta-box .btn{display:block;width:100%;max-width:320px;margin-inline:auto}
   .cta-box .btn + .btn{margin-top:10px}
 }
+
+/* Struck regular price stays muted so the live number is what reads first. */
+.was{color:var(--faint);text-decoration-thickness:.09em;font-weight:400}
+.note-inline{color:var(--faint);font-size:12px}

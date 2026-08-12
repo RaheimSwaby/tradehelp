@@ -398,7 +398,7 @@ export function Preflight({ rules, checks, setChecks, snapshot, goal, maxLoss, i
   )
 }
 
-export function LiveBanner({ net, goal, maxLoss, lossHit, recordingState, elapsed = 0, onEnd }) {
+export function LiveBanner({ net, goal, maxLoss, lossHit, recordingState, sourceLabel = '', elapsed = 0, onEnd }) {
   const lossPct = maxLoss > 0 ? clamp((-net / maxLoss) * 100, 0, 100) : 0
   const bg = lossHit ? T.down : T.accent
   return (
@@ -409,6 +409,14 @@ export function LiveBanner({ net, goal, maxLoss, lossHit, recordingState, elapse
           {recordingState?.status === 'recording' && <span className="inline-block w-2 h-2 rounded-full animate-pulse" style={{ background: '#7A0B18' }} />}
           {recordingState?.status === 'recording' ? 'REC' : 'SESSION'} {durationLabel(elapsed)}
         </span>
+        {/* Naming the captured window matters more than the REC dot: it is the
+            difference between trusting the recording and wondering what is in it. */}
+        {recordingState?.status === 'recording' && sourceLabel && (
+          <span className="th-rec-source flex items-center gap-1.5" title={`Recording: ${sourceLabel}`}>
+            <Monitor size={13} />
+            <span>{sourceLabel}</span>
+          </span>
+        )}
         <span>Today <strong>{fmt$(net)}</strong>{goal > 0 ? ` / ${fmt$(goal)}` : ''}</span>
         {maxLoss > 0 && (
           <span className="flex items-center gap-2">

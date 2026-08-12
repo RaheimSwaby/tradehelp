@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, shell, dialog, protocol, net, Notification
 import { extname, join, sep } from 'path'
 import { copyFileSync, createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'fs'
 import { randomUUID } from 'crypto'
+import { registerQuickNotes, closeQuickNotes } from './quickNotes.js'
 import { createServer } from 'http'
 import { pathToFileURL } from 'url'
 import * as db from './db.js'
@@ -486,6 +487,12 @@ function registerIpc() {
   // These were registered as 'sessions:add' against db.addTradingSession, which does
   // not exist — while the preload invokes 'sessions:create'/'active'/'finish', which
   // nothing handled. Names now match the preload, and the db functions they call.
+  // Scratchpad window: hidden from screen capture where the platform allows it.
+  registerQuickNotes({
+    getNote: () => db.getSettings().quickNote || '',
+    setNote: (text) => db.setSettings({ quickNote: text })
+  })
+
   ipcMain.handle('sessions:list', () => db.listTradingSessions())
   ipcMain.handle('sessions:get', (_e, id) => db.getTradingSession(id))
   ipcMain.handle('sessions:active', () => db.getActiveTradingSession())

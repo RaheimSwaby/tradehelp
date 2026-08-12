@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react'
 import {
   Settings as SettingsIcon, Gauge, Play,
   CalendarClock, AlertTriangle, X, Clock3, TrendingUp, HelpCircle,
-  Waypoints, Wallet, Armchair, Flag, Megaphone, History, Shapes, LineChart, GraduationCap
+  Waypoints, Wallet, Armchair, Flag, Megaphone, History, Shapes, LineChart, GraduationCap, PenLine
 } from 'lucide-react'
 import { applyTheme, T, mono } from './theme.js'
 import { fmt$, fmtN, parseRules, IMPACT_RANK, ALERT_LEADS, GATE_CONFIGURED, isNewerVersion, thisWeekKey } from './utils.js'
@@ -998,7 +998,7 @@ export default function App() {
       {updateAvail && !updateReady && <UpdateAvailableBanner info={updateAvail} onClose={() => setUpdateAvail(null)} />}
       {GATE_CONFIGURED && license?.state === 'trial' && <TrialBanner days={license.daysLeft} />}
       {imminentEvent && <EventBanner event={imminentEvent} now={now} />}
-      {tradeMode && <LiveBanner net={todayNet} goal={dailyGoal} maxLoss={maxLoss} lossHit={lossHit} recordingState={recordingState} elapsed={sessionElapsed} onEnd={endSession} />}
+      {tradeMode && <LiveBanner net={todayNet} goal={dailyGoal} maxLoss={maxLoss} lossHit={lossHit} recordingState={recordingState} sourceLabel={selectedCaptureSource?.name || ''} elapsed={sessionElapsed} onEnd={endSession} />}
       <div className="th-app-shell mx-auto px-3 sm:px-4 py-3 sm:py-4">
         <header className="th-app-header flex flex-wrap items-center justify-between gap-3" style={{ borderBottom: `1px solid ${T.line}` }}>
           <div className="th-brand flex items-center gap-2">
@@ -1028,6 +1028,16 @@ export default function App() {
             {reportDay && !dailyReport && !tradeMode && (settings?.dailyReportEnabled ?? 'true') !== 'false' && (
               <button type="button" onClick={openDailyReport} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm" style={{ background: T.surface2, color: T.dim, border: `1px solid ${T.line}` }}>
                 <CalendarClock size={14} /> Review
+              </button>
+            )}
+            {/* Available in Trade Mode too, unlike the rest of these: writing a note
+                mid-session is the whole reason the scratchpad exists. */}
+            {window.api?.toggleQuickNote && (
+              <button type="button" onClick={() => window.api.toggleQuickNote()}
+                title="Quick note (stays out of screen recordings)" aria-label="Open quick note"
+                className="flex items-center justify-center px-2 py-1.5 rounded-md"
+                style={{ background: T.surface2, color: T.dim, border: `1px solid ${T.line}` }}>
+                <PenLine size={15} />
               </button>
             )}
             {!tradeMode && (
