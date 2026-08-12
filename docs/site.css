@@ -215,3 +215,19 @@ body:not(.has-active-click) .dropdown:hover:not(.is-closed) .dropdown-content,
 @media (prefers-reduced-motion: reduce) {
   .topbar, article > .wrap > h1, header.hero h1 { animation: none !important; }
 }
+
+/* Topbar CTAs. The inline flex this replaces had no mobile behaviour, so at
+   375px the two buttons fought the wordmark and the hamburger for the row. */
+.topbar-cta{display:flex;align-items:center;gap:10px}
+
+@media (max-width:720px){
+  /* A phone cannot install a desktop app, so the download leaves the bar and
+     Buy stays: it is the only one of the two that still works here. */
+  .topbar-cta .btn:not(.ghost){display:none}
+  .topbar-cta .btn{padding:8px 12px;font-size:13px;white-space:nowrap}
+
+  /* Stacked CTAs read as a ragged column when each is only as wide as its
+     label. One shared width gives a single clean edge and a bigger target. */
+  .cta-box .btn{display:block;width:100%;max-width:320px;margin-inline:auto}
+  .cta-box .btn + .btn{margin-top:10px}
+}
