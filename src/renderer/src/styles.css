@@ -701,6 +701,33 @@ button:focus-visible, a:focus-visible, [role="button"]:focus-visible, summary:fo
 }
 
 .th-page > * { min-width: 0; }
+
+/* Reviews stacked its seven panels in a container with no gap, so the cards sat
+   flush against each other. Two columns above 1200px; the weekly summary, the
+   equity chart and the breakdown span the full width because each is either the
+   page header or already two columns internally. */
+.th-page-reviews {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+}
+.th-reviews-record-grid { margin: 0; }
+
+@media (min-width: 1200px) {
+  .th-page-reviews { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); }
+  .th-reviews-wrap,
+  .th-reviews-equity,
+  .th-reviews-breakdown { grid-column: 1 / -1; }
+}
+
+/* The transcript is flex-1 with overflow-y:auto, which only scrolls when its
+   parent has a height to be bounded by. Without one the column grew with the
+   conversation and the composer walked off the bottom of the page. */
+.th-coach-chat {
+  height: calc(100vh - 190px);
+  min-height: 420px;
+}
 .th-page .th-panel > .flex:first-child {
   min-height: 24px;
   margin-bottom: 10px;
