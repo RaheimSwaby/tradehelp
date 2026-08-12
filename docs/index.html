@@ -215,6 +215,11 @@
     h1{font-size:1.9rem}
     .feature-row,.feature-row.reverse{flex-direction:column;gap:1.5rem}
     .feature-visual{width:100%}
+    /* Stacked CTAs were centred pills of three different widths, so the column
+       read as ragged. Full width in a capped column gives one clean edge and a
+       bigger tap target. */
+    .hero-btns,.price-btns{flex-direction:column;align-items:stretch;max-width:320px;margin-inline:auto}
+    .hero-btns .btn,.price-btns .btn{width:100%}
     /* Two rows: logo and buy button on top, the links centred underneath. A single
        row cannot hold fourteen characters of logo plus four links plus a button. */
     :root{--topbar-h:98px}
