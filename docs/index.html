@@ -192,6 +192,12 @@
   .feature-visual img{display:block;width:100%;height:auto}
 
   /* ── pricing ── */
+  /* Set narrower than the feature rows: this is prose, and a 65-character measure
+     is where reading comfort sits. Left aligned, because a centred personal note
+     reads like marketing rather than someone talking. */
+  .why{padding-block:1rem 3rem;max-width:none}
+  .why h2{margin-bottom:1rem}
+  .why p{max-width:60ch;font-size:1.02rem}
   .pricing{padding-block:3rem 4rem;text-align:center}
   .pricing h2{margin-bottom:2rem}
   .price-card{display:inline-block;background:#141417;border:1px solid rgba(255,255,255,.08);border-radius:4px;padding:2.5rem 3rem;text-align:center}
@@ -358,6 +364,24 @@
 </section>
 
 <!-- ====== pricing ====== -->
+<section class="why wrap" id="why">
+  <h2>Why I built TradeHelp</h2>
+  <p>I built TradeHelp because I did not want to keep paying a subscription.</p>
+  <p>When I started trading five years ago I made a lot of mistakes, and it never
+    occurred to me to look at myself as the problem. I would switch up the strategy,
+    or blame the market, when what I actually lacked was discipline. It took some
+    experience before I understood that the market was not the issue. I was.</p>
+  <p>I did not have much money starting out, so the bigger cloud journals like
+    TradeZella and TraderSync were out of reach. I would go months at breakeven, and
+    paying hundreds a year to be told so was not something I could justify.</p>
+  <p>So the goal here is simple: give smaller traders real insight into their own
+    habits without charging them every month for it.</p>
+  <p>On the engineering side, I was a software engineer at Amazon, where I worked on
+    several projects and shipped features to production. TradeHelp is not perfect and
+    it is still a work in progress, but if any of the above sounds familiar, give it a
+    shot.</p>
+</section>
+
 <section class="pricing wrap" id="pricing">
   <h2>One price. No subscription. No account.</h2>
   <div class="price-card">
