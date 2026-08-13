@@ -65,30 +65,33 @@ body.menu-open .hamburger span:nth-child(3){transform:translateY(-7px) rotate(-4
     font-size:15px;
   }
   .nav-links .dropdown{width:100%}
-  /* Submenus sit inline and indented on a phone; a floating panel has nowhere to go. */
-  /* The desktop submenu is centred with left:50% and translateX(-50%), set at a
-     higher specificity than a plain .nav-links .dropdown-content. On a phone that
-     shifted it half its width off the panel, which is why the items were there but
-     out of view. Matched with .is-open here so this actually wins, and the offsets
-     are unwound rather than merely overridden in part. */
-  .nav-links .dropdown .dropdown-content,
-  .nav-links .dropdown.is-open .dropdown-content{
-    position:static;
-    left:auto;
-    right:auto;
-    top:auto;
-    transform:none;
+  body.menu-open .nav-links{display:flex}
+
+  /* Submenus, inline and indented. A floating panel has nowhere to go on a phone.
+     The desktop rule centres them with left:50% and translateX(-50%), so every
+     offset has to be unwound, not just position. The visual reset and the open and
+     closed states live together here so there is one place to read. Actual
+     enforcement of position and transform is at the foot of this file: the desktop
+     .dropdown.is-open rule outranks anything scoped with .nav-links alone. */
+  .nav-links .dropdown{display:block;position:static;width:100%}
+  .nav-links .dropdown-trigger{
+    width:100%;
+    justify-content:space-between;
+    padding:11px 2px;
+    font-size:15px;
+  }
+  .nav-links .dropdown-content{
+    display:none;
     opacity:1;
     visibility:visible;
     pointer-events:auto;
+    background:transparent;
     border:0;
     box-shadow:none;
-    background:transparent;
     padding:0 0 4px 14px;
+    margin:0;
     min-width:0;
   }
-  /* Collapsed until the trigger opens it; the rule above makes it visible again. */
-  .nav-links .dropdown .dropdown-content{display:none}
   .nav-links .dropdown.is-open .dropdown-content{display:block}
   .nav-links .dropdown-content a{
     display:block;
@@ -96,26 +99,6 @@ body.menu-open .hamburger span:nth-child(3){transform:translateY(-7px) rotate(-4
     text-align:left;
     font-size:14px;
   }
-  body.menu-open .nav-links{display:flex}
-  /* Mobile dropdowns inside the panel */
-  .nav-links .dropdown{display:block;position:static}
-  .nav-links .dropdown-trigger{width:100%;justify-content:space-between;padding:8px 0;font-size:14px}
-  .nav-links .dropdown-content{
-    display:none;
-    opacity:1;
-    visibility:visible;
-    pointer-events:auto;
-    position:static;
-    transform:none;
-    background:transparent;
-    border:none;
-    box-shadow:none;
-    padding:0 0 0 14px;
-    margin:0;
-    min-width:0;
-  }
-  .nav-links .dropdown.is-open .dropdown-content{display:block}
-  .nav-links .dropdown-content a{padding:6px 0;font-size:13.5px}
 }
 
 /* Chamfered cut-corner buttons — top-right + bottom-left sliced at 45° */
