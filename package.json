@@ -15,7 +15,12 @@
         "users an update they could not download.",
         "",
         "DO NOT CHANGE without knowing the consequence:",
-        "  build.publish.releaseType  'release'. 'draft' hides releases from the updater.",
+        "  build.publish.releaseType  'draft'. Builds upload into a draft so a release",
+        "                             cannot go public with only some platforms done. The",
+        "                             publish-release CI job flips it public once all 10",
+        "                             assets are present. Setting this to 'release' makes",
+        "                             every upload live immediately, which is how v0.47.3",
+        "                             and v0.47.4 shipped Windows-only.",
         "  build.mac.target           dmg AND zip. electron-updater serves macOS updates",
         "                             from the zip; removing it breaks Mac updates silently.",
         "  build.appId                identifies the app to macOS. Changing it orphans",
@@ -82,7 +87,7 @@
                 "provider": "github",
                 "owner": "RaheimSwaby",
                 "repo": "tradehelp",
-                "releaseType": "release"
+                "releaseType": "draft"
             }
         ],
         "asarUnpack": [

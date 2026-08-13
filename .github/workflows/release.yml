@@ -97,7 +97,32 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Mark release as published
-        run: gh release edit "${{ github.ref_name }}" --draft=false --repo RaheimSwaby/tradehelp
+      # electron-builder uploads into a draft release, so nothing is downloadable
+      # until every platform has finished and this job flips it public. Before
+      # v0.48.1 the release went live the moment the first platform uploaded, which
+      # is how v0.47.3 and v0.47.4 sat published with only the Windows installer
+      # while macOS and Linux users saw an update they could not download.
+      #
+      # A healthy release carries 10 files: three installers, two blockmaps for the
+      # macOS pair and one for Windows, and the three latest*.yml update manifests.
+      # Anything short means a platform did not publish, so the release stays a
+      # draft: invisible and recoverable, rather than public and broken.
+      - name: Verify every platform published
+        run: |
+          count=$(gh release view "$TAG" --repo RaheimSwaby/tradehelp --json assets --jq '.assets | length')
+          echo "assets on $TAG: $count"
+          gh release view "$TAG" --repo RaheimSwaby/tradehelp --json assets --jq '.assets[].name' | sed 's/^/  /'
+          if [ "$count" -lt 10 ]; then
+            echo "::error::Only $count of 10 assets. Leaving $TAG as a draft."
+            echo "Re-run the failed build job, then re-run this one."
+            exit 1
+          fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+
+      - name: Mark release as published
+        run: gh release edit "$TAG" --draft=false --repo RaheimSwaby/tradehelp
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
