@@ -160,6 +160,8 @@ const api = {
   onUpdateProgress: (cb) => ipcRenderer.on('update:progress', (_e, info) => cb(info)),
   onUpdateReady: (cb) => ipcRenderer.on('update:ready', (_e, info) => cb(info)),
   downloadUpdate: () => ipcRenderer.invoke('update:download'),
+  updaterLog: () => ipcRenderer.invoke('update:log'),
+  showUpdaterLog: () => ipcRenderer.invoke('update:log:show'),
   installUpdate: () => ipcRenderer.invoke('update:install'),
   checkUpdate: () => ipcRenderer.invoke('update:check'),
 
