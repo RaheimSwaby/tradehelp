@@ -33,6 +33,8 @@ const V047_NOTES = `- New Chart tab, pull up any trade and see exactly where you
 - NinjaTrader imports no longer leave escape codes in your trade notes, so a strategy name with a pipe in it reads the way you wrote it`
 
 export const RELEASE_NOTES = {
+  '0.48.1': `• Update diagnostics. macOS and Linux installs have not been receiving updates, and every error was being discarded silently, so nothing was ever recorded. The updater now writes a log to the TradeHelp data folder under logs/updater.log
+• If you are on macOS or Linux, that log is what identifies the cause. Sending it over is the fastest way to get automatic updates working again on your machine`,
   '0.48.0': `• New look. Refreshed TradeHelp mark across the app, taskbar and installer
 • New theme: Dark Knight, the warm near-black and gold from the website. New installs open on it; your current theme is left alone
 • Start day screen recording works again. Picking a screen or window failed to open at all, and recordings could not be saved
