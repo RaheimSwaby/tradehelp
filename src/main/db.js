@@ -198,6 +198,7 @@ export function initDb() {
       day TEXT DEFAULT '',
       adhered INTEGER NOT NULL DEFAULT 0,
       detail TEXT DEFAULT '',
+      source TEXT DEFAULT 'auto',
       evaluatedAt TEXT,
       PRIMARY KEY (commitmentId, tradeId)
     );
@@ -404,6 +405,9 @@ export function initDb() {
   }
   const commitmentCols = new Set(db.prepare('PRAGMA table_info(coach_commitments)').all().map((c) => c.name))
   if (!commitmentCols.has('baselineTradeIds')) db.exec("ALTER TABLE coach_commitments ADD COLUMN baselineTradeIds TEXT DEFAULT '[]'")
+  // Existing rows predate manual answers and are all machine verdicts.
+  const resultCols = new Set(db.prepare('PRAGMA table_info(commitment_results)').all().map((c) => c.name))
+  if (!resultCols.has('source')) db.exec("ALTER TABLE commitment_results ADD COLUMN source TEXT DEFAULT 'auto'")
   const eventCols = new Set(db.prepare('PRAGMA table_info(economic_events)').all().map((c) => c.name))
   if (!eventCols.has('actual')) db.exec("ALTER TABLE economic_events ADD COLUMN actual TEXT DEFAULT ''")
   // The preset win/loss reasons lost their em dashes. Trades already tagged with the
@@ -2177,13 +2181,17 @@ function refreshCommitmentResults(onlyId = '', includeCompleted = false) {
     dayPnlBeforeTrade.set(String(trade.id), dayRunningPnl.get(day) || 0)
     dayRunningPnl.set(day, (dayRunningPnl.get(day) || 0) + (Number(trade.pnl) || 0))
   }
-  const remove = db.prepare('DELETE FROM commitment_results WHERE commitmentId = ?')
+  // Only the machine's own verdicts are cleared. A manual answer is the trader
+  // telling us what happened, and no recompute overwrites that.
+  const remove = db.prepare("DELETE FROM commitment_results WHERE commitmentId = ? AND source = 'auto'")
+  const manualFor = db.prepare("SELECT tradeId FROM commitment_results WHERE commitmentId = ? AND source = 'manual'")
   const insert = db.prepare(`INSERT INTO commitment_results
-    (commitmentId,tradeId,day,adhered,detail,evaluatedAt) VALUES (?,?,?,?,?,?)`)
+    (commitmentId,tradeId,day,adhered,detail,source,evaluatedAt) VALUES (?,?,?,?,?,'auto',?)`)
   const setProgress = db.prepare('UPDATE coach_commitments SET status = ?, completedAt = ?, updatedAt = ? WHERE id = ?')
   const tx = db.transaction((items) => {
     for (const c of items) {
       remove.run(c.id)
+        const answered = new Set(manualFor.all(c.id).map((r) => String(r.tradeId)))
       const startMs = Date.parse(c.startAt) || 0
       const baseline = parseBaselineTradeIds(c.baselineTradeIds)
       const target = Math.max(1, parseInt(c.targetCount, 10) || 10)
@@ -2191,6 +2199,7 @@ function refreshCommitmentResults(onlyId = '', includeCompleted = false) {
         .filter((t) => !baseline.has(String(t.id)) && tradeMoment(t) >= startMs)
         .slice(0, target)
       for (const t of eligible) {
+          if (answered.has(String(t.id))) continue
         const day = tradeDay(t)
         const result = evaluateCommitment(c, t, dayPositionByTrade.get(String(t.id)) || 1, dayPnlBeforeTrade.get(String(t.id)) || 0)
         insert.run(c.id, String(t.id), day, result.adhered ? 1 : 0, result.detail, new Date().toISOString())
@@ -2204,9 +2213,41 @@ function refreshCommitmentResults(onlyId = '', includeCompleted = false) {
   tx(commitments)
 }
 
+// The trader's own answer for one commitment on one trade. Written with
+// source='manual' so recomputeCommitmentProgress leaves it alone: the machine can
+// see whether a stop was set, but not whether a fourth trade was a planned
+// scale-in or tilt. Passing adhered=null clears the answer and lets the automatic
+// verdict apply again.
+export function setCommitmentResult(commitmentId, tradeId, adhered, detail = '') {
+  const cid = String(commitmentId || '')
+  const tid = String(tradeId || '')
+  if (!cid || !tid) throw new Error('Commitment and trade are both required')
+  if (adhered === null || adhered === undefined) {
+    db.prepare("DELETE FROM commitment_results WHERE commitmentId = ? AND tradeId = ? AND source = 'manual'").run(cid, tid)
+    return { ok: true, cleared: true }
+  }
+  const trade = db.prepare('SELECT id, timestamp FROM trades WHERE id = ?').get(tid)
+  if (!trade) throw new Error('Trade not found')
+  const day = String(trade.timestamp || '').slice(0, 10)
+  db.prepare(`INSERT INTO commitment_results
+      (commitmentId,tradeId,day,adhered,detail,source,evaluatedAt)
+      VALUES (?,?,?,?,?,'manual',?)
+    ON CONFLICT(commitmentId,tradeId) DO UPDATE SET
+      adhered = excluded.adhered, detail = excluded.detail,
+      source = 'manual', evaluatedAt = excluded.evaluatedAt`)
+    .run(cid, tid, day, adhered ? 1 : 0, String(detail || '').slice(0, 300), new Date().toISOString())
+  return { ok: true }
+}
+
+export function listCommitmentResultsForTrade(tradeId) {
+  return db.prepare('SELECT commitmentId, adhered, detail, source FROM commitment_results WHERE tradeId = ?')
+    .all(String(tradeId || ''))
+    .map((r) => ({ ...r, adhered: Boolean(r.adhered) }))
+}
+
 export function listCoachCommitments() {
   const rows = db.prepare('SELECT * FROM coach_commitments ORDER BY createdAt DESC').all()
-  const getResults = db.prepare('SELECT tradeId, day, adhered, detail, evaluatedAt FROM commitment_results WHERE commitmentId = ? ORDER BY evaluatedAt ASC')
+  const getResults = db.prepare('SELECT tradeId, day, adhered, detail, source, evaluatedAt FROM commitment_results WHERE commitmentId = ? ORDER BY evaluatedAt ASC')
   return rows.map((row) => {
     const results = getResults.all(row.id).map((r) => ({ ...r, adhered: Boolean(r.adhered) }))
     const adheredCount = results.filter((r) => r.adhered).length

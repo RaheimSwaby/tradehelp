@@ -493,6 +493,10 @@ function registerIpc() {
     setNote: (text) => db.setSettings({ quickNote: text })
   })
 
+  ipcMain.handle('commitments:result:set', (_e, commitmentId, tradeId, adhered, detail) =>
+    db.setCommitmentResult(commitmentId, tradeId, adhered, detail))
+  ipcMain.handle('commitments:result:forTrade', (_e, tradeId) => db.listCommitmentResultsForTrade(tradeId))
+
   ipcMain.handle('sessions:list', () => db.listTradingSessions())
   ipcMain.handle('sessions:get', (_e, id) => db.getTradingSession(id))
   ipcMain.handle('sessions:active', () => db.getActiveTradingSession())

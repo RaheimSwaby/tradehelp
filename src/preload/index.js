@@ -92,6 +92,9 @@ const api = {
   addCommitment: (commitment) => ipcRenderer.invoke('commitments:add', commitment),
   updateCommitment: (commitment) => ipcRenderer.invoke('commitments:update', commitment),
   deleteCommitment: (id) => ipcRenderer.invoke('commitments:delete', id),
+  setCommitmentResult: (commitmentId, tradeId, adhered, detail) =>
+    ipcRenderer.invoke('commitments:result:set', commitmentId, tradeId, adhered, detail),
+  commitmentResultsForTrade: (tradeId) => ipcRenderer.invoke('commitments:result:forTrade', tradeId),
 
   getGoals: () => ipcRenderer.invoke('goals:get'),
   setGoals: (g) => ipcRenderer.invoke('goals:set', g),
