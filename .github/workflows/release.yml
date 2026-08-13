@@ -15,7 +15,23 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm ci
+      # Electron's postinstall pulls a ~100 MB binary from GitHub, and that request is
+      # the flakiest part of this pipeline. A socket hang up there failed the Linux
+      # build of v0.48.1, and because publish-release needs every build job, the
+      # release went public with 8 of 10 assets and no Linux download at all. Retrying
+      # in place beats noticing afterwards and re-running by hand.
+      # shell: bash is explicit because this job also runs on windows-latest, where
+      # run: defaults to PowerShell and this loop would not parse.
+      - name: Install dependencies
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            npm ci && exit 0
+            echo "npm ci failed on attempt $attempt, retrying in $((attempt * 15))s"
+            sleep $((attempt * 15))
+          done
+          echo "npm ci failed three times; treating as a real failure"
+          exit 1
       - run: npm test
 
   build:
@@ -31,7 +47,23 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm ci
+      # Electron's postinstall pulls a ~100 MB binary from GitHub, and that request is
+      # the flakiest part of this pipeline. A socket hang up there failed the Linux
+      # build of v0.48.1, and because publish-release needs every build job, the
+      # release went public with 8 of 10 assets and no Linux download at all. Retrying
+      # in place beats noticing afterwards and re-running by hand.
+      # shell: bash is explicit because this job also runs on windows-latest, where
+      # run: defaults to PowerShell and this loop would not parse.
+      - name: Install dependencies
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            npm ci && exit 0
+            echo "npm ci failed on attempt $attempt, retrying in $((attempt * 15))s"
+            sleep $((attempt * 15))
+          done
+          echo "npm ci failed three times; treating as a real failure"
+          exit 1
       - run: npm run build
       # Windows and Linux get no Apple credentials at all — electron-builder also reads
       # CSC_LINK for Windows signing, so handing it the Apple .p12 would fail that build.
