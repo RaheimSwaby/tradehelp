@@ -85,6 +85,38 @@
     if (e.key === 'ArrowLeft') { e.preventDefault(); go(-1); }
   });
 
+  // Fullscreen. iOS Safari does not implement the Fullscreen API on arbitrary
+  // elements and ignores requestFullscreen on a <video> that carries playsinline;
+  // its own webkitEnterFullscreen is the only route there. Controls are added for
+  // the duration so there is a visible way back out, then removed again, since a
+  // six second silent loop does not want a control bar sitting on it inline.
+  var full = document.querySelector('.tour-full');
+  if (full) {
+    full.addEventListener('click', function () {
+      var video = videoOf(slides[current]);
+      if (!video) return;
+      ensureSource(video);
+      video.setAttribute('controls', '');
+      if (video.requestFullscreen) video.requestFullscreen().catch(function () {});
+      else if (video.webkitEnterFullscreen) video.webkitEnterFullscreen();
+      else if (video.webkitRequestFullscreen) video.webkitRequestFullscreen();
+    });
+  }
+
+  function dropControls() {
+    slides.forEach(function (s) {
+      var v = videoOf(s);
+      if (v && !document.fullscreenElement) v.removeAttribute('controls');
+    });
+  }
+  document.addEventListener('fullscreenchange', dropControls);
+  document.addEventListener('webkitfullscreenchange', dropControls);
+  // iOS fires this when the native player closes.
+  slides.forEach(function (s) {
+    var v = videoOf(s);
+    if (v) v.addEventListener('webkitendfullscreen', function () { v.removeAttribute('controls'); });
+  });
+
   warm(0);
   setLabel(0);
 })();
