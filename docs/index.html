@@ -192,12 +192,46 @@
   .feature-visual img{display:block;width:100%;height:auto}
 
   /* ── pricing ── */
+  /* Product tour. A scroll-snap track rather than a JS slider: swipe, trackpad and
+     keyboard all behave natively, and with JS off it degrades to a plain scroller
+     with every clip still reachable. Deliberately no auto-advance; a carousel that
+     moves on its own takes the page away from whoever is reading it. */
+  .tour{padding-block:1rem 2rem}
+  .tour-intro{color:#b5b0a8;margin-bottom:1rem}
+  .tour-head{display:flex;align-items:center;gap:.75rem;margin-bottom:.6rem;min-height:34px}
+  .tour-label{font-weight:600;color:#f0ede6}
+  .tour-counter{color:#888;font-size:.85rem}
+  .tour-nav{margin-left:auto;display:flex;gap:.4rem}
+  .tour-nav button{
+    width:34px;height:34px;line-height:1;
+    background:#141417;color:#e0ddd6;
+    border:1px solid rgba(255,255,255,.12);border-radius:4px;
+    font-size:15px;cursor:pointer;transition:background .15s,border-color .15s;
+  }
+  .tour-nav button:hover{background:#1a1a1d;border-color:rgba(255,255,255,.24)}
+  .tour-track{
+    display:flex;gap:14px;list-style:none;margin:0;padding:0 0 10px;
+    overflow-x:auto;scroll-snap-type:x mandatory;
+    scrollbar-width:thin;-webkit-overflow-scrolling:touch;
+  }
+  .tour-track:focus-visible{outline:2px solid #d4a853;outline-offset:3px}
+  .tour-slide{
+    flex:0 0 min(100%, 720px);scroll-snap-align:start;
+    background:#141417;border:1px solid rgba(255,255,255,.06);border-radius:4px;overflow:hidden;
+  }
+  /* Height comes from the 16:9 clips themselves, so nothing jumps as they load. */
+  .tour-slide video{display:block;width:100%;height:auto;background:#0b0b0c}
+
   /* Set narrower than the feature rows: this is prose, and a 65-character measure
      is where reading comfort sits. Left aligned, because a centred personal note
      reads like marketing rather than someone talking. */
-  .why{padding-block:1rem 3rem;max-width:none}
-  .why h2{margin-bottom:1rem}
-  .why p{max-width:60ch;font-size:1.02rem}
+  /* No max-width override here: .wrap already centres the column, and setting
+     max-width:none cancelled that and pinned the whole section to the left edge. */
+  .why{padding-block:1rem 3rem}
+  .why h2{margin-bottom:1rem;text-align:center}
+  /* Text stays left aligned for readability, but the measure itself is centred so
+     the block sits under the heading rather than hugging one side. */
+  .why p{max-width:62ch;margin-inline:auto;font-size:1.02rem}
   .pricing{padding-block:3rem 4rem;text-align:center}
   .pricing h2{margin-bottom:2rem}
   .price-card{display:inline-block;background:#141417;border:1px solid rgba(255,255,255,.08);border-radius:4px;padding:2.5rem 3rem;text-align:center}
@@ -364,6 +398,73 @@
 </section>
 
 <!-- ====== pricing ====== -->
+<section class="tour wrap" id="tour">
+  <h2>A look around</h2>
+  <p class="tour-intro">Short clips of each tab. Swipe, scroll, or use the arrows.</p>
+  <div class="tour-head">
+    <span class="tour-label"></span>
+    <span class="tour-counter"></span>
+    <span class="tour-nav">
+      <button type="button" class="tour-prev" aria-label="Previous clip">&#8592;</button>
+      <button type="button" class="tour-next" aria-label="Next clip">&#8594;</button>
+    </span>
+  </div>
+  <ul class="tour-track" tabindex="0" aria-label="Product tour">
+      <li class="tour-slide" data-label="Journal">
+        <video muted loop playsinline preload="none" data-src="tours/01-journal.mp4"
+               width="1440" height="810" aria-label="Journal tab walkthrough"></video>
+      </li>
+      <li class="tour-slide" data-label="Charts">
+        <video muted loop playsinline preload="none" data-src="tours/02-charts.mp4"
+               width="1440" height="810" aria-label="Charts tab walkthrough"></video>
+      </li>
+      <li class="tour-slide" data-label="Trade Mode">
+        <video muted loop playsinline preload="none" data-src="tours/03-trade-mode.mp4"
+               width="1440" height="810" aria-label="Trade Mode tab walkthrough"></video>
+      </li>
+      <li class="tour-slide" data-label="Accounts">
+        <video muted loop playsinline preload="none" data-src="tours/04-accounts.mp4"
+               width="1440" height="810" aria-label="Accounts tab walkthrough"></video>
+      </li>
+      <li class="tour-slide" data-label="Dashboard">
+        <video muted loop playsinline preload="none" data-src="tours/05-dashboard.mp4"
+               width="1440" height="810" aria-label="Dashboard tab walkthrough"></video>
+      </li>
+      <li class="tour-slide" data-label="Psychology">
+        <video muted loop playsinline preload="none" data-src="tours/06-psychology.mp4"
+               width="1440" height="810" aria-label="Psychology tab walkthrough"></video>
+      </li>
+      <li class="tour-slide" data-label="Rating">
+        <video muted loop playsinline preload="none" data-src="tours/07-rating.mp4"
+               width="1440" height="810" aria-label="Rating tab walkthrough"></video>
+      </li>
+      <li class="tour-slide" data-label="Goals">
+        <video muted loop playsinline preload="none" data-src="tours/08-goals.mp4"
+               width="1440" height="810" aria-label="Goals tab walkthrough"></video>
+      </li>
+      <li class="tour-slide" data-label="Reviews">
+        <video muted loop playsinline preload="none" data-src="tours/09-reviews.mp4"
+               width="1440" height="810" aria-label="Reviews tab walkthrough"></video>
+      </li>
+      <li class="tour-slide" data-label="AI Coach">
+        <video muted loop playsinline preload="none" data-src="tours/10-ai-coach.mp4"
+               width="1440" height="810" aria-label="AI Coach tab walkthrough"></video>
+      </li>
+      <li class="tour-slide" data-label="Patterns">
+        <video muted loop playsinline preload="none" data-src="tours/11-patterns.mp4"
+               width="1440" height="810" aria-label="Patterns tab walkthrough"></video>
+      </li>
+      <li class="tour-slide" data-label="Playbook">
+        <video muted loop playsinline preload="none" data-src="tours/12-playbook.mp4"
+               width="1440" height="810" aria-label="Playbook tab walkthrough"></video>
+      </li>
+      <li class="tour-slide" data-label="News">
+        <video muted loop playsinline preload="none" data-src="tours/13-news.mp4"
+               width="1440" height="810" aria-label="News tab walkthrough"></video>
+      </li>
+  </ul>
+</section>
+
 <section class="why wrap" id="why">
   <h2>Why I built TradeHelp</h2>
   <p>I built TradeHelp because I did not want to keep paying a subscription.</p>
@@ -476,6 +577,7 @@
 })();
 </script>
   <script src="lightbox.js"></script>
+<script src="tour-carousel.js" defer></script>
 <!-- Same endpoint as the rest of the site. The design overhaul (7b057cd) dropped
      this from the homepage only, so its downloads and buys went uncounted. -->
 <script data-goatcounter="https://kingdd69.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
