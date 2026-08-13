@@ -3,11 +3,13 @@ import { ArrowUpCircle, X } from 'lucide-react'
 import { T } from '../theme.js'
 
 export function UpdateAvailableBanner({ info, onClose }) {
-  const downloadUrl = info.platform === 'win32'
-    ? (info.exeUrl || info.url || 'https://raheimswaby.github.io/tradehelp')
-    : (info.dmgUrl || info.url || 'https://raheimswaby.github.io/tradehelp')
-
-  const label = info.platform === 'win32' ? 'Download .exe' : 'Download .dmg'
+  const downloads = {
+    win32: { url: info.exeUrl, label: 'Download .exe' },
+    darwin: { url: info.dmgUrl, label: 'Download .dmg' },
+    linux: { url: info.appImageUrl, label: 'Download AppImage' }
+  }
+  const download = downloads[info.platform] || { url: '', label: 'View release' }
+  const downloadUrl = download.url || info.url || 'https://raheimswaby.github.io/tradehelp'
 
   return (
     <div className="w-full" style={{ background: T.accentSoft, borderBottom: `1px solid ${T.line}` }}>
@@ -19,7 +21,7 @@ export function UpdateAvailableBanner({ info, onClose }) {
           onClick={() => window.api.openExternal(downloadUrl)}
           className="ml-auto px-2.5 py-0.5 rounded-md font-semibold"
           style={{ background: T.accent, color: '#1A1306' }}
-        >{label}</button>
+        >{download.label}</button>
         <button type="button" onClick={onClose} title="Dismiss" style={{ color: T.accentText }}><X size={14} /></button>
       </div>
     </div>

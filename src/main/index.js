@@ -675,12 +675,14 @@ function registerIpc() {
       const assets = d.assets || []
       const dmg = assets.find((a) => a.name?.endsWith('.dmg'))
       const exe = assets.find((a) => a.name?.endsWith('.exe') && !a.name?.includes('blockmap'))
+      const appImage = assets.find((a) => a.name?.endsWith('.AppImage'))
       return {
         platform,
         version: String(d.tag_name || '').replace(/^v/, ''),
         url: d.html_url || '',
         dmgUrl: dmg?.browser_download_url || '',
-        exeUrl: exe?.browser_download_url || ''
+        exeUrl: exe?.browser_download_url || '',
+        appImageUrl: appImage?.browser_download_url || ''
       }
     } catch { return { platform } }
   })

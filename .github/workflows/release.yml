@@ -109,12 +109,23 @@ jobs:
       # draft: invisible and recoverable, rather than public and broken.
       - name: Verify every platform published
         run: |
-          count=$(gh release view "$TAG" --repo RaheimSwaby/tradehelp --json assets --jq '.assets | length')
-          echo "assets on $TAG: $count"
-          gh release view "$TAG" --repo RaheimSwaby/tradehelp --json assets --jq '.assets[].name' | sed 's/^/  /'
-          if [ "$count" -lt 10 ]; then
-            echo "::error::Only $count of 10 assets. Leaving $TAG as a draft."
-            echo "Re-run the failed build job, then re-run this one."
+          gh release view "$TAG" --repo RaheimSwaby/tradehelp --json assets --jq '.assets[].name' | sort > assets.txt
+          echo "assets on $TAG:"
+          sed 's/^/  /' assets.txt
+          missing=0
+          for required in \
+            latest.yml latest-mac.yml latest-linux.yml \
+            TradeHelp-Setup.exe TradeHelp-Setup.exe.blockmap \
+            TradeHelp-Setup.dmg TradeHelp-Setup.dmg.blockmap \
+            TradeHelp-Setup.zip TradeHelp-Setup.zip.blockmap \
+            TradeHelp-Setup.AppImage; do
+            if ! grep -Fxq "$required" assets.txt; then
+              echo "::error::Missing required release asset: $required"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "Leaving $TAG as a draft. Re-run the failed platform build, then this job."
             exit 1
           fi
         env:

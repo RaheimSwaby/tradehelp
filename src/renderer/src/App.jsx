@@ -403,11 +403,11 @@ export default function App() {
     })()
   }, [settings, hasApi])
 
-  // electron-updater signals when a download is ready (Windows/Linux).
+  // electron-updater signals when a download is ready on every packaged platform.
   useEffect(() => { window.api?.onUpdateReady?.((info) => setUpdateReady(info || {})) }, [])
 
-  // GitHub API check for macOS only. Signed builds auto-update like Windows/Linux, but
-  // this stays as a safety net: if the mac updater ever fails silently, a direct .dmg
+  // GitHub API fallback for macOS and Linux. Both normally auto-update, but
+  // this stays as a safety net: if either updater fails silently, the platform installer
   // link is the only signal the user would get. Suppressed once a download is ready so
   // the two update prompts can't stack — see the render guard on updateAvail.
   useEffect(() => {
@@ -416,7 +416,7 @@ export default function App() {
     const check = async () => {
       try {
         const [cur, latest] = await Promise.all([window.api.appVersion(), window.api.latestVersion()])
-        if (live && latest?.platform === 'darwin' && latest.version && isNewerVersion(latest.version, cur)) {
+        if (live && ['darwin', 'linux'].includes(latest?.platform) && latest.version && isNewerVersion(latest.version, cur)) {
           setUpdateAvail({ ...latest, current: cur })
         }
       } catch {}
