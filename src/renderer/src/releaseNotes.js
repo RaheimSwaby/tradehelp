@@ -36,7 +36,11 @@ export const RELEASE_NOTES = {
   '0.48.2': `• Automatic updates repaired across Windows, macOS and Linux
 • macOS releases now require signing and include the ZIP payload needed by the updater
 • Linux now falls back to the correct AppImage download if an in-place update cannot finish
-• Releases stay private until every required installer and update manifest is present`,
+• Releases stay private until every required installer and update manifest is present
+• Fixed the grading structure. The Grade column in the journal now shows the grade you gave the trade, so a trade you marked F no longer sits there as an A+
+• Imported trades are no longer graded on whether they won or lost, which gave every import an A or a C and made the grade a restatement of P&L
+• Trades are graded on the details you actually logged, and one with too little logged reads as not graded rather than being handed a letter it did not earn
+• Your rating and the coach's read of your execution skip ungraded trades instead of counting them as zero`,
   '0.48.1': `• Update diagnostics. macOS and Linux installs have not been receiving updates, and every error was being discarded silently, so nothing was ever recorded. The updater now writes a log to the TradeHelp data folder under logs/updater.log
 • If you are on macOS or Linux, that log is what identifies the cause. Sending it over is the fastest way to get automatic updates working again on your machine`,
   '0.48.0': `• New look. Refreshed TradeHelp mark across the app, taskbar and installer
