@@ -46,8 +46,10 @@ export function buildCoachBrief(trades = [], stats) {
     }
   }
 
-  const grades = trades.map(executionGrade)
-  const executionScore = Math.round(grades.reduce((sum, g) => sum + g.score, 0) / grades.length)
+  const grades = trades.map(executionGrade).filter((g) => g.score != null)
+  const executionScore = grades.length
+    ? Math.round(grades.reduce((sum, g) => sum + g.score, 0) / grades.length)
+    : 60
   const executionLetter = letterFor(executionScore).letter
   const tilted = trades.filter((t) => TILT.includes(t.emotion))
   const tiltPnl = tilted.reduce((sum, t) => sum + (Number(t.pnl) || 0), 0)

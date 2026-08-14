@@ -370,36 +370,50 @@ export function computeSelfGrade(trades) {
 }
 
 // Per-trade execution grade — deliberately blind to whether the trade won or lost.
+//
+// This used to hand every imported trade a flat A for a win and C for a loss, which
+// made the grade a restatement of P&L and meant an imported journal only ever showed
+// two letters. It also scored missing data generously (no R:R counted 14 of 25, no
+// emotion 12), so a trade we knew nothing about still earned a D rather than saying
+// so.
+//
+// Now each signal is scored only when present, and the total is normalised across
+// the signals that exist. A trade with two signals is graded honestly on those two.
+// Below two, there is nothing to judge and it returns ungraded rather than inventing
+// a letter. Callers must handle score === null.
 export function executionGrade(t) {
-  // Imported trades carry no process data (no emotion/stop/risk), so execution can't be judged.
-  // Use a fair outcome-based placeholder until the trader journals them: win = A, loss = C.
-  if (t.source === 'import') {
-    return (Number(t.pnl) || 0) >= 0 ? { score: 90, letter: 'A', tone: 'up' } : { score: 60, letter: 'C', tone: 'accent' }
-  }
   const entry = Number(t.entry) || 0, stop = Number(t.stop) || 0
   const pnl = Number(t.pnl) || 0, risk = Number(t.riskAmount) || 0, rr = Number(t.rr) || 0
 
-  let stopPts = 0
-  if (stop > 0 && entry > 0) stopPts = (t.direction === 'Long' ? stop < entry : stop > entry) ? 25 : 10
+  const parts = []
 
-  const rrPts = rr >= 2 ? 25 : rr >= 1.5 ? 20 : rr >= 1 ? 15 : rr > 0 ? 8 : 14
-
-  const e = t.emotion || ''
-  const emoPts = ['Disciplined', 'Confident', 'Neutral'].includes(e) ? 25 : ['FOMO', 'Greedy', 'Revenge'].includes(e) ? 0 : 12
-
-  let riskPts = 20 // win / breakeven / no risk logged = can't fault it
+  if (stop > 0 && entry > 0) {
+    parts.push((t.direction === 'Long' ? stop < entry : stop > entry) ? 25 : 10)
+  }
+  if (rr > 0) {
+    parts.push(rr >= 2 ? 25 : rr >= 1.5 ? 20 : rr >= 1 ? 15 : 8)
+  }
+  if (t.emotion) {
+    parts.push(['Disciplined', 'Confident', 'Neutral'].includes(t.emotion) ? 25
+      : ['FOMO', 'Greedy', 'Revenge'].includes(t.emotion) ? 0 : 12)
+  }
+  // Only meaningful on a loss with a planned risk: did the stop actually hold?
   if (pnl < 0 && risk > 0) {
     const mult = Math.abs(pnl) / risk
-    riskPts = mult <= 1.1 ? 25 : mult <= 1.5 ? 12 : 0 // loss bigger than planned = stop wasn't honored
+    parts.push(mult <= 1.1 ? 25 : mult <= 1.5 ? 12 : 0)
   }
 
-  const score = stopPts + rrPts + emoPts + riskPts
-  return { score, ...letterFor(score) }
+  if (parts.length < 2) return { score: null, letter: '—', tone: 'none', ungraded: true }
+
+  const score = Math.round((parts.reduce((a, b) => a + b, 0) / (parts.length * 25)) * 100)
+  return { score, signals: parts.length, ...letterFor(score) }
 }
 
 export function computeRating(trades, stats) {
   const n = stats.n
-  const grades = trades.map(executionGrade)
+  // Only graded trades count. Averaging in a null would score the journal on how
+  // much of it is filled in, not on how the trades were executed.
+  const grades = trades.map(executionGrade).filter((g) => g.score != null)
   const avgGrade = grades.length ? grades.reduce((a, g) => a + g.score, 0) / grades.length : 60
 
   const PF = stats.profitFactor === Infinity ? 2.5 : (stats.profitFactor || 0)
@@ -462,7 +476,8 @@ export function computeAchievements(trades, stats, payouts = [], dayLogs = [], c
     const pnl = Number(t.pnl) || 0, risk = Number(t.riskAmount) || 0
     const entry = Number(t.entry) || 0, stop = Number(t.stop) || 0, target = Number(t.target) || 0
     const stopOk = stop > 0 && entry > 0 && (t.direction === 'Long' ? stop < entry : stop > entry)
-    if (executionGrade(t).score >= 85 && pnl < 0) aGradeLosses++
+    const eg = executionGrade(t)
+    if (eg.score != null && eg.score >= 85 && pnl < 0) aGradeLosses++
     if (stopOk) stopSet++
     if (stopOk && target > 0) planned++
     if ((t.imageCount || 0) > 0) withShots++

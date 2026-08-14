@@ -173,7 +173,31 @@ export function Readout({ label, value, tone, feedback }) {
 }
 export function GradeChip({ t }) {
   const g = executionGrade(t)
-  const c = g.tone === 'up' ? T.up : g.tone === 'accent' ? T.accent : T.down
-  const title = t.source === 'import' ? 'Imported — graded on outcome until you journal it' : `Execution ${g.score}/100 — process, not outcome`
-  return <span className="inline-block text-xs font-bold px-1.5 py-0.5 rounded" style={{ color: c, border: `1px solid ${c}` }} title={title}>{g.letter}</span>
+  // The trader's own grade wins the column. The app scores the mechanics it can see,
+  // but someone who marks their own execution an F knows something the fields do not
+  // record, and a column labelled Grade that ignores the grade they just entered
+  // reads as broken. Same rule as commitments: manual overrides auto.
+  const mine = t.selfExec || t.selfSetup || ''
+  const shown = mine || g.letter
+  const tone = mine
+    ? (mine === 'A+' || mine === 'A' ? 'up' : mine === 'B' || mine === 'C' ? 'accent' : 'down')
+    : g.tone
+  const c = (!mine && g.ungraded) ? T.faint : tone === 'up' ? T.up : tone === 'accent' ? T.accent : T.down
+  const appPart = g.ungraded
+    ? 'app: not enough logged to grade'
+    : `app: ${g.score}/100 from ${g.signals} signal${g.signals === 1 ? '' : 's'}`
+  const title = mine
+    ? `Your grade${t.selfSetup && t.selfExec ? ` — setup ${t.selfSetup}, execution ${t.selfExec}` : ''} (${appPart})`
+    : g.ungraded
+      ? 'Not enough logged to grade the process. Add a stop, R:R or emotion, or grade it yourself.'
+      : `App grade: execution ${g.score}/100 from ${g.signals} logged signal${g.signals === 1 ? '' : 's'}, process not outcome`
+  return (
+    <span className="inline-flex items-center gap-1 text-xs font-bold px-1.5 py-0.5 rounded"
+      style={{ color: c, border: `1px solid ${c}` }} title={title}>
+      {shown}
+      {/* A dot marks the grade as the trader's own, so the column never implies the
+          app reached this verdict by itself. */}
+      {mine && <span aria-hidden="true" style={{ fontSize: 9, opacity: 0.75 }}>•</span>}
+    </span>
+  )
 }

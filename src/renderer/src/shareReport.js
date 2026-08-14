@@ -58,7 +58,7 @@ export function buildShareReport(trades = [], range = '30', accountLabel = 'All 
     .filter((a) => a.unlocked && !a.troll)
     .map((a) => ({ name: a.name, tier: a.tier }))
   const avgExecution = selected.length
-    ? Math.round(selected.reduce((sum, t) => sum + executionGrade(t).score, 0) / selected.length)
+    ? (() => { const g = selected.map(executionGrade).filter((x) => x.score != null); return g.length ? Math.round(g.reduce((s, x) => s + x.score, 0) / g.length) : null })()
     : 0
   return {
     trades: selected,

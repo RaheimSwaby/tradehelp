@@ -82,7 +82,10 @@ export function Reviews({
     () => gran === 'week' ? buildWeeklyWrap({ trades, ruleBreaks, weekKey: period }) : null,
     [gran, trades, ruleBreaks, period]
   )
-  const avgGrade = periodTrades.length ? Math.round(periodTrades.reduce((a, t) => a + executionGrade(t).score, 0) / periodTrades.length) : 0
+  // Ungraded trades are excluded rather than counted as zero, which would drag the
+  // average down in proportion to how much of the journal is unfilled.
+  const gradedTrades = periodTrades.map(executionGrade).filter((g) => g.score != null)
+  const avgGrade = gradedTrades.length ? Math.round(gradedTrades.reduce((a, g) => a + g.score, 0) / gradedTrades.length) : 0
   const records = useMemo(() => {
     if (!periodTrades.length) return null
     const pnls = periodTrades.map((t) => Number(t.pnl) || 0)

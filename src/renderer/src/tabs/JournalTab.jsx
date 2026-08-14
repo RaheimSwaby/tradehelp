@@ -37,7 +37,7 @@ function attachmentTitle(trade) {
 }
 
 /* ───────── journal ───────── */
-export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, onRollbackImport, accounts = [], profiles = [], savedSearches = [], onAddSavedSearch, onUpdateSavedSearch, onDeleteSavedSearch, onRefreshSavedSearches, settings, onSaveSettings, dayLogs = [], onAddDayLog, onDeleteDayLog, drilldown = null, onConsumeDrilldown }) {
+export function Journal({ trades, commitments = [], onAdd, onUpdate, onRemove, onNotes, onImport, onRollbackImport, accounts = [], profiles = [], savedSearches = [], onAddSavedSearch, onUpdateSavedSearch, onDeleteSavedSearch, onRefreshSavedSearches, settings, onSaveSettings, dayLogs = [], onAddDayLog, onDeleteDayLog, drilldown = null, onConsumeDrilldown }) {
   const blank = {
     symbol: '', direction: 'Long', entry: '', exit: '', stop: '', target: '', size: '', riskAmount: '',
     riskPoints: '', rewardPoints: '', riskMode: 'price', analysisTimeframe: '', entryTimeframe: '',
@@ -70,6 +70,25 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
   const [submitError, setSubmitError] = useState('')
   const fileRef = useRef(null)
   const submittingRef = useRef(false)
+  // Which commitments the trader says they kept or broke on this trade. Held in
+  // state because a new trade has no row to attach an answer to until it saves.
+  const [commitmentAnswers, setCommitmentAnswers] = useState({})
+  const activeCommitments = useMemo(() => (commitments || []).filter((c) => c.status !== 'completed'), [commitments])
+
+  async function saveCommitmentAnswers(tradeId) {
+    if (!window.api?.setCommitmentResult) return
+    const entries = Object.entries(commitmentAnswers)
+    if (!entries.length) return
+    try {
+      for (const [commitmentId, adhered] of entries) {
+        await window.api.setCommitmentResult(commitmentId, tradeId, adhered, 'Answered while logging')
+      }
+    } catch {
+      // The trade is already saved by this point. A lost answer is worth re-entering
+      // from the trade, not an error message implying the trade did not save.
+    }
+    setCommitmentAnswers({})
+  }
   const videosRef = useRef([])
 
   useEffect(() => { videosRef.current = videos }, [videos])
@@ -448,9 +467,12 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
       let result
       if (editing) {
         result = await onUpdate({ ...base, id: editing.id, timestamp: editing.timestamp, source: editing.source || 'manual' }, screenshots, videoTokens)
+          await saveCommitmentAnswers(editing.id)
         setEditing(null); setF(blank); setImages([]); setVideos([]); setFillsEnabled(false); setFills([])
       } else {
-        result = await onAdd({ ...base, id: Date.now() + Math.random().toString(16).slice(2), timestamp: new Date().toISOString().slice(0, 16).replace('T', ' ') }, screenshots, videoTokens)
+        const newId = Date.now() + Math.random().toString(16).slice(2)
+        result = await onAdd({ ...base, id: newId, timestamp: new Date().toISOString().slice(0, 16).replace('T', ' ') }, screenshots, videoTokens)
+          await saveCommitmentAnswers(newId)
         setF(blank); setImages([]); setVideos([]); setFillsEnabled(false); setFills([]); setFillProfileId(''); setRiskProfileId('')
       }
       if (result?.videoErrors?.length) setSubmitError(`${savedLabel}, but some recordings were not attached. ${result.videoErrors.join(' ')}`)
@@ -694,6 +716,39 @@ export function Journal({ trades, onAdd, onUpdate, onRemove, onNotes, onImport, 
           </div>
         )}
         </section>
+          {activeCommitments.length > 0 && (
+          <section className="th-form-section">
+            <div className="th-section-label">5. Commitments</div>
+            {/* The app judges the mechanical rules from the trade itself, but it
+                cannot tell a planned scale-in from tilt. An answer here overrides
+                that verdict; left blank, the automatic one stands. */}
+            <div className="th-commitment-list mt-3">
+              {activeCommitments.map((c) => {
+                const answer = commitmentAnswers[c.id]
+                const pick = (value) => setCommitmentAnswers((prev) => {
+                  const next = { ...prev }
+                  if (prev[c.id] === value) delete next[c.id]
+                  else next[c.id] = value
+                  return next
+                })
+                return (
+                  <div key={c.id} className="th-commitment-row" style={{ borderTop: `1px solid ${T.line}` }}>
+                    <span className="th-commitment-title">{c.title}</span>
+                    <span className="th-commitment-actions">
+                      <button type="button" onClick={() => pick(true)} className="rounded-md px-2.5 py-1 text-xs"
+                        style={{ background: answer === true ? T.accentSoft : 'transparent', color: answer === true ? T.up : T.dim, border: `1px solid ${answer === true ? T.up : T.line}` }}>Kept</button>
+                      <button type="button" onClick={() => pick(false)} className="rounded-md px-2.5 py-1 text-xs"
+                        style={{ background: answer === false ? T.accentSoft : 'transparent', color: answer === false ? T.down : T.dim, border: `1px solid ${answer === false ? T.down : T.line}` }}>Broke</button>
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+            <div className="text-xs mt-2" style={{ color: T.faint }}>
+              Answer only where you disagree with the app, or want it on record. Blank is judged automatically.
+            </div>
+          </section>
+          )}
         <section className="th-form-section">
           <div className="th-section-label">5. Notes and media</div>
         <div className="mt-3">

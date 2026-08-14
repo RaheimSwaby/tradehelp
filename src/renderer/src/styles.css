@@ -884,3 +884,14 @@ button:focus-visible, a:focus-visible, [role="button"]:focus-visible, summary:fo
 /* Long window titles would otherwise push the live banner's figures off the row. */
 .th-rec-source { min-width: 0; }
 .th-rec-source > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 22ch; }
+
+/* Journal commitment answers: title left, the two choices right, one row each. */
+.th-commitment-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+}
+.th-commitment-row:first-child { border-top: 0 !important; }
+.th-commitment-title { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.th-commitment-actions { display: flex; gap: 6px; flex-shrink: 0; }
