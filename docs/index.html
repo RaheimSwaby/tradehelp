@@ -325,13 +325,19 @@
 <section class="hero wrap">
   <h1>A trading journal that lives on your computer, not in the cloud</h1>
   <div class="asset-bar">FUTURES / FOREX / CRYPTO</div>
-  <p>TradeHelp stores your trades locally in SQLite. The AI coach runs offline on your own hardware. No account, no subscription, no data leaving your machine. Free 14-day trial, then <s class="was-price">$50</s> <b class="now-price">$25</b> once for the first 100.</p>
-  <div class="hero-btns">
-    <a href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.exe" class="btn btn-primary" data-goatcounter-click="download-windows-hero">Download for Windows</a>
-    <a href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.dmg" class="btn btn-ghost" data-goatcounter-click="download-mac-hero">Download for macOS</a>
-    <a href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.AppImage" class="btn btn-ghost" data-goatcounter-click="download-linux-hero">Download for Linux</a>
-  </div>
-  <p class="hero-secondary"><a href="/#features">See what's inside</a></p>
+    <p>TradeHelp stores your trades locally in SQLite. The AI coach runs offline on your own hardware. No account, no subscription, no data leaving your machine.</p>
+    <!-- One button, for the platform the visitor is on. Three equal choices asked
+         everyone to make a decision before they knew what the app was, and across
+         three days of traffic produced exactly one download click. The other two
+         platforms sit one line below for the minority who need them. Windows is the
+         markup default: it is roughly four fifths of downloads, and it is what a
+         visitor with scripting disabled should land on. -->
+    <div class="hero-btns">
+      <a id="heroDownload"
+         href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.exe"
+         class="btn btn-primary" data-goatcounter-click="download-windows-hero">Download for Windows</a>
+    </div>
+    <p class="hero-secondary">Free for 14 days. No account needed. <span id="heroOther"></span></p>
   <!-- Shown only to phone visitors, who can't install a desktop app where they stand. -->
   <div class="mobile-cta" id="mobileCta">
     <p>This one runs on your desktop. Send yourself the link for when you're back at your computer.</p>
@@ -342,63 +348,6 @@
   </div>
 </section>
 
-<!-- ====== video ====== -->
-<div class="video-wrap">
-  <!-- Relative path: tour.mp4 ships in docs/ and is served from the site root.
-       Autoplay only works muted; controls stay so anyone can unmute or pause it. -->
-  <video id="tourVideo" controls autoplay muted loop playsinline preload="metadata"
-         aria-label="TradeHelp promo video">
-    <source src="tour.mp4" type="video/mp4">
-    <a href="tour.mp4">Watch the TradeHelp promo video</a> (your browser can't play the embedded video).
-  </video>
-</div>
-
-<!-- ====== features ====== -->
-<section class="features wrap" id="features">
-  <h2>What's inside</h2>
-
-  <div class="feature-row">
-    <div class="feature-text">
-      <h3>Local-first. Your trades never leave your machine.</h3>
-      <p>Everything lives in a SQLite database on your computer. No cloud account, no server, no data leaving your machine. You own your journal the same way you own a spreadsheet, except it's actually built for traders.</p>
-    </div>
-    <div class="feature-visual"><img src="shots/feature-dashboard.png" alt="TradeHelp dashboard: net P&amp;L, win rate, profit factor and the current behavioural focus" loading="lazy" decoding="async" width="1916" height="1004"></div>
-  </div>
-
-  <div class="feature-row reverse">
-    <div class="feature-text">
-      <h3>Offline AI coach that runs on your hardware.</h3>
-      <p>Connect your own Ollama or LM Studio instance, or bring your own API key. The AI reviews your trades, spots patterns, and gives you a coaching report, all without sending your data anywhere. It's like having a second set of eyes on every session.</p>
-    </div>
-    <div class="feature-visual"><img src="shots/feature-coach.png" alt="The AI coach reading a local journal, with suggested prompts and a data-and-privacy panel" loading="lazy" decoding="async" width="1919" height="1002"></div>
-  </div>
-
-  <div class="feature-row">
-    <div class="feature-text">
-      <h3>Import from anywhere. CSV auto-detect does the work.</h3>
-      <p>Drop in a CSV from NinjaTrader, Tradovate, or TopstepX and TradeHelp figures out the columns. No manual mapping, no reformatting. Just drag, drop, and your trade history is in.</p>
-    </div>
-    <div class="feature-visual"><img src="shots/feature-import.png" alt="Import inbox showing NinjaTrader CSV history with per-file imported, duplicate and skipped counts" loading="lazy" decoding="async" width="922" height="915"></div>
-  </div>
-
-  <div class="feature-row reverse">
-    <div class="feature-text">
-      <h3>Prop-firm guardrails that actually understand prop rules.</h3>
-      <p>Set per-account profit targets, trailing drawdown cushions, and consistency rules. TradeHelp tracks each account separately and warns you before you breach. Built by someone who's blown accounts and learned the hard way.</p>
-    </div>
-    <div class="feature-visual"><img src="shots/feature-accounts.png" alt="Prop overview listing two funded accounts with drawdown cushion, profit target and daily loss room" loading="lazy" decoding="async" width="1908" height="1006"></div>
-  </div>
-
-  <div class="feature-row">
-    <div class="feature-text">
-      <h3>Live guardrails while you trade.</h3>
-      <p>Pre-trade checklist, max-loss alarm, and daily loss limit, all running locally so there's zero latency. No API calls, no internet required. Just a safety net between you and a bad decision.</p>
-    </div>
-    <div class="feature-visual"><img src="shots/feature-trademode.png" alt="Trade Mode: pre-trade plans, written trading rules and daily goal and max-loss limits" loading="lazy" decoding="async" width="1916" height="1008"></div>
-  </div>
-</section>
-
-<!-- ====== pricing ====== -->
 <section class="tour wrap" id="tour">
   <h2>A look around</h2>
   <p class="tour-intro">Short clips of each tab. Swipe, scroll, or use the arrows.</p>
@@ -466,6 +415,64 @@
       </li>
   </ul>
 </section>
+
+<!-- ====== video ====== -->
+<div class="video-wrap">
+  <!-- Relative path: tour.mp4 ships in docs/ and is served from the site root.
+       Autoplay only works muted; controls stay so anyone can unmute or pause it. -->
+  <video id="tourVideo" controls autoplay muted loop playsinline preload="metadata"
+         aria-label="TradeHelp promo video">
+    <source src="tour.mp4" type="video/mp4">
+    <a href="tour.mp4">Watch the TradeHelp promo video</a> (your browser can't play the embedded video).
+  </video>
+</div>
+
+<!-- ====== features ====== -->
+<section class="features wrap" id="features">
+  <h2>What's inside</h2>
+
+  <div class="feature-row">
+    <div class="feature-text">
+      <h3>Local-first. Your trades never leave your machine.</h3>
+      <p>Everything lives in a SQLite database on your computer. No cloud account, no server, no data leaving your machine. You own your journal the same way you own a spreadsheet, except it's actually built for traders.</p>
+    </div>
+    <div class="feature-visual"><img src="shots/feature-dashboard.png" alt="TradeHelp dashboard: net P&amp;L, win rate, profit factor and the current behavioural focus" loading="lazy" decoding="async" width="1916" height="1004"></div>
+  </div>
+
+  <div class="feature-row reverse">
+    <div class="feature-text">
+      <h3>Offline AI coach that runs on your hardware.</h3>
+      <p>Connect your own Ollama or LM Studio instance, or bring your own API key. The AI reviews your trades, spots patterns, and gives you a coaching report, all without sending your data anywhere. It's like having a second set of eyes on every session.</p>
+    </div>
+    <div class="feature-visual"><img src="shots/feature-coach.png" alt="The AI coach reading a local journal, with suggested prompts and a data-and-privacy panel" loading="lazy" decoding="async" width="1919" height="1002"></div>
+  </div>
+
+  <div class="feature-row">
+    <div class="feature-text">
+      <h3>Import from anywhere. CSV auto-detect does the work.</h3>
+      <p>Drop in a CSV from NinjaTrader, Tradovate, or TopstepX and TradeHelp figures out the columns. No manual mapping, no reformatting. Just drag, drop, and your trade history is in.</p>
+    </div>
+    <div class="feature-visual"><img src="shots/feature-import.png" alt="Import inbox showing NinjaTrader CSV history with per-file imported, duplicate and skipped counts" loading="lazy" decoding="async" width="922" height="915"></div>
+  </div>
+
+  <div class="feature-row reverse">
+    <div class="feature-text">
+      <h3>Prop-firm guardrails that actually understand prop rules.</h3>
+      <p>Set per-account profit targets, trailing drawdown cushions, and consistency rules. TradeHelp tracks each account separately and warns you before you breach. Built by someone who's blown accounts and learned the hard way.</p>
+    </div>
+    <div class="feature-visual"><img src="shots/feature-accounts.png" alt="Prop overview listing two funded accounts with drawdown cushion, profit target and daily loss room" loading="lazy" decoding="async" width="1908" height="1006"></div>
+  </div>
+
+  <div class="feature-row">
+    <div class="feature-text">
+      <h3>Live guardrails while you trade.</h3>
+      <p>Pre-trade checklist, max-loss alarm, and daily loss limit, all running locally so there's zero latency. No API calls, no internet required. Just a safety net between you and a bad decision.</p>
+    </div>
+    <div class="feature-visual"><img src="shots/feature-trademode.png" alt="Trade Mode: pre-trade plans, written trading rules and daily goal and max-loss limits" loading="lazy" decoding="async" width="1916" height="1008"></div>
+  </div>
+</section>
+
+<!-- ====== pricing ====== -->
 
 <section class="why wrap" id="why">
   <h2>Why I built TradeHelp</h2>
@@ -586,6 +593,40 @@
 <!-- Consent gate for the Reddit Ads pixel, and the "Privacy choices" control the
      privacy policy promises. The overhaul dropped this from the homepage only, so
      the main ad landing page had no measurement and no way to opt in or out. -->
+<script>
+// Point the hero button at the visitor's own platform and name the other two beside
+// it. The markup ships Windows, so this only ever swaps the label and href; with
+// scripting off the button still works and still points somewhere real.
+(function () {
+  var btn = document.getElementById('heroDownload');
+  var other = document.getElementById('heroOther');
+  if (!btn) return;
+  var BASE = 'https://github.com/RaheimSwaby/tradehelp/releases/latest/download/';
+  var ua = navigator.userAgent;
+  var builds = {
+    win: { label: 'Windows', file: 'TradeHelp-Setup.exe', event: 'download-windows-hero' },
+    mac: { label: 'macOS', file: 'TradeHelp-Setup.dmg', event: 'download-mac-hero' },
+    linux: { label: 'Linux', file: 'TradeHelp-Setup.AppImage', event: 'download-linux-hero' }
+  };
+  // Order matters: a Mac UA also contains "Mac OS X" on iPads, and Android contains
+  // "Linux", so the mobile cases are excluded before falling through to desktop.
+  var key = 'win';
+  if (/Android/i.test(ua)) key = 'linux';
+  else if (/Macintosh|Mac OS X/i.test(ua)) key = 'mac';
+  else if (/Linux|X11/i.test(ua)) key = 'linux';
+  var pick = builds[key];
+  btn.textContent = 'Download for ' + pick.label;
+  btn.setAttribute('href', BASE + pick.file);
+  btn.setAttribute('data-goatcounter-click', pick.event);
+  if (other) {
+    var rest = Object.keys(builds).filter(function (k) { return k !== key; });
+    other.innerHTML = 'Also on ' + rest.map(function (k) {
+      var b = builds[k];
+      return '<a href="' + BASE + b.file + '" data-goatcounter-click="' + b.event + '">' + b.label + '</a>';
+    }).join(' and ') + '.';
+  }
+})();
+</script>
 <script src="site-preferences.js"></script>
 
 <!-- PeerPush badge -->
