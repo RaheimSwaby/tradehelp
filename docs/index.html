@@ -145,7 +145,11 @@
   /* Demoted to a text link: with three download buttons, a fourth ghost button of
      equal weight made it unclear which one was the actual next step. */
   .hero-secondary{margin:1rem 0 0;font-size:.9rem}
-  .hero-secondary a{color:#b5b0a8}
+  /* The other-platform links inherited the surrounding grey and did not read as
+     links at all. Underlined rather than coloured, so they stay quieter than the
+     button while still looking clickable. */
+  .hero-secondary a{color:#d4d0c8;text-decoration:underline;text-underline-offset:2px;text-decoration-color:rgba(255,255,255,.35)}
+  .hero-secondary a:hover{color:#f0ede6;text-decoration-color:#d4a853}
   .btn{padding:.7rem 1.6rem;border-radius:4px;font-weight:600;font-size:.95rem;display:inline-block;transition:background .15s,color .15s}
   .btn-primary{background:#d4a853;color:#0b0b0c}
   .btn-primary:hover{background:#e0b85c;text-decoration:none}
@@ -175,8 +179,13 @@
 
   /* video — tour.mp4 is square (1920x1920), so the frame takes its height from the
      file rather than forcing 16/9, which pillarboxed it against black bars. */
-  .video-wrap{max-width:640px;margin:0 auto 60px;border-radius:4px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.4);background:#1a1a1d}
-  .video-wrap video{display:block;width:100%;height:auto}
+  /* tour.mp4 is square (1920x1920). Without an aspect ratio the element has no
+     intrinsic size until metadata arrives, so the box collapsed to the browser
+     default of 150px tall and then jumped once the video loaded. Declaring 1/1 here
+     and width/height on the element itself reserves the correct space up front, and
+     keeps the frame square rather than squashed if the file never loads. */
+  .video-wrap{max-width:640px;margin:0 auto 60px;border-radius:4px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.4);background:#1a1a1d;aspect-ratio:1/1}
+  .video-wrap video{display:block;width:100%;height:100%;object-fit:contain}
 
   /* ── features ── */
   .features{padding-block:3rem 4rem}
@@ -420,7 +429,7 @@
 <div class="video-wrap">
   <!-- Relative path: tour.mp4 ships in docs/ and is served from the site root.
        Autoplay only works muted; controls stay so anyone can unmute or pause it. -->
-  <video id="tourVideo" controls autoplay muted loop playsinline preload="metadata"
+  <video id="tourVideo" width="1920" height="1920" controls autoplay muted loop playsinline preload="metadata"
          aria-label="TradeHelp promo video">
     <source src="tour.mp4" type="video/mp4">
     <a href="tour.mp4">Watch the TradeHelp promo video</a> (your browser can't play the embedded video).
