@@ -443,7 +443,11 @@ export function initDb() {
 
   db.prepare('INSERT OR IGNORE INTO goals (id, weekly, monthly) VALUES (1, 500, 2000)').run()
 
-  const profileSeedKey = '_instrumentProfilesSeededV1'
+  // Bumped to V2 when the forex profiles were added. The seed runs once per key, so a
+  // database that had already set V1 would never have seen them. Re-running is safe:
+  // the insert is OR IGNORE and both id and symbol are unique, so any profile the
+  // trader has edited is left as it is and only the genuinely new symbols land.
+  const profileSeedKey = '_instrumentProfilesSeededV2'
   if (db.prepare('SELECT value FROM settings WHERE key = ?').get(profileSeedKey)?.value !== 'true') {
     const seedProfile = db.prepare(`INSERT OR IGNORE INTO instrument_profiles
       (id,symbol,name,assetClass,tickSize,tickValue,quantityStep,createdAt,updatedAt)
