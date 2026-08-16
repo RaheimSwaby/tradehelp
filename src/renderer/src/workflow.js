@@ -11,7 +11,27 @@ const PROFILE_ROWS = [
   ['MCL', 'Micro Crude Oil', 'Futures', 0.01, 1, 1],
   ['GC', 'Gold', 'Futures', 0.1, 10, 1],
   ['MGC', 'Micro Gold', 'Futures', 0.1, 1, 1],
-  ['STOCK', 'Generic stock', 'Stock', 0.01, 0.01, 1]
+  ['STOCK', 'Generic stock', 'Stock', 0.01, 0.01, 1],
+  // Forex, sized in standard lots (100,000 units). Only pairs quoted in USD are
+  // listed: their pip value is fixed at $10 per lot whatever the price, so
+  // tickValue/tickSize converts exactly, the same way it does for a futures tick.
+  // Pairs where USD is the base (USDJPY, USDCAD, USDCHF) and crosses (EURJPY) have a
+  // pip value that moves with the rate, so a fixed profile would quietly drift and
+  // they are deliberately left out until there is a rate to convert with.
+  // quantityStep is 0.01 so mini and micro lots size correctly.
+  ['EURUSD', 'Euro / US Dollar', 'Forex', 0.0001, 10, 0.01],
+  ['GBPUSD', 'British Pound / US Dollar', 'Forex', 0.0001, 10, 0.01],
+  ['AUDUSD', 'Australian Dollar / US Dollar', 'Forex', 0.0001, 10, 0.01],
+  ['NZDUSD', 'New Zealand Dollar / US Dollar', 'Forex', 0.0001, 10, 0.01],
+  // JPY-quoted pairs. Every one of them is 1,000 JPY per pip per standard lot, so
+  // they share a single dollar value, but that value is 1000 / USDJPY and therefore
+  // moves with the rate. Seeded at a USDJPY of 150, which is roughly $6.67 a pip, and
+  // named so the trader can see it is an estimate rather than a constant. At USDJPY
+  // 140 the true figure is $7.14 and at 160 it is $6.25, so anyone sizing tightly
+  // should edit the tick value under Settings, Instrument profiles.
+  ['USDJPY', 'US Dollar / Japanese Yen (pip value approx, USDJPY 150)', 'Forex', 0.01, 6.67, 0.01],
+  ['GBPJPY', 'British Pound / Japanese Yen (pip value approx, USDJPY 150)', 'Forex', 0.01, 6.67, 0.01],
+  ['EURJPY', 'Euro / Japanese Yen (pip value approx, USDJPY 150)', 'Forex', 0.01, 6.67, 0.01]
 ]
 
 export const INSTRUMENT_PROFILE_DEFAULTS = Object.freeze(Object.fromEntries(PROFILE_ROWS.map(([symbol, name, assetClass, tickSize, tickValue, quantityStep]) => [symbol, Object.freeze({
@@ -24,6 +44,18 @@ export const PLAN_SCORE_VERSION = 1
 export function instrumentRootSymbol(value) {
   const symbol = String(value || '').trim().toUpperCase().replace(/^\//, '')
   if (INSTRUMENT_PROFILE_DEFAULTS[symbol]) return symbol
+
+  // Forex is written every which way: EUR/USD, EURUSD.a, $EURUSD, EURUSDm. Strip the
+  // punctuation and match on the six letter pair at the front, so a broker suffix
+  // does not cost the trader their conversion. Kept separate from the futures rule
+  // below, which requires a digit after the root for the month code and would treat
+  // a letter suffix as a different instrument.
+  const letters = symbol.replace(/[^A-Z0-9]/g, '')
+  const forex = Object.keys(INSTRUMENT_PROFILE_DEFAULTS)
+    .filter((key) => INSTRUMENT_PROFILE_DEFAULTS[key].assetClass === 'Forex')
+    .find((key) => letters.startsWith(key))
+  if (forex) return forex
+
   return Object.keys(INSTRUMENT_PROFILE_DEFAULTS)
     .filter((key) => key !== 'STOCK')
     .sort((a, b) => b.length - a.length)

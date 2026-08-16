@@ -397,6 +397,28 @@ function ReleaseNotesPanel() {
 const BLANK_PROFILE = { symbol: '', name: '', assetClass: 'Futures', tickSize: '', tickValue: '', quantityStep: '1' }
 
 function InstrumentProfilesPanel({ profiles = [], onAdd, onUpdate, onDelete }) {
+  // Filters are derived from the asset classes actually present rather than a fixed
+  // list, so a chip never offers a category with nothing behind it, and any class a
+  // trader invents on a custom profile gets one for free.
+  const [assetFilter, setAssetFilter] = useState('All')
+  const assetClasses = useMemo(() => {
+    const counts = new Map()
+    for (const p of profiles) {
+      const key = String(p.assetClass || '').trim() || 'Other'
+      counts.set(key, (counts.get(key) || 0) + 1)
+    }
+    return [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+  }, [profiles])
+  const visible = useMemo(() => {
+    const list = assetFilter === 'All'
+      ? profiles
+      : profiles.filter((p) => (String(p.assetClass || '').trim() || 'Other') === assetFilter)
+    // Group by class, then symbol, so the list reads in a stable order either way.
+    return [...list].sort((a, b) =>
+      String(a.assetClass || '').localeCompare(String(b.assetClass || '')) ||
+      String(a.symbol || '').localeCompare(String(b.symbol || '')))
+  }, [profiles, assetFilter])
+
   const [editing, setEditing] = useState(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -433,8 +455,22 @@ function InstrumentProfilesPanel({ profiles = [], onAdd, onUpdate, onDelete }) {
     }>
       <p className="text-xs mb-3" style={{ color: T.faint }}>Tick economics drive plan sizing and multi-fill P&amp;L. Futures contracts match their root profile; a generic stock fallback is used only when explicitly selected.</p>
       {error && <div className="rounded-md px-3 py-2 mb-3 text-xs" style={{ color: T.down, border: `1px solid ${T.down}`, background: T.surface2 }}>{error}</div>}
+      {assetClasses.length > 1 && (
+        <div className="th-profile-filters flex flex-wrap gap-1.5 mb-3">
+          {[['All', profiles.length], ...assetClasses].map(([label, count]) => {
+            const on = assetFilter === label
+            return (
+              <button key={label} type="button" onClick={() => setAssetFilter(label)}
+                className="rounded-md px-2.5 py-1 text-xs"
+                style={{ background: on ? T.accentSoft : 'transparent', color: on ? T.accentText : T.dim, border: `1px solid ${on ? T.accent : T.line}` }}>
+                {label} <span style={{ color: T.faint }}>{count}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
       <div className="space-y-1.5">
-        {profiles.map((profile) => (
+        {visible.map((profile) => (
           <div key={profile.id} className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 items-center rounded-lg px-3 py-2 text-xs" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
             <div className="min-w-0"><strong>{profile.symbol}</strong> · <span style={{ color: T.dim }}>{profile.name || profile.assetClass || 'Custom'}</span><div style={{ ...mono, color: T.faint }}>tick {profile.tickSize} = {fmtProfileMoney(profile.tickValue)} · step {profile.quantityStep}</div></div>
             <div className="flex gap-2">

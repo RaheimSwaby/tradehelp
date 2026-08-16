@@ -19,6 +19,18 @@ export const HELP_SECTIONS = [
         a: 'Yes. Settings → Journal preferences → Simple journal mode hides the price and risk fields so you can log a trade in under a minute. You keep screenshots, notes and emotion tags.'
       },
       {
+        q: 'Can I journal forex?',
+        a: 'Yes. Log the pair as the symbol and size in standard lots, so 0.10 is a mini lot and 0.01 a micro. EURUSD, GBPUSD, AUDUSD, NZDUSD, USDJPY, GBPJPY and EURJPY all have built-in instrument profiles, so a stop entered in points converts to dollars for you. Broker suffixes and separators are handled, so EUR/USD, EURUSD.a and EURUSDm all match the same profile.'
+      },
+      {
+        q: 'Are the yen pair conversions exact?',
+        a: 'No, and it is worth knowing why. When a pair is quoted in US dollars, as EURUSD is, a pip is always worth $10 per standard lot whatever the price. Yen pairs are 1,000 yen per pip instead, so the dollar value depends on USDJPY: about $6.67 when it trades at 150, $7.14 at 140, $6.25 at 160. The built-in profiles are seeded at 150 and labelled as approximate. If you size tightly, edit the tick value under Settings, Instrument profiles, or enter your risk in dollars rather than points.'
+      },
+      {
+        q: 'What is an instrument profile for?',
+        a: 'It turns a stop measured in points or pips into a dollar risk. Each profile stores a tick size and what one tick is worth, and TradeHelp matches it from the symbol you type, including futures month codes such as ESZ4. Futures and the major forex pairs are built in; anything else you can add under Settings, Instrument profiles.'
+      },
+      {
         q: 'Can I import trades from my broker?',
         a: 'Journal tab → Import CSV. Exports from NinjaTrader, Tradovate and TopstepX are auto-detected and the columns map themselves. Duplicates are skipped if you import the same file twice, and you can assign a whole batch to one prop account.'
       },
