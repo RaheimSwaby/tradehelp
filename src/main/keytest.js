@@ -1,4 +1,6 @@
 // Validates a pasted API key by making one cheap request to the service.
+import { ANTHROPIC_BASE_URL, anthropicHeaders } from '../renderer/src/aiProviders.js'
+
 const trim = (u) => String(u || '').replace(/\/+$/, '')
 
 export async function testKey({ type, key, url } = {}) {
@@ -21,6 +23,14 @@ export async function testKey({ type, key, url } = {}) {
       const r = await fetch(`${trim(url)}/models`, { headers: { Authorization: `Bearer ${key}` } })
       if (r.ok) return { ok: true, msg: '✓ Cloud key works.' }
       return { ok: false, msg: `✗ Cloud key rejected (${r.status}).` }
+    }
+    if (type === 'anthropic') {
+      // Listing models is the cheapest authenticated call Claude offers:
+      // it proves the key without spending a single token.
+      const r = await fetch(`${ANTHROPIC_BASE_URL}/models?limit=1`, { headers: anthropicHeaders(key) })
+      if (r.ok) return { ok: true, msg: '✓ Claude key works.' }
+      if (r.status === 401) return { ok: false, msg: '✗ Claude rejected that key.' }
+      return { ok: false, msg: `✗ Claude key rejected (${r.status}).` }
     }
     return { ok: false, msg: 'Unknown key type.' }
   } catch {

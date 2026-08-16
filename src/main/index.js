@@ -297,6 +297,8 @@ function registerIpc() {
     return result
   })
   ipcMain.handle('trades:delete', (_e, id) => db.deleteTrade(id))
+  ipcMain.handle('trades:deleteMany', (_e, ids) => db.deleteTrades(ids))
+  ipcMain.handle('trades:deletionSummary', (_e, ids) => db.tradeDeletionSummary(ids))
   ipcMain.handle('trades:demoCount', () => db.countDemoTrades())
   ipcMain.handle('trades:clearDemo', () => { db.clearDemoTrades(); return db.listTrades() })
   ipcMain.handle('imports:batches', () => db.listImportBatches())

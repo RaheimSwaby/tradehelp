@@ -4,11 +4,16 @@ import { Plus, Trash2, Upload, Paperclip, X, Pencil, ImagePlus, Video, ChevronLe
 import { T, mono, inputStyle, withAlpha } from '../theme.js'
 import { fmt$, fmtN, nowLocalInput, parseLocal, holdMs, fmtDuration, EMOTIONS, SETUPS, WIN_REASONS, LOSS_REASONS, SELF_GRADES, pad2, MONTHS, downscale, fileToDataUrl } from '../utils.js'
 import { Field, Panel, GradeChip } from '../components/Shared.jsx'
+import { BulkDeleteBar } from '../components/BulkDeleteBar.jsx'
 import { ImportModal } from '../widgets/ImportModal.jsx'
 import { ImportCenterModal } from '../widgets/ImportCenterModal.jsx'
 import { AnnotateModal } from '../components/AnnotateModal.jsx'
 import { describeJournalDrilldown, matchesJournalDrilldown, matchesJournalFilters, parseJournalQuery } from '../journalSearch.js'
-import { averageCostFillPreview, calculatePointRisk, selectInstrumentProfile, synthesizeTradeFills } from '../workflow.js'
+import { achievedR, averageCostFillPreview, calculatePointRisk, isBreakEven, looksLikeBreakEven, plannedRR, selectInstrumentProfile, synthesizeTradeFills } from '../workflow.js'
+// Achieved R reads as a signed multiple (+2.0R, -1.0R) rather than the 1:N ratio
+// used for the plan, because the sign is the whole point of the column.
+const fmtR = (value) => (value == null ? '—' : `${value > 0 ? '+' : ''}${value.toFixed(1)}R`)
+const rTone = (value) => (value == null ? T.faint : value > 0.05 ? T.up : value < -0.05 ? T.down : T.dim)
 
 const NO_TRADE_REASONS = [
   'Followed my rules — no clean setup',
@@ -37,12 +42,12 @@ function attachmentTitle(trade) {
 }
 
 /* ───────── journal ───────── */
-export function Journal({ trades, commitments = [], onAdd, onUpdate, onRemove, onNotes, onImport, onRollbackImport, accounts = [], profiles = [], savedSearches = [], onAddSavedSearch, onUpdateSavedSearch, onDeleteSavedSearch, onRefreshSavedSearches, settings, onSaveSettings, dayLogs = [], onAddDayLog, onDeleteDayLog, drilldown = null, onConsumeDrilldown }) {
+export function Journal({ trades, commitments = [], onAdd, onUpdate, onRemove, onRemoveMany, onNotes, onImport, onRollbackImport, accounts = [], profiles = [], savedSearches = [], onAddSavedSearch, onUpdateSavedSearch, onDeleteSavedSearch, onRefreshSavedSearches, settings, onSaveSettings, dayLogs = [], onAddDayLog, onDeleteDayLog, drilldown = null, onConsumeDrilldown }) {
   const blank = {
     symbol: '', direction: 'Long', entry: '', exit: '', stop: '', target: '', size: '', riskAmount: '',
     riskPoints: '', rewardPoints: '', riskMode: 'price', analysisTimeframe: '', entryTimeframe: '',
     managementTimeframe: '', pnl: '', fees: '', emotion: 'Neutral', setup: 'Pullback', notes: '',
-    entryTime: nowLocalInput(), exitTime: nowLocalInput(), reason: '', account: '', selfSetup: '', selfExec: ''
+    entryTime: nowLocalInput(), exitTime: nowLocalInput(), reason: '', account: '', selfSetup: '', selfExec: '', breakEven: ''
   }
   const [f, setF] = useState(blank)
   const [images, setImages] = useState([])
@@ -240,6 +245,21 @@ export function Journal({ trades, commitments = [], onAdd, onUpdate, onRemove, o
 
   const [page, setPage] = useState(0)
   const [pageSize, setPageSize] = useState(20)
+  const [selectedIds, setSelectedIds] = useState([])
+  // Anything selected that no longer exists is dropped, so a deletion elsewhere
+  // can't leave the bar offering to delete rows that are already gone.
+  useEffect(() => {
+    setSelectedIds((current) => {
+      if (!current.length) return current
+      const live = new Set(trades.map((t) => String(t.id)))
+      const kept = current.filter((id) => live.has(id))
+      return kept.length === current.length ? current : kept
+    })
+  }, [trades])
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds])
+  const toggleSelected = (id) => setSelectedIds((current) => (
+    current.includes(String(id)) ? current.filter((x) => x !== String(id)) : [...current, String(id)]
+  ))
   useEffect(() => {
     if (!drilldown?.id || consumedDrilldownRef.current === drilldown.id) return
     consumedDrilldownRef.current = drilldown.id
@@ -346,6 +366,15 @@ export function Journal({ trades, commitments = [], onAdd, onUpdate, onRemove, o
   const calculatedStop = pointPlan.stop || null
   const calculatedTarget = pointPlan.target || null
   const derivedRiskAmount = pointPlan.calculated ? pointPlan.riskAmount : null
+  // What the band would decide from the numbers currently in the form. Net of
+  // fees, matching how the trade is actually saved, because a scratch that pays
+  // commission is exactly the case the band exists to catch.
+  const autoBreakEven = useMemo(() => isBreakEven({
+    pnl: (f.pnl !== '' ? parseFloat(f.pnl) || 0 : 0) - (parseFloat(f.fees) || 0),
+    riskAmount: f.riskAmount !== '' ? parseFloat(f.riskAmount) || 0 : (derivedRiskAmount ?? 0),
+    entry: parseFloat(f.entry) || 0, stop: parseFloat(f.stop) || 0,
+    size: parseFloat(f.size) || 0, symbol: f.symbol
+  }), [f.pnl, f.fees, f.riskAmount, f.entry, f.stop, f.size, f.symbol, derivedRiskAmount])
   const genericStockProfile = useMemo(() => profiles.find((profile) => String(profile.symbol).toUpperCase() === 'STOCK') || null, [profiles])
   // Offer every configured profile — the symbol's own match first, generic stock last.
   // A mismatched pick is allowed but warned about below: the wrong tick economics
@@ -442,7 +471,10 @@ export function Journal({ trades, commitments = [], onAdd, onUpdate, onRemove, o
       const grossPnl = f.pnl !== '' ? parseFloat(f.pnl) : (derivedPnl ?? 0)
       const fees = parseFloat(f.fees) || 0
       const pnl = (isNaN(grossPnl) ? 0 : grossPnl) - fees // store P&L net of fees
-      const rr = derivedRR ?? (f.riskAmount && f.pnl ? Math.abs(parseFloat(f.pnl)) / Math.abs(parseFloat(f.riskAmount)) : 0)
+      // Planned reward-to-risk only. The outcome is not folded in here: achieved
+      // R is derived from P&L and risk at read time, so this column can no longer
+      // report a 1:3 plan on a trade that stopped out.
+      const rr = derivedRR ?? 0
       const riskAmount = f.riskAmount !== '' ? parseFloat(f.riskAmount) : (derivedRiskAmount ?? 0)
       const base = {
         symbol: f.symbol.trim().toUpperCase(), direction: f.direction,
@@ -459,6 +491,7 @@ export function Journal({ trades, commitments = [], onAdd, onUpdate, onRemove, o
         // In simple mode there's no separate exit time — mirror the entry time so the calendar/heatmap still place it.
         exitTime: (compact ? f.entryTime : f.exitTime) ? (compact ? f.entryTime : f.exitTime).replace('T', ' ') : '',
         reason: f.reason, account: f.account, selfSetup: f.selfSetup, selfExec: f.selfExec,
+          breakEven: f.breakEven,
         ...(fillsEnabled ? { fills: explicitFills } : {})
       }
       const screenshots = images.map((im) => ({ dataUrl: im.dataUrl, tag: im.tag.trim(), caption: (im.labels || []).join(', ') }))
@@ -713,6 +746,26 @@ export function Journal({ trades, commitments = [], onAdd, onUpdate, onRemove, o
             <Field label="Fees / commissions $">
               <input style={inputStyle} className={inp} value={f.fees} onChange={set('fees')} inputMode="decimal" placeholder="0" />
             </Field>
+            {/* Manual wins. Untouched, it mirrors what the band would decide, so
+                the trader sees the classification before it is recorded. */}
+            <label className="flex items-start gap-2 text-sm cursor-pointer col-span-full" style={{ color: T.text }}>
+              <input type="checkbox" className="mt-0.5"
+                checked={f.breakEven === 'yes' || (f.breakEven === '' && autoBreakEven)}
+                onChange={(e) => setF((p) => ({ ...p, breakEven: e.target.checked ? 'yes' : 'no' }))} />
+              <span>Scratched at break-even
+                <span className="block text-xs mt-0.5" style={{ color: T.faint }}>
+                  {f.breakEven === ''
+                    ? (autoBreakEven ? 'Detected from the result. Tick or untick to decide it yourself.' : 'Not detected. Tick if you took this off flat.')
+                    : 'Your call, kept as set.'}
+                </span>
+              </span>
+            </label>
+            {f.breakEven === '' && !autoBreakEven && looksLikeBreakEven(f.notes) && (
+              <button type="button" onClick={() => setF((p) => ({ ...p, breakEven: 'yes' }))}
+                className="text-xs text-left col-span-full" style={{ color: T.accentText }}>
+                Your notes mention break-even — mark this trade as one?
+              </button>
+            )}
           </div>
         )}
         </section>
@@ -917,20 +970,42 @@ export function Journal({ trades, commitments = [], onAdd, onUpdate, onRemove, o
           <div className="px-4 py-16 text-center text-sm" style={{ color: T.dim }}>No trades match your search.</div>
         ) : (
           <div className="overflow-x-auto">
+              <BulkDeleteBar
+                selectedIds={selectedIds}
+                matchingIds={ordered.map((t) => String(t.id))}
+                onClearSelection={() => setSelectedIds([])}
+                onConfirmDelete={(ids) => onRemoveMany?.(ids)}
+              />
             <table className="w-full text-sm" style={mono}>
               <thead>
                 <tr style={{ color: T.faint }} className="text-xs uppercase tracking-wider">
                   {/* Numbers sit right-aligned so decimal points line up down the column —
                       with tabular-nums that makes magnitude scannable at a glance. */}
-                  {['Time', 'Symbol', 'Dir', 'P&L', 'Grade', 'R:R', 'Held', 'Setup / strategy', 'Emotion'].map((h) => (
-                    <th key={h} className={`font-normal px-3 py-2 ${['P&L', 'R:R', 'Held'].includes(h) ? 'text-right' : 'text-left'}`}>{h}</th>
+                  {/* Selects this page only. Deleting everything that matches the
+                      filter is a separate, explicitly counted action in the bar. */}
+                  <th className="font-normal px-3 py-2 w-8">
+                    <input type="checkbox" aria-label="Select all on this page"
+                      checked={pageRows.length > 0 && pageRows.every((t) => selectedSet.has(String(t.id)))}
+                      onChange={(e) => {
+                        const ids = pageRows.map((t) => String(t.id))
+                        setSelectedIds((current) => (e.target.checked
+                          ? [...new Set([...current, ...ids])]
+                          : current.filter((id) => !ids.includes(id))))
+                      }} />
+                  </th>
+                  {['Time', 'Symbol', 'Dir', 'P&L', 'Grade', 'R:R planned', 'R actual', 'Held', 'Setup / strategy', 'Emotion'].map((h) => (
+                    <th key={h} className={`font-normal px-3 py-2 whitespace-nowrap ${['P&L', 'R:R planned', 'R actual', 'Held'].includes(h) ? 'text-right' : 'text-left'}`}>{h}</th>
                   ))}
                   <th className="text-right font-normal px-3 py-2 sticky right-0" style={{ background: T.surface }}>Edit · Del</th>
                 </tr>
               </thead>
               <tbody>
                 {pageRows.map((t) => (
-                  <tr key={t.id} className="cursor-pointer" style={{ borderTop: `1px solid ${T.line}` }} onDoubleClick={() => onNotes(t)}>
+                  <tr key={t.id} className="cursor-pointer" style={{ borderTop: `1px solid ${T.line}`, background: selectedSet.has(String(t.id)) ? T.surface2 : 'transparent' }} onDoubleClick={() => onNotes(t)}>
+                    <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                      <input type="checkbox" aria-label={`Select ${t.symbol} trade`}
+                        checked={selectedSet.has(String(t.id))} onChange={() => toggleSelected(t.id)} />
+                    </td>
                     <td className="px-3 py-2 whitespace-nowrap" style={{ color: T.dim, boxShadow: `inset 3px 0 0 ${(Number(t.pnl) || 0) >= 0 ? T.up : T.down}` }}>{t.timestamp}</td>
                     <td className="px-3 py-2 font-semibold">
                       <span className="inline-flex items-center gap-1">
@@ -945,7 +1020,10 @@ export function Journal({ trades, commitments = [], onAdd, onUpdate, onRemove, o
                     <td className="px-3 py-2" style={{ color: t.direction === 'Long' ? T.up : T.down }}>{t.direction}</td>
                     <td className="px-3 py-2 text-right font-semibold" style={{ color: t.pnl >= 0 ? T.up : T.down }}>{fmt$(t.pnl)}</td>
                     <td className="px-3 py-2"><GradeChip t={t} /></td>
-                    <td className="px-3 py-2 text-right" style={{ color: T.dim }}>{t.rr ? `1:${fmtN(t.rr, 1)}` : '—'}</td>
+                    <td className="px-3 py-2 text-right" style={{ color: T.dim }}>{plannedRR(t) ? `1:${fmtN(plannedRR(t), 1)}` : '—'}</td>
+                    {/* Signed, so a two-R win and a two-R loss can never read alike.
+                        Coloured with the same up/down tokens as P&L. */}
+                    <td className="px-3 py-2 text-right tabular-nums" style={{ color: isBreakEven(t) ? T.dim : rTone(achievedR(t)) }}>{isBreakEven(t) ? 'BE' : fmtR(achievedR(t))}</td>
                     <td className="px-3 py-2 text-right" style={{ color: T.dim }}>{fmtDuration(holdMs(t)) || '—'}</td>
                     <td className="px-3 py-2" style={{ color: T.dim }}>{t.setup}</td>
                     <td className="px-3 py-2" style={{ color: T.dim }}>{t.emotion}</td>

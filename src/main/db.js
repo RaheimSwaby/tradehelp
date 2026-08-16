@@ -3,7 +3,7 @@ import { app } from 'electron'
 import { basename, extname, join } from 'path'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync, unlinkSync, readdirSync } from 'fs'
 import { randomUUID } from 'crypto'
-import { INSTRUMENT_PROFILE_DEFAULT_LIST, instrumentRootSymbol } from '../renderer/src/workflow.js'
+import { INSTRUMENT_PROFILE_DEFAULT_LIST, instrumentRootSymbol, plannedRR } from '../renderer/src/workflow.js'
 
 let db
 let imagesDir
@@ -45,7 +45,8 @@ export function initDb() {
       entryTime TEXT, exitTime TEXT, reason TEXT, source TEXT, account TEXT,
       selfSetup TEXT, selfExec TEXT,
       analysisTimeframe TEXT, entryTimeframe TEXT, managementTimeframe TEXT,
-      riskPoints REAL, rewardPoints REAL, riskMode TEXT
+      riskPoints REAL, rewardPoints REAL, riskMode TEXT,
+      breakEven TEXT
     );
     CREATE TABLE IF NOT EXISTS trade_fills (
       id TEXT PRIMARY KEY,
@@ -386,7 +387,7 @@ export function initDb() {
     ['entryTime', 'TEXT'], ['exitTime', 'TEXT'], ['reason', 'TEXT'], ['source', 'TEXT'], ['account', 'TEXT'],
     ['fees', 'REAL'], ['selfSetup', 'TEXT'], ['selfExec', 'TEXT'], ['analysisTimeframe', 'TEXT'],
     ['entryTimeframe', 'TEXT'], ['managementTimeframe', 'TEXT'], ['riskPoints', 'REAL'],
-    ['rewardPoints', 'REAL'], ['riskMode', 'TEXT']
+    ['rewardPoints', 'REAL'], ['riskMode', 'TEXT'], ['breakEven', 'TEXT']
   ]) {
     if (!tradeCols.has(name)) db.exec(`ALTER TABLE trades ADD COLUMN ${name} ${type}`)
   }
@@ -675,15 +676,16 @@ function buildRow(t) {
     selfSetup: String(t.selfSetup || ''), selfExec: String(t.selfExec || ''),
     analysisTimeframe: String(t.analysisTimeframe || ''), entryTimeframe: String(t.entryTimeframe || ''),
     managementTimeframe: String(t.managementTimeframe || ''), riskPoints: num(t.riskPoints),
-    rewardPoints: num(t.rewardPoints), riskMode: t.riskMode === 'points' ? 'points' : 'price'
+    rewardPoints: num(t.rewardPoints), riskMode: t.riskMode === 'points' ? 'points' : 'price',
+    breakEven: ['yes', 'no'].includes(String(t.breakEven || '').toLowerCase()) ? String(t.breakEven).toLowerCase() : ''
   }
 }
 
 const INSERT_TRADE = `
   INSERT INTO trades
-    (id, symbol, direction, entry, exit, stop, target, size, riskAmount, pnl, fees, rr, emotion, setup, notes, timestamp, entryTime, exitTime, reason, source, account, selfSetup, selfExec, analysisTimeframe, entryTimeframe, managementTimeframe, riskPoints, rewardPoints, riskMode)
+    (id, symbol, direction, entry, exit, stop, target, size, riskAmount, pnl, fees, rr, breakEven, emotion, setup, notes, timestamp, entryTime, exitTime, reason, source, account, selfSetup, selfExec, analysisTimeframe, entryTimeframe, managementTimeframe, riskPoints, rewardPoints, riskMode)
   VALUES
-    (@id, @symbol, @direction, @entry, @exit, @stop, @target, @size, @riskAmount, @pnl, @fees, @rr, @emotion, @setup, @notes, @timestamp, @entryTime, @exitTime, @reason, @source, @account, @selfSetup, @selfExec, @analysisTimeframe, @entryTimeframe, @managementTimeframe, @riskPoints, @rewardPoints, @riskMode)
+    (@id, @symbol, @direction, @entry, @exit, @stop, @target, @size, @riskAmount, @pnl, @fees, @rr, @breakEven, @emotion, @setup, @notes, @timestamp, @entryTime, @exitTime, @reason, @source, @account, @selfSetup, @selfExec, @analysisTimeframe, @entryTimeframe, @managementTimeframe, @riskPoints, @rewardPoints, @riskMode)
 `
 
 function sanitizeTradeFills(tradeId, fills) {
@@ -1440,7 +1442,7 @@ export function updateTrade(t) {
   const tx = db.transaction(() => {
     db.prepare(`UPDATE trades SET
       symbol=@symbol, direction=@direction, entry=@entry, exit=@exit, stop=@stop, target=@target,
-      size=@size, riskAmount=@riskAmount, pnl=@pnl, fees=@fees, rr=@rr, emotion=@emotion, setup=@setup,
+      size=@size, riskAmount=@riskAmount, pnl=@pnl, fees=@fees, rr=@rr, breakEven=@breakEven, emotion=@emotion, setup=@setup,
       notes=@notes, timestamp=@timestamp, entryTime=@entryTime, exitTime=@exitTime,
       reason=@reason, source=@source, account=@account, selfSetup=@selfSetup, selfExec=@selfExec,
       analysisTimeframe=@analysisTimeframe, entryTimeframe=@entryTimeframe, managementTimeframe=@managementTimeframe,
@@ -1456,28 +1458,79 @@ export function updateTrade(t) {
   return listTrades()
 }
 
-export function deleteTrade(id) {
-  const key = String(id)
-  for (const img of db.prepare('SELECT file FROM trade_images WHERE tradeId = ?').all(key)) {
-    try { unlinkSync(join(imagesDir, img.file)) } catch {}
+const normalizeTradeIds = (ids) => [...new Set((Array.isArray(ids) ? ids : [ids]).map((id) => String(id)))].filter(Boolean)
+
+// What a deletion would destroy, counted before anything is touched, so the
+// confirmation can name it. The attachment counts matter more than the trade
+// count: rows can be re-imported from a broker, but the screenshot and recording
+// files are unlinked from disk and are not recoverable from the app.
+export function tradeDeletionSummary(ids = []) {
+  const keys = normalizeTradeIds(ids)
+  const summary = { trades: 0, images: 0, videos: 0 }
+  if (!keys.length) return summary
+  const countTrade = db.prepare('SELECT COUNT(*) n FROM trades WHERE id = ?')
+  const countImages = db.prepare('SELECT COUNT(*) n FROM trade_images WHERE tradeId = ?')
+  const countVideos = db.prepare('SELECT COUNT(*) n FROM trade_videos WHERE tradeId = ?')
+  for (const key of keys) {
+    summary.trades += countTrade.get(key)?.n || 0
+    summary.images += countImages.get(key)?.n || 0
+    summary.videos += countVideos.get(key)?.n || 0
   }
-  for (const video of db.prepare('SELECT file FROM trade_videos WHERE tradeId = ?').all(key)) {
-    try { unlinkSync(join(videosDir, video.file)) } catch {}
+  return summary
+}
+
+// One id or a thousand take the same path, so bulk and single deletion can never
+// drift apart. Statements are prepared once and run per id rather than building
+// an IN list, which keeps this correct past SQLite's bound-parameter limit.
+export function deleteTrades(ids = []) {
+  const keys = normalizeTradeIds(ids)
+  if (!keys.length) return listTrades()
+
+  // Files first and outside the transaction: unlinking cannot be rolled back, so
+  // there is nothing gained by holding the write lock while the disk works.
+  const imagesFor = db.prepare('SELECT file FROM trade_images WHERE tradeId = ?')
+  const videosFor = db.prepare('SELECT file FROM trade_videos WHERE tradeId = ?')
+  for (const key of keys) {
+    for (const img of imagesFor.all(key)) {
+      try { unlinkSync(join(imagesDir, img.file)) } catch {}
+    }
+    for (const video of videosFor.all(key)) {
+      try { unlinkSync(join(videosDir, video.file)) } catch {}
+    }
   }
+
   const now = new Date().toISOString()
-  const tx = db.transaction(() => {
-    db.prepare('DELETE FROM trade_images WHERE tradeId = ?').run(key)
-    db.prepare('DELETE FROM trade_videos WHERE tradeId = ?').run(key)
-    db.prepare('DELETE FROM trade_fills WHERE tradeId = ?').run(key)
-    db.prepare('DELETE FROM trading_session_trades WHERE tradeId = ?').run(key)
-    db.prepare(`DELETE FROM commitment_results WHERE tradeId = ? AND commitmentId IN
-      (SELECT id FROM coach_commitments WHERE status = 'active')`).run(key)
-    db.prepare("UPDATE trade_plans SET status = CASE WHEN status = 'executed' THEN 'locked' ELSE status END, linkedTradeId = '', resolvedAt = '', updatedAt = ? WHERE linkedTradeId = ?").run(now, key)
-    db.prepare('DELETE FROM trades WHERE id = ?').run(key)
-  })
-  tx()
+  const delImages = db.prepare('DELETE FROM trade_images WHERE tradeId = ?')
+  const delVideos = db.prepare('DELETE FROM trade_videos WHERE tradeId = ?')
+  const delFills = db.prepare('DELETE FROM trade_fills WHERE tradeId = ?')
+  const delSessionLinks = db.prepare('DELETE FROM trading_session_trades WHERE tradeId = ?')
+  const delResults = db.prepare(`DELETE FROM commitment_results WHERE tradeId = ? AND commitmentId IN
+    (SELECT id FROM coach_commitments WHERE status = 'active')`)
+  // Import rollback has always cleared this; single deletion did not, which left
+  // a sync record pointing at a trade that no longer exists.
+  const delBrokerSyncItem = db.prepare('DELETE FROM broker_sync_items WHERE tradeId = ?')
+  const detachPlans = db.prepare("UPDATE trade_plans SET status = CASE WHEN status = 'executed' THEN 'locked' ELSE status END, linkedTradeId = '', resolvedAt = '', updatedAt = ? WHERE linkedTradeId = ?")
+  const delTrade = db.prepare('DELETE FROM trades WHERE id = ?')
+
+  db.transaction(() => {
+    for (const key of keys) {
+      delImages.run(key)
+      delVideos.run(key)
+      delFills.run(key)
+      delSessionLinks.run(key)
+      delResults.run(key)
+      delBrokerSyncItem.run(key)
+      detachPlans.run(now, key)
+      delTrade.run(key)
+    }
+  })()
+
   refreshCommitmentResults()
   return listTrades()
+}
+
+export function deleteTrade(id) {
+  return deleteTrades([id])
 }
 
 export function getGoals() {
@@ -1497,6 +1550,11 @@ const SETTINGS_DEFAULTS = Object.freeze({
   cloudUrl: 'https://api.openai.com/v1',
   cloudModel: 'gpt-4o-mini',
   cloudKey: '',
+  // Claude speaks its own protocol, so it gets its own keys rather than
+  // reusing the OpenAI-compatible ones. No base URL: there is exactly one
+  // endpoint, and letting it be edited is how the 404s started.
+  anthropicKey: '',
+  anthropicModel: 'claude-opus-5',
   // Trade Mode: per-day circuit breaker + the trader's own pre-flight checklist.
   dailyGoal: '300',
   maxDailyLoss: '300',
@@ -2140,7 +2198,7 @@ function evaluateCommitment(c, t, dayPosition, dayPnlBefore = 0) {
   }
   if (c.ruleType === 'min_rr') {
     const min = Math.max(0, Number(c.ruleValue) || 0)
-    const rr = Number(t.rr) || 0
+    const rr = plannedRR(t)
     return { adhered: rr > 0 && rr >= min, detail: rr > 0 ? `R:R 1:${rr.toFixed(2)} · min 1:${min}` : 'No R:R recorded' }
   }
   if (c.ruleType === 'require_stop') {
@@ -2377,7 +2435,7 @@ const PORTABLE_TRADE_FIELDS = [
   'symbol', 'direction', 'entry', 'exit', 'stop', 'target', 'size', 'riskAmount', 'pnl', 'fees', 'rr',
   'emotion', 'setup', 'notes', 'timestamp', 'entryTime', 'exitTime', 'reason', 'source', 'account',
   'selfSetup', 'selfExec', 'analysisTimeframe', 'entryTimeframe', 'managementTimeframe',
-  'riskPoints', 'rewardPoints', 'riskMode'
+  'riskPoints', 'rewardPoints', 'riskMode', 'breakEven'
 ]
 
 function portableTradeIdentity(trade) {
@@ -2549,8 +2607,8 @@ export function restoreData(data) {
   const tx = db.transaction((d) => {
     if (Array.isArray(d.trades)) {
       const ins = db.prepare(`INSERT OR REPLACE INTO trades
-        (id, symbol, direction, entry, exit, stop, target, size, riskAmount, pnl, fees, rr, emotion, setup, notes, timestamp, entryTime, exitTime, reason, source, account, selfSetup, selfExec, analysisTimeframe, entryTimeframe, managementTimeframe, riskPoints, rewardPoints, riskMode)
-        VALUES (@id,@symbol,@direction,@entry,@exit,@stop,@target,@size,@riskAmount,@pnl,@fees,@rr,@emotion,@setup,@notes,@timestamp,@entryTime,@exitTime,@reason,@source,@account,@selfSetup,@selfExec,@analysisTimeframe,@entryTimeframe,@managementTimeframe,@riskPoints,@rewardPoints,@riskMode)`)
+        (id, symbol, direction, entry, exit, stop, target, size, riskAmount, pnl, fees, rr, breakEven, emotion, setup, notes, timestamp, entryTime, exitTime, reason, source, account, selfSetup, selfExec, analysisTimeframe, entryTimeframe, managementTimeframe, riskPoints, rewardPoints, riskMode)
+        VALUES (@id,@symbol,@direction,@entry,@exit,@stop,@target,@size,@riskAmount,@pnl,@fees,@rr,@breakEven,@emotion,@setup,@notes,@timestamp,@entryTime,@exitTime,@reason,@source,@account,@selfSetup,@selfExec,@analysisTimeframe,@entryTimeframe,@managementTimeframe,@riskPoints,@rewardPoints,@riskMode)`)
       for (const t of d.trades) ins.run(buildRow(t))
     }
     if (Array.isArray(d.instrumentProfiles)) {

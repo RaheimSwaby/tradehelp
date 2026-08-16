@@ -67,3 +67,111 @@ describe('AI request limits', () => {
     expect(full).toBe('Protect your size. Review first.')
   })
 })
+
+describe('Claude (Anthropic) provider', () => {
+  const settings = { provider: 'anthropic', anthropicKey: 'sk-ant-test', anthropicModel: 'claude-opus-5' }
+
+  it('posts to /messages with the headers Claude requires, not the OpenAI shape', async () => {
+    let url, options
+    vi.stubGlobal('fetch', vi.fn(async (u, o) => {
+      url = u; options = o
+      return { ok: true, json: async () => ({ content: [{ type: 'text', text: 'ok' }] }) }
+    }))
+
+    await chat(settings, { system: 'coach', messages: [{ role: 'user', content: 'hi' }], think: false })
+
+    // The 404 this provider exists to fix came from hitting /chat/completions.
+    expect(url).toBe('https://api.anthropic.com/v1/messages')
+    expect(url).not.toContain('chat/completions')
+    expect(options.headers['x-api-key']).toBe('sk-ant-test')
+    expect(options.headers['anthropic-version']).toBe('2023-06-01')
+    expect(options.headers.Authorization).toBeUndefined()
+
+    const body = JSON.parse(options.body)
+    // system is a top-level field; a role:'system' message is an OpenAI-ism.
+    expect(body.system).toBe('coach')
+    expect(body.messages).toEqual([{ role: 'user', content: 'hi' }])
+    expect(body.max_tokens).toBeGreaterThan(0)
+  })
+
+  it('reads the first text block, skipping thinking blocks', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ content: [{ type: 'thinking', thinking: 'hmm' }, { type: 'text', text: 'the answer' }] })
+    })))
+
+    expect(await chat(settings, { system: 's', messages: [], think: true })).toBe('the answer')
+  })
+
+  it('splits an image data URL into media type and bytes', async () => {
+    let body
+    vi.stubGlobal('fetch', vi.fn(async (_u, o) => {
+      body = JSON.parse(o.body)
+      return { ok: true, json: async () => ({ content: [{ type: 'text', text: 'ok' }] }) }
+    }))
+
+    await chat(settings, {
+      system: 's',
+      messages: [{ role: 'user', content: 'read this', images: ['data:image/png;base64,AAAB'] }],
+      think: false
+    })
+
+    expect(body.messages[0].content[0]).toEqual({
+      type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AAAB' }
+    })
+    // Image first, then the question about it.
+    expect(body.messages[0].content[1]).toEqual({ type: 'text', text: 'read this' })
+  })
+
+  it('names the setting to fix instead of surfacing a bare status code', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 401, json: async () => ({}) })))
+    await expect(chat(settings, { system: 's', messages: [], think: false })).rejects.toThrow(/rejected that API key/i)
+
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 404, json: async () => ({}) })))
+    await expect(chat(settings, { system: 's', messages: [], think: false })).rejects.toThrow(/no model called "claude-opus-5"/i)
+  })
+
+  it('streams text and routes reasoning to the thinking channel', async () => {
+    const events = [
+      'event: content_block_delta',
+      'data: {"type":"content_block_delta","delta":{"type":"thinking_delta","thinking":"weighing it"}}',
+      'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"Hold "}}',
+      'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"the line."}}',
+      'data: [DONE]'
+    ].join('\n')
+
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      body: {
+        getReader: () => {
+          let sent = false
+          return {
+            read: async () => (sent ? { done: true } : ((sent = true), { done: false, value: new TextEncoder().encode(events) }))
+          }
+        }
+      }
+    })))
+
+    const chunks = []; const thoughts = []
+    const answer = await chatStream(
+      settings,
+      { system: 's', messages: [], think: true },
+      (c) => chunks.push(c),
+      (t) => thoughts.push(t)
+    )
+
+    expect(answer).toBe('Hold the line.')
+    expect(chunks).toEqual(['Hold ', 'the line.'])
+    // Reasoning must never be folded into the coach's visible answer.
+    expect(thoughts).toEqual(['weighing it'])
+  })
+
+  it('returns a readable message when Claude declines rather than an empty reply', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ stop_reason: 'refusal', content: [] })
+    })))
+
+    expect(await chat(settings, { system: 's', messages: [], think: false })).toMatch(/declined/i)
+  })
+})

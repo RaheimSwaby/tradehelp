@@ -2,6 +2,7 @@ import { Trophy, Brain, Snowflake, Shield, Target, BookOpen, Camera, TrendingUp,
 import { TILT, REASONS, clamp, fmtN, holdMs, periodKey, pad2 } from './utils.js'
 import { TRADING_WINDOW_HISTORY_LIMITS } from './sessionClock.js'
 import { parsePeriodRetrospective } from './periodRetrospective.js'
+import { achievedR, plannedRR, tradeOutcome } from './workflow.js'
 
 const PERIOD_RETROSPECTIVE_MARKER = '<!-- tradehelp-period-retrospective:'
 
@@ -172,12 +173,23 @@ export function computeStats(trades) {
   const totalFees = sorted.reduce((a, t) => a + (Number(t.fees) || 0), 0)
   const grossProfit = wins.reduce((a, b) => a + b, 0)
   const grossLoss = Math.abs(losses.reduce((a, b) => a + b, 0))
-  const winRate = n ? (wins.length / n) * 100 : 0
+  const outcomes = sorted.map((t) => tradeOutcome(t))
+  const winCount = outcomes.filter((o) => o === 'win').length
+  const lossCount = outcomes.filter((o) => o === 'loss').length
+  const breakEvenCount = outcomes.filter((o) => o === 'breakeven').length
+  // Break-even trades leave the denominator entirely: a trade taken off flat
+  // neither proved nor disproved the edge, and counting it as a loss punished
+  // the trader for cutting risk.
+  const decided = winCount + lossCount
+  const winRate = decided ? (winCount / decided) * 100 : 0
   const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : (grossProfit > 0 ? Infinity : 0)
   const avgWin = wins.length ? grossProfit / wins.length : 0
   const avgLoss = losses.length ? grossLoss / losses.length : 0
   const expectancy = n ? totalPnl / n : 0
-  const rrs = sorted.map((t) => Number(t.rr)).filter((r) => r > 0)
+  const rrs = sorted.map((t) => plannedRR(t)).filter((r) => r > 0)
+  // Achieved R is signed, so losses pull the average down instead of inflating it.
+  const achievedRs = sorted.map((t) => achievedR(t)).filter((r) => r != null)
+  const avgAchievedR = achievedRs.length ? achievedRs.reduce((a, b) => a + b, 0) / achievedRs.length : 0
   const avgRR = rrs.length ? rrs.reduce((a, b) => a + b, 0) / rrs.length : 0
   const risks = sorted.map((trade) => Math.abs(Number(trade.riskAmount) || 0)).filter((risk) => risk > 0).sort((a, b) => a - b)
   const riskSample = risks.length
@@ -288,7 +300,7 @@ export function computeStats(trades) {
   const toReasonArr = (o) => Object.entries(o).map(([name, m]) => ({ name, n: m })).sort((a, b) => b.n - a.n)
 
   return {
-    n, totalPnl, totalFees, winRate, profitFactor, avgWin, avgLoss, expectancy, avgRR,
+    n, totalPnl, totalFees, winRate, winCount, lossCount, breakEvenCount, profitFactor, avgWin, avgLoss, expectancy, avgRR,
     maxDD, currentStreak, bestWin, worstLoss, equity, daily, activeDays,
     grossProfit, grossLoss, nonTiltStreak: ntCur, bestNonTilt: ntBest,
     reasonsWin: toReasonArr(reasonsWin), reasonsLoss: toReasonArr(reasonsLoss),
@@ -383,7 +395,7 @@ export function computeSelfGrade(trades) {
 // a letter. Callers must handle score === null.
 export function executionGrade(t) {
   const entry = Number(t.entry) || 0, stop = Number(t.stop) || 0
-  const pnl = Number(t.pnl) || 0, risk = Number(t.riskAmount) || 0, rr = Number(t.rr) || 0
+  const pnl = Number(t.pnl) || 0, risk = Number(t.riskAmount) || 0, rr = plannedRR(t)
 
   const parts = []
 
@@ -597,8 +609,10 @@ export function computePropFirm(trades, cfg) {
   // Trading performance over the same trades the evaluation is scored on. The size
   // scale is positive, so it never changes whether a trade counts as a win.
   const n = sorted.length
-  const wins = sorted.filter((t) => (Number(t.pnl) || 0) > 0).length
-  const winRate = n ? (wins / n) * 100 : 0
+  const propOutcomes = sorted.map((t) => tradeOutcome(t))
+  const wins = propOutcomes.filter((o) => o === 'win').length
+  const decidedProp = wins + propOutcomes.filter((o) => o === 'loss').length
+  const winRate = decidedProp ? (wins / decidedProp) * 100 : 0
   return { start, bal, netProfit, peak, curFloor, ddBuffer, maxDD, target, maxDaily, todayPnl, dailyRemaining, daysTraded, minDays, targetHit, daysHit, breached, floorBreached, dailyBreached, status, curve, n, wins, winRate }
 }
 

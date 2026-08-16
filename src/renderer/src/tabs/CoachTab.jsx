@@ -50,7 +50,7 @@ export function Coach({ trades, stats, settings, reviews = {}, playbook = [], da
   useEffect(() => { scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight) }, [msgs, busy, streamText, thinkingText])
   useEffect(() => () => cancelStreamRef.current?.(), [])
 
-  const modelLabel = settings?.provider === 'cloud' ? settings?.cloudModel : settings?.ollamaModel
+  const modelLabel = { cloud: settings?.cloudModel, anthropic: settings?.anthropicModel }[settings?.provider] ?? settings?.ollamaModel
   const showThinking = settings?.provider !== 'cloud' && (settings?.coachShowThinking === 'true' || settings?.coachShowThinking === true)
   const requestProfile = useMemo(() => coachRequestProfile(settings), [settings?.coachContextMode])
   const journalContext = useMemo(() => fullJournalContext(
@@ -58,7 +58,7 @@ export function Coach({ trades, stats, settings, reviews = {}, playbook = [], da
     { includeWritten, maxChars: requestProfile.maxChars }
   ), [trades, stats, settings, reviews, playbook, dayLogs, goals, payouts, commitments, includeWritten, requestProfile.maxChars])
   // Sub-2B models can't reliably read structured journal data and tend to fabricate trades.
-  const tinyModel = settings?.provider !== 'cloud' && [':0.5b', ':1b', ':1.5b', ':135m', ':360m', ':500m'].some((t) => String(modelLabel || '').toLowerCase().includes(t))
+  const tinyModel = settings?.provider === 'ollama' && [':0.5b', ':1b', ':1.5b', ':135m', ':360m', ':500m'].some((t) => String(modelLabel || '').toLowerCase().includes(t))
 
   async function ask(userText) {
     if (busy) return

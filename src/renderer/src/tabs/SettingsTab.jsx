@@ -514,7 +514,7 @@ function ModelSelect({ value, onChange, placeholder }) {
 
   const browse = useCallback(async () => {
     setLoading(true); setErr(null)
-    const res = await window.api.aiModels().catch(() => ({ ok: false, error: 'Cannot reach Ollama' }))
+    const res = await window.api.aiModels().catch(() => ({ ok: false, error: 'Cannot reach the model provider' }))
     setLoading(false)
     if (res.ok) setModels(res.models || [])
     else { setModels([]); setErr(res.error) }
@@ -630,7 +630,7 @@ function AppearanceLivePreview({ settings }) {
           <div className="th-preview-fields grid grid-cols-4 gap-3">
             <Field label="Symbol"><div>MES</div></Field><Field label="Direction"><div style={{ color: T.up }}>Long</div></Field><Field label="Account"><div>Live / personal</div></Field><Field label="Setup / strategy"><div>Double bottom</div></Field>
           </div>
-          <table className="w-full text-xs mt-4"><thead><tr><th className="text-left">Time</th><th>Symbol</th><th>Dir</th><th>P&amp;L</th><th>Grade</th><th>R:R</th><th>Held</th><th className="text-left">Setup</th></tr></thead>
+          <table className="w-full text-xs mt-4"><thead><tr><th className="text-left">Time</th><th>Symbol</th><th>Dir</th><th>P&amp;L</th><th>Grade</th><th>R:R planned</th><th>Held</th><th className="text-left">Setup</th></tr></thead>
             <tbody>{rows.map((row) => <tr key={row[0]}>{row.map((cell, index) => <td key={index} className={index === 0 || index === 7 ? 'text-left' : 'text-center'} style={index === 3 ? { color: cell.startsWith('-') ? T.down : T.up, ...mono } : index === 2 ? { color: cell === 'Long' ? T.up : T.down } : undefined}>{cell}</td>)}</tr>)}</tbody>
           </table>
         </div>
@@ -986,6 +986,7 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
         <Field label="Provider">
           <select style={inputStyle} className={inp} value={s.provider || 'ollama'} onChange={set('provider')}>
             <option value="ollama">Ollama (local, offline, free)</option>
+            <option value="anthropic">Claude (Anthropic key)</option>
             <option value="cloud">OpenAI-compatible — LM Studio, LocalAI, or a cloud key</option>
           </select>
         </Field>
@@ -997,6 +998,19 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
             <p className="text-xs" style={{ color: T.faint }}>
               Recommended for accurate coaching: <span style={mono} className="text-xs">qwen2.5:7b</span> or <span style={mono} className="text-xs">llama3.1:8b</span>. Minimum <span style={mono} className="text-xs">qwen2.5:3b</span> / <span style={mono} className="text-xs">llama3.2</span> (3B) — models under 3B tend to misread or invent trades. Pull one with e.g. <span style={mono} className="text-xs">ollama pull qwen2.5:7b</span>.
             </p>
+          </div>
+        ) : s.provider === 'anthropic' ? (
+          <div className="space-y-3 mt-3">
+            <Field label="API key"><input type="password" style={inputStyle} className={inp} value={s.anthropicKey || ''} onChange={set('anthropicKey')} placeholder="sk-ant-..." /></Field>
+            <Field label="Model"><ModelSelect value={s.anthropicModel || ''} onChange={set('anthropicModel')} placeholder="claude-opus-5" /></Field>
+            <p className="text-xs" style={{ color: T.faint }}>
+              Paste a key from <span style={mono} className="text-xs">console.anthropic.com</span> and press Browse to list the models it can use. There is no URL to configure. Opus is the most capable, Sonnet is the balance of speed and cost, Haiku is the cheapest and fastest.
+            </p>
+            <TestKey type="anthropic" value={s.anthropicKey} />
+            <label className="flex items-start gap-2 text-sm cursor-pointer" style={{ color: T.text }}>
+              <input type="checkbox" className="mt-0.5" checked={(s.cloudJournalAccess ?? 'true') !== 'false'} onChange={(e) => setS((p) => ({ ...p, cloudJournalAccess: String(e.target.checked) }))} />
+              <span>Send my written notes &amp; reviews to Claude<span className="block text-xs mt-0.5" style={{ color: T.faint }}>On: the coach reads your full journal — notes, reasons, reviews, playbook — for real coaching. Off: only structured numbers (P&amp;L, setups, grades) leave your machine. Local Ollama always gets everything.</span></span>
+            </label>
           </div>
         ) : (
           <div className="space-y-3 mt-3">

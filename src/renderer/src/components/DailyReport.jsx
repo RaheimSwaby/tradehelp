@@ -3,6 +3,7 @@ import { CalendarClock, X, Sparkles } from 'lucide-react'
 import { T, mono } from '../theme.js'
 import { fmt$, fmtN, streamChat, TILT } from '../utils.js'
 import { buildDailyReport, dailyReportAiPayload } from '../coachInsights.js'
+import { isCloudProvider } from '../aiProviders.js'
 
 export function buildDailyReportAiPayload(report, settings = {}) {
   return dailyReportAiPayload(report, settings.coachVoice)
@@ -26,7 +27,7 @@ export function DailyReport({ trades, date, settings, onClose, onOpenCoach }) {
 
   // Cloud needs a model + key; local Ollama we assume present and let the call fail
   // gracefully if the server isn't up.
-  const aiConfigured = settings?.provider === 'cloud'
+  const aiConfigured = isCloudProvider(settings?.provider)
     ? !!(settings?.cloudModel && settings?.cloudKey)
     : !!(settings?.ollamaModel)
 

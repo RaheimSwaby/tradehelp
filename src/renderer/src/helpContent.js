@@ -189,6 +189,19 @@ export const HELP_SECTIONS = [
         a: 'Settings → Model provider. Ollama is the simplest local option; the next answer walks through installing it and downloading a model. You can also point the OpenAI-compatible option at LM Studio or LocalAI on localhost and leave the API key blank to stay fully offline. A cloud key works too if you prefer.'
       },
       {
+        q: 'Can I use my own Claude (Anthropic) API key?',
+        a: [
+          'Yes. Settings → Model provider → Claude (Anthropic key). Paste the key from console.anthropic.com and press Browse beside Model to list the models that key can use.',
+          'There is no URL to set. Claude has one endpoint and TradeHelp already knows it.',
+          'Opus is the most capable, Sonnet balances speed and cost, Haiku is the cheapest and fastest. Any of them coach well; the difference shows up on longer, more open-ended questions.',
+          'Your key is stored on this machine only and is sent to Anthropic, never to us.'
+        ].join('\n')
+      },
+      {
+        q: 'I put my Claude key in the OpenAI-compatible option and got a 404. Why?',
+        a: 'Claude does not speak the OpenAI protocol, so pointing the OpenAI-compatible Base URL at Anthropic asks for an address that does not exist, which is the 404. Switch Provider to Claude (Anthropic key) instead and paste the key there. That path talks to Claude properly, and there is no URL to fill in.'
+      },
+      {
         q: 'How do I install Ollama and download a model?',
         a: [
           '1. Download Ollama from ollama.com/download, install it, and open the Ollama app.',

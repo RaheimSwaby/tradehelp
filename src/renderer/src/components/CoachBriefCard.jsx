@@ -4,9 +4,10 @@ import { T } from '../theme.js'
 import { buildCoachBrief, coachSnapshotKey, proactiveCoachPayload, shouldIncludeWrittenJournal } from '../coachInsights.js'
 import { fullJournalContext } from '../stats.js'
 import { CompactMarkdown } from './CompactMarkdown.jsx'
+import { isCloudProvider } from '../aiProviders.js'
 
 function aiConfigured(settings) {
-  if (settings?.provider === 'cloud') {
+  if (isCloudProvider(settings?.provider)) {
     const hostedOpenAi = /api\.openai\.com/i.test(settings.cloudUrl || '')
     return Boolean(settings.cloudUrl && settings.cloudModel && (settings.cloudKey || !hostedOpenAi))
   }

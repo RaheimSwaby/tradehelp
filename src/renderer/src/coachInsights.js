@@ -1,6 +1,7 @@
 import { executionGrade, letterFor } from './stats.js'
 import { TILT, fmt$ } from './utils.js'
 import { tradeDateKey } from './periodRetrospective.js'
+import { isCloudProvider } from './aiProviders.js'
 
 const pct = (n) => `${Math.round(Number(n) || 0)}%`
 
@@ -24,7 +25,7 @@ export function coachVoiceInstruction(value) {
 }
 
 export function shouldIncludeWrittenJournal(settings = {}) {
-  return settings?.provider !== 'cloud' || (settings?.cloudJournalAccess ?? 'true') !== 'false'
+  return !isCloudProvider(settings?.provider) || (settings?.cloudJournalAccess ?? 'true') !== 'false'
 }
 
 export function coachSnapshotKey(trades, context = '') {

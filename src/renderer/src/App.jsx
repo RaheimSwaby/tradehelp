@@ -515,6 +515,7 @@ export default function App() {
     return { videoErrors }
   }
   async function removeTrade(id) { if (hasApi) { await window.api.deleteTrade(id); await refreshWorkflow() } }
+  async function removeTrades(ids) { if (hasApi) { await window.api.deleteTrades(ids); await refreshWorkflow() } }
   async function importTrades(rows, meta = {}) { if (hasApi) { const result = await window.api.importTrades(rows, meta); await refreshWorkflow(); return result } }
   async function rollbackImport(id) { if (hasApi) { const result = await window.api.rollbackImportBatch(id); await refreshWorkflow(); return result } }
   async function reloadAll() {
@@ -1015,6 +1016,9 @@ export default function App() {
             <span className="th-header-readout-group flex items-center gap-4" style={mono}>
               <Readout label="NET" value={fmt$(demoPnlTotal ?? stats.totalPnl)} tone={(demoPnlTotal ?? stats.totalPnl) >= 0 ? 'up' : 'down'} feedback={pnlFeedback} />
               <Readout label="WIN" value={`${fmtN(stats.winRate, 1)}%`} />
+              {/* WIN now excludes scratches, so the count of them sits beside it:
+                  without this the two numbers look like they disagree. */}
+              {stats.breakEvenCount > 0 && <Readout label="BE" value={String(stats.breakEvenCount)} />}
               <Readout label="PF" value={stats.profitFactor === Infinity ? '∞' : fmtN(stats.profitFactor, 2)} />
               <Readout label="STREAK" value={String(stats.currentStreak)} tone={String(stats.currentStreak).endsWith('W') ? 'up' : String(stats.currentStreak).endsWith('L') ? 'down' : 'none'} />
               {stats.n > 0 && <Readout label="CALM" value={String(stats.nonTiltStreak)} tone="up" />}
@@ -1086,7 +1090,7 @@ export default function App() {
         ) : (
           <PageAnimationContext.Provider value={`${tab}-${pageAnimationReplay}`}>
           <div key={tab} id="th-tabpanel" role="tabpanel" aria-labelledby={`th-tab-${tab}`} className="th-cinematic th-tabpanel">
-            {tab === 'journal' && <Journal trades={trades} commitments={commitments} onAdd={addTrade} onUpdate={updateTrade} onRemove={removeTrade} onNotes={setNotesView} onImport={importTrades} onRollbackImport={rollbackImport} accounts={propFirmAccounts} profiles={instrumentProfiles} savedSearches={savedSearches} onAddSavedSearch={addSavedSearch} onUpdateSavedSearch={updateSavedSearch} onDeleteSavedSearch={deleteSavedSearch} onRefreshSavedSearches={refreshSavedSearches} settings={settings} onSaveSettings={saveSettings} dayLogs={dayLogs} onAddDayLog={addDayLog} onDeleteDayLog={deleteDayLog} drilldown={journalDrilldown} onConsumeDrilldown={() => setJournalDrilldown(null)} />}
+            {tab === 'journal' && <Journal trades={trades} commitments={commitments} onAdd={addTrade} onUpdate={updateTrade} onRemove={removeTrade} onRemoveMany={removeTrades} onNotes={setNotesView} onImport={importTrades} onRollbackImport={rollbackImport} accounts={propFirmAccounts} profiles={instrumentProfiles} savedSearches={savedSearches} onAddSavedSearch={addSavedSearch} onUpdateSavedSearch={updateSavedSearch} onDeleteSavedSearch={deleteSavedSearch} onRefreshSavedSearches={refreshSavedSearches} settings={settings} onSaveSettings={saveSettings} dayLogs={dayLogs} onAddDayLog={addDayLog} onDeleteDayLog={deleteDayLog} drilldown={journalDrilldown} onConsumeDrilldown={() => setJournalDrilldown(null)} />}
             {tab === 'chart' && <ChartTab trades={trades} onOpenTrade={setNotesView} settings={settings} onSaveSettings={saveSettings} />}
             {tab === 'trade' && <TradeModeTab settings={settings} onSave={saveSettings} rules={rules} ruleBreaks={ruleBreaks} onDeleteRuleBreak={deleteRuleBreak} onUpdateSession={updateTradingSession} onDeleteSession={deleteTradingSession} live={tradeMode} arming={goTransition === 'arming'} todayNet={todayNet} todayCount={todayTrades.length} weekNet={weekNet} goal={dailyGoal} maxLoss={maxLoss} onStart={startDay} onEnd={endSession} session={activeSession} recordingState={recordingState} elapsed={sessionElapsed} sessions={tradingSessions} plans={tradePlans} trades={trades} accounts={propFirmAccounts} playbook={playbook} profiles={instrumentProfiles} planPrefill={planPrefill} onConsumePlanPrefill={() => setPlanPrefill(null)} onAddPlan={addTradePlan} onUpdatePlan={updateTradePlan} onDeletePlan={deleteTradePlan} />}
             {tab === 'propfirm' && <PropFirm trades={trades} accounts={propFirmAccounts} onSave={savePropFirmAccounts} settings={settings} onSaveSettings={saveSettings} payouts={payouts} onAddPayout={addPayout} onDeletePayout={deletePayout} expenses={propExpenses} onAddExpense={addPropExpense} onDeleteExpense={deletePropExpense} />}

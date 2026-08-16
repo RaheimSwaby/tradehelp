@@ -140,6 +140,97 @@ export function calculatePlanSizing(plan = {}, profile = null) {
   }
 }
 
+// Planned R:R and achieved R are different numbers and were previously stored in
+// one column. `rr` held reward/risk from the plan when the trader used points
+// mode, and |P&L| / risk otherwise — so a trade planned 1:3 that stopped out
+// recorded 3.0, and a 2R loss was indistinguishable from a 2R win. Grading, the
+// minimum-R:R commitment, and the journal column all read that one value.
+//
+// plannedRR answers "was this setup worth taking" and is always positive.
+// achievedR answers "what did it actually pay" and is signed: +2 is a two-R win,
+// -1 a clean stop-out, 0 a scratch.
+
+const finiteNumber = (value) => {
+  const n = Number(value)
+  return Number.isFinite(n) ? n : 0
+}
+
+export function plannedRR(trade = {}) {
+  const riskPoints = Math.abs(finiteNumber(trade.riskPoints))
+  const rewardPoints = Math.abs(finiteNumber(trade.rewardPoints))
+  if (riskPoints > 0 && rewardPoints > 0) return rewardPoints / riskPoints
+
+  const entry = finiteNumber(trade.entry)
+  const stop = finiteNumber(trade.stop)
+  const target = finiteNumber(trade.target)
+  if (entry > 0 && stop > 0 && target > 0) {
+    const risk = Math.abs(entry - stop)
+    if (risk > 0) return Math.abs(target - entry) / risk
+  }
+
+  // Trades saved before the split, and imports that carry no plan, only have the
+  // old combined column. Reading it as planned is the closest honest guess.
+  const legacy = finiteNumber(trade.rr)
+  return legacy > 0 ? legacy : 0
+}
+
+// Risk in currency. Falling back to price distance keeps achieved R available on
+// imported trades that never recorded a risk amount.
+export function riskAmountFor(trade = {}) {
+  const explicit = Math.abs(finiteNumber(trade.riskAmount))
+  if (explicit > 0) return explicit
+
+  const entry = finiteNumber(trade.entry)
+  const stop = finiteNumber(trade.stop)
+  const size = Math.abs(finiteNumber(trade.size))
+  if (!(entry > 0 && stop > 0 && size > 0)) return 0
+
+  const profile = INSTRUMENT_PROFILE_DEFAULTS[instrumentRootSymbol(trade.symbol)]
+  const multiplier = profile && profile.tickSize > 0 ? profile.tickValue / profile.tickSize : 1
+  return Math.abs(entry - stop) * size * multiplier
+}
+
+// A scratch is a band around zero, not exactly zero: commissions mean a trade
+// taken off at the entry price lands a few dollars negative, and calling that a
+// loss misreads what the trader actually did.
+export const BREAK_EVEN_BAND_R = 0.1
+
+// Traders write this in their notes. It is deliberately only used to *suggest*
+// the flag in the form, never to classify a saved trade: "broke even on the day"
+// is about the session, not the trade, and silently relabelling a real loss
+// because of a sentence in the notes is worse than not detecting it at all.
+const BREAK_EVEN_PHRASES = /\b(?:b\.?e\.?|break[\s-]?even|breakeven|scratch(?:ed)?|flat)\b/i
+export const looksLikeBreakEven = (text) => BREAK_EVEN_PHRASES.test(String(text || ''))
+
+// 'yes' and 'no' are the trader's explicit call and always win. Anything else
+// means "not stated", and the band decides — the same manual-overrides-auto rule
+// used for commitments and grades.
+export function isBreakEven(trade = {}, band = BREAK_EVEN_BAND_R) {
+  const manual = String(trade.breakEven || '').toLowerCase()
+  if (manual === 'yes') return true
+  if (manual === 'no') return false
+
+  const r = achievedR(trade)
+  // With no risk recorded there is no band to apply, so only an exact zero
+  // counts. Guessing from a dollar amount would mean different answers for the
+  // same trade depending on account size.
+  if (r == null) return Number(trade.pnl) === 0
+  return Math.abs(r) <= Math.abs(band)
+}
+
+export function tradeOutcome(trade = {}, band = BREAK_EVEN_BAND_R) {
+  if (isBreakEven(trade, band)) return 'breakeven'
+  return (Number(trade.pnl) || 0) > 0 ? 'win' : 'loss'
+}
+
+// null, not 0, when risk is unknown: an unknown R and a scratch are different
+// things and a caller that averages them must be able to tell them apart.
+export function achievedR(trade = {}) {
+  const risk = riskAmountFor(trade)
+  if (!(risk > 0)) return null
+  return finiteNumber(trade.pnl) / risk
+}
+
 function validPlanGeometry(plan) {
   const entry = finitePositive(plan.plannedEntry)
   const stop = finitePositive(plan.plannedStop)
