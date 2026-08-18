@@ -1,4 +1,7 @@
 (function () {
+  // Declared before any of the early returns below: the footer link must be able
+  // to reopen this panel even when the script bails out of its own setup.
+  window.thOpenPrivacyChoices = function () { showConsent(); };
   'use strict';
 
   // Replace this once with the ID shown in Reddit Ads > Events Manager.
@@ -106,7 +109,9 @@
       '.th-privacy-choices{position:fixed;z-index:900;left:12px;bottom:12px;background:rgba(20,20,23,.92);color:#b5b0a8;padding:7px 9px}' +
       '@media(max-width:620px){.th-consent{align-items:stretch;flex-direction:column;gap:12px}.th-consent-actions{justify-content:flex-end}}';
     document.head.appendChild(style);
-  }
+  }
+
+
 
   function showChoicesButton() {
     if (document.getElementById('th-privacy-choices')) return;

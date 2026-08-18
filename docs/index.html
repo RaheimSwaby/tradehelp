@@ -284,6 +284,279 @@
     .nav-links{gap:1rem;flex-wrap:wrap;justify-content:center}
     .nav-links a,.dropdown-toggle{font-size:.82rem}
   }
+
+/* ── Module explorer ───────────────────────────────────────────────────────
+   Replaces the five stacked feature rows and the screenshot carousel. One
+   panel visible at a time: eyebrow, benefit headline, short paragraph, four
+   concrete specifics, real screenshot.
+
+   Panels are visible by default and hidden by script, never by CSS. With JS
+   off the whole thing degrades to every panel stacked down the page, which
+   reads fine; the opposite default would leave a blank section.               */
+.xp-head{max-width:680px;margin:0 0 44px}
+.xp-head h2{font-size:38px;line-height:1.12;letter-spacing:-.02em;margin:0 0 14px}
+.xp-head p{font-size:17px;color:#a9a49c;margin:0}
+
+.xp-tabs{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;
+  border-bottom:1px solid rgba(255,255,255,.08);margin-bottom:56px;
+  /* The bar scrolls on narrow screens; the fade says so without a scrollbar. */
+  -webkit-mask-image:linear-gradient(90deg,#000 88%,transparent);
+  mask-image:linear-gradient(90deg,#000 88%,transparent)}
+.xp-tabs::-webkit-scrollbar{display:none}
+.xp-tab{flex:0 0 auto;background:none;border:0;cursor:pointer;
+  font-family:inherit;font-weight:600;font-size:15px;color:#8d8982;
+  padding:0 18px 14px;border-bottom:2px solid transparent;
+  /* Pulls its own border down onto the bar's so the two read as one line. */
+  margin-bottom:-1px}
+.xp-tab:hover{color:#e4e1da}
+.xp-tab[aria-selected="true"]{color:#f5f2eb;border-bottom-color:#d4a853}
+
+.xp-panel{display:grid;grid-template-columns:1fr 1.15fr;gap:60px;align-items:center}
+/* Alternates which side the screenshot sits on, so the eye is not dragged
+   down a single column of identical blocks. */
+.xp-panel:nth-child(even){grid-template-columns:1.15fr 1fr}
+.xp-panel:nth-child(even) .xp-copy{order:2}
+
+.xp-eyebrow{font-weight:600;font-size:12px;letter-spacing:.14em;
+  text-transform:uppercase;color:#8d8982;margin:0 0 14px}
+.xp-copy h3{font-size:31px;line-height:1.15;letter-spacing:-.02em;
+  margin:0 0 16px;text-wrap:balance}
+.xp-copy>p{font-size:16.5px;line-height:1.65;color:#a9a49c;
+  margin:0 0 24px;text-wrap:pretty}
+.xp-specs{list-style:none;display:flex;flex-direction:column;gap:12px;
+  margin:0 0 28px;padding:0}
+.xp-specs li{display:flex;gap:11px;align-items:flex-start;
+  font-size:15.5px;line-height:1.5;color:#cfcac1}
+/* A square, not a tick: a checklist of ticks reads as a sales sheet. */
+.xp-specs li::before{content:"";flex:0 0 auto;width:5px;height:5px;
+  margin-top:9px;background:#d4a853}
+.xp-cta{display:inline-flex;align-items:center;gap:8px;font-size:15px;
+  font-weight:500;color:#d4a853;text-decoration:none}
+.xp-cta:hover{color:#e5bc72}
+
+@media (max-width:900px){
+  .xp-panel,.xp-panel:nth-child(even){grid-template-columns:1fr;gap:32px}
+  .xp-panel:nth-child(even) .xp-copy{order:0}
+  .xp-tabs{margin-bottom:36px}
+}
+@media (max-width:768px){
+  .xp-head h2{font-size:26px}
+  .xp-copy h3{font-size:22px}
+  .xp-specs li{font-size:15px}
+}
+@media (prefers-reduced-motion:reduce){
+  .xp-panel{transition:none}
+}
+
+/* Faux window frame. The screenshots are the only imagery on the page, so they
+   get a chrome that reads as "this is the actual app" rather than a floating
+   picture. Flat, 1px borders, no shadow — same system as everything else. */
+.shot-frame{border:1px solid rgba(255,255,255,.1);border-radius:9px;
+  background:#101012;overflow:hidden}
+.shot-bar{display:flex;align-items:center;gap:7px;padding:9px 12px;
+  background:#151517;border-bottom:1px solid rgba(255,255,255,.07)}
+.shot-dot{width:9px;height:9px;border-radius:50%;background:#37373b}
+.shot-cap{margin-left:6px;font-size:12px;color:#6f6c67}
+.shot-frame img{display:block;width:100%;height:auto}
+
+
+    /* Video sits in the same frame the stills used, so the chrome is unchanged. */
+    .shot-media{display:block;width:100%;height:auto}
+
+    /* The demo has to be visible the moment a tab is clicked. Left uncapped the
+       frame renders ~620px tall, which pushes the video below the fold and makes
+       the tab feel like it did nothing. Capping against viewport height keeps the
+       whole panel on screen on a laptop; contain preserves each clip's own ratio
+       (the import capture is nearly square, the rest are ~16:9). */
+    .shot-media{display:block;width:100%;height:auto;max-height:58vh;object-fit:contain;background:#0d0d0f}
+    .xp-panel{align-items:start}
+    @media (max-width:900px){.shot-media{max-height:none}}
+
+    /* ── Explorer: vertical rail + one card ──────────────────────────────
+       Thirteen tabs will not sit in a horizontal strip without becoming a
+       cramped scroller, so the rail runs down the left and the panel becomes a
+       single card that swaps in place. No HTML restructuring: the section is a
+       grid, the rail occupies column one, and every panel is placed in the same
+       cell of column two so only the visible one occupies it.                  */
+    #features{display:grid;grid-template-columns:210px minmax(0,1fr);
+      column-gap:44px;align-items:start}
+    #features .xp-head{grid-column:1 / -1}
+
+    .xp-tabs{grid-column:1;grid-row:2;flex-direction:column;gap:2px;
+      overflow:visible;border-bottom:0;margin-bottom:0;
+      -webkit-mask-image:none;mask-image:none;
+      border-right:1px solid rgba(255,255,255,.08)}
+    .xp-tab{text-align:left;width:100%;padding:11px 16px;margin-bottom:0;
+      border-bottom:0;border-right:2px solid transparent;border-radius:5px 0 0 5px}
+    .xp-tab[aria-selected="true"]{border-bottom-color:transparent;
+      border-right-color:#d4a853;background:rgba(212,168,83,.06)}
+
+    /* The card. Same flat system as everything else: 1px border, no shadow. */
+    .xp-panel{grid-column:2;grid-row:2;gap:36px;
+      border:1px solid rgba(255,255,255,.1);border-radius:10px;
+      background:#101012;padding:32px}
+    /* Alternating sides made sense down a scrolling list; in a card that swaps
+       in place it just makes the layout jump, so every card reads the same. */
+    .xp-panel:nth-child(even){grid-template-columns:1fr 1.15fr}
+    .xp-panel:nth-child(even) .xp-copy{order:0}
+
+    @media (max-width:900px){
+      #features{grid-template-columns:1fr;row-gap:24px}
+      .xp-tabs{grid-column:1;grid-row:auto;flex-direction:row;overflow-x:auto;
+        border-right:0;border-bottom:1px solid rgba(255,255,255,.08);
+        -webkit-mask-image:linear-gradient(90deg,#000 88%,transparent);
+        mask-image:linear-gradient(90deg,#000 88%,transparent)}
+      .xp-tab{width:auto;border-right:0;border-bottom:2px solid transparent;
+        border-radius:0;padding:0 16px 12px;margin-bottom:-1px}
+      .xp-tab[aria-selected="true"]{border-right-color:transparent;
+        border-bottom-color:#d4a853;background:none}
+      .xp-panel{grid-column:1;grid-row:auto;padding:20px}
+    }
+
+    /* Card heights ran 598-708px across the thirteen tabs, so every click nudged
+       the rest of the page up or down. Reserving the tallest stops the shift; the
+       cost is some empty card on the shortest tabs, which is cheaper than a page
+       that jumps under the cursor. */
+    .xp-panel{min-height:708px;align-content:start}
+
+    /* A short fade on the incoming card. Deliberately not a cross-fade between
+       two cards: overlapping a 700px panel reads as a flicker. This just says
+       "new content" and gets out of the way. */
+    @keyframes xp-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+    .xp-panel:not([hidden]){animation:xp-in .22s cubic-bezier(.22,.61,.36,1) both}
+    @media (prefers-reduced-motion:reduce){
+      .xp-panel:not([hidden]){animation:none}
+    }
+    @media (max-width:900px){.xp-panel{min-height:0}}
+
+    /* The clips are shown small inside the card, so each frame gets an expand
+       control. Native fullscreen rather than a custom overlay: it works on a
+       phone, it uses the pinch/rotate the OS already gives you, and Escape
+       closes it without any code from us. */
+    .shot-frame{position:relative}
+    .shot-zoom{position:absolute;top:8px;right:10px;z-index:2;cursor:pointer;
+      font:inherit;font-size:12px;line-height:1;color:#cfcac1;
+      background:rgba(10,10,11,.72);border:1px solid rgba(255,255,255,.14);
+      border-radius:5px;padding:6px 10px}
+    .shot-zoom:hover{background:rgba(10,10,11,.9);color:#f2efe8;border-color:rgba(255,255,255,.28)}
+    .shot-media{cursor:zoom-in}
+    /* Fullscreen strips the card sizing; fill the screen instead of staying 58vh. */
+    .shot-media:fullscreen{max-height:none;height:100%;width:100%;background:#0a0a0b}
+    .shot-media:-webkit-full-screen{max-height:none;height:100%;width:100%}
+
+    /* ── Card: demo first, at full width ─────────────────────────────────
+       Splitting the card into copy + video left the clip about 290px wide and
+       164px tall, adrift in a 708px card - which read as a blank panel with a
+       strip of video in it. Once the rail takes 210px there is not enough width
+       left to put text beside a video and have either be legible, so the demo
+       gets the full card width and the copy sits beneath it.                    */
+    .xp-panel,.xp-panel:nth-child(even){grid-template-columns:minmax(0,1fr);gap:24px}
+    .xp-panel .shot-frame{order:-1}
+    .xp-panel .xp-copy,.xp-panel:nth-child(even) .xp-copy{order:0}
+    /* Height is reserved by the tallest card so switching tabs still does not
+       shift the page; measured after the stack, not before it. */
+    .xp-panel{min-height:1020px}
+    @media (max-width:900px){.xp-panel{min-height:0}}
+    .shot-media{max-height:none;background:transparent}
+
+    /* The hidden attribute is only [hidden]{display:none} in the UA stylesheet,
+       so .xp-panel{display:grid} outranks it on specificity. Without this rule
+       every panel stays painted, stacked in the same grid cell, and the last one
+       in the DOM (News) covers whichever tab you actually picked - while all
+       thirteen videos render at once and make the swap feel slow. */
+    .xp-panel[hidden]{display:none}
+
+    .shot-overlay{position:fixed;inset:0;z-index:200;display:flex;
+      align-items:center;justify-content:center;padding:32px;
+      background:rgba(6,6,7,.92)}
+    .shot-overlay-video{max-width:100%;max-height:100%;width:auto;height:auto;
+      border:1px solid rgba(255,255,255,.12);border-radius:8px;background:#0a0a0b}
+    .shot-overlay-close{position:absolute;top:20px;right:24px;cursor:pointer;
+      font:inherit;font-size:13px;color:#cfcac1;background:rgba(10,10,11,.8);
+      border:1px solid rgba(255,255,255,.18);border-radius:6px;padding:8px 14px}
+    .shot-overlay-close:hover{color:#f2efe8;border-color:rgba(255,255,255,.34)}
+
+    /* Three friction-removers under the hero. A rule above them separates the
+       pitch from the practicalities without adding another band colour. */
+    .friction{display:grid;grid-template-columns:repeat(3,1fr);gap:52px;
+      padding-top:40px;padding-bottom:24px;
+      border-top:1px solid rgba(255,255,255,.08)}
+    .friction-col h3{font-size:18px;font-weight:600;color:#f2efe8;margin:0 0 10px}
+    .friction-col p{font-size:15.5px;line-height:1.6;color:#a9a49c;margin:0}
+    @media (max-width:900px){
+      .friction{grid-template-columns:1fr;gap:28px}
+    }
+
+    /* Closing trial band. Its own surface so the page visibly resolves here. */
+    .trialband{border-top:1px solid rgba(255,255,255,.07);background:#0c0c0e;
+      padding:88px 0;text-align:center}
+    .trialband-inner{max-width:800px}
+    .trialband h2{font-size:40px;line-height:1.1;letter-spacing:-.025em;
+      margin:0 0 18px;text-wrap:balance}
+    .trialband p{font-size:17.5px;line-height:1.6;color:#a9a49c;
+      max-width:56ch;margin:0 auto 28px}
+    .trialband-btns{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+    .trialband-note{font-size:14px;color:#7d7972;margin:18px auto 0}
+    @media (max-width:768px){
+      .trialband{padding:56px 0}
+      .trialband h2{font-size:27px}
+      .trialband-btns{flex-direction:column;max-width:320px;margin:0 auto}
+    }
+
+    /* ── Hero ────────────────────────────────────────────────────────────
+       The asset line leads so a futures or forex trader knows in one glance
+       that this is for them, before reading a word of the pitch. */
+    .hero .asset-bar{font-size:12.5px;font-weight:500;letter-spacing:.16em;
+      text-transform:uppercase;color:#7d7972;margin:0 0 18px;background:none;
+      border:0;padding:0;display:block}
+    .hero h1{font-size:50px;line-height:1.08;letter-spacing:-.02em;color:#f5f2eb;
+      max-width:780px;text-wrap:balance;margin:0 0 20px}
+    .hero > p:not(.asset-bar):not(.hero-secondary){font-size:19px;line-height:1.55;
+      color:#a9a49c;max-width:600px;text-wrap:pretty}
+    .hero-btns{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+    .btn-ghost{display:inline-flex;align-items:center;justify-content:center;
+      padding:13px 22px;border-radius:6px;font-size:15.5px;font-weight:500;
+      color:#cfcac1;text-decoration:none;border:1px solid rgba(255,255,255,.14)}
+    .btn-ghost:hover{background:rgba(255,255,255,.05);color:#f2efe8}
+    @media (max-width:768px){
+      .hero h1{font-size:32px}
+      .hero-btns{flex-direction:column;align-items:stretch;max-width:320px}
+    }
+
+    /* ── Footer link map ─────────────────────────────────────────────────
+       The guide and comparison pages exist and were previously unreachable
+       from the homepage, which wasted them for search and for readers. */
+    .footer-map{display:grid;grid-template-columns:1.3fr 1fr 1fr 1fr;gap:44px;
+      margin-bottom:44px}
+    .footer-word{display:inline-flex;align-items:center;gap:8px;font-size:16px;
+      font-weight:700;color:#f2efe8}
+    .footer-word span{color:#d4a853}
+    .footer-brand p{font-size:14px;color:#7d7972;max-width:30ch;margin:12px 0 0}
+    .footer-col{display:flex;flex-direction:column;gap:10px}
+    .footer-col h4{font-size:13px;font-weight:600;letter-spacing:.06em;
+      text-transform:uppercase;color:#8d8982;margin:0 0 4px}
+    .footer-col a{font-size:14px;color:#a9a49c;text-decoration:none}
+    .footer-col a:hover{color:#f2efe8}
+    .footer-bar{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;
+      padding-top:26px;border-top:1px solid rgba(255,255,255,.07);
+      font-size:13.5px;color:#6a6762}
+    .footer-bar p{margin:0}
+    .footer-disclaimer{font-size:13px;color:#5c5a56;margin:18px 0 0}
+    @media (max-width:900px){
+      .footer-map{grid-template-columns:1fr 1fr;gap:32px}
+    }
+    @media (max-width:560px){
+      .footer-map{grid-template-columns:1fr}
+    }
+
+    /* The hero centres its text, so any width cap needs auto margins or the
+       block hugs the left edge and the centred text lands off-centre. */
+    .hero h1{margin-left:auto;margin-right:auto}
+    .hero > p:not(.asset-bar):not(.hero-secondary){margin-left:auto;margin-right:auto}
+    .hero .asset-bar{margin-left:auto;margin-right:auto}
+    @media (max-width:768px){
+      .hero-btns{margin-left:auto;margin-right:auto}
+    }
 </style>
   <link rel="stylesheet" href="lightbox.css">
 <link rel="icon" href="favicon.ico" sizes="any" />
@@ -332,8 +605,8 @@
 
 <!-- ====== hero ====== -->
 <section class="hero wrap">
-  <h1>A trading journal that lives on your computer, not in the cloud</h1>
-  <div class="asset-bar">FUTURES / FOREX / CRYPTO</div>
+  <p class="asset-bar">Futures / Forex / Crypto</p>
+  <h1>Your trading journal belongs on your own computer</h1>
     <p>TradeHelp stores your trades locally in SQLite. The AI coach runs offline on your own hardware. No account, no subscription, no data leaving your machine.</p>
     <!-- One button, for the platform the visitor is on. Three equal choices asked
          everyone to make a decision before they knew what the app was, and across
@@ -342,11 +615,12 @@
          markup default: it is roughly four fifths of downloads, and it is what a
          visitor with scripting disabled should land on. -->
     <div class="hero-btns">
-      <a id="heroDownload"
+      <a id="heroDownload" data-download="hero"
          href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.exe"
          class="btn btn-primary" data-goatcounter-click="download-windows-hero">Download for Windows</a>
+        <a href="#features" class="btn btn-ghost" data-goatcounter-click="cta-see-every-screen">See every screen</a>
     </div>
-    <p class="hero-secondary">Free for 14 days. No account needed. <span id="heroOther"></span></p>
+    <p class="hero-secondary">Free for 14 days. No account needed. <span id="heroOther" data-download-other="hero"></span></p>
   <!-- Shown only to phone visitors, who can't install a desktop app where they stand. -->
   <div class="mobile-cta" id="mobileCta">
     <p>This one runs on your desktop. Send yourself the link for when you're back at your computer.</p>
@@ -357,73 +631,6 @@
   </div>
 </section>
 
-<section class="tour wrap" id="tour">
-  <h2>A look around</h2>
-  <p class="tour-intro">Short clips of each tab. Swipe, scroll, or use the arrows.</p>
-  <div class="tour-head">
-    <span class="tour-label"></span>
-    <span class="tour-counter"></span>
-    <span class="tour-nav">
-      <button type="button" class="tour-full" aria-label="Play current clip fullscreen">Fullscreen</button>
-      <button type="button" class="tour-prev" aria-label="Previous clip">&#8592;</button>
-      <button type="button" class="tour-next" aria-label="Next clip">&#8594;</button>
-    </span>
-  </div>
-  <ul class="tour-track" tabindex="0" aria-label="Product tour">
-      <li class="tour-slide" data-label="Journal">
-        <video muted loop playsinline preload="none" data-src="tours/01-journal.mp4"
-               width="1440" height="810" aria-label="Journal tab walkthrough"></video>
-      </li>
-      <li class="tour-slide" data-label="Charts">
-        <video muted loop playsinline preload="none" data-src="tours/02-charts.mp4"
-               width="1440" height="810" aria-label="Charts tab walkthrough"></video>
-      </li>
-      <li class="tour-slide" data-label="Trade Mode">
-        <video muted loop playsinline preload="none" data-src="tours/03-trade-mode.mp4"
-               width="1440" height="810" aria-label="Trade Mode tab walkthrough"></video>
-      </li>
-      <li class="tour-slide" data-label="Accounts">
-        <video muted loop playsinline preload="none" data-src="tours/04-accounts.mp4"
-               width="1440" height="810" aria-label="Accounts tab walkthrough"></video>
-      </li>
-      <li class="tour-slide" data-label="Dashboard">
-        <video muted loop playsinline preload="none" data-src="tours/05-dashboard.mp4"
-               width="1440" height="810" aria-label="Dashboard tab walkthrough"></video>
-      </li>
-      <li class="tour-slide" data-label="Psychology">
-        <video muted loop playsinline preload="none" data-src="tours/06-psychology.mp4"
-               width="1440" height="810" aria-label="Psychology tab walkthrough"></video>
-      </li>
-      <li class="tour-slide" data-label="Rating">
-        <video muted loop playsinline preload="none" data-src="tours/07-rating.mp4"
-               width="1440" height="810" aria-label="Rating tab walkthrough"></video>
-      </li>
-      <li class="tour-slide" data-label="Goals">
-        <video muted loop playsinline preload="none" data-src="tours/08-goals.mp4"
-               width="1440" height="810" aria-label="Goals tab walkthrough"></video>
-      </li>
-      <li class="tour-slide" data-label="Reviews">
-        <video muted loop playsinline preload="none" data-src="tours/09-reviews.mp4"
-               width="1440" height="810" aria-label="Reviews tab walkthrough"></video>
-      </li>
-      <li class="tour-slide" data-label="AI Coach">
-        <video muted loop playsinline preload="none" data-src="tours/10-ai-coach.mp4"
-               width="1440" height="810" aria-label="AI Coach tab walkthrough"></video>
-      </li>
-      <li class="tour-slide" data-label="Patterns">
-        <video muted loop playsinline preload="none" data-src="tours/11-patterns.mp4"
-               width="1440" height="810" aria-label="Patterns tab walkthrough"></video>
-      </li>
-      <li class="tour-slide" data-label="Playbook">
-        <video muted loop playsinline preload="none" data-src="tours/12-playbook.mp4"
-               width="1440" height="810" aria-label="Playbook tab walkthrough"></video>
-      </li>
-      <li class="tour-slide" data-label="News">
-        <video muted loop playsinline preload="none" data-src="tours/13-news.mp4"
-               width="1440" height="810" aria-label="News tab walkthrough"></video>
-      </li>
-  </ul>
-</section>
 
 <!-- ====== video ====== -->
 <div class="video-wrap">
@@ -436,48 +643,287 @@
   </video>
 </div>
 
+<!-- ====== trial friction removers ====== -->
+<!-- Sits between the promo video and the feature explorer: the three reasons
+     people hesitate, answered before they are asked to read about features. -->
+<section class="friction wrap">
+  <div class="friction-col">
+    <h3>Nothing to sign up for</h3>
+    <p>No account, no email, no card. Download it, open it, and log a trade in under a minute.</p>
+  </div>
+  <div class="friction-col">
+    <h3>It reads the history you have</h3>
+    <p>Drop in a NinjaTrader, Tradovate or TopstepX export and years of trades come in at once.</p>
+  </div>
+  <div class="friction-col">
+    <h3>Nothing is held back</h3>
+    <!-- PRICE-DRIFT: another $25. See the note above the pricing card. -->
+    <p>The trial is the whole app for fourteen days. After that it is $25 once, not every month.</p>
+  </div>
+</section>
+
 <!-- ====== features ====== -->
 <section class="features wrap" id="features">
-  <h2>What's inside</h2>
-
-  <div class="feature-row">
-    <div class="feature-text">
-      <h3>Local-first. Your trades never leave your machine.</h3>
-      <p>Everything lives in a SQLite database on your computer. No cloud account, no server, no data leaving your machine. You own your journal the same way you own a spreadsheet, except it's actually built for traders.</p>
-    </div>
-    <div class="feature-visual"><img src="shots/feature-dashboard.png" alt="TradeHelp dashboard: net P&amp;L, win rate, profit factor and the current behavioural focus" loading="lazy" decoding="async" width="1916" height="1004"></div>
+  <div class="xp-head">
+    <h2>Fourteen tabs. One local file.</h2>
+    <p>Every screen below is the app as it ships today. Pick a tab and see what it actually does.</p>
   </div>
 
-  <div class="feature-row reverse">
-    <div class="feature-text">
-      <h3>Offline AI coach that runs on your hardware.</h3>
-      <p>Connect your own Ollama or LM Studio instance, or bring your own API key. The AI reviews your trades, spots patterns, and gives you a coaching report, all without sending your data anywhere. It's like having a second set of eyes on every session.</p>
-    </div>
-    <div class="feature-visual"><img src="shots/feature-coach.png" alt="The AI coach reading a local journal, with suggested prompts and a data-and-privacy panel" loading="lazy" decoding="async" width="1919" height="1002"></div>
+  <div class="xp-tabs" role="tablist" aria-label="App features">
+    <button class="xp-tab" role="tab" id="xt-0" aria-controls="xp-0" aria-selected="true">Journal</button>
+    <button class="xp-tab" role="tab" id="xt-1" aria-controls="xp-1" aria-selected="false">Dashboard</button>
+    <button class="xp-tab" role="tab" id="xt-2" aria-controls="xp-2" aria-selected="false">Trade Mode</button>
+    <button class="xp-tab" role="tab" id="xt-3" aria-controls="xp-3" aria-selected="false">Prop firm</button>
+    <button class="xp-tab" role="tab" id="xt-4" aria-controls="xp-4" aria-selected="false">AI coach</button>
+    <button class="xp-tab" role="tab" id="xt-5" aria-controls="xp-5" aria-selected="false">Charts</button>
+    <button class="xp-tab" role="tab" id="xt-6" aria-controls="xp-6" aria-selected="false">Psychology</button>
+    <button class="xp-tab" role="tab" id="xt-7" aria-controls="xp-7" aria-selected="false">Rating</button>
+    <button class="xp-tab" role="tab" id="xt-8" aria-controls="xp-8" aria-selected="false">Goals</button>
+    <button class="xp-tab" role="tab" id="xt-9" aria-controls="xp-9" aria-selected="false">Reviews</button>
+    <button class="xp-tab" role="tab" id="xt-10" aria-controls="xp-10" aria-selected="false">Playbook</button>
+    <button class="xp-tab" role="tab" id="xt-11" aria-controls="xp-11" aria-selected="false">Patterns</button>
+    <button class="xp-tab" role="tab" id="xt-12" aria-controls="xp-12" aria-selected="false">News</button>
   </div>
 
-  <div class="feature-row">
-    <div class="feature-text">
-      <h3>Import from anywhere. CSV auto-detect does the work.</h3>
-      <p>Drop in a CSV from NinjaTrader, Tradovate, or TopstepX and TradeHelp figures out the columns. No manual mapping, no reformatting. Just drag, drop, and your trade history is in.</p>
+  <div class="xp-panel" role="tabpanel" id="xp-0" aria-labelledby="xt-0">
+    <div class="xp-copy">
+      <p class="xp-eyebrow">Journal and import</p>
+      <h3>Five years of trades in, before the coffee goes cold</h3>
+      <p>Log a trade in a few keystrokes, or drop in a CSV. Exports from NinjaTrader, Tradovate and TopstepX are recognised on sight.</p>
+      <ul class="xp-specs">
+        <li>Broker CSVs detected automatically, generic files get a mapping step</li>
+        <li>Point it at an export folder and it imports on its own</li>
+        <li>Every batch keeps its warnings, its history and a one-click rollback</li>
+        <li>Re-importing skips duplicates. Imported trades count as Verified</li>
+      </ul>
+      <a class="xp-cta" href="#download" data-goatcounter-click="cta-explorer-journal">Start the free 14 days <span aria-hidden="true">&rarr;</span></a>
     </div>
-    <div class="feature-visual"><img src="shots/feature-import.png" alt="Import inbox showing NinjaTrader CSV history with per-file imported, duplicate and skipped counts" loading="lazy" decoding="async" width="922" height="915"></div>
+    <div class="shot-frame">
+      <div class="shot-bar"><span class="shot-dot"></span><span class="shot-dot"></span><span class="shot-dot"></span><span class="shot-cap">TradeHelp, Import</span></div>
+      <video class="shot-media" src="tours/01-journal.mp4" poster="shots/feature-import.png" width="922" height="915" muted loop playsinline preload="none" aria-label="Logging a trade and importing a broker CSV"></video>
+    </div>
   </div>
 
-  <div class="feature-row reverse">
-    <div class="feature-text">
-      <h3>Prop-firm guardrails that actually understand prop rules.</h3>
-      <p>Set per-account profit targets, trailing drawdown cushions, and consistency rules. TradeHelp tracks each account separately and warns you before you breach. Built by someone who's blown accounts and learned the hard way.</p>
+  <div class="xp-panel" role="tabpanel" id="xp-1" aria-labelledby="xt-1" hidden>
+    <div class="xp-copy">
+      <p class="xp-eyebrow">Dashboard</p>
+      <h3>The numbers that say whether you are actually getting better</h3>
+      <p>Every trade you log recalculates the whole picture: net P&amp;L, win rate, profit factor, expectancy, drawdown and streaks. Filter it down to one account, or look at your live and prop accounts side by side.</p>
+      <ul class="xp-specs">
+        <li>Equity curve and daily P&amp;L on one screen</li>
+        <li>Expectancy and profit factor, not just win rate</li>
+        <li>Peak-to-trough drawdown per account</li>
+        <li>Leak finder and calendar view</li>
+      </ul>
+      <a class="xp-cta" href="#download" data-goatcounter-click="cta-explorer-dashboard">Start the free 14 days <span aria-hidden="true">&rarr;</span></a>
     </div>
-    <div class="feature-visual"><img src="shots/feature-accounts.png" alt="Prop overview listing two funded accounts with drawdown cushion, profit target and daily loss room" loading="lazy" decoding="async" width="1908" height="1006"></div>
+    <div class="shot-frame">
+      <div class="shot-bar"><span class="shot-dot"></span><span class="shot-dot"></span><span class="shot-dot"></span><span class="shot-cap">TradeHelp, Dashboard</span></div>
+      <video class="shot-media" src="tours/05-dashboard.mp4" poster="shots/feature-dashboard.png" width="1916" height="1004" muted loop playsinline preload="none" aria-label="The dashboard recalculating as trades are logged"></video>
+    </div>
   </div>
 
-  <div class="feature-row">
-    <div class="feature-text">
-      <h3>Live guardrails while you trade.</h3>
-      <p>Pre-trade checklist, max-loss alarm, and daily loss limit, all running locally so there's zero latency. No API calls, no internet required. Just a safety net between you and a bad decision.</p>
+  <div class="xp-panel" role="tabpanel" id="xp-2" aria-labelledby="xt-2" hidden>
+    <div class="xp-copy">
+      <p class="xp-eyebrow">Trade mode</p>
+      <h3>A lockout between you and the tilt trade</h3>
+      <p>Write your rules and your daily limits while you are calm. Trade Mode then holds you to them: it walks your checklist before you enter, and when you hit your max loss it takes over the screen rather than sending a notification you can wave away.</p>
+      <ul class="xp-specs">
+        <li>Your own pre-trade checklist and written rules</li>
+        <li>Daily goal and max-loss lockout</li>
+        <li>Full-screen alarm the moment you breach</li>
+        <li>A warning when high-impact news is minutes away</li>
+      </ul>
+      <a class="xp-cta" href="#download" data-goatcounter-click="cta-explorer-trademode">Start the free 14 days <span aria-hidden="true">&rarr;</span></a>
     </div>
-    <div class="feature-visual"><img src="shots/feature-trademode.png" alt="Trade Mode: pre-trade plans, written trading rules and daily goal and max-loss limits" loading="lazy" decoding="async" width="1916" height="1008"></div>
+    <div class="shot-frame">
+      <div class="shot-bar"><span class="shot-dot"></span><span class="shot-dot"></span><span class="shot-dot"></span><span class="shot-cap">TradeHelp, Trade Mode</span></div>
+      <video class="shot-media" src="tours/03-trade-mode.mp4" poster="shots/feature-trademode.png" width="1916" height="1008" muted loop playsinline preload="none" aria-label="Trade Mode running its checklist and loss lockout"></video>
+    </div>
+  </div>
+
+  <div class="xp-panel" role="tabpanel" id="xp-3" aria-labelledby="xt-3" hidden>
+    <div class="xp-copy">
+      <p class="xp-eyebrow">Prop firm</p>
+      <h3>Know your cushion before you take the trade</h3>
+      <p>Every eval and funded account gets its own card with two bars: progress to target, and how much trailing drawdown you have left.</p>
+      <ul class="xp-specs">
+        <li>Templates for 25K, 50K, 100K and 150K sizes</li>
+        <li>Trailing or static drawdown, daily loss room, minimum days</li>
+        <li>Payouts logged per account with an all-time total</li>
+        <li>Any firm. Accounts are defined by numbers, not by name</li>
+      </ul>
+      <a class="xp-cta" href="#download" data-goatcounter-click="cta-explorer-propfirm">Start the free 14 days <span aria-hidden="true">&rarr;</span></a>
+    </div>
+    <div class="shot-frame">
+      <div class="shot-bar"><span class="shot-dot"></span><span class="shot-dot"></span><span class="shot-dot"></span><span class="shot-cap">TradeHelp, Accounts</span></div>
+      <video class="shot-media" src="tours/04-accounts.mp4" poster="shots/feature-accounts.png" width="1908" height="1006" muted loop playsinline preload="none" aria-label="Prop firm account cards and drawdown cushion"></video>
+    </div>
+  </div>
+
+  <div class="xp-panel" role="tabpanel" id="xp-4" aria-labelledby="xt-4" hidden>
+    <div class="xp-copy">
+      <p class="xp-eyebrow">AI coach</p>
+      <h3>A coach that has read your log, not a forum thread</h3>
+      <p>Runs on your own machine through Ollama, or on your own API key if you would rather. Either way it is reading your trades, not generic advice.</p>
+      <ul class="xp-specs">
+        <li>Your model, your hardware, your data</li>
+        <li>Grounded in the trades you actually took</li>
+        <li>Review summaries, plus a live crypto and stock price lookup</li>
+        <li>Process and psychology only. No buy or sell signals</li>
+      </ul>
+      <a class="xp-cta" href="#download" data-goatcounter-click="cta-explorer-coach">Start the free 14 days <span aria-hidden="true">&rarr;</span></a>
+    </div>
+    <div class="shot-frame">
+      <div class="shot-bar"><span class="shot-dot"></span><span class="shot-dot"></span><span class="shot-dot"></span><span class="shot-cap">TradeHelp, AI Coach</span></div>
+      <video class="shot-media" src="tours/10-ai-coach.mp4" poster="shots/feature-coach.png" width="1919" height="1002" muted loop playsinline preload="none" aria-label="The AI coach answering from the trade log"></video>
+    </div>
+  </div>
+
+  <div class="xp-panel" role="tabpanel" id="xp-5" aria-labelledby="xt-5" hidden>
+    <div class="xp-copy">
+      <p class="xp-eyebrow">Chart AI and patterns</p>
+      <h3>Attach the chart. Ask what you missed.</h3>
+      <p>Attach the chart as you saw it and as it finished. Your imported candles are drawn with the entry, stop and target on top, and the coach reads the picture with you, on your own machine or your own key.</p>
+      <ul class="xp-specs">
+        <li>Before and after screenshots per trade</li>
+        <li>Offline vision model, or your own cloud key</li>
+        <li>Winners against losers, by setup</li>
+        <li>An A to F execution grade on every trade</li>
+      </ul>
+      <a class="xp-cta" href="#download" data-goatcounter-click="cta-explorer-charts">Start the free 14 days <span aria-hidden="true">&rarr;</span></a>
+    </div>
+    <div class="shot-frame">
+      <div class="shot-bar"><span class="shot-dot"></span><span class="shot-dot"></span><span class="shot-dot"></span><span class="shot-cap">TradeHelp, Charts</span></div>
+      <video class="shot-media" src="tours/02-charts.mp4" poster="shots/charts.png" width="1169" height="789" muted loop playsinline preload="none" aria-label="A chart marked up with entry, stop and target"></video>
+    </div>
+  </div>
+
+  <div class="xp-panel" role="tabpanel" id="xp-6" aria-labelledby="xt-6" hidden>
+    <div class="xp-copy">
+      <p class="xp-eyebrow">Psychology</p>
+      <h3>The tell you cannot see in your own trading</h3>
+      <p>P&amp;L broken down by emotion, by setup and by hour of the day, sitting next to the reasons you gave yourself at the time you took the trade.</p>
+      <ul class="xp-specs">
+        <li>P&amp;L by emotion, setup and hour</li>
+        <li>Your own reasons recorded at entry, not reconstructed later</li>
+        <li>Tilt flagged from behaviour, not self-report</li>
+        <li>The hours and setups that quietly cost you money</li>
+      </ul>
+      <a class="xp-cta" href="#download" data-goatcounter-click="cta-explorer-psychology">Start the free 14 days <span aria-hidden="true">&rarr;</span></a>
+    </div>
+    <div class="shot-frame">
+      <div class="shot-bar"><span class="shot-dot"></span><span class="shot-dot"></span><span class="shot-dot"></span><span class="shot-cap">TradeHelp, Psychology</span></div>
+      <video class="shot-media" src="tours/06-psychology.mp4" width="1916" height="1004" muted loop playsinline preload="none" aria-label="Psychology tab showing P&amp;L grouped by emotion and setup"></video>
+    </div>
+  </div>
+  <div class="xp-panel" role="tabpanel" id="xp-7" aria-labelledby="xt-7" hidden>
+    <div class="xp-copy">
+      <p class="xp-eyebrow">Rating</p>
+      <h3>A score for how you traded, not how it landed</h3>
+      <p>A 59 to 99 rating that grades your process rather than your luck, so a disciplined loss scores better than a reckless win.</p>
+      <ul class="xp-specs">
+        <li>Process score that ignores whether the trade paid</li>
+        <li>Non-tilt streak tracked alongside it</li>
+        <li>A to F execution grade on every individual trade</li>
+        <li>Your own self-grade overrides the app when you disagree</li>
+      </ul>
+      <a class="xp-cta" href="#download" data-goatcounter-click="cta-explorer-rating">Start the free 14 days <span aria-hidden="true">&rarr;</span></a>
+    </div>
+    <div class="shot-frame">
+      <div class="shot-bar"><span class="shot-dot"></span><span class="shot-dot"></span><span class="shot-dot"></span><span class="shot-cap">TradeHelp, Rating</span></div>
+      <video class="shot-media" src="tours/07-rating.mp4" width="1916" height="1004" muted loop playsinline preload="none" aria-label="The rating screen showing a process score and non-tilt streak"></video>
+    </div>
+  </div>
+  <div class="xp-panel" role="tabpanel" id="xp-8" aria-labelledby="xt-8" hidden>
+    <div class="xp-copy">
+      <p class="xp-eyebrow">Goals</p>
+      <h3>Targets you set while you are thinking clearly</h3>
+      <p>Weekly and monthly targets with live progress against them, so the number you are trading toward was chosen in advance rather than in the moment.</p>
+      <ul class="xp-specs">
+        <li>Weekly and monthly P&amp;L targets</li>
+        <li>Live progress as trades are logged</li>
+        <li>Commitments you can mark kept or broken yourself</li>
+        <li>Feeds the daily limits enforced in Trade Mode</li>
+      </ul>
+      <a class="xp-cta" href="#download" data-goatcounter-click="cta-explorer-goals">Start the free 14 days <span aria-hidden="true">&rarr;</span></a>
+    </div>
+    <div class="shot-frame">
+      <div class="shot-bar"><span class="shot-dot"></span><span class="shot-dot"></span><span class="shot-dot"></span><span class="shot-cap">TradeHelp, Goals</span></div>
+      <video class="shot-media" src="tours/08-goals.mp4" width="1916" height="1004" muted loop playsinline preload="none" aria-label="Goals screen showing weekly and monthly targets with progress"></video>
+    </div>
+  </div>
+  <div class="xp-panel" role="tabpanel" id="xp-9" aria-labelledby="xt-9" hidden>
+    <div class="xp-copy">
+      <p class="xp-eyebrow">Reviews</p>
+      <h3>The habit that actually changes how you trade</h3>
+      <p>Weekly, monthly and quarterly reviews with the period stats already gathered, so the only thing left to supply is the honest part.</p>
+      <ul class="xp-specs">
+        <li>Period stats and top setups compiled for you</li>
+        <li>A written reflection kept with the numbers</li>
+        <li>Month rewind to see what changed</li>
+        <li>Notes you can delete, edit and search later</li>
+      </ul>
+      <a class="xp-cta" href="#download" data-goatcounter-click="cta-explorer-reviews">Start the free 14 days <span aria-hidden="true">&rarr;</span></a>
+    </div>
+    <div class="shot-frame">
+      <div class="shot-bar"><span class="shot-dot"></span><span class="shot-dot"></span><span class="shot-dot"></span><span class="shot-cap">TradeHelp, Reviews</span></div>
+      <video class="shot-media" src="tours/09-reviews.mp4" width="1916" height="1004" muted loop playsinline preload="none" aria-label="The reviews screen with period statistics and a written reflection"></video>
+    </div>
+  </div>
+  <div class="xp-panel" role="tabpanel" id="xp-10" aria-labelledby="xt-10" hidden>
+    <div class="xp-copy">
+      <p class="xp-eyebrow">Playbook</p>
+      <h3>The setups you actually trade, scored against your results</h3>
+      <p>Write down the setups you claim to trade, attach real examples, and let your own history say which of them are worth keeping.</p>
+      <ul class="xp-specs">
+        <li>Each setup written down with its rules</li>
+        <li>Multiple chart examples per setup</li>
+        <li>Scored against the trades you took from it</li>
+        <li>The ones that lose money are hard to ignore</li>
+      </ul>
+      <a class="xp-cta" href="#download" data-goatcounter-click="cta-explorer-playbook">Start the free 14 days <span aria-hidden="true">&rarr;</span></a>
+    </div>
+    <div class="shot-frame">
+      <div class="shot-bar"><span class="shot-dot"></span><span class="shot-dot"></span><span class="shot-dot"></span><span class="shot-cap">TradeHelp, Playbook</span></div>
+      <video class="shot-media" src="tours/12-playbook.mp4" width="1916" height="1004" muted loop playsinline preload="none" aria-label="The playbook listing trading setups with example charts"></video>
+    </div>
+  </div>
+  <div class="xp-panel" role="tabpanel" id="xp-11" aria-labelledby="xt-11" hidden>
+    <div class="xp-copy">
+      <p class="xp-eyebrow">Patterns</p>
+      <h3>Winners against losers, side by side</h3>
+      <p>Your trades sorted by what they have in common, so the difference between the ones that worked and the ones that did not stops being a feeling.</p>
+      <ul class="xp-specs">
+        <li>Winners and losers compared by setup</li>
+        <li>Recurring mistakes surfaced from your own log</li>
+        <li>Chart screenshots grouped with their outcomes</li>
+        <li>Nothing leaves your machine to produce it</li>
+      </ul>
+      <a class="xp-cta" href="#download" data-goatcounter-click="cta-explorer-patterns">Start the free 14 days <span aria-hidden="true">&rarr;</span></a>
+    </div>
+    <div class="shot-frame">
+      <div class="shot-bar"><span class="shot-dot"></span><span class="shot-dot"></span><span class="shot-dot"></span><span class="shot-cap">TradeHelp, Patterns</span></div>
+      <video class="shot-media" src="tours/11-patterns.mp4" width="1916" height="1004" muted loop playsinline preload="none" aria-label="The patterns screen comparing winning and losing trades by setup"></video>
+    </div>
+  </div>
+  <div class="xp-panel" role="tabpanel" id="xp-12" aria-labelledby="xt-12" hidden>
+    <div class="xp-copy">
+      <p class="xp-eyebrow">News</p>
+      <h3>Know what is about to move before you size in</h3>
+      <p>A ticker tape and economic-calendar alerts, wired into the warnings that appear in Trade Mode minutes before high-impact news lands.</p>
+      <ul class="xp-specs">
+        <li>Economic calendar with impact levels</li>
+        <li>Warns you before high-impact releases</li>
+        <li>Feeds the alerts shown in Trade Mode</li>
+        <li>Live crypto and stock price lookup</li>
+      </ul>
+      <a class="xp-cta" href="#download" data-goatcounter-click="cta-explorer-news">Start the free 14 days <span aria-hidden="true">&rarr;</span></a>
+    </div>
+    <div class="shot-frame">
+      <div class="shot-bar"><span class="shot-dot"></span><span class="shot-dot"></span><span class="shot-dot"></span><span class="shot-cap">TradeHelp, News</span></div>
+      <video class="shot-media" src="tours/13-news.mp4" width="1916" height="1004" muted loop playsinline preload="none" aria-label="The news tab showing an economic calendar and ticker tape"></video>
+    </div>
   </div>
 </section>
 
@@ -504,9 +950,13 @@
 <section class="pricing wrap" id="pricing">
   <h2>One price. No subscription. No account.</h2>
   <div class="price-card">
-    <!-- PRICE-DRIFT: change $25 to $50 when the launch deal ends -->
+    <!-- PRICE-DRIFT: change $25 to $50 when the launch deal ends. The page now
+           promises this price to the first 100 customers specifically, so that
+           switch is a commitment, not a marketing option: leaving $25 up after
+           100 sales makes the sentence false. $25 also appears in the JSON-LD
+           above (twice) and in the nav — change all of them together. -->
     <div class="price">$25 <small>once</small></div>
-    <p style="color:#888;margin-bottom:.5rem">Launch price. Regular $50</p>
+    <p style="color:#888;margin-bottom:.5rem">Launch price for the first 100 customers. Regular $50 after that.</p>
     <p style="color:#888;font-size:.88rem">Free 14-day trial. Windows, macOS &amp; Linux.</p>
     <!-- The card advertises a free trial but only offered a Buy button, so anyone
          wanting to try it first had to scroll back to the hero to find a download. -->
@@ -522,16 +972,68 @@
 </section>
 
 <!-- ====== footer ====== -->
+
+<!-- ====== closing trial band ====== -->
+<!-- Deliberately the last thing read before the footer: the page ends on the
+     trial rather than on the price. -->
+<section class="trialband">
+  <div class="wrap trialband-inner">
+    <h2>The only way to know is to log a week in it</h2>
+    <p>Fourteen days, every feature on, no account and no card. If it does not tell you something about your trading you did not already know, delete it. You are out nothing but the download.</p>
+    <div class="trialband-btns">
+      <a class="btn btn-primary" data-download="trialband" href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.exe" data-goatcounter-click="download-windows-trialband">Download free for Windows</a>
+      <a class="btn btn-ghost" href="#pricing">See the price</a>
+    </div>
+    <p class="trialband-note">Also on macOS and Linux.</p>
+  </div>
+</section>
 <footer>
   <div class="wrap">
-    <div class="footer-links">
-      <a href="/support.html">Support</a>
-      <a href="/privacy.html">Privacy</a>
-      <a href="/sitemap.html">Sitemap</a>
+    <div class="footer-map">
+      <div class="footer-brand">
+        <span class="footer-word"><img src="logo-mark.png" alt="" width="22" height="22"><strong>Trade</strong><span>Help</span></span>
+        <p>A trading journal that stays on your own machine.</p>
+      </div>
+      <div class="footer-col">
+        <h4>Compare</h4>
+        <a href="/vs-tradezella.html">vs TradeZella</a>
+        <a href="/vs-tradersync.html">vs TraderSync</a>
+        <a href="/trading-journal-software.html">Trading journal software</a>
+      </div>
+      <div class="footer-col">
+        <h4>Guides</h4>
+        <a href="/prop-firm-trading-journal.html">Prop-firm journal</a>
+        <a href="/offline-trading-journal.html">Offline journal</a>
+        <a href="/import-ninjatrader.html">Import NinjaTrader</a>
+        <a href="/import-tradovate.html">Import Tradovate</a>
+        <a href="/import-topstepx.html">Import TopstepX</a>
+      </div>
+      <div class="footer-col">
+        <h4>More</h4>
+        <a href="/support.html">Support</a>
+        <a href="/privacy.html">Privacy</a>
+        <a href="/sitemap.html">Sitemap</a>
+        <!-- Reopens the real consent panel rather than pointing at nothing. -->
+        <a href="#" id="footerPrivacyChoices">Privacy choices</a>
+      </div>
     </div>
-    <p style="margin:0">&copy; 2026 TradeHelp. Built for traders who want to own their data.</p>
+    <div class="footer-bar">
+      <p>&copy; 2026 TradeHelp. Built for traders who want to own their data.</p>
+      <p>Windows, macOS and Linux</p>
+    </div>
+    <p class="footer-disclaimer">TradeHelp is a journaling and analysis tool. It is not financial advice and it does not give buy or sell signals.</p>
   </div>
 </footer>
+<script>
+  (function () {
+    var link = document.getElementById("footerPrivacyChoices");
+    if (!link) return;
+    link.addEventListener("click", function (e) {
+      e.preventDefault();
+      if (typeof window.thOpenPrivacyChoices === "function") window.thOpenPrivacyChoices();
+    });
+  })();
+</script>
 
 <!-- dropdown toggle -->
 <script>
@@ -595,7 +1097,6 @@
 })();
 </script>
   <script src="lightbox.js"></script>
-<script src="tour-carousel.js" defer></script>
 <!-- Same endpoint as the rest of the site. The design overhaul (7b057cd) dropped
      this from the homepage only, so its downloads and buys went uncounted. -->
 <script data-goatcounter="https://kingdd69.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
@@ -607,9 +1108,11 @@
 // it. The markup ships Windows, so this only ever swaps the label and href; with
 // scripting off the button still works and still points somewhere real.
 (function () {
-  var btn = document.getElementById('heroDownload');
-  var other = document.getElementById('heroOther');
-  if (!btn) return;
+  // Every download button on the page, not just the hero: the closing trial
+  // band needs the same platform label, and each keeps its own tracking event
+  // so it is possible to tell which one people actually press.
+  var buttons = document.querySelectorAll('[data-download]');
+  if (!buttons.length) return;
   var BASE = 'https://github.com/RaheimSwaby/tradehelp/releases/latest/download/';
   var ua = navigator.userAgent;
   var builds = {
@@ -624,9 +1127,13 @@
   else if (/Macintosh|Mac OS X/i.test(ua)) key = 'mac';
   else if (/Linux|X11/i.test(ua)) key = 'linux';
   var pick = builds[key];
-  btn.textContent = 'Download for ' + pick.label;
-  btn.setAttribute('href', BASE + pick.file);
-  btn.setAttribute('data-goatcounter-click', pick.event);
+  Array.prototype.forEach.call(buttons, function (btn) {
+    var where = btn.getAttribute('data-download');
+    btn.textContent = 'Download for ' + pick.label;
+    btn.setAttribute('href', BASE + pick.file);
+    btn.setAttribute('data-goatcounter-click', pick.event.replace(/-hero$/, '-' + where));
+  });
+  var other = document.querySelector('[data-download-other]');
   if (other) {
     var rest = Object.keys(builds).filter(function (k) { return k !== key; });
     other.innerHTML = 'Also on ' + rest.map(function (k) {
@@ -652,5 +1159,6 @@
   </a>
 </div>
 
+  <script src="features-explorer.js" defer></script>
 </body>
 </html>
