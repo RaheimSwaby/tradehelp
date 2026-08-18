@@ -557,6 +557,52 @@
     @media (max-width:768px){
       .hero-btns{margin-left:auto;margin-right:auto}
     }
+
+    /* ── Compare ─────────────────────────────────────────────────────────
+       A grid rather than a <table> so it can collapse to stacked cards on a
+       phone, where a squeezed three-column table is unreadable. */
+    .compare h2{font-size:36px;line-height:1.15;letter-spacing:-.02em;margin:0 0 12px;text-wrap:balance}
+    .compare-sub{font-size:17px;color:#a9a49c;max-width:62ch;margin:0 0 36px}
+    .compare-table{border:1px solid rgba(255,255,255,.1);border-radius:8px;overflow:hidden}
+    .compare-row{display:grid;grid-template-columns:1.4fr 1fr 1fr}
+    .compare-row > div{padding:16px 22px;font-size:15.5px;color:#a9a49c;
+      border-bottom:1px solid rgba(255,255,255,.07)}
+    .compare-row > div + div{border-left:1px solid rgba(255,255,255,.07)}
+    .compare-row:last-child > div{border-bottom:0}
+    .compare-head > div{background:#131315;color:#f0ede6;font-weight:600}
+    .c-us{color:#f0ede6 !important;font-weight:500}
+    .c-them{color:#817d76 !important}
+    .compare-note{font-size:13px;color:#6a6762;margin:14px 0 0}
+
+    /* ── Pricing card ────────────────────────────────────────────────── */
+    .price-card{display:grid;grid-template-columns:1.1fr 1fr;gap:56px;
+      border:1px solid rgba(255,255,255,.1);border-radius:10px;
+      background:#101012;padding:52px;text-align:left}
+    .price-left h2{font-size:36px;line-height:1.15;letter-spacing:-.02em;margin:0 0 18px;text-wrap:balance}
+    .price-left p{font-size:16.5px;line-height:1.65;color:#a9a49c;margin:0 0 14px}
+    .price-fine{color:#7d7972 !important;font-size:15px !important}
+    .price-right{border-left:1px solid rgba(255,255,255,.1);padding-left:44px}
+    .price-row{display:flex;align-items:baseline;gap:10px}
+    .price-now{font-size:52px;font-weight:600;letter-spacing:-.025em;color:#f5f2eb}
+    .price-unit{font-size:15px;color:#817d76}
+    .price-was{font-size:15px;color:#6f6c67}
+    .price-terms{font-size:14.5px;color:#a9a49c;margin:12px 0 24px}
+    .price-card .price-btns{display:flex;flex-direction:column;gap:10px}
+    .price-nocard{font-size:13.5px;color:#6a6762;text-align:center;margin:14px 0 0}
+    @media (max-width:900px){
+      .price-card{grid-template-columns:1fr;gap:32px;padding:32px}
+      .price-right{border-left:0;border-top:1px solid rgba(255,255,255,.1);
+        padding-left:0;padding-top:32px}
+      .compare-row{grid-template-columns:1fr}
+      .compare-row > div + div{border-left:0}
+      .compare-head{display:none}
+      .c-us::before{content:"TradeHelp: ";color:#8d8982}
+      .c-them::before{content:"Cloud: ";color:#8d8982}
+    }
+    @media (max-width:768px){
+      .compare h2,.price-left h2{font-size:26px}
+      .price-now{font-size:40px}
+    }
 </style>
   <link rel="stylesheet" href="lightbox.css">
 <link rel="icon" href="favicon.ico" sizes="any" />
@@ -947,27 +993,51 @@
     shot.</p>
 </section>
 
-<section class="pricing wrap" id="pricing">
-  <h2>One price. No subscription. No account.</h2>
-  <div class="price-card">
-    <!-- PRICE-DRIFT: change $25 to $50 when the launch deal ends. The page now
-           promises this price to the first 100 customers specifically, so that
-           switch is a commitment, not a marketing option: leaving $25 up after
-           100 sales makes the sentence false. $25 also appears in the JSON-LD
-           above (twice) and in the nav — change all of them together. -->
-    <div class="price">$25 <small>once</small></div>
-    <p style="color:#888;margin-bottom:.5rem">Launch price for the first 100 customers. Regular $50 after that.</p>
-    <p style="color:#888;font-size:.88rem">Free 14-day trial. Windows, macOS &amp; Linux.</p>
-    <!-- The card advertises a free trial but only offered a Buy button, so anyone
-         wanting to try it first had to scroll back to the hero to find a download. -->
-    <div class="price-btns">
-      <a href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.exe" class="btn btn-primary" data-goatcounter-click="download-windows-pricing">Download now</a>
-      <a href="https://tradehelp.gumroad.com/l/oyftvr" class="btn btn-ghost" data-goatcounter-click="buy-gumroad-pricing">Buy on Gumroad</a>
+<!-- ====== compare ====== -->
+<!-- Figures match the ones already published on vs-tradezella.html and
+     vs-tradersync.html. If those change, change these in the same commit: a
+     visitor who clicks through and sees two different numbers stops believing
+     either of them. -->
+<section class="compare wrap" id="compare">
+  <h2>$25 once, or $360 every year</h2>
+  <p class="compare-sub">Cloud journals are good software. They are also a subscription, an account, and your full trade history sitting on somebody else's server.</p>
+  <div class="compare-table">
+    <div class="compare-row compare-head">
+      <div></div><div>TradeHelp</div><div>Cloud journals</div>
     </div>
-    <p class="note-alt">No account, no card. Also on
-      <a href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.dmg" data-goatcounter-click="download-mac">macOS</a> and
-      <a href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.AppImage" data-goatcounter-click="download-linux">Linux</a>.
-    </p>
+    <div class="compare-row"><div>Cost</div><div class="c-us">$25 once</div><div class="c-them">$29.95 to $79.95 a month</div></div>
+    <div class="compare-row"><div>Where trades live</div><div class="c-us">SQLite on your disk</div><div class="c-them">Their servers</div></div>
+    <div class="compare-row"><div>Account required</div><div class="c-us">None</div><div class="c-them">Email and password</div></div>
+    <div class="compare-row"><div>Works with no internet</div><div class="c-us">Fully</div><div class="c-them">No</div></div>
+    <div class="compare-row"><div>AI coach</div><div class="c-us">Your model, on your machine</div><div class="c-them">Their model, their logs</div></div>
+    <div class="compare-row"><div>If the company folds</div><div class="c-us">Your file still opens</div><div class="c-them">Export while you can</div></div>
+  </div>
+  <p class="compare-note">Cloud figures are published list pricing for comparable plans, checked August 2026.</p>
+</section>
+<section class="pricing wrap" id="pricing">
+  <div class="price-card">
+    <div class="price-left">
+      <h2>One price, no subscription, no account</h2>
+      <p>Use the whole app free for fourteen days. If it earns its keep, pay once and keep it. One key activates two devices, verifies once online and works offline after that.</p>
+      <p class="price-fine">Bought through Gumroad, so refunds and receipts are handled for you.</p>
+    </div>
+    <div class="price-right">
+      <!-- PRICE-DRIFT: $25 appears here, in the nav, the friction strip, the
+           compare table and twice in the JSON-LD. Change them together with
+           scripts/set-price.mjs, never by hand. The first-100 promise below
+           makes raising it a commitment rather than an option. -->
+      <div class="price-row">
+        <span class="price-now">$25</span>
+        <span class="price-unit">once</span>
+        <s class="price-was">$50</s>
+      </div>
+      <p class="price-terms">Launch price for the first 100 customers. Windows, macOS and Linux.</p>
+      <div class="price-btns">
+        <a href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.exe" class="btn btn-primary" data-download="pricing" data-download-keep-label data-goatcounter-click="download-windows-pricing">Start the free 14 days</a>
+        <a href="https://tradehelp.gumroad.com/l/oyftvr" class="btn btn-ghost" data-goatcounter-click="buy-gumroad-pricing">Buy on Gumroad</a>
+      </div>
+      <p class="price-nocard">No card needed for the trial.</p>
+    </div>
   </div>
 </section>
 
@@ -1129,7 +1199,11 @@
   var pick = builds[key];
   Array.prototype.forEach.call(buttons, function (btn) {
     var where = btn.getAttribute('data-download');
-    btn.textContent = 'Download for ' + pick.label;
+    // A button may carry its own wording on purpose - the pricing card sells the
+    // trial, not the platform - so only rewrite the label when it is generic.
+    if (!btn.hasAttribute('data-download-keep-label')) {
+      btn.textContent = 'Download for ' + pick.label;
+    }
     btn.setAttribute('href', BASE + pick.file);
     btn.setAttribute('data-goatcounter-click', pick.event.replace(/-hero$/, '-' + where));
   });
