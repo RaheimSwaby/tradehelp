@@ -5,7 +5,6 @@ import { randomUUID } from 'crypto'
 import { registerQuickNotes, closeQuickNotes } from './quickNotes.js'
 import { createServer } from 'http'
 import { pathToFileURL } from 'url'
-import * as db from './db.js'
 import { chat, chatStream, models } from './ai.js'
 import { fetchPrice, fetchQuotes } from './price.js'
 import { fetchEvents, fetchEventRange } from './events.js'
@@ -20,8 +19,10 @@ import { createMobileSyncServer } from './mobileSync.js'
 import { createCredentialVault } from './credentialVault.js'
 import { createMarketDataService } from './marketData/service.js'
 import { prepareTradingViewRequestHeaders } from './tradingViewHeaders.js'
+import { createStartupLogger, withDeadline } from './startup.js'
 
 let win
+let db = null
 let settingsCache = null
 let videoPickCleanupTimer = null
 let importWatcher = null
@@ -29,6 +30,7 @@ let brokerSync = null
 let marketData = null
 let mobileSync = null
 let rendererServer = null
+let startupLog = null
 const VIDEO_SCHEME = 'tradehelp-media'
 const VIDEO_PICK_TTL_MS = 15 * 60 * 1000
 const MAX_VIDEO_PICKS = 10
@@ -184,13 +186,13 @@ function createWindow(rendererPort) {
   // electron-vite injects ELECTRON_RENDERER_URL in dev; load the built file otherwise.
   const devUrl = process.env.ELECTRON_RENDERER_URL
   win.webContents.on('did-fail-load', (_event, code, description) => {
-    console.error(`[renderer] failed to load (${code}): ${description}`)
+    startupLog?.error('renderer failed to load', { code, description })
   })
   win.webContents.on('render-process-gone', (_event, details) => {
-    console.error('[renderer] process exited:', details.reason, details.exitCode)
+    startupLog?.error('renderer process exited', details)
   })
   win.webContents.on('console-message', (_event, level, message, line, sourceId) => {
-    if (level >= 2) console.error(`[renderer] ${message} (${sourceId}:${line})`)
+    if (level >= 2) startupLog?.error('renderer console', `${message} (${sourceId}:${line})`)
   })
 
   // The embedded TradingView chart is remote content and carries its own links.
@@ -218,7 +220,14 @@ function createWindow(rendererPort) {
   else win.loadFile(join(__dirname, '../renderer/index.html'))
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  startupLog = createStartupLogger(join(app.getPath('userData'), 'logs', 'startup.log'))
+  startupLog.info('launch', {
+    version: app.getVersion(),
+    platform: process.platform,
+    arch: process.arch,
+    packaged: app.isPackaged
+  })
   app.setAppUserModelId('com.tradehelp.app') // so Windows notifications show "TradeHelp", not "electron.app"
   
   // Referer only, deliberately. Overriding Origin here looked like the same
@@ -251,38 +260,34 @@ app.whenReady().then(() => {
   // so an install that dies here also never checks for updates again — which is
   // consistent with macOS being ~36% of installs but ~3% of update checks.
   //
-  // Each subsystem below is macOS-fragile in ways it is not on Windows:
-  //   createCredentialVault  -> safeStorage -> the macOS Keychain
-  //   createMobileSyncServer -> binds a listener -> Local Network permission,
-  //                             which macOS 15+ gates behind a prompt
-  //   registerVideoProtocol  -> protocol.handle
-  // Windows survives all three, which is why this never reproduced here.
-  //
-  // Rule: optional subsystems degrade, they do not abort. A subsystem that fails
-  // is left null, and its own IPC handlers reject when the user touches that
-  // feature — a contained, visible failure instead of a dead app. Only the
-  // database is fatal, and it must say so in a dialog.
+  // Optional subsystems degrade instead of aborting startup. Database loading,
+  // IPC registration, and BrowserWindow creation are essential and fail with a
+  // visible dialog. The database module is imported here so a native SQLite ABI
+  // failure is caught too; a static import would fail before this handler ran.
   // ───────────────────────────────────────────────────────────────────────────
   const optional = (label, fn) => {
     try {
       return fn()
     } catch (err) {
-      console.error(`[startup] ${label} failed, continuing without it:`, err)
+      startupLog.warn(`${label} failed, continuing without it`, err)
       return null
     }
   }
 
-  try {
-    db.initDb()
-  } catch (err) {
-    // A journal with no database is unusable — but the user still has to be told
-    // why, rather than being left looking at their desktop.
-    console.error('[startup] database init failed:', err)
+  const fatal = (label, err, detail) => {
+    startupLog.error(`${label} failed`, err)
     dialog.showErrorBox(
       'TradeHelp could not start',
-      `The trade database could not be opened.\n\n${err?.message || err}\n\nYour trades have not been changed. Please send this message to support.`
+      `${detail}\n\n${err?.message || err}\n\nYour trades have not been changed. Diagnostic log:\n${startupLog.filePath}`
     )
     app.quit()
+  }
+
+  try {
+    db = await import('./db.js')
+    db.initDb()
+  } catch (err) {
+    fatal('database initialization', err, 'The trade database could not be loaded or opened.')
     return
   }
 
@@ -310,30 +315,62 @@ app.whenReady().then(() => {
   optional('video protocol', () => registerVideoProtocol())
   videoPickCleanupTimer = setInterval(purgeExpiredVideoPicks, 60_000)
   videoPickCleanupTimer.unref?.()
-  db.backupDb()
-  optional('IPC registration', () => registerIpc())
-  // If loopback cannot bind, fall back to file:// rather than failing to open
-  // at all — everything works then except the embedded live chart.
-  startRendererServer()
-    .then((port) => createWindow(port))
-    .catch((e) => {
-      console.error('[renderer] loopback server unavailable, using file://:', e?.message || e)
-      createWindow(null)
+  optional('database backup', () => db.backupDb())
+
+  try {
+    registerIpc()
+  } catch (err) {
+    fatal('IPC registration', err, 'TradeHelp could not connect its window to your local journal.')
+    return
+  }
+
+  let rendererPort = null
+  try {
+    rendererPort = await withDeadline(
+      startRendererServer(),
+      4_000,
+      'The local renderer server did not start within four seconds'
+    )
+  } catch (err) {
+    startupLog.warn('loopback renderer unavailable, using file fallback', err)
+    const stalledServer = rendererServer
+    rendererServer = null
+    try { stalledServer?.close() } catch {}
+  }
+
+  try {
+    createWindow(rendererPort)
+  } catch (err) {
+    fatal('window creation', err, 'The TradeHelp window could not be created.')
+    return
+  }
+
+  importWatcher = optional('import watcher', () => {
+    const watcher = createImportWatcher(db, (event) => {
+      try { win?.webContents?.send('imports:changed', event) } catch {}
+      if (!Notification.isSupported() || event.type === 'error') return
+      const title = event.type === 'auto-imported' ? 'Trades imported' : 'New broker CSV detected'
+      const body = event.type === 'auto-imported'
+        ? `${event.importedCount} new trade${event.importedCount === 1 ? '' : 's'} added from ${event.item.fileName}.`
+        : `${event.item.fileName} is ready in your Import inbox.`
+      try { new Notification({ title, body }).show() } catch {}
     })
-  importWatcher = createImportWatcher(db, (event) => {
-    try { win?.webContents?.send('imports:changed', event) } catch {}
-    if (!Notification.isSupported() || event.type === 'error') return
-    const title = event.type === 'auto-imported' ? 'Trades imported' : 'New broker CSV detected'
-    const body = event.type === 'auto-imported'
-      ? `${event.importedCount} new trade${event.importedCount === 1 ? '' : 's'} added from ${event.item.fileName}.`
-      : `${event.item.fileName} is ready in your Import inbox.`
-    try { new Notification({ title, body }).show() } catch {}
+    watcher.start()
+    return watcher
   })
-  importWatcher.start()
-  initUpdater(() => win)
+  optional('updater', () => initUpdater(() => win))
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow(rendererServer?.address()?.port || null)
   })
+  startupLog.info('startup complete', { renderer: rendererPort ? 'loopback' : 'file' })
+}).catch((err) => {
+  try {
+    startupLog?.error('unhandled ready failure', err)
+    dialog.showErrorBox('TradeHelp could not start', `${err?.message || err}\n\nPlease send startup.log to support.`)
+  } catch {
+    console.error('[startup] unhandled ready failure', err)
+  }
+  app.quit()
 })
 
 app.on('before-quit', () => {

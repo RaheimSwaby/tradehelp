@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react'
 import {
   Settings as SettingsIcon, Gauge, Play,
   CalendarClock, AlertTriangle, X, Clock3, TrendingUp, HelpCircle,
-  Waypoints, Wallet, Armchair, Flag, Megaphone, History, Shapes, LineChart, GraduationCap, PenLine
+  Waypoints, Wallet, Armchair, Flag, Megaphone, History, Shapes, LineChart, GraduationCap, PenLine, RefreshCw
 } from 'lucide-react'
 import { applyTheme, T, mono } from './theme.js'
 import { fmt$, fmtN, parseRules, IMPACT_RANK, ALERT_LEADS, GATE_CONFIGURED, isNewerVersion, thisWeekKey } from './utils.js'
@@ -178,6 +178,8 @@ function GoTimeTransition() {
 /* ───────── main app ───────── */
 export default function App() {
   const [ready, setReady] = useState(false)
+  const [startupError, setStartupError] = useState('')
+  const [startupAttempt, setStartupAttempt] = useState(0)
   const [trades, setTrades] = useState([])
   const [goals, setGoals] = useState({ weekly: 500, monthly: 2000 })
   const [reviews, setReviews] = useState({})
@@ -269,26 +271,35 @@ export default function App() {
   }, [trades, now])
 
   useEffect(() => {
+    let active = true
     (async () => {
-      if (!hasApi) { setReady(true); return }
-      setTrades(await window.api.listTrades())
-      setGoals(await window.api.getGoals())
-      setReviews(await window.api.getReviews())
-      setSettings(await window.api.getSettings())
-      if (window.api.getLicense) setLicense(await window.api.getLicense())
-      if (window.api.listPlaybook) setPlaybook(await window.api.listPlaybook())
-      if (window.api.listDayLogs) setDayLogs(await window.api.listDayLogs())
-      if (window.api.listPayouts) setPayouts(await window.api.listPayouts())
-      if (window.api.listPropExpenses) setPropExpenses(await window.api.listPropExpenses())
-      if (window.api.listTradePlans) setTradePlans(await window.api.listTradePlans())
-      if (window.api.listCommitments) setCommitments(await window.api.listCommitments())
-      if (window.api.listRuleBreaks) setRuleBreaks(await window.api.listRuleBreaks())
-      if (window.api.listInstrumentProfiles) setInstrumentProfiles(await window.api.listInstrumentProfiles())
-      if (window.api.listSavedSearches) setSavedSearches(await window.api.listSavedSearches())
-      if (window.api.listTradingSessions) setTradingSessions(await window.api.listTradingSessions(100))
-      setReady(true)
+      if (!hasApi) { if (active) setReady(true); return }
+      try {
+        setStartupError('')
+        setTrades(await window.api.listTrades())
+        setGoals(await window.api.getGoals())
+        setReviews(await window.api.getReviews())
+        setSettings(await window.api.getSettings())
+        if (window.api.getLicense) setLicense(await window.api.getLicense())
+        if (window.api.listPlaybook) setPlaybook(await window.api.listPlaybook())
+        if (window.api.listDayLogs) setDayLogs(await window.api.listDayLogs())
+        if (window.api.listPayouts) setPayouts(await window.api.listPayouts())
+        if (window.api.listPropExpenses) setPropExpenses(await window.api.listPropExpenses())
+        if (window.api.listTradePlans) setTradePlans(await window.api.listTradePlans())
+        if (window.api.listCommitments) setCommitments(await window.api.listCommitments())
+        if (window.api.listRuleBreaks) setRuleBreaks(await window.api.listRuleBreaks())
+        if (window.api.listInstrumentProfiles) setInstrumentProfiles(await window.api.listInstrumentProfiles())
+        if (window.api.listSavedSearches) setSavedSearches(await window.api.listSavedSearches())
+        if (window.api.listTradingSessions) setTradingSessions(await window.api.listTradingSessions(100))
+      } catch (error) {
+        console.error('[startup] journal bootstrap failed', error)
+        if (active) setStartupError(error?.message || 'The local journal did not respond.')
+      } finally {
+        if (active) setReady(true)
+      }
     })()
-  }, [hasApi])
+    return () => { active = false }
+  }, [hasApi, startupAttempt])
 
   async function refreshPrivateBriefingQuotes() {
     if (!hasApi || !settings || settings.tickerEnabled === 'false') {
@@ -1176,6 +1187,18 @@ export default function App() {
 
         {!ready ? (
           <div className="py-20 text-center text-sm" style={{ color: T.dim }}>Loading your journal…</div>
+        ) : startupError ? (
+          <section className="mx-auto flex max-w-xl flex-col items-center px-5 py-20 text-center" role="alert">
+            <AlertTriangle size={24} style={{ color: T.down }} />
+            <h2 className="mt-4 text-base font-semibold" style={{ color: T.text }}>Your journal could not finish loading</h2>
+            <p className="mt-2 text-sm" style={{ color: T.dim }}>Your trades have not been changed. Restart TradeHelp or retry the local connection.</p>
+            <p className="mt-2 text-xs" style={{ color: T.faint }}>{startupError}</p>
+            <button type="button" className="mt-5 flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold"
+              style={{ background: T.accent, color: '#1A1306' }}
+              onClick={() => { setReady(false); setStartupError(''); setStartupAttempt((value) => value + 1) }}>
+              <RefreshCw size={15} /> Retry
+            </button>
+          </section>
         ) : !hasApi && browserPreview === 'tradingview' ? (
           <ChartTab trades={[]} />
         ) : !hasApi && browserPreview === 'news' ? (
