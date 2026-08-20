@@ -159,20 +159,78 @@ export const HELP_SECTIONS = [
     ]
   },
   {
+    id: 'market-context',
+    title: 'Private briefing and directional bias',
+    items: [
+      {
+        q: 'Where is the Private Briefing?',
+        a: 'Open News & Events. The Private Briefing is the first panel on that page. It refreshes every five minutes, and the refresh button beside the page tabs reloads the briefing and economic calendar.'
+      },
+      {
+        q: 'What does the Private Briefing use?',
+        a: 'It combines your watchlist, scheduled economic events, today\'s P&L, saved daily loss limit, active commitment and journal patterns. It gives session context and risk reminders. It does not predict price direction or tell you to enter a trade.'
+      },
+      {
+        q: 'Why did the Private Briefing appear over another tab?',
+        a: 'TradeHelp shows one compact briefing each day when you have not opened News & Events. Press Open briefing to see the full panel, or press the close button to dismiss it for the day. Opening News & Events also marks that day\'s briefing as seen.'
+      },
+      {
+        q: 'What is Directional Bias?',
+        a: 'Open News & Events and find Directional bias below the Private Briefing. Choose an instrument to see Bullish, Bearish, Neutral or Unavailable. TradeHelp scores five checks from one-minute bars: two-hour trend, market structure, VWAP, momentum and participation. Each row shows its contribution to the score and the condition that would invalidate the current state.'
+      },
+      {
+        q: 'Why does Directional Bias say Unavailable?',
+        a: 'The calculation needs at least 120 one-minute bars, and the latest completed bar must be no more than two minutes old. TradeHelp also withholds the state when the stored series is not one-minute data. Refresh the connected source or import a current bar file. A closed market can leave the latest bar too old until trading resumes.'
+      },
+      {
+        q: 'How do I connect free forex data?',
+        a: 'Open Settings → Market data connections, choose OANDA Practice, paste the personal access token from your OANDA fxTrade Practice account, then press Verify and save securely. Choose EUR/USD, GBP/USD or USD/JPY and press Refresh bars. The same connection supplies those pairs to the ticker and Private Briefing. OANDA demo and API access depend on your region.'
+      },
+      {
+        q: 'Where do ticker prices appear?',
+        a: 'A compact secondary ticker stays under the app navigation on every tab and remains at the top while you scroll. It mirrors the watchlist configured in Charting → Market Pulse, where the full TradingView ticker and watchlist editor remain available. Turn the compact ticker on or off under Settings → Market ticker & briefing quotes.'
+      },
+      {
+        q: 'Can the OANDA connection place trades?',
+        a: 'No. TradeHelp connects to the OANDA practice environment and calls the account check and candle endpoints. It has no code for OANDA orders or positions. TradeHelp encrypts the saved token with your operating system and excludes it from backups and exports.'
+      },
+      {
+        q: 'Why does forex use tick activity instead of volume?',
+        a: 'Spot forex has no central exchange volume. OANDA reports how many prices formed each candle, so TradeHelp uses that tick count as a participation proxy. The panel labels it Tick activity and labels the weighted price level as VWAP proxy.'
+      },
+      {
+        q: 'How do I supply CME futures data?',
+        a: 'You have two paths. Import one-minute bars under Settings → Chart data, or open Settings → Market data connections and choose Databento Historical. With Databento, choose the instrument and history window, press Check download cost, then confirm the download. TradeHelp makes no billable request before you approve the estimate.'
+      },
+      {
+        q: 'Is Databento required?',
+        a: 'No. Local bar imports work without a Databento account, and OANDA Practice covers the supported forex pairs. Databento supplies the current automatic CME path. A manual CME export must stay current for Directional Bias to publish a state.'
+      }
+    ]
+  },
+  {
     id: 'reviews',
     title: 'Reviews and wrap-ups',
     items: [
       {
-        q: 'What is the weekly or monthly wrap-up?',
+        q: 'What is the weekly, monthly or quarterly wrap-up?',
         a: 'It is a local recap built from your completed trades and recorded rule breaks: net P&L, record, win rate, repeated setups or emotions, your current weakness and one suggested focus. The numbers do not require AI; asking the Coach for a note is optional.'
       },
       {
         q: 'When does a wrap-up appear?',
-        a: 'TradeHelp offers a completed weekly or monthly recap once for that period. A monthly wrap takes priority when both are ready. You can also open weekly recaps from Reviews and use the full-screen recap button there.'
+        a: 'TradeHelp offers each completed week, month or quarter once. A quarterly recap takes priority when several recaps are ready, followed by the monthly and weekly recaps on later launches. You can open any period from Reviews without waiting for the reminder.'
       },
       {
         q: 'What happens to the focus I save?',
-        a: 'Your focus is saved locally against that week or month. The next matching wrap shows it back to you so you can compare what you intended to work on with what your journal recorded.'
+        a: 'TradeHelp saves your focus against that week, month or quarter. The next matching wrap shows it again so you can compare your intended change with the trades you recorded.'
+      },
+      {
+        q: 'Where are my monthly and quarterly statistics?',
+        a: 'Open Reviews and find Monthly statistics. Use the Month or Quarter buttons to change the grouping. The panel shows profitable periods, average P&L, best and worst period, trade count, win rate, profit factor and average trade. Select a period name to open its full review.'
+      },
+      {
+        q: 'How do I filter my Journal by quarter?',
+        a: 'Open Journal and use the quarter menu beside the other filters. Choose This quarter or Last quarter. Journal search also understands phrases such as "winning trades this quarter" and "NQ losses last quarter."'
       },
       {
         q: 'Where are my written review notes?',
@@ -228,6 +286,10 @@ export const HELP_SECTIONS = [
       {
         q: 'What can the coach see?',
         a: 'Your full journal: trades with notes, reasons and self-grades, saved reviews, playbook, goals, rules and no-trade days. It coaches process and psychology — it does not predict prices or give trade signals.'
+      },
+      {
+        q: 'Are my coach conversations saved?',
+        a: 'TradeHelp saves the visible coach conversation on this device, so switching tabs or restarting the app keeps the current thread. It clears the thread five days after the latest message. The saved thread does not include API keys or the hidden journal context sent with each request. Press Clear in the Coach header to remove it sooner.'
       },
       {
         q: 'Will it make things up?',

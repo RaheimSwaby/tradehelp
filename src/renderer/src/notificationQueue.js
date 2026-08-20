@@ -3,6 +3,7 @@ export const FLOATING_NOTICE_PRIORITY = Object.freeze([
   'update',
   'weekly-review',
   'daily-review',
+  'briefing',
   'timing',
   'achievement',
   'nudge',
@@ -16,6 +17,7 @@ export function selectFloatingNotice({
   update = false,
   dailyReview = false,
   weeklyReview = false,
+  briefing = false,
   timing = false,
   achievement = false,
   nudge = false,
@@ -27,6 +29,7 @@ export function selectFloatingNotice({
   if (blocked) return null
   if (weeklyReview) return 'weekly-review'
   if (dailyReview) return 'daily-review'
+  if (briefing) return 'briefing'
   if (timing) return 'timing'
   if (achievement) return 'achievement'
   if (nudge) return 'nudge'

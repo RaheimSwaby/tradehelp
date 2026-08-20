@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseJournalQuery, matchesJournalFilters } from '../journalSearch.js'
+import { journalQuarterRange, parseJournalQuery, matchesJournalFilters } from '../journalSearch.js'
 
 // A Wednesday, noon local — keeps the relative-date cases deterministic.
 const NOW = new Date(2026, 6, 15, 12, 0, 0)
@@ -79,6 +79,18 @@ describe('parseJournalQuery — time, dates & weekdays', () => {
     expect(today.to).toBe(new Date(2026, 6, 16).getTime())
     const week = firstKind(parse('this week'), 'dateRange')
     expect(week.from).toBe(new Date(2026, 6, 13).getTime()) // Monday of NOW's week
+  })
+
+  it('uses calendar boundaries for this quarter and last quarter', () => {
+    expect(firstKind(parse('this quarter'), 'dateRange')).toMatchObject({
+      from: new Date(2026, 6, 1).getTime(),
+      to: new Date(2026, 6, 16).getTime()
+    })
+    expect(firstKind(parse('last quarter'), 'dateRange')).toMatchObject({
+      from: new Date(2026, 3, 1).getTime(),
+      to: new Date(2026, 6, 1).getTime()
+    })
+    expect(journalQuarterRange('all', NOW)).toBeNull()
   })
 
   it('parses an explicit ISO date qualifier', () => {
@@ -162,6 +174,8 @@ describe('matchesJournalFilters', () => {
     expect(matchesJournalFilters(TRADES[0], parse('monday'))).toBe(false)
     expect(matchesJournalFilters(TRADES[0], parse('today'))).toBe(true) // 2026-07-15
     expect(matchesJournalFilters(TRADES[1], parse('today'))).toBe(false)
+    expect(matchesJournalFilters(TRADES[0], parse('this quarter'))).toBe(true)
+    expect(matchesJournalFilters({ entryTime: '2026-05-12 10:00' }, parse('last quarter'))).toBe(true)
   })
 
   it('matches free-text tokens across searchable fields', () => {

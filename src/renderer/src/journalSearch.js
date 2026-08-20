@@ -66,6 +66,12 @@ function startOfMonth(value) {
   return new Date(date.getFullYear(), date.getMonth(), 1)
 }
 
+function startOfQuarter(value) {
+  const date = new Date(value)
+  const month = Math.floor(date.getMonth() / 3) * 3
+  return new Date(date.getFullYear(), month, 1)
+}
+
 function shiftMonths(value, amount) {
   const date = startOfMonth(value)
   date.setMonth(date.getMonth() + amount)
@@ -79,6 +85,15 @@ function shiftMonthsClamped(value, amount) {
   const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate()
   target.setDate(Math.min(day, lastDay))
   return target
+}
+
+export function journalQuarterRange(which = 'this', now = new Date()) {
+  if (!['this', 'last'].includes(which)) return null
+  const today = startOfDay(now)
+  const tomorrow = addDays(today, 1)
+  const current = startOfQuarter(today)
+  if (which === 'last') return { from: shiftMonths(current, -3).getTime(), to: current.getTime() }
+  return { from: current.getTime(), to: tomorrow.getTime() }
 }
 
 function parseClock(hourText, minuteText, suffixText) {
@@ -262,9 +277,15 @@ export function parseJournalQuery(rawQuery, { trades = [], accounts = [], now = 
     else from = addDays(today, -(amount * (unit.startsWith('week') ? 7 : 1)) + 1)
     add({ id: `date-relative:${match[0].trim().toLowerCase()}`, kind: 'dateRange', from: from.getTime(), to: tomorrow.getTime(), label: `Date: ${match[0].trim()}`, detail: 'Uses the trade entry date, including today.' })
   })
-  consume(/\b(this|last)\s+(week|month)\b/gi, (match) => {
+  consume(/\b(this|last)\s+(week|month|quarter)\b/gi, (match) => {
     const current = match[1].toLowerCase() === 'this'
-    const week = match[2].toLowerCase() === 'week'
+    const unit = match[2].toLowerCase()
+    if (unit === 'quarter') {
+      const range = journalQuarterRange(current ? 'this' : 'last', today)
+      add({ id: `date-relative:${match[0].trim().toLowerCase()}`, kind: 'dateRange', ...range, label: `Date: ${match[0].trim()}`, detail: 'Uses calendar quarters: Jan-Mar, Apr-Jun, Jul-Sep, and Oct-Dec.' })
+      return
+    }
+    const week = unit === 'week'
     const periodStart = week ? startOfWeek(today) : startOfMonth(today)
     const from = current ? periodStart : (week ? addDays(periodStart, -7) : shiftMonths(periodStart, -1))
     const to = current ? tomorrow : periodStart

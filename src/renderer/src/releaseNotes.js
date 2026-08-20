@@ -33,6 +33,16 @@ const V047_NOTES = `- New Chart tab, pull up any trade and see exactly where you
 - NinjaTrader imports no longer leave escape codes in your trade notes, so a strategy name with a pipe in it reads the way you wrote it`
 
 export const RELEASE_NOTES = {
+  '0.50.0': `- Market Pulse: account-free TradingView ticker, live charts, technical summaries, and a watchlist you can rename, reorder, and expand
+- Compact market ticker below the main navigation, open Market Pulse from it or turn it off in Settings
+- Private Briefing: a concise market and journal check-in in News, with a small reminder while you work elsewhere
+- Directional Bias reads supported candle data as Bullish, Bearish, Neutral, or Unavailable, with contributing factors and data freshness
+- Connect an OANDA Practice account for forex candle data, credentials stay on your device
+- Dashboard session analytics show P&L and win rate for Asia, London, and New York using each trade's entry time
+- Reviews add monthly and quarterly statistics, quarter filters, and period review reminders
+- AI Coach conversations stay available for five days, with a Clear conversation control
+- Fixed the Reviews layout, compact ticker availability, and TradingView Technical Analysis loading for Nasdaq and S&P 500
+- Help and FAQ now explain the new market data, session tracking, review, and coaching features`,
   '0.48.3': `• Fixed the grading structure. The Grade column in the journal now shows the grade you gave the trade, so a trade you marked F no longer sits there as an A+
 • Imported trades are no longer graded on whether they won or lost, which gave every import an A or a C and made the grade a restatement of P&L
 • Trades are graded on the details you actually logged, and one with too little logged reads as not graded rather than being handed a letter it did not earn

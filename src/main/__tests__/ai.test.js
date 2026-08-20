@@ -175,3 +175,34 @@ describe('Claude (Anthropic) provider', () => {
     expect(await chat(settings, { system: 's', messages: [], think: false })).toMatch(/declined/i)
   })
 })
+
+describe('Claude thinking parameter per model', () => {
+  const bodyFor = async (anthropicModel, think) => {
+    let body
+    vi.stubGlobal('fetch', vi.fn(async (_u, o) => {
+      body = JSON.parse(o.body)
+      return { ok: true, json: async () => ({ content: [{ type: 'text', text: 'ok' }] }) }
+    }))
+    await chat({ provider: 'anthropic', anthropicKey: 'k', anthropicModel },
+      { system: 's', messages: [], think })
+    return body
+  }
+
+  it('asks for adaptive thinking only on models that have it', async () => {
+    expect((await bodyFor('claude-opus-5')).thinking).toEqual({ type: 'adaptive', display: 'summarized' })
+    expect((await bodyFor('claude-sonnet-5')).thinking).toEqual({ type: 'adaptive', display: 'summarized' })
+  })
+
+  it('sends no thinking field at all to older models', async () => {
+    // Browse lists every model the key can reach. Sending an adaptive block to
+    // one that predates adaptive thinking is a 400, which looked to the trader
+    // like Claude was simply broken.
+    expect(await bodyFor('claude-haiku-4-5')).not.toHaveProperty('thinking')
+    expect(await bodyFor('claude-3-5-sonnet-20241022')).not.toHaveProperty('thinking')
+  })
+
+  it('omits the field rather than disabling on models that reject a disable', async () => {
+    expect(await bodyFor('claude-fable-5', false)).not.toHaveProperty('thinking')
+    expect((await bodyFor('claude-opus-5', false)).thinking).toEqual({ type: 'disabled' })
+  })
+})

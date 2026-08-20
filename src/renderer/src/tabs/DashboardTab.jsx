@@ -13,6 +13,7 @@ import { PreflightStatus } from '../components/PreflightStatus.jsx'
 import { ShareReportModal } from '../components/ShareReportModal.jsx'
 import { DayReplayModal } from '../components/DayReplayModal.jsx'
 import { SessionCompareModal } from '../components/SessionCompareModal.jsx'
+import { buildMarketSessionPerformance } from '../marketSessions.js'
 
 // Leak finder — puts a dollar figure on your worst behavioral pattern. The point
 // isn't to shame; it's to make the cost of tilt concrete and, therefore, fixable.
@@ -110,6 +111,57 @@ function SymbolPerformance({ stats }) {
           </div>
         ))}
       </div>
+    </Panel>
+  )
+}
+
+export function SessionPerformance({ trades }) {
+  const performance = useMemo(() => buildMarketSessionPerformance(trades), [trades])
+  const { rows, totalCount, timedCount, missingTimeCount, overlapCount, outsideCount } = performance
+
+  return (
+    <Panel
+      title="Performance by market session"
+      right={<span className="text-[10px]" style={{ color: T.faint }}>{timedCount}/{totalCount} trades with entry time</span>}
+    >
+      {timedCount === 0 ? (
+        <div className="py-5 text-center text-xs" style={{ color: T.faint }}>Add an entry time to a trade to build your Asia, London, and New York record.</div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            {rows.map((session) => (
+              <article key={session.id} className="rounded-lg px-3 py-3" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
+                <div className="flex items-center justify-between gap-3">
+                  <strong className="text-xs">{session.label}</strong>
+                  <span className="text-[10px]" style={{ color: T.faint }}>{session.tradeCount} trade{session.tradeCount === 1 ? '' : 's'}</span>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wide" style={{ color: T.faint }}>Net P&amp;L</div>
+                    <div className="mt-0.5 text-sm font-semibold" style={{ ...mono, color: !session.tradeCount ? T.faint : session.netPnl >= 0 ? T.up : T.down }}>{session.tradeCount ? fmt$(session.netPnl) : '—'}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wide" style={{ color: T.faint }}>Win rate</div>
+                    <div className="mt-0.5 text-sm font-semibold" style={{ ...mono, color: T.text }}>{session.winRate == null ? '—' : `${fmtN(session.winRate, 1)}%`}</div>
+                  </div>
+                </div>
+                <div className="mt-2 text-[10px]" style={{ color: T.faint }}>
+                  {session.decidedCount ? `${session.wins}W · ${session.losses}L${session.breakEvenCount ? ` · ${session.breakEvenCount} BE` : ''}` : 'No decided trades yet'}
+                </div>
+              </article>
+            ))}
+          </div>
+          {(overlapCount > 0 || outsideCount > 0 || missingTimeCount > 0) && (
+            <div className="mt-2 text-[10px]" style={{ color: T.faint }}>
+              {overlapCount > 0 && `${overlapCount} overlap trade${overlapCount === 1 ? '' : 's'} assigned to the session that opened most recently.`}
+              {overlapCount > 0 && (outsideCount > 0 || missingTimeCount > 0) ? ' ' : ''}
+              {outsideCount > 0 && `${outsideCount} timed trade${outsideCount === 1 ? '' : 's'} fell outside the tracked windows.`}
+              {outsideCount > 0 && missingTimeCount > 0 ? ' ' : ''}
+              {missingTimeCount > 0 && `${missingTimeCount} trade${missingTimeCount === 1 ? '' : 's'} had no usable entry time.`}
+            </div>
+          )}
+        </>
+      )}
     </Panel>
   )
 }
@@ -371,6 +423,8 @@ export function Dashboard({ stats, trades, accounts = [], settings, journalData,
         <Stat label="Avg loser" value={fmt$(-vStats.avgLoss)} tone="down" />
         <Stat label="Streaks" value={String(vStats.currentStreak)} sub={`best ${vStats.bestWin}W · worst ${vStats.worstLoss}L`} />
       </div>
+
+      <SessionPerformance trades={viewTrades} />
 
       <div className="th-dashboard-insights">
         <RiskConsistency stats={vStats} />

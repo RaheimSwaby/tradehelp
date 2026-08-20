@@ -41,6 +41,22 @@ describe('help content', () => {
     expect(reasoning.a).toMatch(/turn off Show model reasoning/i)
     expect(reasoning.a).toMatch(/Normal answer streaming still works/i)
   })
+
+  it('explains the briefing, bias data sources and period reviews', () => {
+    const market = HELP_SECTIONS.find((section) => section.id === 'market-context')
+    const reviews = HELP_SECTIONS.find((section) => section.id === 'reviews')
+    const marketText = market.items.map((item) => `${item.q} ${item.a}`).join(' ')
+    const reviewText = reviews.items.map((item) => `${item.q} ${item.a}`).join(' ')
+
+    expect(marketText).toMatch(/Private Briefing/i)
+    expect(marketText).toMatch(/OANDA Practice/i)
+    expect(marketText).toMatch(/Databento Historical/i)
+    expect(marketText).toMatch(/120 one-minute bars/i)
+    expect(marketText).toMatch(/tick activity/i)
+    expect(reviewText).toMatch(/quarterly recap/i)
+    expect(reviewText).toMatch(/Monthly statistics/i)
+    expect(reviewText).toMatch(/Last quarter/i)
+  })
 })
 
 describe('searchHelp', () => {
@@ -61,6 +77,9 @@ describe('searchHelp', () => {
     expect(helpItemCount(searchHelp('OLLAMA'))).toBeGreaterThan(0)
     expect(helpItemCount(searchHelp('sqlite'))).toBeGreaterThan(0)
     expect(helpItemCount(searchHelp('hermes3 thinking'))).toBeGreaterThan(0)
+    expect(helpItemCount(searchHelp('OANDA Practice'))).toBeGreaterThan(0)
+    expect(helpItemCount(searchHelp('directional unavailable'))).toBeGreaterThan(0)
+    expect(helpItemCount(searchHelp('quarterly statistics'))).toBeGreaterThan(0)
   })
 
   it('requires every term to match, not just one', () => {

@@ -8,7 +8,7 @@ import { BulkDeleteBar } from '../components/BulkDeleteBar.jsx'
 import { ImportModal } from '../widgets/ImportModal.jsx'
 import { ImportCenterModal } from '../widgets/ImportCenterModal.jsx'
 import { AnnotateModal } from '../components/AnnotateModal.jsx'
-import { describeJournalDrilldown, matchesJournalDrilldown, matchesJournalFilters, parseJournalQuery } from '../journalSearch.js'
+import { describeJournalDrilldown, journalQuarterRange, matchesJournalDrilldown, matchesJournalFilters, parseJournalQuery } from '../journalSearch.js'
 import { achievedR, averageCostFillPreview, calculatePointRisk, isBreakEven, looksLikeBreakEven, plannedRR, selectInstrumentProfile, synthesizeTradeFills } from '../workflow.js'
 // Achieved R reads as a signed multiple (+2.0R, -1.0R) rather than the 1:N ratio
 // used for the plan, because the sign is the whole point of the column.
@@ -63,6 +63,7 @@ export function Journal({ trades, commitments = [], onAdd, onUpdate, onRemove, o
   const consumedDrilldownRef = useRef(null)
   const [dismissedSearchFilters, setDismissedSearchFilters] = useState([])
   const [outcome, setOutcome] = useState('all') // all | win | loss
+  const [quarterFilter, setQuarterFilter] = useState('all') // all | this | last
   const [accountFilter, setAccountFilter] = useState('all') // all | __live__ | <account id>
   const [selectedSearchId, setSelectedSearchId] = useState('')
   const [searchName, setSearchName] = useState('')
@@ -192,6 +193,7 @@ export function Journal({ trades, commitments = [], onAdd, onUpdate, onRemove, o
     setQuery('')
     setDismissedSearchFilters([])
     setOutcome('all')
+    setQuarterFilter('all')
     setAccountFilter('all')
     setSelectedSearchId('')
     setTimingDrilldown(null)
@@ -229,6 +231,7 @@ export function Journal({ trades, commitments = [], onAdd, onUpdate, onRemove, o
   }
 
   const filtered = useMemo(() => {
+    const quarterRange = journalQuarterRange(quarterFilter, new Date())
     return trades.filter((t) => {
       if (pendingDelete && t.id === pendingDelete.id) return false
       if (!matchesJournalDrilldown(t, timingDrilldown)) return false
@@ -239,9 +242,10 @@ export function Journal({ trades, commitments = [], onAdd, onUpdate, onRemove, o
         const acct = String(t.account || '')
         if (accountFilter === '__live__' ? acct !== '' : acct !== accountFilter) return false
       }
+      if (quarterRange && !matchesJournalFilters(t, [{ kind: 'dateRange', ...quarterRange }])) return false
       return matchesJournalFilters(t, activeSearchFilters)
     })
-  }, [trades, activeSearchFilters, outcome, accountFilter, pendingDelete, timingDrilldown])
+  }, [trades, activeSearchFilters, outcome, accountFilter, quarterFilter, pendingDelete, timingDrilldown])
 
   const [page, setPage] = useState(0)
   const [pageSize, setPageSize] = useState(20)
@@ -271,7 +275,7 @@ export function Journal({ trades, commitments = [], onAdd, onUpdate, onRemove, o
   const pageCount = Math.max(1, Math.ceil(ordered.length / pageSize))
   const safePage = Math.min(page, pageCount - 1)
   const pageRows = ordered.slice(safePage * pageSize, safePage * pageSize + pageSize)
-  useEffect(() => { setPage(0) }, [query, outcome, accountFilter, pageSize, dismissedSearchFilters])
+  useEffect(() => { setPage(0) }, [query, outcome, accountFilter, quarterFilter, pageSize, dismissedSearchFilters])
 
   function startEdit(t) {
     discardPendingVideos()
@@ -917,6 +921,11 @@ export function Journal({ trades, commitments = [], onAdd, onUpdate, onRemove, o
               {[['all', 'All'], ['win', 'Wins'], ['loss', 'Losses']].map(([k, label]) => (
                 <button key={k} type="button" onClick={() => setOutcome(k)} className="text-xs px-2 py-1 rounded-md" style={{ background: outcome === k ? T.surface2 : 'transparent', color: outcome === k ? T.accentText : T.dim, border: `1px solid ${outcome === k ? T.line : 'transparent'}` }}>{label}</button>
               ))}
+              <select aria-label="Filter by quarter" style={inputStyle} className="rounded px-2 py-1 text-xs" value={quarterFilter} onChange={(event) => setQuarterFilter(event.target.value)}>
+                <option value="all">All quarters</option>
+                <option value="this">This quarter</option>
+                <option value="last">Last quarter</option>
+              </select>
               {accounts.length > 0 && (
                 <select aria-label="Filter by account" style={inputStyle}
                   className="rounded px-2 py-1 text-xs"

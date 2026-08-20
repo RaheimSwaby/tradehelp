@@ -7,6 +7,7 @@ import { SOURCE_ZONE_OPTIONS } from '../utils/barImport.js'
 import { RELEASE_NOTES } from '../releaseNotes.js'
 import { BrokerSyncPanel } from '../widgets/BrokerSyncPanel.jsx'
 import { MobileSyncPanel } from '../widgets/MobileSyncPanel.jsx'
+import { MarketDataPanel } from '../widgets/MarketDataPanel.jsx'
 import { Instagram, MessagesSquare, Plus, Pencil, Trash2, X, Globe } from 'lucide-react'
 
 const COACH_VOICE_VALUES = new Set(['supportive', 'balanced', 'tough-love'])
@@ -15,7 +16,7 @@ const PERSONAL_CLOCK_SOURCES = new Set(['auto', 'manual'])
 const CLOCK_TIME = /^(?:[01]\d|2[0-3]):[0-5]\d$/
 const SETTINGS_SECTIONS = [
   'License', 'Data & backup', 'Broker sync', 'Mobile sync', 'Instrument profiles',
-  'Chart data', "What's new", 'Appearance 2.0', 'Coach & personal clock',
+  'Chart data', 'Market data connections', "What's new", 'Appearance 2.0', 'Coach & personal clock',
   'Model provider', 'Getting Ollama running', 'Market data & ticker',
   'Economic calendar & news', 'Feedback & support'
 ]
@@ -639,16 +640,26 @@ function AppearanceLivePreview({ settings }) {
   )
 }
 
-export function SettingsTab({ settings, onSave, license, onLicenseChange, onReload, accounts = [], profiles = [], onAddProfile, onUpdateProfile, onDeleteProfile }) {
+export function SettingsTab({ settings, onSave, license, onLicenseChange, onReload, accounts = [], profiles = [], onAddProfile, onUpdateProfile, onDeleteProfile, initialSection = '' }) {
   const [s, setS] = useState(() => normalizeSettingsForDisplay(settings))
   const [manualWindows, setManualWindows] = useState(() => parsePersonalClockWindows(settings?.personalClockManualWindows))
   const [test, setTest] = useState(null)
-  const [settingsSection, setSettingsSection] = useState('Appearance 2.0')
+  const [settingsSection, setSettingsSection] = useState(initialSection || 'Appearance 2.0')
   useEffect(() => {
     const normalized = normalizeSettingsForDisplay(settings)
     setS(normalized)
     setManualWindows(parsePersonalClockWindows(normalized.personalClockManualWindows))
   }, [settings])
+  useEffect(() => {
+    if (!initialSection) return undefined
+    setSettingsSection(initialSection)
+    const timer = setTimeout(() => {
+      const panels = document.querySelectorAll('.th-page-settings > .th-panel')
+      const target = [...panels].find((panel) => panel.querySelector(':scope > div:first-child > div:first-child')?.textContent?.trim().startsWith(initialSection))
+      target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 0)
+    return () => clearTimeout(timer)
+  }, [initialSection])
   const set = (k) => (e) => setS((p) => ({ ...p, [k]: e.target.value }))
   const inp = 'w-full rounded px-2 py-1.5 text-sm'
   const validManualWindows = parsePersonalClockWindows(manualWindows)
@@ -752,6 +763,7 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
       <MobileSyncPanel />
       <InstrumentProfilesPanel profiles={profiles} onAdd={onAddProfile} onUpdate={onUpdateProfile} onDelete={onDeleteProfile} />
       <PriceBarsPanel />
+      <MarketDataPanel />
       <ReleaseNotesPanel />
       <Panel title="Appearance 2.0" className="th-settings-appearance-panel">
         <div className="grid grid-cols-[1fr_154px] gap-3">
@@ -1056,13 +1068,16 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
         <p className="mt-3 text-xs" style={{ color: T.faint }}>Everything stays on your machine. Your key and trades never leave this app.</p>
       </Panel>
 
-      <Panel title="Market data &amp; ticker">
+      <Panel title="Market ticker &amp; briefing quotes">
         <label className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: T.text }}>
           <input type="checkbox" checked={(s.tickerEnabled ?? 'true') !== 'false'} onChange={(e) => setS((p) => ({ ...p, tickerEnabled: String(e.target.checked) }))} />
-          Show the scrolling ticker tape
+          Show the persistent market ticker
         </label>
+        <p className="mt-2 text-xs" style={{ color: T.faint }}>
+          This compact secondary ticker stays under the app navigation and mirrors the watchlist configured in Charting → Market Pulse.
+        </p>
         <div className="space-y-3 mt-3">
-          <Field label="Ticker symbols (comma-separated)">
+          <Field label="Private Briefing quote symbols (comma-separated)">
             <input style={inputStyle} className={inp} value={s.tickerSymbols ?? ''} onChange={set('tickerSymbols')} placeholder="SPY,QQQ,EURUSD,BTC" />
           </Field>
           <Field label="Finnhub API key (optional — real-time stocks)">
@@ -1072,7 +1087,7 @@ export function SettingsTab({ settings, onSave, license, onLicenseChange, onRelo
         </div>
         <button type="button" onClick={() => onSave(s)} className="mt-4 rounded-md px-3 py-2 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306' }}>Save</button>
         <p className="mt-3 text-xs" style={{ color: T.faint }}>
-          Keyless by default (crypto via Binance, stocks delayed via Stooq). A free Finnhub key switches stocks to real-time and also speeds up the Live price lookup. Futures (ES/NQ) need a paid feed — use SPY/QQQ as proxies.
+          The secondary ticker is a view-only compact copy of the full TradingView ticker in Market Pulse. Private Briefing quotes use the separate Binance, stock and OANDA provider path.
         </p>
       </Panel>
 

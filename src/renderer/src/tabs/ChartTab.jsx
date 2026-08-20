@@ -2,9 +2,10 @@ import React, { useState, useMemo, useRef, useEffect, Component } from 'react'
 import { T, mono } from '../theme.js'
 import { fmt$, fmtN, holdMs, fmtDuration } from '../utils.js'
 import { TradeChart } from '../components/TradeChart.jsx'
+import { TradingViewMarketPulse } from '../components/TradingViewMarketPulse.jsx'
 import { formatTradingViewSymbol, toTimestamp } from '../utils/tradeChartUtils.js'
 import { instrumentRootSymbol } from '../workflow.js'
-import { LineChart, Search, AlertCircle, ExternalLink, Maximize2, ChevronDown, Check, Edit3, Lock, Save, Globe, CandlestickChart } from 'lucide-react'
+import { LineChart, Search, AlertCircle, ExternalLink, Maximize2, ChevronDown, Check, Edit3, Lock, Save, Globe, CandlestickChart, Activity } from 'lucide-react'
 
 class ChartErrorBoundary extends Component {
   constructor(props) {
@@ -56,10 +57,10 @@ const SAMPLE_DEMO_TRADE = {
 
 const DEFAULT_QUICK_SYMBOLS = ['CME_MINI:NQ1!', 'CME_MINI:ES1!', 'BINANCE:BTCUSDT', 'NASDAQ:AAPL', 'NASDAQ:TSLA']
 
-export function ChartTab({ trades = [], onOpenTrade, onUpdateTrade }) {
+export function ChartTab({ trades = [], onOpenTrade, onUpdateTrade, requestedView = 'candles', viewRequestId = 0 }) {
   return (
     <ChartErrorBoundary>
-      <ChartTabContent trades={trades} onOpenTrade={onOpenTrade} onUpdateTrade={onUpdateTrade} />
+      <ChartTabContent trades={trades} onOpenTrade={onOpenTrade} onUpdateTrade={onUpdateTrade} requestedView={requestedView} viewRequestId={viewRequestId} />
     </ChartErrorBoundary>
   )
 }
@@ -212,8 +213,8 @@ function TradePickerCombobox({ trades = [], selectedId, onSelectTrade, barMatche
   )
 }
 
-function ChartTabContent({ trades = [], onOpenTrade, onUpdateTrade }) {
-  const [viewMode, setViewMode] = useState('candles') // 'candles' | 'live'
+function ChartTabContent({ trades = [], onOpenTrade, onUpdateTrade, requestedView = 'candles', viewRequestId = 0 }) {
+  const [viewMode, setViewMode] = useState(requestedView) // 'candles' | 'live' | 'pulse'
   const [liveSymbol, setLiveSymbol] = useState('CME_MINI:NQ1!')
 
   const [quickSymbols, setQuickSymbols] = useState(() => {
@@ -230,6 +231,12 @@ function ChartTabContent({ trades = [], onOpenTrade, onUpdateTrade }) {
   const [editingSymbols, setEditingSymbols] = useState(false)
   const [symbolDraft, setSymbolDraft] = useState('')
   const [isSolidifying, setIsSolidifying] = useState(false)
+
+  useEffect(() => {
+    if (!viewRequestId) return
+    setLiveOrigin(null)
+    setViewMode(requestedView)
+  }, [requestedView, viewRequestId])
 
   // Sort trades descending by timestamp so the latest trade is always first
   const safeTrades = useMemo(() => {
@@ -422,6 +429,18 @@ function ChartTabContent({ trades = [], onOpenTrade, onUpdateTrade }) {
             >
               <Globe size={13} /> Live Market View
             </button>
+            <button
+              type="button"
+              onClick={() => { setLiveOrigin(null); setViewMode('pulse') }}
+              title="Preview account-free TradingView ticker and technical context"
+              className="flex items-center gap-1.5 px-3 py-1 text-xs rounded font-medium transition-colors"
+              style={{
+                background: viewMode === 'pulse' ? T.accent : 'transparent',
+                color: viewMode === 'pulse' ? '#1A1306' : T.dim
+              }}
+            >
+              <Activity size={13} /> Market Pulse
+            </button>
           </div>
         </div>
 
@@ -496,6 +515,8 @@ function ChartTabContent({ trades = [], onOpenTrade, onUpdateTrade }) {
               </button>
             </div>
           </div>
+        ) : viewMode === 'pulse' ? (
+          <div className="text-xs" style={{ color: T.faint }}>No account required · hosted market context</div>
         ) : (
           <div className="flex flex-wrap items-center gap-3">
             {/* Symbol Filter Search */}
@@ -560,6 +581,8 @@ function ChartTabContent({ trades = [], onOpenTrade, onUpdateTrade }) {
           )}
           <TradeChart mode="live" liveSymbol={liveSymbol} height={620} />
         </div>
+      ) : viewMode === 'pulse' ? (
+        <TradingViewMarketPulse />
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
           {/* Main Chart Area (3 Columns) */}

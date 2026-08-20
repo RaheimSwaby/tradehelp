@@ -1,9 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { Newspaper, ChevronLeft, ChevronRight, RefreshCw, History, TrendingDown, TrendingUp } from 'lucide-react'
+import { Newspaper, ChevronLeft, ChevronRight, RefreshCw, History, TrendingDown, TrendingUp, Activity, Clock3, ShieldAlert, Target, WalletCards, BookOpen } from 'lucide-react'
 import { T, mono, inputStyle } from '../theme.js'
 import { fmt$, fmtN, pad2, MONTHS } from '../utils.js'
 import { Stat, Panel } from '../components/Shared.jsx'
 import { buildNewsCorrelation, newsCorrelationHeadline, eventsAtImpact, DEFAULT_NEWS_WINDOW_MIN } from '../newsCorrelation.js'
+import { buildSessionBriefing } from '../marketBriefing.js'
+import { computeLeaks } from '../stats.js'
+import { DirectionalBiasPanel } from '../components/DirectionalBiasPanel.jsx'
+import { NewsMarketBoard } from '../components/NewsMarketBoard.jsx'
 
 const IMPACTS = ['High', 'Medium', 'Low']
 const WINDOWS = [15, 30, 60]
@@ -49,7 +53,7 @@ function EventRow({ event, trades = [] }) {
   )
 }
 
-export function NewsTab({ trades = [], settings = {}, events = [] }) {
+export function NewsTab({ trades = [], stats = {}, settings = {}, events = [], commitments = [], ruleBreaks = [], todayNet = 0, todayCount = 0, live = false, now = Date.now(), briefQuotes = [], briefUpdatedAt = null, onRefreshBriefing, onOpenMarketDataSettings }) {
   const [sub, setSub] = useState('calendar')
   // Upcoming events come from the app-wide poll (every 10 min) so opening this tab
   // costs nothing; Refresh is the only thing that forces a live fetch.
@@ -63,7 +67,6 @@ export function NewsTab({ trades = [], settings = {}, events = [] }) {
   const [minImpact, setMinImpact] = useState(settings.eventsMinImpact || 'High')
   const [windowMin, setWindowMin] = useState(DEFAULT_NEWS_WINDOW_MIN)
   const [backfill, setBackfill] = useState({ busy: false, message: '' })
-
   // Reads the local archive only — no network. Cheap enough to run on every mount.
   async function loadArchive() {
     setLoading(true)
@@ -79,7 +82,10 @@ export function NewsTab({ trades = [], settings = {}, events = [] }) {
   useEffect(() => { loadArchive() }, [])
 
   async function refresh() {
-    const next = await Promise.resolve(window.api?.events?.()).catch(() => null)
+    const [next] = await Promise.all([
+      Promise.resolve(window.api?.events?.()).catch(() => null),
+      Promise.resolve(onRefreshBriefing?.()).catch(() => [])
+    ])
     if (Array.isArray(next)) setRefreshed(next)
     loadArchive() // the fetch archives what it saw, so re-read coverage
   }
@@ -106,6 +112,7 @@ export function NewsTab({ trades = [], settings = {}, events = [] }) {
     [trades, allEvents, windowMin, minImpact, coverage]
   )
   const headline = newsCorrelationHeadline(correlation)
+  const leaks = useMemo(() => computeLeaks(trades), [trades])
 
   const byDay = useMemo(() => {
     const map = {}
@@ -159,6 +166,17 @@ export function NewsTab({ trades = [], settings = {}, events = [] }) {
 
   const selectedEvents = selectedDay ? byDay[selectedDay] || [] : []
   const nextUp = visibleEvents.filter((event) => event.ts >= Date.now()).slice(0, 8)
+  // Every known event, not the calendar's current view. buildSessionBriefing
+  // applies settings.eventsMinImpact itself, so passing the already-filtered
+  // list meant tightening the calendar's impact buttons quietly stopped the
+  // briefing from warning about releases the trader's settings still wanted.
+  const briefing = useMemo(() => buildSessionBriefing({
+    quotes: briefQuotes,
+    events: allEvents,
+    settings,
+    journal: { stats, leaks, commitments, ruleBreaks, todayNet, todayCount, live, correlation },
+    now
+  }), [briefQuotes, allEvents, settings, stats, leaks, commitments, ruleBreaks, todayNet, todayCount, live, correlation, now])
 
   return (
     <div className="th-page th-page-news space-y-4">
@@ -166,7 +184,7 @@ export function NewsTab({ trades = [], settings = {}, events = [] }) {
         <div>
           <h2 className="text-base font-semibold flex items-center gap-2"><Newspaper size={16} style={{ color: T.accentText }} /> News &amp; events</h2>
           <p className="text-xs mt-0.5" style={{ color: T.dim }}>
-            The economic calendar, plus how your own trades actually perform around it.
+            Five-minute market context, the economic calendar, and how your trades perform around scheduled risk.
           </p>
         </div>
         <div className="ml-auto flex items-center gap-1">
@@ -176,11 +194,13 @@ export function NewsTab({ trades = [], settings = {}, events = [] }) {
               {label}
             </button>
           ))}
-          <button type="button" onClick={refresh} title="Refresh the calendar" className="text-xs px-2 py-1.5 rounded-md" style={{ background: T.surface2, color: T.dim, border: `1px solid ${T.line}` }}>
+          <button type="button" onClick={refresh} title="Refresh the briefing and calendar" className="text-xs px-2 py-1.5 rounded-md" style={{ background: T.surface2, color: T.dim, border: `1px solid ${T.line}` }}>
             <RefreshCw size={13} />
           </button>
         </div>
       </div>
+
+      <NewsMarketBoard />
 
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <span style={{ color: T.faint }}>Impact</span>
@@ -198,6 +218,108 @@ export function NewsTab({ trades = [], settings = {}, events = [] }) {
           </button>
         ))}
       </div>
+
+      <Panel title="Private briefing" right={
+        <span className="text-xs" style={{ color: T.faint }}>
+          {briefUpdatedAt ? `Updated ${clockLabel(briefUpdatedAt)}` : 'Loading'} · refreshes every 5 min
+        </span>
+      }>
+        <div className="space-y-3">
+          <div>
+            <div className="text-sm font-semibold" style={{ color: T.text }}>{briefing.headline}</div>
+            <div className="text-xs mt-1" style={{ color: T.dim }}>{briefing.disclaimer}</div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <div className="rounded-lg p-3" style={{ background: T.surface2 }}>
+              <div className="flex items-center gap-2 text-xs font-semibold" style={{ color: T.accentText }}><Clock3 size={14} />{briefing.session.label}</div>
+              <div className="text-xs mt-1.5" style={{ color: T.dim }}>{briefing.session.detail}</div>
+            </div>
+            <div className="rounded-lg p-3" style={{ background: T.surface2 }}>
+              <div className="flex items-center gap-2 text-xs font-semibold" style={{ color: briefing.eventRisk.level === 'imminent' ? T.down : T.accentText }}><ShieldAlert size={14} />Event risk</div>
+              <div className="text-xs mt-1.5" style={{ color: T.dim }}>{briefing.eventRisk.detail}</div>
+            </div>
+            <div className="rounded-lg p-3" style={{ background: T.surface2 }}>
+              <div className="flex items-center gap-2 text-xs font-semibold" style={{ color: T.accentText }}><Activity size={14} />Watchlist breadth</div>
+              <div className="text-xs mt-1.5" style={{ color: T.dim }}>
+                {briefing.breadth.total
+                  ? `${briefing.breadth.up} up · ${briefing.breadth.down} down · ${briefing.breadth.flat} flat`
+                  : 'No supported quotes returned. Check the symbols configured in Settings.'}
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+            <div className="rounded-lg p-3" style={{ background: T.surface2 }}>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-xs font-semibold" style={{ color: briefing.guardrail.state === 'stop' || briefing.guardrail.state === 'caution' ? T.down : T.accentText }}>
+                  <WalletCards size={14} />Today's guardrail
+                </div>
+                <span className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: briefing.guardrail.state === 'stop' ? T.down : briefing.guardrail.state === 'caution' ? T.accentText : T.faint }}>{briefing.guardrail.label}</span>
+              </div>
+              <div className="flex flex-wrap items-end gap-x-4 gap-y-1 mt-2">
+                <strong className="text-lg" style={{ ...mono, color: briefing.guardrail.net >= 0 ? T.up : T.down }}>{fmt$(briefing.guardrail.net)}</strong>
+                <span className="text-xs pb-0.5" style={{ color: T.dim }}>{briefing.guardrail.trades} trade{briefing.guardrail.trades === 1 ? '' : 's'} today</span>
+              </div>
+              <div className="text-xs mt-1.5" style={{ color: T.dim }}>
+                {briefing.guardrail.limit > 0
+                  ? briefing.guardrail.net < 0
+                    ? `${fmt$(briefing.guardrail.remaining)} before your saved daily stop.`
+                    : `${fmt$(briefing.guardrail.limit)} saved daily loss boundary.`
+                  : 'Set a daily loss boundary in Trade Mode to track the buffer here.'}
+              </div>
+              {briefing.guardrail.limit > 0 && briefing.guardrail.net < 0 && (
+                <div className="h-1 rounded-full mt-2 overflow-hidden" style={{ background: T.line }}>
+                  <div className="h-full rounded-full" style={{ width: `${briefing.guardrail.usedPct}%`, background: briefing.guardrail.usedPct >= 75 ? T.down : T.accent }} />
+                </div>
+              )}
+            </div>
+            <div className="rounded-lg p-3" style={{ background: T.surface2 }}>
+              <div className="flex items-center gap-2 text-xs font-semibold" style={{ color: briefing.commitment.capReached ? T.down : T.accentText }}><Target size={14} />Process focus</div>
+              {briefing.commitment.active ? (
+                <>
+                  <div className="text-sm font-semibold mt-2" style={{ color: T.text }}>{briefing.commitment.active.title}</div>
+                  <div className="text-xs mt-1" style={{ color: T.dim }}>
+                    {briefing.commitment.evaluated}/{briefing.commitment.target} measured
+                    {briefing.commitment.adherenceRate == null ? ' · waiting for a qualifying trade' : ` · ${fmtN(briefing.commitment.adherenceRate, 0)}% followed`}
+                  </div>
+                  <div className="h-1 rounded-full mt-2 overflow-hidden" style={{ background: T.line }}>
+                    <div className="h-full rounded-full" style={{ width: `${briefing.commitment.progressPct}%`, background: briefing.commitment.capReached ? T.down : T.accent }} />
+                  </div>
+                  {briefing.commitment.capReached && <div className="text-xs mt-2 font-semibold" style={{ color: T.down }}>Today's trade cap has been reached.</div>}
+                </>
+              ) : (
+                <div className="text-xs mt-2" style={{ color: T.dim }}>No active commitment. Start one measurable process rule under Goals.</div>
+              )}
+            </div>
+          </div>
+          <div>
+            <div className="flex items-center gap-2 text-xs font-semibold mb-2" style={{ color: T.text }}><BookOpen size={14} style={{ color: T.accentText }} />What your journal says</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {briefing.insights.map((insight) => {
+                const color = insight.tone === 'risk' ? T.down : insight.tone === 'caution' ? T.accentText : insight.tone === 'positive' ? T.up : T.text
+                return (
+                  <div key={insight.id} className="rounded-lg px-3 py-2.5" style={{ background: T.surface2 }}>
+                    <div className="text-xs font-semibold" style={{ color }}>{insight.title}</div>
+                    <div className="text-xs mt-1" style={{ color: T.dim }}>{insight.detail}</div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+          {briefQuotes.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {briefQuotes.map((quote) => (
+                <div key={quote.symbol} className="rounded-md px-2.5 py-1.5 text-xs" style={{ background: T.surface2, border: `1px solid ${T.line}` }}>
+                  <strong style={{ color: T.text }}>{quote.symbol}</strong>{' '}
+                  <span style={{ ...mono, color: Number(quote.changePct) >= 0 ? T.up : T.down }}>{Number(quote.changePct) >= 0 ? '+' : ''}{fmtN(Number(quote.changePct) || 0, 2)}%</span>{' '}
+                  <span style={{ color: T.faint }}>{quote.source}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </Panel>
+
+      <DirectionalBiasPanel onOpenSettings={onOpenMarketDataSettings} />
 
       {loading ? (
         <div className="py-16 text-center text-sm" style={{ color: T.dim }}>Loading the calendar…</div>

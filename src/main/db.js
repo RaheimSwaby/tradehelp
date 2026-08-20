@@ -1569,6 +1569,7 @@ const SETTINGS_DEFAULTS = Object.freeze({
   accountStateUpdatedAt: '',
   // Ticker tape: keyless by default (Stooq/Binance). Add a Finnhub key for real-time stocks.
   tickerEnabled: 'true',
+  persistentTickerRolloutSeen: 'false',
   tickerSymbols: 'SPY,QQQ,BTC,ETH',
   // Quick-select buttons above the live chart. TradingView's own
   // EXCHANGE:SYMBOL form, since that is what the widget takes.
@@ -2430,7 +2431,11 @@ export function deleteRuleBreak(id) {
 }
 
 /* ───────── backup / export / import ───────── */
-const SECRET_KEYS = ['cloudKey', 'finnhubKey', 'fmpKey', 'licenseKey', 'licenseInstanceId']
+// Every credential the trader pastes into Settings. getAllData() promises the
+// export carries no API keys, so a key added here without being added to this
+// list writes itself into every backup file in plain text - which is how
+// anthropicKey escaped when the Claude provider was added.
+const SECRET_KEYS = ['cloudKey', 'anthropicKey', 'finnhubKey', 'fmpKey', 'licenseKey', 'licenseInstanceId']
 const PORTABLE_TRADE_FIELDS = [
   'symbol', 'direction', 'entry', 'exit', 'stop', 'target', 'size', 'riskAmount', 'pnl', 'fees', 'rr',
   'emotion', 'setup', 'notes', 'timestamp', 'entryTime', 'exitTime', 'reason', 'source', 'account',
@@ -3212,6 +3217,32 @@ export function importPriceBars({ root, label = '', contract = '', sourceFile = 
 
   run(bars)
   return { ok: true, root: key, barCount: bars.length, firstTs: bars[0].time, lastTs: bars[bars.length - 1].time }
+}
+
+/**
+ * Adds API-fetched bars without deleting a trader's existing platform export.
+ * Matching timestamps are refreshed; older local history remains available offline.
+ */
+export function mergePriceBars({ root, label = '', contract = '', sourceFile = '', bars = [] } = {}) {
+  const key = String(root || '').trim().toUpperCase()
+  if (!key) return { ok: false, error: 'No instrument for these bars.' }
+  if (!Array.isArray(bars) || bars.length === 0) return { ok: false, error: 'No bars to import.' }
+  const rows = [...bars].sort((a, b) => a.time - b.time)
+  const insert = db.prepare(
+    `INSERT OR REPLACE INTO price_bars (root, ts, open, high, low, close, volume)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
+  )
+  const run = db.transaction(() => {
+    for (const bar of rows) insert.run(key, bar.time, bar.open, bar.high, bar.low, bar.close, bar.volume ?? null)
+    const summary = db.prepare('SELECT COUNT(*) AS barCount, MIN(ts) AS firstTs, MAX(ts) AS lastTs FROM price_bars WHERE root = ?').get(key)
+    db.prepare(
+      `INSERT OR REPLACE INTO price_bar_series (root, label, contract, sourceFile, barCount, firstTs, lastTs, importedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(key, String(label || key), String(contract || ''), String(sourceFile || ''), summary.barCount, summary.firstTs, summary.lastTs, new Date().toISOString())
+    return summary
+  })
+  const summary = run()
+  return { ok: true, root: key, receivedCount: rows.length, ...summary }
 }
 
 export function listPriceSeries() {

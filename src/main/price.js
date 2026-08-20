@@ -1,14 +1,27 @@
 // Runs in the main process, so there's no browser CORS restriction.
 // Crypto -> Binance public ticker; stocks -> Stooq CSV. Both keyless.
+// Supported forex pairs use the customer's encrypted OANDA Practice connection.
 
 const CRYPTO = new Set([
   'BTC', 'ETH', 'SOL', 'XRP', 'DOGE', 'ADA', 'BNB', 'LTC', 'MATIC',
   'DOT', 'AVAX', 'LINK', 'SHIB', 'TRX', 'XLM', 'ATOM', 'NEAR', 'APT'
 ])
 
-export async function fetchPrice(symbolRaw, finnhubKey) {
+const FOREX = new Set(['EURUSD', 'GBPUSD', 'USDJPY'])
+
+function forexRoot(symbol) {
+  return String(symbol || '').toUpperCase().replace(/[^A-Z]/g, '')
+}
+
+export async function fetchPrice(symbolRaw, finnhubKey, { forexQuote } = {}) {
   const symbol = String(symbolRaw || '').trim().toUpperCase()
   if (!symbol) throw new Error('No symbol given')
+
+  const forex = forexRoot(symbol)
+  if (FOREX.has(forex)) {
+    if (typeof forexQuote !== 'function') throw new Error(`Connect OANDA Practice to load ${forex}`)
+    return forexQuote(forex)
+  }
 
   const base = symbol.replace(/USDT|USDC|USD|-|\//g, '')
 
@@ -50,9 +63,9 @@ export async function fetchPrice(symbolRaw, finnhubKey) {
 }
 
 // Batch quotes for the ticker tape — resolves what it can, drops the rest.
-export async function fetchQuotes(symbols, finnhubKey) {
+export async function fetchQuotes(symbols, finnhubKey, options = {}) {
   const list = (Array.isArray(symbols) ? symbols : String(symbols || '').split(','))
     .map((s) => String(s).trim().toUpperCase()).filter(Boolean).slice(0, 12)
-  const settled = await Promise.allSettled(list.map((s) => fetchPrice(s, finnhubKey)))
+  const settled = await Promise.allSettled(list.map((s) => fetchPrice(s, finnhubKey, options)))
   return settled.filter((r) => r.status === 'fulfilled').map((r) => r.value)
 }

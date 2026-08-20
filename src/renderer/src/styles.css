@@ -255,11 +255,53 @@ button:focus-visible, a:focus-visible, [role="button"]:focus-visible, summary:fo
   .th-go-mode-transition { display: none; }
 }
 
-/* ticker tape marquee: two identical segments scrolled -50% for a seamless loop */
-.ticker-track { display: inline-flex; will-change: transform; animation: ticker-scroll 40s linear infinite; }
-.ticker-track:hover { animation-play-state: paused; }
-.ticker-seg { display: inline-flex; flex: none; }
-@keyframes ticker-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+/* One restrained market strip follows the user through every tab. It sticks only
+   after the larger app header and tab rail have scrolled away. */
+.th-global-market-ticker {
+  position: sticky;
+  top: 0;
+  z-index: 45;
+  display: flex;
+  width: 100%;
+  height: 50px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--th-bg) 95%, #111113);
+  border-bottom: 1px solid var(--th-line);
+  cursor: pointer;
+  outline: none;
+}
+.th-global-market-ticker:hover { border-bottom-color: color-mix(in srgb, var(--th-accent) 48%, var(--th-line)); }
+.th-global-market-ticker:focus-visible { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--th-accent) 72%, transparent); }
+.th-global-market-ticker-label {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px 0 18px;
+  color: var(--th-dim);
+  border-right: 1px solid var(--th-line);
+  font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.th-global-market-ticker-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--th-up);
+}
+.th-global-market-ticker iframe {
+  display: block;
+  flex: 1 1 0;
+  width: 0;
+  min-width: 0;
+  height: 50px;
+  border: 0;
+  background: #111113;
+  pointer-events: none;
+}
 
 /* Approved workstation redesign -------------------------------------------------
    The reference screens use one flat application frame. Pages stay dense and
@@ -702,23 +744,39 @@ button:focus-visible, a:focus-visible, [role="button"]:focus-visible, summary:fo
 
 .th-page > * { min-width: 0; }
 
-/* Reviews stacked its seven panels in a container with no gap, so the cards sat
-   flush against each other. Two columns above 1200px; the weekly summary, the
-   equity chart and the breakdown span the full width because each is either the
-   page header or already two columns internally. */
+/* Reviews uses an overview grid so the shorter page toolbar does not reserve the
+   full height of the statistics panel beside it. Each column stacks independently. */
 .th-page-reviews {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-items: start;
   gap: 12px;
 }
+.th-reviews-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+.th-reviews-overview-left,
+.th-reviews-overview-right {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+  align-content: start;
+}
+.th-reviews-overview-right { order: -1; }
 .th-reviews-record-grid { margin: 0; }
 
 @media (min-width: 1200px) {
   .th-page-reviews { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); }
+  .th-reviews-toolbar,
   .th-reviews-wrap,
+  .th-reviews-overview,
   .th-reviews-equity,
   .th-reviews-breakdown { grid-column: 1 / -1; }
+  .th-reviews-overview { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); }
+  .th-reviews-overview-right { order: initial; }
 }
 
 /* The transcript is flex-1 with overflow-y:auto, which only scrolls when its

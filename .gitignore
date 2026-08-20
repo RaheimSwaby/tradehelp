@@ -29,3 +29,4 @@ dist/
 # render scripts belong in the repo); it is the multi-MB output that must not be.
 /marketing/**/*.mp4
 /marketing/**/*.webm
+.gstack/

@@ -14,7 +14,7 @@ function Metric({ label, value, tone = T.text }) {
 
 export function WeeklyWrapContent({ wrap, hideFocus = false }) {
   // 'week' or 'month' — the same recap is used for both, so wording follows the data.
-  const noun = wrap?.granularity === 'month' ? 'month' : 'week'
+  const noun = wrap?.granularity === 'quarter' ? 'quarter' : wrap?.granularity === 'month' ? 'month' : 'week'
   if (!wrap) return null
   const weakness = wrap.weakness
   return (
@@ -53,7 +53,7 @@ export function WeeklyWrapContent({ wrap, hideFocus = false }) {
 }
 
 export function WeeklyWrapModal({ wrap, settings = {}, onClose, onOpenReview, onSaveFocus, priorFocus = '' }) {
-  const noun = wrap?.granularity === 'month' ? 'month' : 'week'
+  const noun = wrap?.granularity === 'quarter' ? 'quarter' : wrap?.granularity === 'month' ? 'month' : 'week'
   const [coach, setCoach] = useState(null)
   // The generated line is a starting point, not the answer. Whatever the trader types
   // replaces it and is what gets carried into the next period.
@@ -76,7 +76,7 @@ export function WeeklyWrapModal({ wrap, settings = {}, onClose, onOpenReview, on
     const weakness = wrap.weakness?.label || 'no repeated leak'
     const payload = {
       system: 'You are a concise trading process coach. Use only the supplied stats for this period. Give one encouraging observation and one concrete process adjustment. No price predictions or financial advice. Plain text only, under 90 words.',
-      messages: [{ role: 'user', content: `${noun === 'month' ? 'Month' : 'Week'} ${wrap.weekKey}: ${wrap.trades.length} trades, ${wrap.wins} wins, ${wrap.losses} losses, net ${fmt$(wrap.stats.totalPnl)}, win rate ${fmtN(wrap.stats.winRate, 1)}%, ${wrap.ruleBreaks.length} rule breaks, current weakness: ${weakness}. Trader name: ${settings.traderName || 'not provided'}.` }]
+      messages: [{ role: 'user', content: `${noun[0].toUpperCase()}${noun.slice(1)} ${wrap.weekKey}: ${wrap.trades.length} trades, ${wrap.wins} wins, ${wrap.losses} losses, net ${fmt$(wrap.stats.totalPnl)}, win rate ${fmtN(wrap.stats.winRate, 1)}%, ${wrap.ruleBreaks.length} rule breaks, current weakness: ${weakness}. Trader name: ${settings.traderName || 'not provided'}.` }]
     }
     try {
       let text = ''

@@ -12,6 +12,7 @@ import { AnimatedValue, Stat, Panel } from '../components/Shared.jsx'
 import { GroupTable, ReasonList } from './PsychologyTab.jsx'
 import { coachVoiceInstruction, shouldIncludeWrittenJournal } from '../coachInsights.js'
 import { buildWeeklyWrap } from '../weeklyWrap.js'
+import { buildPeriodStatistics } from '../periodStatistics.js'
 
 /* ───────── periodic reviews ───────── */
 const REVIEW_SYSTEM = `You are a trading coach writing a short periodic review. Given the trader's aggregated stats and trades for ONE period, summarize how the period went using their real numbers, name 1-2 strengths and 1-2 leaks (revenge, FOMO, overtrading, cutting winners early, oversizing), then give 2 concrete focus points for next period. No price predictions or buy/sell advice. Under ~170 words.`
@@ -57,6 +58,78 @@ function RecordMetric({ label, value, sub, tone }) {
       </dd>
       {sub && <dd className="text-xs mt-0.5" style={{ color: T.dim }}>{sub}</dd>}
     </div>
+  )
+}
+
+function PeriodStatistics({ trades, onOpenPeriod }) {
+  const [granularity, setGranularity] = useState('month')
+  const result = useMemo(() => buildPeriodStatistics(trades, granularity), [trades, granularity])
+  const maxAbs = Math.max(1, ...result.rows.map((row) => Math.abs(row.totalPnl)))
+  const visibleRows = result.rows.slice(0, granularity === 'month' ? 12 : 8)
+  const pf = (value) => value === Infinity ? '∞' : fmtN(value, 2)
+
+  return (
+    <Panel title={`${granularity === 'month' ? 'Monthly' : 'Quarterly'} statistics`} right={
+      <div className="flex gap-1">
+        {[['month', 'Month'], ['quarter', 'Quarter']].map(([value, label]) => (
+          <button key={value} type="button" onClick={() => setGranularity(value)} className="rounded px-2 py-1 text-xs"
+            style={{ color: granularity === value ? T.accentText : T.dim, background: granularity === value ? T.surface2 : 'transparent', border: `1px solid ${granularity === value ? T.line : 'transparent'}` }}>
+            {label}
+          </button>
+        ))}
+      </div>
+    }>
+      {!result.summary ? (
+        <div className="text-sm py-3" style={{ color: T.dim }}>Add dated trades to compare performance by {granularity}.</div>
+      ) : (
+        <>
+          <dl className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 mb-4">
+            <RecordMetric label="Profitable periods" value={`${fmtN(result.summary.profitabilityRate, 0)}%`} sub={`${result.summary.profitableCount} of ${result.summary.periodCount}`} tone="accent" />
+            <RecordMetric label="Average P&L" value={fmt$(result.summary.averagePnl)} sub={`per ${granularity}`} tone={result.summary.averagePnl >= 0 ? 'up' : 'down'} />
+            <RecordMetric label="Best period" value={fmt$(result.summary.best.totalPnl)} sub={periodLabel(result.summary.best.periodKey, granularity)} tone="up" />
+            <RecordMetric label="Worst period" value={fmt$(result.summary.worst.totalPnl)} sub={periodLabel(result.summary.worst.periodKey, granularity)} tone="down" />
+          </dl>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr style={{ color: T.faint }}>
+                  <th className="text-left font-medium py-2">Period</th>
+                  <th className="text-right font-medium">Trades</th>
+                  <th className="text-right font-medium">Win rate</th>
+                  <th className="text-right font-medium">Profit factor</th>
+                  <th className="text-right font-medium">Avg trade</th>
+                  <th className="text-right font-medium min-w-36">P&amp;L</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleRows.map((row) => (
+                  <tr key={row.periodKey} style={{ borderTop: `1px solid ${T.line}` }}>
+                    <td className="py-2.5 pr-3">
+                      <button type="button" onClick={() => onOpenPeriod(granularity, row.periodKey)} className="font-semibold text-left" style={{ color: T.text }}>
+                        {periodLabel(row.periodKey, granularity)}
+                      </button>
+                    </td>
+                    <td className="text-right" style={{ ...mono, color: T.dim }}>{row.tradeCount}</td>
+                    <td className="text-right" style={{ ...mono, color: T.dim }}>{fmtN(row.winRate, 1)}%</td>
+                    <td className="text-right" style={{ ...mono, color: T.dim }}>{pf(row.profitFactor)}</td>
+                    <td className="text-right" style={{ ...mono, color: row.averageTrade >= 0 ? T.up : T.down }}>{fmt$(row.averageTrade)}</td>
+                    <td className="text-right pl-4">
+                      <div className="flex items-center justify-end gap-2">
+                        <div className="w-16 h-1 rounded-full overflow-hidden" style={{ background: T.line }}>
+                          <div className="h-full rounded-full" style={{ width: `${Math.max(3, Math.abs(row.totalPnl) / maxAbs * 100)}%`, background: row.totalPnl >= 0 ? T.up : T.down }} />
+                        </div>
+                        <strong style={{ ...mono, color: row.totalPnl >= 0 ? T.up : T.down }}>{fmt$(row.totalPnl)}</strong>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {result.rows.length > visibleRows.length && <div className="text-xs mt-2" style={{ color: T.faint }}>Showing the latest {visibleRows.length} periods.</div>}
+        </>
+      )}
+    </Panel>
   )
 }
 
@@ -227,53 +300,60 @@ export function Reviews({
         </div>
       )}
 
-      <div className="th-reviews-retrospective">
-      <Panel title={`Goals and process · ${pLabel}`}>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <RetrospectiveMetric label="Saved target" value={retrospective.targetSnapshot.amount == null ? 'Not set' : fmt$(retrospective.targetSnapshot.amount)} sub={retrospective.targetSnapshot.source ? retrospective.targetSnapshot.source.replace('goals.', '') : 'No target set for this period'} />
-          <RetrospectiveMetric label="Actual P&L" value={fmt$(retrospective.actualPnl)} color={retrospective.actualPnl >= 0 ? T.up : T.down} sub={`${retrospective.tradeCount} ${retrospective.tradeCount === 1 ? 'trade' : 'trades'} · calculated from trades`} />
-          <RetrospectiveMetric label="Goal result" value={goalPresentation.label} color={goalPresentation.color} sub={retrospective.tradeCount === 0 && retrospective.goalOutcome === 'not-assessed' ? 'No trades · abstained' : 'Compared with saved target'} />
+      <div className="th-reviews-overview">
+        <div className="th-reviews-overview-left">
+          <div className="th-reviews-retrospective">
+          <Panel title={`Goals and process · ${pLabel}`}>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <RetrospectiveMetric label="Saved target" value={retrospective.targetSnapshot.amount == null ? 'Not set' : fmt$(retrospective.targetSnapshot.amount)} sub={retrospective.targetSnapshot.source ? retrospective.targetSnapshot.source.replace('goals.', '') : 'No target set for this period'} />
+              <RetrospectiveMetric label="Actual P&L" value={fmt$(retrospective.actualPnl)} color={retrospective.actualPnl >= 0 ? T.up : T.down} sub={`${retrospective.tradeCount} ${retrospective.tradeCount === 1 ? 'trade' : 'trades'} · calculated from trades`} />
+              <RetrospectiveMetric label="Goal result" value={goalPresentation.label} color={goalPresentation.color} sub={retrospective.tradeCount === 0 && retrospective.goalOutcome === 'not-assessed' ? 'No trades · abstained' : 'Compared with saved target'} />
+            </div>
+            <div className="mt-4">
+              <div className="text-xs" style={{ color: T.dim }}>Process result</div>
+              <div className="flex flex-wrap gap-2 mt-1.5">
+                {PROCESS_CHOICES.map(([value, label]) => {
+                  const selected = processStatus === value
+                  const color = value === 'hit' ? T.up : value === 'miss' ? T.down : T.faint
+                  return <button key={value} type="button" aria-pressed={selected} onClick={() => setProcessStatus(value)} className="rounded-md px-3 py-1.5 text-xs font-semibold" style={{ color: selected ? color : T.dim, background: selected ? T.surface2 : 'transparent', border: `1px solid ${selected ? color : T.line}` }}>{label}</button>
+                })}
+              </div>
+            </div>
+          </Panel>
+          </div>
+
+          {records && (
+            <div className="th-reviews-records">
+            <Panel title={isAll ? 'Career records' : 'Records'}>
+              <dl className="th-reviews-record-grid">
+                <div className="th-reviews-record-row grid grid-cols-2 md:grid-cols-4">
+                  <RecordMetric label="Biggest win" value={fmt$(records.bigWin)} tone="up" />
+                  <RecordMetric label="Biggest loss" value={fmt$(records.bigLoss)} tone="down" />
+                  <RecordMetric label="Best day" value={fmt$(records.bestDay)} tone="up" />
+                  <RecordMetric label="Worst day" value={fmt$(records.worstDay)} tone="down" />
+                </div>
+                <div className="th-reviews-record-row grid grid-cols-2 md:grid-cols-4 mt-2 pt-2 border-t" style={{ borderColor: T.line }}>
+                  <RecordMetric label="Longest non-tilt" value={String(stats.bestNonTilt)} sub="best streak" tone="accent" />
+                  <RecordMetric label="Total fees" value={fmt$(records.fees)} sub="paid" />
+                  <RecordMetric label="Trades logged" value={String(stats.n)} sub={`${stats.activeDays} active days`} />
+                  <RecordMetric label="Win rate" value={`${fmtN(stats.winRate, 1)}%`} sub={`${stats.activeDays ? fmtN(stats.n / stats.activeDays, 1) : 0}/day`} />
+                </div>
+              </dl>
+            </Panel>
+            </div>
+          )}
         </div>
-        <div className="mt-4">
-          <div className="text-xs" style={{ color: T.dim }}>Process result</div>
-          <div className="flex flex-wrap gap-2 mt-1.5">
-            {PROCESS_CHOICES.map(([value, label]) => {
-              const selected = processStatus === value
-              const color = value === 'hit' ? T.up : value === 'miss' ? T.down : T.faint
-              return <button key={value} type="button" aria-pressed={selected} onClick={() => setProcessStatus(value)} className="rounded-md px-3 py-1.5 text-xs font-semibold" style={{ color: selected ? color : T.dim, background: selected ? T.surface2 : 'transparent', border: `1px solid ${selected ? color : T.line}` }}>{label}</button>
-            })}
+
+        <div className="th-reviews-overview-right">
+          <PeriodStatistics trades={trades} onOpenPeriod={(nextGranularity, nextPeriod) => { setGran(nextGranularity); setSel(nextPeriod) }} />
+          <div className="th-reviews-summary grid grid-cols-2 md:grid-cols-4 gap-3">
+            <Stat label="Net P&L" value={fmt$(stats.totalPnl)} tone={stats.totalPnl >= 0 ? 'up' : 'down'} sub={`${stats.n} trades · ${stats.activeDays} days`} />
+            <Stat label="Win rate" value={`${fmtN(stats.winRate, 1)}%`} sub={`PF ${stats.profitFactor === Infinity ? '∞' : fmtN(stats.profitFactor, 2)}`} />
+            <Stat label="Avg grade" value={periodTrades.length ? letterFor(avgGrade).letter : '—'} tone="accent" sub={periodTrades.length ? `${avgGrade}/100 execution` : 'No trades assessed'} />
+            <Stat label="Expectancy" value={fmt$(stats.expectancy)} sub={`max DD ${fmt$(-stats.maxDD)}`} />
           </div>
         </div>
-      </Panel>
       </div>
-
-      <div className="th-reviews-summary grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Stat label="Net P&L" value={fmt$(stats.totalPnl)} tone={stats.totalPnl >= 0 ? 'up' : 'down'} sub={`${stats.n} trades · ${stats.activeDays} days`} />
-        <Stat label="Win rate" value={`${fmtN(stats.winRate, 1)}%`} sub={`PF ${stats.profitFactor === Infinity ? '∞' : fmtN(stats.profitFactor, 2)}`} />
-        <Stat label="Avg grade" value={periodTrades.length ? letterFor(avgGrade).letter : '—'} tone="accent" sub={periodTrades.length ? `${avgGrade}/100 execution` : 'No trades assessed'} />
-        <Stat label="Expectancy" value={fmt$(stats.expectancy)} sub={`max DD ${fmt$(-stats.maxDD)}`} />
-      </div>
-
-      {records && (
-        <div className="th-reviews-records">
-        <Panel title={isAll ? 'Career records' : 'Records'}>
-          <dl className="th-reviews-record-grid">
-            <div className="th-reviews-record-row grid grid-cols-2 md:grid-cols-4">
-              <RecordMetric label="Biggest win" value={fmt$(records.bigWin)} tone="up" />
-              <RecordMetric label="Biggest loss" value={fmt$(records.bigLoss)} tone="down" />
-              <RecordMetric label="Best day" value={fmt$(records.bestDay)} tone="up" />
-              <RecordMetric label="Worst day" value={fmt$(records.worstDay)} tone="down" />
-            </div>
-            <div className="th-reviews-record-row grid grid-cols-2 md:grid-cols-4 mt-2 pt-2 border-t" style={{ borderColor: T.line }}>
-              <RecordMetric label="Longest non-tilt" value={String(stats.bestNonTilt)} sub="best streak" tone="accent" />
-              <RecordMetric label="Total fees" value={fmt$(records.fees)} sub="paid" />
-              <RecordMetric label="Trades logged" value={String(stats.n)} sub={`${stats.activeDays} active days`} />
-              <RecordMetric label="Win rate" value={`${fmtN(stats.winRate, 1)}%`} sub={`${stats.activeDays ? fmtN(stats.n / stats.activeDays, 1) : 0}/day`} />
-            </div>
-          </dl>
-        </Panel>
-        </div>
-      )}
 
       {stats.n > 0 && (
         <div className="th-reviews-equity">

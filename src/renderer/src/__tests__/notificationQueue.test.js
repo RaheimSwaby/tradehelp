@@ -4,7 +4,7 @@ import { FLOATING_NOTICE_PRIORITY, selectFloatingNotice } from '../notificationQ
 describe('floating notification priority', () => {
   it('keeps the documented risk-to-feedback order', () => {
     expect(FLOATING_NOTICE_PRIORITY).toEqual([
-      'risk', 'update', 'weekly-review', 'daily-review', 'timing', 'achievement', 'nudge', 'feedback'
+      'risk', 'update', 'weekly-review', 'daily-review', 'briefing', 'timing', 'achievement', 'nudge', 'feedback'
     ])
   })
 
@@ -13,6 +13,8 @@ describe('floating notification priority', () => {
     expect(selectFloatingNotice({ dailyReview: true, timing: true, achievement: true })).toBe('daily-review')
     expect(selectFloatingNotice({ weeklyReview: true, timing: true })).toBe('weekly-review')
     expect(selectFloatingNotice({ weeklyReview: true, dailyReview: true })).toBe('weekly-review')
+    expect(selectFloatingNotice({ dailyReview: true, briefing: true })).toBe('daily-review')
+    expect(selectFloatingNotice({ briefing: true, timing: true })).toBe('briefing')
     expect(selectFloatingNotice({ timing: true, achievement: true, feedback: true })).toBe('timing')
     expect(selectFloatingNotice({ achievement: true, nudge: true, feedback: true })).toBe('achievement')
   })

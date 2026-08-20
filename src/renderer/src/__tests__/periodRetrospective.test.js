@@ -50,10 +50,12 @@ describe('canonical period trade dates', () => {
 })
 
 describe('review period options', () => {
-  it('keeps the current empty week and month selectable', () => {
+  it('keeps the current empty review periods selectable', () => {
     const now = new Date(2026, 6, 22, 12)
     expect(reviewPeriodKeys({ trades: [], reviews: {}, granularity: 'week', now })).toEqual(['2026-07-20'])
     expect(reviewPeriodKeys({ trades: [], reviews: {}, granularity: 'month', now })).toEqual(['2026-07'])
+    expect(reviewPeriodKeys({ trades: [], reviews: {}, granularity: 'quarter', now })).toEqual(['2026-Q3'])
+    expect(reviewPeriodKeys({ trades: [], reviews: {}, granularity: 'year', now })).toEqual(['2026'])
   })
 
   it('combines current, traded, and previously reviewed periods without mixing granularities', () => {

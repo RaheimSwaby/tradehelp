@@ -58,6 +58,21 @@ export function monthlyWrapCandidate(now = new Date()) {
   return previousMonthKey(date)
 }
 
+export function previousQuarterKey(now = new Date()) {
+  const date = asDate(now)
+  if (!date) return ''
+  const currentQuarter = Math.floor(date.getMonth() / 3)
+  const previous = new Date(date.getFullYear(), (currentQuarter - 1) * 3, 1)
+  return currentPeriodKey('quarter', previous)
+}
+
+/** The most recently completed quarter, offered once whenever the app is next opened. */
+export function quarterlyWrapCandidate(now = new Date()) {
+  const date = asDate(now)
+  if (!date) return ''
+  return previousQuarterKey(date)
+}
+
 export function ruleBreaksForSession(ruleBreaks = [], sessionId = '') {
   const key = String(sessionId || '')
   if (!key) return []

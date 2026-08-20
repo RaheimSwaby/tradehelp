@@ -79,18 +79,36 @@ function anthropicMessages(messages) {
 // channel the coach already renders for Ollama. Without it the models that think
 // by default emit empty thinking blocks, which shows up as a long silent pause
 // before the answer starts.
-const anthropicThinking = (think) => (
-  think === false ? { type: 'disabled' } : { type: 'adaptive', display: 'summarized' }
-)
+// Adaptive thinking exists only on Claude 4.6 and later. Browse lists every
+// model the key can reach, older ones included, so sending an adaptive thinking
+// block unconditionally turned "that model does not think" into a 400 that read
+// as "the Claude connection is broken".
+const ADAPTIVE_THINKING = /^claude-(opus-(4-6|4-7|4-8|5)|sonnet-(4-6|5)|fable-5|mythos-5)/
+// Fable and Mythos reject an explicit disable; leaving the field out is how you
+// ask those for no thinking.
+const REJECTS_DISABLED_THINKING = /^claude-(fable|mythos)-5/
 
-const anthropicBody = (settings, system, messages, think, stream) => JSON.stringify({
-  model: anthropicModelFor(settings),
-  max_tokens: ANTHROPIC_MAX_TOKENS,
-  system,
-  messages: anthropicMessages(messages),
-  thinking: anthropicThinking(think),
-  ...(stream ? { stream: true } : {})
-})
+// null means "send no thinking field at all", which is valid on every model.
+function anthropicThinking(model, think) {
+  const id = String(model || '')
+  if (think === false) return REJECTS_DISABLED_THINKING.test(id) ? null : { type: 'disabled' }
+  return ADAPTIVE_THINKING.test(id) ? { type: 'adaptive', display: 'summarized' } : null
+}
+
+const anthropicBody = (settings, system, messages, think, stream) => {
+  const model = anthropicModelFor(settings)
+  const thinking = anthropicThinking(model, think)
+  return JSON.stringify({
+    model,
+    max_tokens: ANTHROPIC_MAX_TOKENS,
+    system,
+    messages: anthropicMessages(messages),
+    // Omitted entirely when the model does not take one, rather than sent as a
+    // null the API would reject.
+    ...(thinking ? { thinking } : {}),
+    ...(stream ? { stream: true } : {})
+  })
+}
 
 // The raw status code tells the trader nothing. Name the setting they need to fix.
 async function anthropicFailure(res, model) {

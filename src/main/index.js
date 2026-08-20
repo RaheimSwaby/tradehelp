@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell, dialog, protocol, net, Notification, desktopCapturer, session } from 'electron'
+import { app, BrowserWindow, ipcMain, shell, dialog, protocol, net, Notification, desktopCapturer, session, safeStorage } from 'electron'
 import { extname, join, sep } from 'path'
 import { copyFileSync, createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'fs'
 import { randomUUID } from 'crypto'
@@ -17,12 +17,16 @@ import { createBrokerSync } from './brokerSync.js'
 import { parseBarExport, resolveSourceZone } from '../renderer/src/utils/barImport.js'
 import { instrumentRootSymbol } from '../renderer/src/workflow.js'
 import { createMobileSyncServer } from './mobileSync.js'
+import { createCredentialVault } from './credentialVault.js'
+import { createMarketDataService } from './marketData/service.js'
+import { prepareTradingViewRequestHeaders } from './tradingViewHeaders.js'
 
 let win
 let settingsCache = null
 let videoPickCleanupTimer = null
 let importWatcher = null
 let brokerSync = null
+let marketData = null
 let mobileSync = null
 let rendererServer = null
 const VIDEO_SCHEME = 'tradehelp-media'
@@ -217,14 +221,19 @@ function createWindow(rendererPort) {
 app.whenReady().then(() => {
   app.setAppUserModelId('com.tradehelp.app') // so Windows notifications show "TradeHelp", not "electron.app"
   
-  // Set origin and referer headers for TradingView data feeds in production builds
+  // Referer only, deliberately. Overriding Origin here looked like the same
+  // kind of fix but guaranteed the opposite: this hook changes what is sent,
+  // while Chromium validates the CORS response against the document's real
+  // origin (localhost in dev, null from file:// when packaged). Claiming to
+  // be tradingview.com made the server echo an Access-Control-Allow-Origin
+  // that can never match the real one, so every cross-origin read was blocked
+  // and the technical-analysis widget rendered "No data here yet". Referer is
+  // not part of that check, so feeds that wanted it still get it.
   try {
     session.defaultSession.webRequest.onBeforeSendHeaders(
       { urls: ['*://*.tradingview.com/*', '*://*.tradingview-widget.com/*'] },
       (details, callback) => {
-        details.requestHeaders['Referer'] = 'https://www.tradingview.com/'
-        details.requestHeaders['Origin'] = 'https://www.tradingview.com'
-        callback({ requestHeaders: details.requestHeaders })
+        callback({ requestHeaders: prepareTradingViewRequestHeaders(details.requestHeaders) })
       }
     )
   } catch (err) {
@@ -233,6 +242,11 @@ app.whenReady().then(() => {
 
   db.initDb()
   brokerSync = createBrokerSync(db, { allowDevelopment: !app.isPackaged })
+  const credentialVault = createCredentialVault({
+    safeStorage,
+    filePath: join(app.getPath('userData'), 'secure', 'market-data-credentials.json')
+  })
+  marketData = createMarketDataService({ database: db, vault: credentialVault })
   mobileSync = createMobileSyncServer(db, {
     allow: true,
     onSync: (result) => {
@@ -343,6 +357,31 @@ function registerIpc() {
       })
     } catch {}
     return result
+  })
+  ipcMain.handle('market-data:capabilities', () => marketData.capabilities())
+  ipcMain.handle('market-data:status', (_e, provider) => {
+    try { return { ok: true, status: marketData.status(provider) } }
+    catch (error) { return { ok: false, error: String(error?.message || error) } }
+  })
+  ipcMain.handle('market-data:connect', async (_e, input = {}) => {
+    try { return { ok: true, status: await marketData.connect(input) } }
+    catch (error) { return { ok: false, error: String(error?.message || error) } }
+  })
+  ipcMain.handle('market-data:disconnect', (_e, provider) => {
+    try { return { ok: true, status: marketData.disconnect(provider) } }
+    catch (error) { return { ok: false, error: String(error?.message || error) } }
+  })
+  ipcMain.handle('market-data:estimate', async (_e, input = {}) => {
+    try { return { ok: true, estimate: await marketData.estimate(input) } }
+    catch (error) { return { ok: false, error: String(error?.message || error) } }
+  })
+  ipcMain.handle('market-data:sync', async (_e, input = {}) => {
+    try { return { ok: true, result: await marketData.sync(input) } }
+    catch (error) { return { ok: false, error: String(error?.message || error) } }
+  })
+  ipcMain.handle('market-data:bias', (_e, instrument) => {
+    try { return { ok: true, bias: marketData.bias(instrument) } }
+    catch (error) { return { ok: false, error: String(error?.message || error) } }
   })
   ipcMain.handle('mobile-sync:status', () => mobileSync.status())
   ipcMain.handle('mobile-sync:start', () => mobileSync.start())
@@ -819,7 +858,7 @@ function registerIpc() {
 
   ipcMain.handle('price:get', async (_e, sym) => {
     try {
-      return { ok: true, ...(await fetchPrice(sym, cachedSettings().finnhubKey)) }
+      return { ok: true, ...(await fetchPrice(sym, cachedSettings().finnhubKey, { forexQuote: (instrument) => marketData.quote(instrument) })) }
     } catch (err) {
       return { ok: false, error: String(err?.message || err) }
     }
@@ -827,7 +866,7 @@ function registerIpc() {
 
   ipcMain.handle('price:batch', async (_e, symbols) => {
     try {
-      return await fetchQuotes(symbols, cachedSettings().finnhubKey)
+      return await fetchQuotes(symbols, cachedSettings().finnhubKey, { forexQuote: (instrument) => marketData.quote(instrument) })
     } catch {
       return []
     }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
-import { Bot, Brain, BookOpen, Send, Search } from 'lucide-react'
+import { Bot, Brain, BookOpen, Send, Search, Trash2 } from 'lucide-react'
 import { T, mono, inputStyle } from '../theme.js'
 import { fmt$, fmtN, streamChat } from '../utils.js'
 import { fullJournalContext, computeLeaks } from '../stats.js'
@@ -8,6 +8,7 @@ import { coachRequestProfile } from '../coachRequest.js'
 import { Panel } from '../components/Shared.jsx'
 import { CompactMarkdown } from '../components/CompactMarkdown.jsx'
 import { EventsPanel } from '../widgets/EventBanner.jsx'
+import { clearCoachChatHistory, loadCoachChatHistory, saveCoachChatHistory } from '../coachChatHistory.js'
 
 /* ───────── AI coach ───────── */
 const COACH_SYSTEM = `You are a trading performance coach embedded in a trader's personal journal app.
@@ -39,7 +40,7 @@ export function Coach({ trades, stats, settings, reviews = {}, playbook = [], da
   // Local Ollama always gets the full written record; cloud users can gate free-form text.
   const includeWritten = shouldIncludeWrittenJournal(settings)
   const coachSystem = `${COACH_SYSTEM}\n${coachVoiceInstruction(settings?.coachVoice)}`
-  const [msgs, setMsgs] = useState([])
+  const [msgs, setMsgs] = useState(loadCoachChatHistory)
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [streamText, setStreamText] = useState(null)
@@ -47,7 +48,20 @@ export function Coach({ trades, stats, settings, reviews = {}, playbook = [], da
   const [price, setPrice] = useState({ sym: '', out: null, loading: false })
   const scrollRef = useRef(null)
   const cancelStreamRef = useRef(null)
+  const savedMessagesRef = useRef(JSON.stringify(msgs))
   useEffect(() => { scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight) }, [msgs, busy, streamText, thinkingText])
+  useEffect(() => {
+    const serialized = JSON.stringify(msgs)
+    if (serialized === savedMessagesRef.current) return
+    savedMessagesRef.current = serialized
+    saveCoachChatHistory(msgs)
+  }, [msgs])
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (msgs.length > 0 && loadCoachChatHistory().length === 0) setMsgs([])
+    }, 60_000)
+    return () => clearInterval(timer)
+  }, [msgs.length])
   useEffect(() => () => cancelStreamRef.current?.(), [])
 
   const modelLabel = { cloud: settings?.cloudModel, anthropic: settings?.anthropicModel }[settings?.provider] ?? settings?.ollamaModel
@@ -63,6 +77,7 @@ export function Coach({ trades, stats, settings, reviews = {}, playbook = [], da
   async function ask(userText) {
     if (busy) return
     const next = [...msgs, { role: 'user', content: userText }]
+    saveCoachChatHistory(next)
     setMsgs(next); setInput(''); setBusy(true); setStreamText('')
     setThinkingText(showThinking ? '' : null)
     let fullThinking = ''
@@ -87,6 +102,14 @@ export function Coach({ trades, stats, settings, reviews = {}, playbook = [], da
     } catch (e) {
       setMsgs((m) => [...m, { role: 'assistant', content: `⚠︎ ${e?.message || 'Could not reach the model. Check Settings.'}` }])
     } finally { setStreamText(null); setThinkingText(null); setBusy(false) }
+  }
+
+  function clearChat() {
+    if (busy || msgs.length === 0) return
+    if (!window.confirm('Clear this saved coach conversation? This cannot be undone.')) return
+    clearCoachChatHistory()
+    setMsgs([])
+    setInput('')
   }
 
   async function checkPrice() {
@@ -129,7 +152,15 @@ export function Coach({ trades, stats, settings, reviews = {}, playbook = [], da
         <div className="px-4 py-3 flex items-center gap-2" style={{ borderBottom: `1px solid ${T.line}` }}>
           <Bot size={16} style={{ color: T.dim }} />
           <span className="text-sm font-semibold">AI Coach</span>
-          <span className="text-xs ml-auto" style={{ color: T.faint }}>{modelLabel || 'No model selected'} · not financial advice</span>
+          <div className="ml-auto flex items-center gap-2">
+            {msgs.length > 0 && (
+              <button type="button" onClick={clearChat} disabled={busy} className="flex items-center gap-1 rounded px-1.5 py-1 text-xs"
+                style={{ color: T.faint, opacity: busy ? 0.5 : 1 }} title="Clear saved coach conversation. Conversations expire five days after the latest message.">
+                <Trash2 size={12} /> Clear
+              </button>
+            )}
+            <span className="text-xs" style={{ color: T.faint }}>{modelLabel || 'No model selected'} · not financial advice</span>
+          </div>
         </div>
         {tinyModel && (
           <div className="px-4 py-2 text-xs" style={{ background: 'rgba(251,113,133,0.10)', borderBottom: `1px solid ${T.line}`, color: T.down }}>

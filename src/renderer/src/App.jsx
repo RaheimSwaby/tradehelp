@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 import { applyTheme, T, mono } from './theme.js'
 import { fmt$, fmtN, parseRules, IMPACT_RANK, ALERT_LEADS, GATE_CONFIGURED, isNewerVersion, thisWeekKey } from './utils.js'
-import { computeStats, computeAchievements } from './stats.js'
+import { computeStats, computeAchievements, computeLeaks } from './stats.js'
 import { RELEASE_NOTES } from './releaseNotes.js'
 import { PageAnimationContext } from './pageAnimation.js'
 import { Readout } from './components/Shared.jsx'
@@ -38,13 +38,15 @@ import { WeeklyWrapModal } from './components/WeeklyWrap.jsx'
 import { FeedbackPrompt } from './components/FeedbackPrompt.jsx'
 import { HelpModal } from './components/HelpModal.jsx'
 import { EasterEggNudge } from './components/EasterEggNudge.jsx'
+import { PrivateBriefingBubble } from './components/PrivateBriefingBubble.jsx'
 import { buildEasterEggNudges, lastTradingDay } from './coachInsights.js'
 import { dHashDataUrl, IMAGE_FINGERPRINT_VERSION } from './workflow.js'
 import { formatClockMinute, localDateKey, inferTradingSchedule, manualTradingSchedule, personalTradingClock, sessionEdgeCue } from './sessionClock.js'
 import { selectFloatingNotice } from './notificationQueue.js'
 import { tradeDateKey, tradePeriodKey } from './periodRetrospective.js'
 import { startSessionRecorder } from './sessionRecorder.js'
-import { buildWeeklyWrap, monthlyWrapCandidate, previousMonthKey, previousWeekKey, weeklyWrapCandidate } from './weeklyWrap.js'
+import { buildWeeklyWrap, monthlyWrapCandidate, previousMonthKey, previousQuarterKey, previousWeekKey, quarterlyWrapCandidate, weeklyWrapCandidate } from './weeklyWrap.js'
+import { buildSessionBriefing } from './marketBriefing.js'
 
 /* Journal: Lucide's feather, unchanged vane and rib, with the shaft stopping short so
    it can end in a carved nib instead of a rounded stroke cap. The nib is filled rather
@@ -182,6 +184,8 @@ export default function App() {
   const [settings, setSettings] = useState(null)
   const [license, setLicense] = useState(null)
   const [tab, setTab] = useState('journal')
+  const [chartViewRequest, setChartViewRequest] = useState({ mode: 'candles', id: 0 })
+  const [settingsFocus, setSettingsFocus] = useState('')
   const [notesView, setNotesView] = useState(null)
   const [tradeMode, setTradeMode] = useState(false)
   const [preflight, setPreflight] = useState(false)
@@ -189,6 +193,9 @@ export default function App() {
   const [checks, setChecks] = useState({})
   const [lockoutDismissed, setLockoutDismissed] = useState(false)
   const [events, setEvents] = useState([])
+  const [briefQuotes, setBriefQuotes] = useState([])
+  const [briefUpdatedAt, setBriefUpdatedAt] = useState(null)
+  const [privateBriefingOpen, setPrivateBriefingOpen] = useState(false)
   const [now, setNow] = useState(Date.now())
   const firedRef = useRef(new Set())
   const [toastQueue, setToastQueue] = useState([])
@@ -215,6 +222,7 @@ export default function App() {
   const [weeklyWrap, setWeeklyWrap] = useState(null)
   const [instrumentProfiles, setInstrumentProfiles] = useState([])
   const [savedSearches, setSavedSearches] = useState([])
+  const briefingSeenRef = useRef('')
   const [planPrefill, setPlanPrefill] = useState(null)
   const [workflowMsg, setWorkflowMsg] = useState(null)
   const [customBg, setCustomBg] = useState('')
@@ -252,6 +260,9 @@ export default function App() {
   }, [tradeMode, activeSession])
 
   const hasApi = typeof window !== 'undefined' && window.api
+  const browserPreview = import.meta.env.DEV && typeof window !== 'undefined'
+    ? new URLSearchParams(window.location.search).get('preview')
+    : null
   const reportDay = useMemo(() => {
     const today = localDateKey(new Date(now))
     return lastTradingDay(trades, today)
@@ -278,6 +289,41 @@ export default function App() {
       setReady(true)
     })()
   }, [hasApi])
+
+  async function refreshPrivateBriefingQuotes() {
+    if (!hasApi || !settings || settings.tickerEnabled === 'false') {
+      setBriefQuotes([])
+      setBriefUpdatedAt(Date.now())
+      return []
+    }
+    const symbols = String(settings.tickerSymbols || 'SPY,QQQ,BTC,ETH')
+      .split(',').map((symbol) => symbol.trim()).filter(Boolean).slice(0, 12)
+    try {
+      const quotes = await window.api?.priceBatch?.(symbols)
+      const next = Array.isArray(quotes) ? quotes : []
+      setBriefQuotes(next)
+      return next
+    } catch {
+      setBriefQuotes([])
+      return []
+    } finally {
+      setBriefUpdatedAt(Date.now())
+    }
+  }
+
+  useEffect(() => {
+    if (!ready || !settings) return undefined
+    refreshPrivateBriefingQuotes()
+    const timer = setInterval(refreshPrivateBriefingQuotes, 5 * 60 * 1000)
+    return () => clearInterval(timer)
+  }, [ready, settings?.tickerEnabled, settings?.tickerSymbols, settings?.finnhubKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Roll the persistent ticker out once to existing installs. The marker prevents
+  // a later user opt-out from being overwritten on the next launch.
+  useEffect(() => {
+    if (!ready || !hasApi || !settings || settings.persistentTickerRolloutSeen === 'true') return
+    window.api.setSettings({ tickerEnabled: 'true', persistentTickerRolloutSeen: 'true' }).then(setSettings).catch(() => {})
+  }, [ready, hasApi, settings?.persistentTickerRolloutSeen])
 
   useEffect(() => {
     if (!hasApi || !window.api.onImportsChanged) return undefined
@@ -317,7 +363,7 @@ export default function App() {
     // Holds both week and month keys now, so a year needs 52 + 12 slots.
     // Persist the seen key before clearing the modal. Clearing first lets the scheduling
     // effect run once with stale settings and immediately reopen the same recap.
-    if (period) await saveSettings({ weeklyWrapSeen: JSON.stringify([...new Set([...weeklyWrapSeen(), period])].slice(-64)) })
+    if (period) await saveSettings({ weeklyWrapSeen: JSON.stringify([...new Set([...weeklyWrapSeen(), period])].slice(-80)) })
     setWeeklyWrap(null)
   }
 
@@ -341,9 +387,12 @@ export default function App() {
   /** What the trader committed to after the period immediately before this one. */
   function priorWrapFocus(wrap) {
     if (!wrap?.weekKey) return ''
-    const anchor = new Date(`${wrap.weekKey.length === 7 ? `${wrap.weekKey}-01` : wrap.weekKey}T12:00:00`)
+    const quarter = /^(\d{4})-Q([1-4])$/.exec(wrap.weekKey)
+    const anchor = quarter
+      ? new Date(Number(quarter[1]), (Number(quarter[2]) - 1) * 3, 1, 12)
+      : new Date(`${wrap.weekKey.length === 7 ? `${wrap.weekKey}-01` : wrap.weekKey}T12:00:00`)
     if (Number.isNaN(anchor.getTime())) return ''
-    const key = wrap.granularity === 'month' ? previousMonthKey(anchor) : previousWeekKey(anchor)
+    const key = wrap.granularity === 'quarter' ? previousQuarterKey(anchor) : wrap.granularity === 'month' ? previousMonthKey(anchor) : previousWeekKey(anchor)
     return String(wrapFocusMap()[key] || '')
   }
 
@@ -359,6 +408,7 @@ export default function App() {
     // and stacking two recaps on one launch is worse than showing the bigger one first.
     // The other stays unseen and appears on the next launch.
     const candidates = [
+      { granularity: 'quarter', period: quarterlyWrapCandidate(new Date(now)) },
       { granularity: 'month', period: monthlyWrapCandidate(new Date(now)) },
       { granularity: 'week', period: weeklyWrapCandidate(new Date(now)) }
     ]
@@ -427,6 +477,7 @@ export default function App() {
   }, [hasApi])
 
   const stats = useMemo(() => computeStats(trades), [trades])
+  const briefingLeaks = useMemo(() => computeLeaks(trades), [trades])
   const easterNudges = useMemo(() => buildEasterEggNudges(trades, stats), [trades, stats])
 
   async function refreshWorkflow() {
@@ -655,6 +706,42 @@ export default function App() {
   const dailyGoal = parseFloat(settings?.dailyGoal) || 0
   const maxLoss = parseFloat(settings?.maxDailyLoss) || 0
   const lossHit = maxLoss > 0 && todayNet <= -maxLoss
+  const privateBriefing = useMemo(() => settings ? buildSessionBriefing({
+    quotes: briefQuotes,
+    events,
+    settings,
+    journal: {
+      stats,
+      leaks: briefingLeaks,
+      commitments,
+      ruleBreaks,
+      todayNet,
+      todayCount: todayTrades.length,
+      live: tradeMode
+    },
+    now
+  }) : null, [briefQuotes, events, settings, stats, briefingLeaks, commitments, ruleBreaks, todayNet, todayTrades.length, tradeMode, now])
+
+  function dismissPrivateBriefing() {
+    const day = localDateKey(new Date(now))
+    briefingSeenRef.current = day
+    setPrivateBriefingOpen(false)
+    if (settings?.privateBriefingSeenDay !== day) Promise.resolve(saveSettings({ privateBriefingSeenDay: day })).catch(() => {})
+  }
+
+  useEffect(() => {
+    if (!ready || !settings || !briefUpdatedAt || settings.privateBriefingPopupEnabled === 'false') return
+    const day = localDateKey(new Date(now))
+    if (tab === 'news') {
+      setPrivateBriefingOpen(false)
+      if (briefingSeenRef.current !== day && settings.privateBriefingSeenDay !== day) {
+        briefingSeenRef.current = day
+        Promise.resolve(saveSettings({ privateBriefingSeenDay: day })).catch(() => {})
+      }
+      return
+    }
+    if (briefingSeenRef.current !== day && settings.privateBriefingSeenDay !== day) setPrivateBriefingOpen(true)
+  }, [ready, settings, briefUpdatedAt, tab, now]) // eslint-disable-line react-hooks/exhaustive-deps
   const sessionElapsed = activeSession ? Math.max(0, sessionTick - new Date(activeSession.startedAt).getTime()) : 0
   const personalClockAlerts = settings?.personalClockAlerts !== 'false'
   const personalClockAmbience = settings?.personalClockAmbience !== 'false'
@@ -863,6 +950,7 @@ export default function App() {
     update: Boolean(updateReady),
     dailyReview: Boolean(dailyReport),
     weeklyReview: Boolean(weeklyWrap),
+    briefing: Boolean(privateBriefingOpen && tab !== 'news'),
     timing: Boolean(sessionCue && personalClockAlerts),
     achievement: Boolean(toast),
     nudge: Boolean(nudge),
@@ -995,7 +1083,6 @@ export default function App() {
       <CustomBackground dataUrl={customBg} settings={settings} />
       <Backdrop variant={!settings?.backdrop || settings.backdrop === 'on' ? 'constellation' : settings.backdrop} />
       {personalClockAmbience && <SessionAmbience clock={sessionClock} />}
-      <Ticker settings={settings} />
       {updateAvail && !updateReady && <UpdateAvailableBanner info={updateAvail} onClose={() => setUpdateAvail(null)} />}
       {GATE_CONFIGURED && license?.state === 'trial' && <TrialBanner days={license.daysLeft} />}
       {imminentEvent && <EventBanner event={imminentEvent} now={now} />}
@@ -1070,7 +1157,10 @@ export default function App() {
                 aria-selected={active} aria-controls="th-tabpanel"
                 tabIndex={active ? 0 : -1}
                 ref={(node) => { tabRefs.current[index] = node }}
-                onClick={() => setTab(id)}
+                onClick={() => {
+                  if (id === 'chart') setChartViewRequest((current) => ({ mode: 'candles', id: current.id + 1 }))
+                  setTab(id)
+                }}
                 className={`th-tab flex items-center gap-2 px-3 py-2 text-sm${active ? ' th-tab-on' : ''}`}
                 style={{ color: active ? T.accentText : T.dim }}>
                 <Icon size={15} /> {label}
@@ -1079,8 +1169,17 @@ export default function App() {
           })}
         </nav>
 
+        <Ticker settings={settings} onOpenMarketPulse={() => {
+          setChartViewRequest((current) => ({ mode: 'pulse', id: current.id + 1 }))
+          setTab('chart')
+        }} />
+
         {!ready ? (
           <div className="py-20 text-center text-sm" style={{ color: T.dim }}>Loading your journal…</div>
+        ) : !hasApi && browserPreview === 'tradingview' ? (
+          <ChartTab trades={[]} />
+        ) : !hasApi && browserPreview === 'news' ? (
+          <NewsTab />
         ) : !hasApi ? (
           <div className="py-20 text-center text-sm" style={{ color: T.down }}>
             This UI must run inside the Electron shell (npm run dev) to reach your local database.
@@ -1091,7 +1190,7 @@ export default function App() {
           <PageAnimationContext.Provider value={`${tab}-${pageAnimationReplay}`}>
           <div key={tab} id="th-tabpanel" role="tabpanel" aria-labelledby={`th-tab-${tab}`} className="th-cinematic th-tabpanel">
             {tab === 'journal' && <Journal trades={trades} commitments={commitments} onAdd={addTrade} onUpdate={updateTrade} onRemove={removeTrade} onRemoveMany={removeTrades} onNotes={setNotesView} onImport={importTrades} onRollbackImport={rollbackImport} accounts={propFirmAccounts} profiles={instrumentProfiles} savedSearches={savedSearches} onAddSavedSearch={addSavedSearch} onUpdateSavedSearch={updateSavedSearch} onDeleteSavedSearch={deleteSavedSearch} onRefreshSavedSearches={refreshSavedSearches} settings={settings} onSaveSettings={saveSettings} dayLogs={dayLogs} onAddDayLog={addDayLog} onDeleteDayLog={deleteDayLog} drilldown={journalDrilldown} onConsumeDrilldown={() => setJournalDrilldown(null)} />}
-            {tab === 'chart' && <ChartTab trades={trades} onOpenTrade={setNotesView} settings={settings} onSaveSettings={saveSettings} />}
+            {tab === 'chart' && <ChartTab trades={trades} onOpenTrade={setNotesView} settings={settings} onSaveSettings={saveSettings} requestedView={chartViewRequest.mode} viewRequestId={chartViewRequest.id} />}
             {tab === 'trade' && <TradeModeTab settings={settings} onSave={saveSettings} rules={rules} ruleBreaks={ruleBreaks} onDeleteRuleBreak={deleteRuleBreak} onUpdateSession={updateTradingSession} onDeleteSession={deleteTradingSession} live={tradeMode} arming={goTransition === 'arming'} todayNet={todayNet} todayCount={todayTrades.length} weekNet={weekNet} goal={dailyGoal} maxLoss={maxLoss} onStart={startDay} onEnd={endSession} session={activeSession} recordingState={recordingState} elapsed={sessionElapsed} sessions={tradingSessions} plans={tradePlans} trades={trades} accounts={propFirmAccounts} playbook={playbook} profiles={instrumentProfiles} planPrefill={planPrefill} onConsumePlanPrefill={() => setPlanPrefill(null)} onAddPlan={addTradePlan} onUpdatePlan={updateTradePlan} onDeletePlan={deleteTradePlan} />}
             {tab === 'propfirm' && <PropFirm trades={trades} accounts={propFirmAccounts} onSave={savePropFirmAccounts} settings={settings} onSaveSettings={saveSettings} payouts={payouts} onAddPayout={addPayout} onDeletePayout={deletePayout} expenses={propExpenses} onAddExpense={addPropExpense} onDeleteExpense={deletePropExpense} />}
             {tab === 'dashboard' && <Dashboard stats={stats} trades={trades} accounts={propFirmAccounts} settings={settings} journalData={{ reviews, playbook, dayLogs, goals, payouts, commitments }} payouts={payouts} plans={tradePlans} commitments={commitments} rules={rules} todayNet={todayNet} maxLoss={maxLoss} live={tradeMode} pnlFeedback={pnlFeedback} onSaveSettings={saveSettings} onOpenCoach={() => setTab('coach')} onOpenTradeMode={() => setTab('trade')} onOpenTrade={setNotesView} onTimingDrilldown={openTimingJournal} onClearDemo={clearDemoTrades} personalClock={sessionClock} personalSchedule={personalSchedule} now={now} />}
@@ -1099,11 +1198,13 @@ export default function App() {
             {tab === 'rating' && <Rating trades={trades} stats={stats} achievements={achievements} unlockedAt={unlockedAt} settings={settings} onSave={saveSettings} payouts={payouts} />}
             {tab === 'goals' && <Goals goals={goals} onSave={saveGoals} trades={trades} now={now} commitments={commitments} onAddCommitment={addCommitment} onUpdateCommitment={updateCommitment} onDeleteCommitment={deleteCommitment} onOpenCoach={() => setTab('coach')} />}
             {tab === 'reviews' && <Reviews trades={trades} ruleBreaks={ruleBreaks} reviews={reviews} goals={goals} settings={settings} onSave={saveReview} onDelete={removeReview} onOpenWeeklyWrap={showWeeklyWrap} now={now} />}
-            {tab === 'coach' && <Coach trades={trades} stats={stats} settings={settings} reviews={reviews} playbook={playbook} dayLogs={dayLogs} goals={goals} payouts={payouts} commitments={commitments} events={events} now={now} />}
+            <div aria-hidden={tab !== 'coach'} style={{ display: tab === 'coach' ? 'contents' : 'none' }}>
+              <Coach trades={trades} stats={stats} settings={settings} reviews={reviews} playbook={playbook} dayLogs={dayLogs} goals={goals} payouts={payouts} commitments={commitments} events={events} now={now} />
+            </div>
             {tab === 'patterns' && <Patterns trades={trades} onOpenTrade={setNotesView} />}
             {tab === 'playbook' && <PlaybookTab entries={playbook} trades={trades} onAdd={addPlaybookEntry} onUpdate={updatePlaybookEntry} onDelete={deletePlaybookEntry} onPlan={planFromPlaybook} />}
-            {tab === 'news' && <NewsTab trades={trades} settings={settings} events={events} />}
-            {tab === 'settings' && <SettingsTab settings={settings} onSave={saveSettings} license={license} onLicenseChange={refreshLicense} onReload={reloadAll} accounts={propFirmAccounts} profiles={instrumentProfiles} onAddProfile={addInstrumentProfile} onUpdateProfile={updateInstrumentProfile} onDeleteProfile={deleteInstrumentProfile} />}
+            {tab === 'news' && <NewsTab trades={trades} stats={stats} settings={settings} events={events} commitments={commitments} ruleBreaks={ruleBreaks} todayNet={todayNet} todayCount={todayTrades.length} live={tradeMode} now={now} briefQuotes={briefQuotes} briefUpdatedAt={briefUpdatedAt} onRefreshBriefing={refreshPrivateBriefingQuotes} onOpenMarketDataSettings={() => { setSettingsFocus('Market data connections'); setTab('settings') }} />}
+            {tab === 'settings' && <SettingsTab settings={settings} onSave={saveSettings} license={license} onLicenseChange={refreshLicense} onReload={reloadAll} accounts={propFirmAccounts} profiles={instrumentProfiles} onAddProfile={addInstrumentProfile} onUpdateProfile={updateInstrumentProfile} onDeleteProfile={deleteInstrumentProfile} initialSection={settingsFocus} />}
           </div>
           </PageAnimationContext.Provider>
         )}
@@ -1147,6 +1248,10 @@ export default function App() {
       {activeFloatingNotice === 'daily-review' && dailyReport && (
         <DailyReport trades={trades} date={dailyReport} settings={settings}
           onClose={closeDailyReport} onOpenCoach={() => { closeDailyReport(); setTab('coach') }} />
+      )}
+      {activeFloatingNotice === 'briefing' && privateBriefing && (
+        <PrivateBriefingBubble briefing={privateBriefing} updatedAt={briefUpdatedAt} onClose={dismissPrivateBriefing}
+          onOpen={() => { dismissPrivateBriefing(); setTab('news') }} />
       )}
       {activeFloatingNotice === 'weekly-review' && weeklyWrap && (
         <WeeklyWrapModal wrap={weeklyWrap} settings={settings} onClose={closeWeeklyWrap}

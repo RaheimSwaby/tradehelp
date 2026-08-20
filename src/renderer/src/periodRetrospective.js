@@ -86,7 +86,7 @@ function reviewKeyMatchesGranularity(key, granularity) {
   return PERIOD_PATTERNS[granularity]?.test(key) || false
 }
 
-/** Period options include saved reviews and the current week/month even when they contain no trades. */
+/** Period options include saved reviews and the current period even when it contains no trades. */
 export function reviewPeriodKeys({ trades = [], reviews = {}, granularity, now = new Date() } = {}) {
   if (granularity === 'all') return ['all-time']
   const keys = new Set()
@@ -97,7 +97,7 @@ export function reviewPeriodKeys({ trades = [], reviews = {}, granularity, now =
   for (const key of Object.keys(reviews || {})) {
     if (reviewKeyMatchesGranularity(key, granularity)) keys.add(key)
   }
-  if (granularity === 'week' || granularity === 'month') {
+  if (['week', 'month', 'quarter', 'year'].includes(granularity)) {
     const current = currentPeriodKey(granularity, now)
     if (current) keys.add(current)
   }

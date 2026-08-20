@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildWeeklyWrap, filterTradingSessions, monthlyWrapCandidate, previousMonthKey, previousWeekKey, ruleBreakKey, ruleBreaksForSession, summarizeRuleBreaks, weeklyWrapCandidate } from '../weeklyWrap.js'
+import { buildWeeklyWrap, filterTradingSessions, monthlyWrapCandidate, previousMonthKey, previousQuarterKey, previousWeekKey, quarterlyWrapCandidate, ruleBreakKey, ruleBreaksForSession, summarizeRuleBreaks, weeklyWrapCandidate } from '../weeklyWrap.js'
 
 const trades = [
   { id: 'a', timestamp: '2026-07-27 09:30', pnl: 120, emotion: 'Confident', setup: 'Pullback', reason: 'Followed my plan' },
@@ -113,5 +113,23 @@ describe('monthly rewind', () => {
 
   it('returns nothing for a month with no trades', () => {
     expect(buildWeeklyWrap({ trades, ruleBreaks, weekKey: '2026-01', granularity: 'month' })).toBeNull()
+  })
+})
+
+describe('quarterly rewind', () => {
+  it('offers the most recently completed quarter once the next quarter begins', () => {
+    expect(previousQuarterKey(new Date(2026, 7, 19, 15))).toBe('2026-Q2')
+    expect(quarterlyWrapCandidate(new Date(2026, 9, 1, 9))).toBe('2026-Q3')
+  })
+
+  it('rolls back across a year boundary', () => {
+    expect(previousQuarterKey(new Date(2026, 0, 4, 9))).toBe('2025-Q4')
+  })
+
+  it('builds the same deterministic recap over a quarter', () => {
+    const wrap = buildWeeklyWrap({ trades, ruleBreaks, weekKey: '2026-Q3', granularity: 'quarter' })
+    expect(wrap).toMatchObject({ granularity: 'quarter', wins: 1, losses: 2 })
+    expect(wrap.trades).toHaveLength(3)
+    expect(wrap.headline).toContain('quarter')
   })
 })
