@@ -1,3 +1,7 @@
+// Pin the timezone so the time-only entry test is deterministic across
+// local (America/New_York) and CI (UTC) runners.
+process.env.TZ = 'America/New_York'
+
 import { describe, expect, it } from 'vitest'
 import { MARKET_SESSION_DEFINITIONS, buildMarketSessionPerformance, marketSessionState, marketSessionsSnapshot } from '../marketSessions.js'
 
