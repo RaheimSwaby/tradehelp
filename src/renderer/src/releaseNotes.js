@@ -32,8 +32,7 @@ const V047_NOTES = `- New Chart tab, pull up any trade and see exactly where you
 - Dashboard now breaks your results down by symbol, so you can see at a glance which instruments actually pay you
 - NinjaTrader imports no longer leave escape codes in your trade notes, so a strategy name with a pipe in it reads the way you wrote it`
 
-export const RELEASE_NOTES = {
-  '0.50.0': `- Market Pulse: account-free TradingView ticker, live charts, technical summaries, and a watchlist you can rename, reorder, and expand
+const V050_NOTES = `- Market Pulse: account-free TradingView ticker, live charts, technical summaries, and a watchlist you can rename, reorder, and expand
 - Compact market ticker below the main navigation, open Market Pulse from it or turn it off in Settings
 - Private Briefing: a concise market and journal check-in in News, with a small reminder while you work elsewhere
 - Directional Bias reads supported candle data as Bullish, Bearish, Neutral, or Unavailable, with contributing factors and data freshness
@@ -42,7 +41,14 @@ export const RELEASE_NOTES = {
 - Reviews add monthly and quarterly statistics, quarter filters, and period review reminders
 - AI Coach conversations stay available for five days, with a Clear conversation control
 - Fixed the Reviews layout, compact ticker availability, and TradingView Technical Analysis loading for Nasdaq and S&P 500
-- Help and FAQ now explain the new market data, session tracking, review, and coaching features`,
+- Help and FAQ now explain the new market data, session tracking, review, and coaching features`
+
+export const RELEASE_NOTES = {
+  '0.50.1': `${V050_NOTES}
+- macOS: one component failing to start no longer takes the whole window with it. If TradeHelp opened to nothing but a menu bar and your desktop, this is what that was
+- Saved credentials, mobile sync, and video playback now fail on their own instead of stopping the app from opening at all
+- If your trade database cannot be opened, TradeHelp now tells you why instead of quitting without a word. Your trades are not touched`,
+  '0.50.0': V050_NOTES,
   '0.48.3': `• Fixed the grading structure. The Grade column in the journal now shows the grade you gave the trade, so a trade you marked F no longer sits there as an A+
 • Imported trades are no longer graded on whether they won or lost, which gave every import an A or a C and made the grade a restatement of P&L
 • Trades are graded on the details you actually logged, and one with too little logged reads as not graded rather than being handed a letter it did not earn
