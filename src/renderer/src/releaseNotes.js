@@ -44,6 +44,11 @@ const V050_NOTES = `- Market Pulse: account-free TradingView ticker, live charts
 - Help and FAQ now explain the new market data, session tracking, review, and coaching features`
 
 export const RELEASE_NOTES = {
+  '0.50.2': `${V050_NOTES}
+- macOS startup is no longer held indefinitely by the local renderer server. If it cannot start promptly, TradeHelp opens through its bundled file instead
+- Native database loading, IPC setup, and window creation now produce a visible error with a diagnostic log instead of leaving only the macOS menu bar
+- Startup and renderer failures are recorded in logs/startup.log so support can diagnose an affected Mac without guesswork
+- If the window opens but the local journal cannot finish loading, TradeHelp now shows the error and a Retry control instead of staying on its loading screen`,
   '0.50.1': `${V050_NOTES}
 - macOS: one component failing to start no longer takes the whole window with it. If TradeHelp opened to nothing but a menu bar and your desktop, this is what that was
 - Saved credentials, mobile sync, and video playback now fail on their own instead of stopping the app from opening at all
