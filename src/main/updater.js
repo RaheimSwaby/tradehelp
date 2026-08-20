@@ -17,6 +17,36 @@ const { autoUpdater } = electronUpdater
 // electron-updater takes a `logger`, and its internal messages are the useful part:
 // on an unsigned or improperly signed macOS build it reports the signature problem
 // before any network request, which matches a manifest fetch count of zero.
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// DO NOT REMOVE THE LOGGING OR RESTORE THE EMPTY CATCHES.
+//
+// This looks like debug scaffolding worth tidying up. It is not — it is the only
+// instrument on a platform nobody here can run. There is no Mac on this project,
+// so `updater.log` from an affected install is the sole way this gets diagnosed.
+// Deleting `autoUpdater.logger`, the `.on('error')` handler, or the `update:log`
+// IPC returns this bug to being invisible, which is how it survived unnoticed
+// from v0.40.0 to v0.48.1.
+//
+// Still open as of 2026-08-20 (v0.50.0). Manifest fetches per release, from
+// `gh api repos/RaheimSwaby/tradehelp/releases`:
+//
+//     tag       latest.yml   latest-mac.yml
+//     v0.50.0        67            0
+//     v0.49.1       314           10
+//     v0.49.0       105            0
+//     v0.48.3       186            0
+//     v0.48.2       132            0
+//
+// macOS is ~36% of installs but ~3% of update checks. The v0.48.2 release-side
+// repairs (forceCodeSigning, strict asset verification) did not move it, so the
+// remaining fault is client-side and still unidentified.
+//
+// Before concluding this is fixed, re-run the counts above and require
+// latest-mac.yml to be a believable fraction of latest.yml — not merely nonzero.
+// See the guard block at the top of package.json for the build config this
+// depends on.
+// ─────────────────────────────────────────────────────────────────────────────
 
 const MAX_LOG_BYTES = 256 * 1024
 

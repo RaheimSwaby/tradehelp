@@ -240,25 +240,78 @@ app.whenReady().then(() => {
     console.error('TradingView header interceptor error:', err)
   }
 
-  db.initDb()
-  brokerSync = createBrokerSync(db, { allowDevelopment: !app.isPackaged })
-  const credentialVault = createCredentialVault({
-    safeStorage,
-    filePath: join(app.getPath('userData'), 'secure', 'market-data-credentials.json')
-  })
-  marketData = createMarketDataService({ database: db, vault: credentialVault })
-  mobileSync = createMobileSyncServer(db, {
-    allow: true,
-    onSync: (result) => {
-      settingsCache = db.getSettings()
-      try { win?.webContents?.send('imports:changed', { type: 'mobile-sync', ...result }) } catch {}
+  // ───────────────────────────────────────────────────────────────────────────
+  // GUARD: THE WINDOW MUST ALWAYS GET CREATED. DO NOT ADD UNGUARDED CALLS HERE.
+  //
+  // createWindow() runs at the END of this handler. Anything above it that throws
+  // takes the window down with it, and the user gets no window at all — just the
+  // desktop, with TradeHelp's File/Edit menu bar at the top. No dialog, no error,
+  // nothing a customer can screenshot beyond an empty screen. A macOS customer
+  // reported exactly that on 2026-08-20, and initUpdater() sits below this too,
+  // so an install that dies here also never checks for updates again — which is
+  // consistent with macOS being ~36% of installs but ~3% of update checks.
+  //
+  // Each subsystem below is macOS-fragile in ways it is not on Windows:
+  //   createCredentialVault  -> safeStorage -> the macOS Keychain
+  //   createMobileSyncServer -> binds a listener -> Local Network permission,
+  //                             which macOS 15+ gates behind a prompt
+  //   registerVideoProtocol  -> protocol.handle
+  // Windows survives all three, which is why this never reproduced here.
+  //
+  // Rule: optional subsystems degrade, they do not abort. A subsystem that fails
+  // is left null, and its own IPC handlers reject when the user touches that
+  // feature — a contained, visible failure instead of a dead app. Only the
+  // database is fatal, and it must say so in a dialog.
+  // ───────────────────────────────────────────────────────────────────────────
+  const optional = (label, fn) => {
+    try {
+      return fn()
+    } catch (err) {
+      console.error(`[startup] ${label} failed, continuing without it:`, err)
+      return null
     }
-  })
-  registerVideoProtocol()
+  }
+
+  try {
+    db.initDb()
+  } catch (err) {
+    // A journal with no database is unusable — but the user still has to be told
+    // why, rather than being left looking at their desktop.
+    console.error('[startup] database init failed:', err)
+    dialog.showErrorBox(
+      'TradeHelp could not start',
+      `The trade database could not be opened.\n\n${err?.message || err}\n\nYour trades have not been changed. Please send this message to support.`
+    )
+    app.quit()
+    return
+  }
+
+  brokerSync = optional('broker sync', () =>
+    createBrokerSync(db, { allowDevelopment: !app.isPackaged })
+  )
+  const credentialVault = optional('credential vault', () =>
+    createCredentialVault({
+      safeStorage,
+      filePath: join(app.getPath('userData'), 'secure', 'market-data-credentials.json')
+    })
+  )
+  marketData = optional('market data', () =>
+    createMarketDataService({ database: db, vault: credentialVault })
+  )
+  mobileSync = optional('mobile sync', () =>
+    createMobileSyncServer(db, {
+      allow: true,
+      onSync: (result) => {
+        settingsCache = db.getSettings()
+        try { win?.webContents?.send('imports:changed', { type: 'mobile-sync', ...result }) } catch {}
+      }
+    })
+  )
+  optional('video protocol', () => registerVideoProtocol())
   videoPickCleanupTimer = setInterval(purgeExpiredVideoPicks, 60_000)
   videoPickCleanupTimer.unref?.()
   db.backupDb()
-  registerIpc()
+  optional('IPC registration', () => registerIpc())
   // If loopback cannot bind, fall back to file:// rather than failing to open
   // at all — everything works then except the embedded live chart.
   startRendererServer()
