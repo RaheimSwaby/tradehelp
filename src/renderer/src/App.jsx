@@ -272,7 +272,11 @@ export default function App() {
 
   useEffect(() => {
     let active = true
-    (async () => {
+    // The semicolon is load-bearing. Without it this parses as
+    // `true(async () => {...})()` - ASI does not break between a value and a
+    // following `(`, so the startup effect threw "true is not a function"
+    // before any data loaded and nothing rendered, on every platform.
+    ;(async () => {
       if (!hasApi) { if (active) setReady(true); return }
       try {
         setStartupError('')
