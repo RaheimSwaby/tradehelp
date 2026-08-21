@@ -44,6 +44,9 @@ const V050_NOTES = `- Market Pulse: account-free TradingView ticker, live charts
 - Help and FAQ now explain the new market data, session tracking, review, and coaching features`
 
 export const RELEASE_NOTES = {
+  '0.50.3': `TradeHelp opens normally again on Windows, macOS and Linux. Versions 0.50.1 and 0.50.2 could stop during the first startup effect and leave the window empty.
+
+Intel Macs can load the trade database again. The universal Mac installer now keeps separate Intel and Apple Silicon SQLite binaries and the release pipeline verifies both before publishing.`,
   '0.50.2': `${V050_NOTES}
 - macOS startup is no longer held indefinitely by the local renderer server. If it cannot start promptly, TradeHelp opens through its bundled file instead
 - Native database loading, IPC setup, and window creation now produce a visible error with a diagnostic log instead of leaving only the macOS menu bar
