@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { chmodSync, copyFileSync, existsSync, renameSync, statSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import builderUtil from 'builder-util'
 
@@ -27,6 +27,28 @@ function requireArchitectures(label, path, expected) {
   }
 }
 
+export function detachFromSharedBuildFile(path) {
+  const before = statSync(path)
+  const detached = `${path}.tradehelp-detached-${process.pid}`
+
+  // electron-builder hard-links unpacked native modules to node_modules. The
+  // next architecture rebuild then rewrites the already-packaged file through
+  // that shared inode. Copy, unlink and rename gives this app its own inode while
+  // preserving the bytes and mode that were just verified.
+  try {
+    copyFileSync(path, detached)
+    chmodSync(detached, before.mode)
+    unlinkSync(path)
+    renameSync(detached, path)
+  } finally {
+    if (existsSync(detached)) unlinkSync(detached)
+  }
+
+  const after = statSync(path)
+  if (after.nlink !== 1) throw new Error(`Could not detach packaged native module: ${path}`)
+  console.log(`[mac-architecture] detached native module from shared build file (links ${before.nlink} -> ${after.nlink})`)
+}
+
 export default function verifyMacNativeArchitecture(context) {
   if (context.electronPlatformName !== 'darwin') return
 
@@ -37,8 +59,11 @@ export default function verifyMacNativeArchitecture(context) {
 
   if (architecture === 'x64' || architecture === 'arm64') {
     const expected = architecture === 'x64' ? 'x86_64' : 'arm64'
+    const sqlite = join(resources, 'app.asar.unpacked', SQLITE_PATH)
     requireArchitectures(`${architecture} TradeHelp executable`, executable, [expected])
-    requireArchitectures(`${architecture} better_sqlite3.node`, join(resources, 'app.asar.unpacked', SQLITE_PATH), [expected])
+    requireArchitectures(`${architecture} better_sqlite3.node`, sqlite, [expected])
+    detachFromSharedBuildFile(sqlite)
+    requireArchitectures(`${architecture} detached better_sqlite3.node`, sqlite, [expected])
     return
   }
 
