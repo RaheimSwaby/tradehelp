@@ -6,6 +6,11 @@ import builderUtil from 'builder-util'
 const { Arch } = builderUtil
 const SQLITE_PATH = join('node_modules', 'better-sqlite3', 'build', 'Release', 'better_sqlite3.node')
 
+// This is an electron-builder afterPack hook, so it runs before signing and
+// uploading. v0.50.2's universal app passed the build, signature and notarization
+// steps while its unpacked SQLite module was still arm64-only. Check the x64 and
+// arm64 temporary apps first, then the merged app; a bad slice now stops the
+// release while it is still private.
 function readArchitectures(path) {
   return execFileSync('lipo', ['-archs', path], { encoding: 'utf8' }).trim().split(/\s+/)
 }
@@ -47,6 +52,9 @@ export default function verifyMacNativeArchitecture(context) {
   const x64Sqlite = join(resources, 'app-x64.asar.unpacked', SQLITE_PATH)
   const arm64Sqlite = join(resources, 'app-arm64.asar.unpacked', SQLITE_PATH)
 
+  // With mergeASARs disabled, @electron/universal normally keeps separate ASARs
+  // and lets its entrypoint select one using process.arch. If future tooling emits
+  // a single unpacked tree instead, accept it only when the native module is fat.
   if (existsSync(x64Sqlite) && existsSync(arm64Sqlite)) {
     requireArchitectures('Intel better_sqlite3.node', x64Sqlite, ['x86_64'])
     requireArchitectures('Apple Silicon better_sqlite3.node', arm64Sqlite, ['arm64'])
