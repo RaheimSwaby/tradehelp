@@ -93,6 +93,56 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
+      # A universal app can still be signed, notarised and uploaded while carrying
+      # an arm64-only native module. That made v0.50.2 unusable on every Intel Mac.
+      # Inspect the finished app, not the build log, before this job is allowed to
+      # succeed. The release remains a private draft if either architecture is wrong.
+      - name: Verify macOS native module architectures
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        run: |
+          app="dist/mac-universal/TradeHelp.app"
+          executable="$app/Contents/MacOS/TradeHelp"
+          common_sqlite="$app/Contents/Resources/app.asar.unpacked/node_modules/better-sqlite3/build/Release/better_sqlite3.node"
+          x64_sqlite="$app/Contents/Resources/app-x64.asar.unpacked/node_modules/better-sqlite3/build/Release/better_sqlite3.node"
+          arm64_sqlite="$app/Contents/Resources/app-arm64.asar.unpacked/node_modules/better-sqlite3/build/Release/better_sqlite3.node"
+
+          check_arch() {
+            local label="$1"
+            local path="$2"
+            local expected="$3"
+
+            if [ ! -f "$path" ]; then
+              echo "::error::$label is missing: $path"
+              exit 1
+            fi
+
+            local arches
+            arches="$(lipo -archs "$path")"
+            echo "$label architectures: $arches"
+            case " $arches " in
+              *" $expected "*) ;;
+              *)
+                echo "::error::$label must contain $expected, found: $arches"
+                exit 1
+                ;;
+            esac
+          }
+
+          check_arch "TradeHelp executable" "$executable" "x86_64"
+          check_arch "TradeHelp executable" "$executable" "arm64"
+
+          if [ -f "$x64_sqlite" ] && [ -f "$arm64_sqlite" ]; then
+            check_arch "Intel better_sqlite3.node" "$x64_sqlite" "x86_64"
+            check_arch "Apple Silicon better_sqlite3.node" "$arm64_sqlite" "arm64"
+          elif [ -f "$common_sqlite" ]; then
+            check_arch "Universal better_sqlite3.node" "$common_sqlite" "x86_64"
+            check_arch "Universal better_sqlite3.node" "$common_sqlite" "arm64"
+          else
+            echo "::error::No packaged better_sqlite3.node was found"
+            exit 1
+          fi
+
   publish-release:
     needs: build
     runs-on: ubuntu-latest

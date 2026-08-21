@@ -23,6 +23,9 @@
         "                             and v0.47.4 shipped Windows-only.",
         "  build.mac.target           dmg AND zip. electron-updater serves macOS updates",
         "                             from the zip; removing it breaks Mac updates silently.",
+        "  build.mac.mergeASARs       false. Keeps architecture-specific unpacked native",
+        "                             modules separate in the universal Mac app. The afterPack",
+        "                             hook verifies both SQLite slices before signing.",
         "  build.appId                identifies the app to macOS. Changing it orphans",
         "                             every existing install from its own updates.",
         "  engines.node               pinned because better-sqlite3 has no prebuild past",
@@ -82,6 +85,7 @@
         "productName": "TradeHelp",
         "artifactName": "${productName}-Setup.${ext}",
         "asar": true,
+        "afterPack": "scripts/verify-mac-native-architecture.mjs",
         "publish": [
             {
                 "provider": "github",
@@ -100,6 +104,7 @@
         "mac": {
             "category": "public.app-category.finance",
             "forceCodeSigning": true,
+            "mergeASARs": false,
             "target": [
                 {
                     "target": "dmg",
