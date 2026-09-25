@@ -32,6 +32,7 @@ jobs:
           done
           echo "npm ci failed three times; treating as a real failure"
           exit 1
+      - run: node --test scripts/fix-mac-keychain-password.test.mjs
       - run: npm test
 
   build:
@@ -65,6 +66,9 @@ jobs:
           echo "npm ci failed three times; treating as a real failure"
           exit 1
       - run: npm run build
+      - name: Backport macOS signing keychain fix
+        if: matrix.os == 'macos-latest'
+        run: node scripts/fix-mac-keychain-password.mjs
       # Windows and Linux get no Apple credentials at all — electron-builder also reads
       # CSC_LINK for Windows signing, so handing it the Apple .p12 would fail that build.
       - name: Build & publish installer

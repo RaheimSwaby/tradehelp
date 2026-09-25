@@ -44,7 +44,7 @@ const V050_NOTES = `- Market Pulse: account-free TradingView ticker, live charts
 - Help and FAQ now explain the new market data, session tracking, review, and coaching features`
 
 export const RELEASE_NOTES = {
-  '0.51.0': `Squashed a couple bugs!
+  '0.51.1': `Squashed a couple bugs!
 
 - Reviews now connect recorded reasons, pre-entry plans, and commitment results, with supporting trades and previous-period comparisons
 - AI Coach retrieves question-specific journal evidence, links cited trades, and offers editable, user-approved coaching memory
