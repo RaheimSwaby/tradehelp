@@ -3,22 +3,22 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>TradeHelp: local-first trading journal and offline AI coach</title>
-<meta name="description" content="A desktop trading journal with an offline AI coach. Your trades live on your machine and never leave it. Free 14-day trial, then a one-time $50. No subscription. Windows, macOS &amp; Linux." />
+<title>TradeHelp | Trading Journal for Windows, Mac &amp; Linux</title>
+<meta name="description" content="Review your trades, compare decisions with your plan, and track your trading habits. A local-first desktop journal with optional AI coaching. Try TradeHelp free for 14 days." />
 <link rel="canonical" href="https://trade-help.app/" />
-<meta property="article:modified_time" content="2026-08-10" />
+<meta property="article:modified_time" content="2026-09-24" />
 
 <!-- OpenGraph &amp; Twitter Card Social Preview -->
 <meta property="og:type" content="website" />
 <meta property="og:url" content="https://trade-help.app/" />
-<meta property="og:title" content="TradeHelp: Local-First Trading Journal and Offline AI Coach" />
-<meta property="og:description" content="A desktop trading journal with an offline AI coach. Your trades live on your machine in SQLite. Free 14-day trial, then a one-time $50. No subscription." />
+<meta property="og:title" content="TradeHelp | Your Trades. Your Decisions. Your Journal." />
+<meta property="og:description" content="A local-first trading journal for Windows, Mac and Linux. Review your process with optional AI coaching. Free 14-day trial, no account needed." />
 <meta property="og:image" content="https://trade-help.app/shots/dashboard.png" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
 <meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="TradeHelp: Local-First Trading Journal and Offline AI Coach" />
-<meta name="twitter:description" content="Stop paying monthly subscriptions for trading journals. Store trades locally in SQLite with an offline AI coach." />
+<meta name="twitter:title" content="TradeHelp | Local-First Trading Journal" />
+<meta name="twitter:description" content="Review decisions, not just P&amp;L. A desktop trading journal with optional local or cloud AI coaching. Try it free for 14 days." />
 <meta name="twitter:image" content="https://trade-help.app/shots/dashboard.png" />
 
 <!-- PRICE-DRIFT WARNING: When the launch deal ends, update "price":"25.00" (x2 below) to
@@ -37,7 +37,7 @@
       "applicationCategory": "FinanceApplication",
       "price": "25.00",
       "priceCurrency": "USD",
-      "description": "Local-first desktop trading journal with an offline AI coach. Your trades live locally in SQLite and never leave your machine.",
+      "description": "Local-first desktop trading journal for Windows, macOS and Linux. Use Ollama for local AI processing, or optionally send selected journal context to a cloud AI provider.",
       "offers": {
         "@type": "Offer",
         "price": "25.00",
@@ -60,7 +60,7 @@
           "name": "Is TradeHelp really offline?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Yes. Your trades live in a local SQLite database on your machine. The AI coach runs entirely on your own hardware via Ollama, LM Studio, or your own API key. Nothing leaves your computer unless you choose to export it."
+            "text": "Your journal is stored locally in SQLite. AI coaching can run locally with Ollama. If you choose a cloud AI provider, your questions and selected journal context are sent to that provider. Live market data, updates and license activation require internet access."
           }
         },
         {
@@ -643,7 +643,7 @@
     <!-- Outside the list so the nav links centre on the page rather than being
          pushed left by the button's width. -->
     <div class="topbar-cta">
-      <a href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.exe" class="nav-download" data-goatcounter-click="download-windows-nav">Download now</a>
+      <a href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.exe" class="nav-download" data-download="nav" data-download-keep-label data-goatcounter-click="download-windows-nav">Download now</a>
       <a href="https://tradehelp.gumroad.com/l/oyftvr" class="nav-cta" data-goatcounter-click="buy-gumroad-nav">Buy for $25</a>
     </div>
   </div>
@@ -652,8 +652,8 @@
 <!-- ====== hero ====== -->
 <section class="hero wrap">
   <p class="asset-bar">Futures / Forex / Crypto</p>
-  <h1>Your trading journal belongs on your own computer</h1>
-    <p>TradeHelp stores your trades locally in SQLite. The AI coach runs offline on your own hardware. No account, no subscription, no data leaving your machine.</p>
+  <h1>TradeHelp</h1>
+    <p>A trading journal for reviewing decisions, not just P&amp;L. Keep your trades on your computer, compare your execution with your plan, and choose one behavior to improve next.</p>
     <!-- One button, for the platform the visitor is on. Three equal choices asked
          everyone to make a decision before they knew what the app was, and across
          three days of traffic produced exactly one download click. The other two
@@ -664,9 +664,10 @@
       <a id="heroDownload" data-download="hero"
          href="https://github.com/RaheimSwaby/tradehelp/releases/latest/download/TradeHelp-Setup.exe"
          class="btn btn-primary" data-goatcounter-click="download-windows-hero">Download for Windows</a>
-        <a href="#features" class="btn btn-ghost" data-goatcounter-click="cta-see-every-screen">See every screen</a>
+        <a href="#features" class="btn btn-ghost" data-goatcounter-click="cta-see-every-screen">See the app</a>
     </div>
     <p class="hero-secondary">Free for 14 days. No account needed. <span id="heroOther" data-download-other="hero"></span></p>
+    <p class="hero-secondary">Windows, macOS (Intel and Apple Silicon), and Linux. AI is optional: start by logging a trade or importing a CSV. Local AI uses Ollama; cloud AI sends selected context to your chosen provider.</p>
   <!-- Shown only to phone visitors, who can't install a desktop app where they stand. -->
   <div class="mobile-cta" id="mobileCta">
     <p>This one runs on your desktop. Send yourself the link for when you're back at your computer.</p>
@@ -811,10 +812,10 @@
     <div class="xp-copy">
       <p class="xp-eyebrow">AI coach</p>
       <h3>A coach that has read your log, not a forum thread</h3>
-      <p>Runs on your own machine through Ollama, or on your own API key if you would rather. Either way it is reading your trades, not generic advice.</p>
+      <p>Ask about your own trades, setups, and recorded habits. Choose local processing through Ollama, or a cloud provider with your own API key. Cloud requests send selected journal context to that provider.</p>
       <ul class="xp-specs">
         <li>Your model, your hardware, your data</li>
-        <li>Grounded in the trades you actually took</li>
+        <li>Uses your journal context; check the evidence before accepting an interpretation</li>
         <li>Review summaries, plus a live crypto and stock price lookup</li>
         <li>Process and psychology only. No buy or sell signals</li>
       </ul>
