@@ -44,6 +44,16 @@ const V050_NOTES = `- Market Pulse: account-free TradingView ticker, live charts
 - Help and FAQ now explain the new market data, session tracking, review, and coaching features`
 
 export const RELEASE_NOTES = {
+  '0.51.0': `Squashed a couple bugs!
+
+- Reviews now connect recorded reasons, pre-entry plans, and commitment results, with supporting trades and previous-period comparisons
+- AI Coach retrieves question-specific journal evidence, links cited trades, and offers editable, user-approved coaching memory
+- Coach replies with missing or invalid references fall back to recorded facts; cloud written-journal exclusions also cover memory and prior chat
+- Playbook practice hides recorded outcomes until you answer, using linked plan screenshots locked before entry; practice requires eligible screenshots
+- Journal history has more room, with a resizable entry pane that preserves drafts when closed
+- Navigation groups preparation, journaling, reviews, practice, and account settings; the ticker and secondary header stats can be collapsed
+
+Available for Windows, macOS (Intel and Apple Silicon), and Linux.`,
   '0.50.4': `TradeHelp opens normally again on Windows, macOS and Linux. Versions 0.50.1 and 0.50.2 could stop during the first startup effect and leave the window empty.
 
 Intel Macs can load the trade database again. The universal Mac installer now keeps separate Intel and Apple Silicon SQLite binaries and the release pipeline verifies both before publishing.`,
