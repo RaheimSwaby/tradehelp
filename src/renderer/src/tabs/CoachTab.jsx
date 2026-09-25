@@ -1,25 +1,18 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
-import { Bot, Brain, BookOpen, Send, Search, Trash2 } from 'lucide-react'
+import { Bot, Brain, BookOpen, Send, Search, Trash2, Square, Target, GraduationCap } from 'lucide-react'
 import { T, mono, inputStyle } from '../theme.js'
 import { fmt$, fmtN, streamChat } from '../utils.js'
-import { fullJournalContext, computeLeaks } from '../stats.js'
-import { buildCoachPrompts, lastTradingDay, buildDailyReport, coachVoiceInstruction, localDayKey, shouldIncludeWrittenJournal } from '../coachInsights.js'
+import { computeLeaks } from '../stats.js'
+import { buildCoachPrompts, lastTradingDay, buildDailyReport, localDayKey, shouldIncludeWrittenJournal } from '../coachInsights.js'
 import { coachRequestProfile } from '../coachRequest.js'
 import { Panel } from '../components/Shared.jsx'
-import { CompactMarkdown } from '../components/CompactMarkdown.jsx'
 import { EventsPanel } from '../widgets/EventBanner.jsx'
 import { clearCoachChatHistory, loadCoachChatHistory, saveCoachChatHistory } from '../coachChatHistory.js'
-
-/* ───────── AI coach ───────── */
-const COACH_SYSTEM = `You are a trading performance coach embedded in a trader's personal journal app.
-You are given the trader's REAL journal below: aggregated stats, individual trades (with their written notes, reasons and self-grades), saved reviews, playbook setups, goals, trading rules, and no-trade-day logs.
-Coach the PROCESS and PSYCHOLOGY: discipline, emotional patterns, position sizing, time-of-day performance, overtrading, revenge trading, cutting winners early, rule-breaking. Be specific and quote their actual numbers, notes and setups.
-CRITICAL: Use ONLY the data provided below. Never invent or assume trades, symbols, prices, dates, or notes, and never pull in examples from other traders or generic scenarios. If the trader asks about something that is not in the data, say you don't see it rather than guessing.
-Each trade shows the account it was on (the "account" field); "Live" means their personal, non-prop account. When the trader asks about a specific account (their Live account, or a prop account by name), use ONLY the trades whose account matches — refer to accounts by that name, never by an internal id — and if no trades match, say so plainly instead of inventing them.
-Many trades are logged without an emotion, setup, or reason — these show as "(none)". Treat "(none)" strictly as untagged: never infer, guess, or attribute an emotion/setup/reason to a trade that shows "(none)". Only count and cite tags that are literally present in the data, and count only the trades actually listed — do not estimate totals.
-For account-level totals (net P&L, win rate, trade count), use the numbers in the PER-ACCOUNT SUMMARY directly — they are already computed. Do not re-derive them from the trade list.
-Do NOT give buy/sell signals, price predictions, or personalized investment advice. Keep it tight (under ~180 words) and direct. If data is thin, say so honestly.
-Format the response as clean, compact Markdown. Prefer one short opening sentence and no more than three bullets. Use bold only for short labels, never for an entire paragraph or bullet. Do not use tables or repeat the question.`
+import { buildCoachEvidence, coachAccounts, coachMessages, checkCoachAnswer } from '../coachEvidence.js'
+import { loadCoachMemory } from '../coachMemory.js'
+import { CoachMemory } from '../components/CoachMemory.jsx'
+import { CoachEvidenceAnswer } from '../components/CoachEvidence.jsx'
+import { CommitmentModal } from '../components/CoachCommitmentCard.jsx'
 
 function ThinkingTrace({ text, live = false }) {
   if (!text && !live) return null
@@ -36,10 +29,15 @@ function ThinkingTrace({ text, live = false }) {
   )
 }
 
-export function Coach({ trades, stats, settings, reviews = {}, playbook = [], dayLogs = [], goals = {}, payouts = [], commitments = [], events, now }) {
-  // Local Ollama always gets the full written record; cloud users can gate free-form text.
+export function Coach({ trades, stats, settings, reviews = {}, playbook = [], dayLogs = [], goals = {}, payouts = [], commitments = [], plans = [], events, now, onOpenTrade, onAddCommitment, onOpenPlaybook }) {
+  // Cloud users can exclude written records, approved memory, and prior chat context.
   const includeWritten = shouldIncludeWrittenJournal(settings)
-  const coachSystem = `${COACH_SYSTEM}\n${coachVoiceInstruction(settings?.coachVoice)}`
+  const [memory, setMemory] = useState(loadCoachMemory)
+  const [filters, setFilters] = useState({ symbol: '', account: 'auto', from: '', to: '' })
+  const [creatingCommitment, setCreatingCommitment] = useState(false)
+  const [requestError, setRequestError] = useState('')
+  const [streamEvidence, setStreamEvidence] = useState(null)
+  const generation = useRef(0)
   const [msgs, setMsgs] = useState(loadCoachChatHistory)
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
@@ -62,46 +60,55 @@ export function Coach({ trades, stats, settings, reviews = {}, playbook = [], da
     }, 60_000)
     return () => clearInterval(timer)
   }, [msgs.length])
-  useEffect(() => () => cancelStreamRef.current?.(), [])
+  useEffect(() => {
+    generation.current += 1
+    cancelStreamRef.current?.()
+    setBusy(false); setStreamText(null); setThinkingText(null); setStreamEvidence(null)
+    return () => { generation.current += 1; cancelStreamRef.current?.() }
+  }, [settings?.provider, settings?.cloudModel, settings?.anthropicModel, settings?.ollamaModel, includeWritten])
 
   const modelLabel = { cloud: settings?.cloudModel, anthropic: settings?.anthropicModel }[settings?.provider] ?? settings?.ollamaModel
   const showThinking = settings?.provider !== 'cloud' && (settings?.coachShowThinking === 'true' || settings?.coachShowThinking === true)
   const requestProfile = useMemo(() => coachRequestProfile(settings), [settings?.coachContextMode])
-  const journalContext = useMemo(() => fullJournalContext(
-    { trades, stats, settings, reviews, playbook, dayLogs, goals, payouts, commitments },
-    { includeWritten, maxChars: requestProfile.maxChars }
-  ), [trades, stats, settings, reviews, playbook, dayLogs, goals, payouts, commitments, includeWritten, requestProfile.maxChars])
+  const accountOptions = useMemo(() => coachAccounts(settings, trades), [settings, trades])
+  const prepareRequest = (question) => {
+    let priorScope = null
+    try { priorScope = JSON.parse([...msgs].reverse().find((message) => message.role === 'user' && message.contextKey)?.contextKey || '[]')[0] || null } catch { /* Legacy messages have no scope. */ }
+    return buildCoachEvidence({ question, trades, plans, commitments, reviews, playbook, dayLogs, goals, settings, memory, filters, priorScope, now: now ? new Date(now) : new Date(), maxChars: requestProfile.maxChars })
+  }
   // Sub-2B models can't reliably read structured journal data and tend to fabricate trades.
   const tinyModel = settings?.provider === 'ollama' && [':0.5b', ':1b', ':1.5b', ':135m', ':360m', ':500m'].some((t) => String(modelLabel || '').toLowerCase().includes(t))
 
   async function ask(userText) {
     if (busy) return
-    const next = [...msgs, { role: 'user', content: userText }]
+    if (filters.from && filters.to && filters.from > filters.to) { setRequestError('The start date must come before the end date.'); return }
+    const request = prepareRequest(userText)
+    const run = ++generation.current
+    const next = [...msgs, { role: 'user', content: userText, contextKey: request.contextKey }]
+    setRequestError(''); setStreamEvidence(request.evidence)
     saveCoachChatHistory(next)
     setMsgs(next); setInput(''); setBusy(true); setStreamText('')
     setThinkingText(showThinking ? '' : null)
     let fullThinking = ''
-    const apiMsgs = [
-      { role: 'user', content: `Here is my current journal data:\n\n${journalContext}` },
-      { role: 'assistant', content: includeWritten
-        ? 'Got it — I have your full journal in front of me: trades, notes, reviews, playbook, goals and rules.'
-        : 'Got it — I have your structured journal data. Written notes and reviews are excluded by your cloud privacy setting.' },
-      ...next.slice(-requestProfile.historyMessages)
-    ]
+    const apiMsgs = coachMessages(request, userText, msgs, requestProfile.historyMessages)
     try {
       const full = await streamChat({
-        system: coachSystem,
+        system: request.system,
         messages: apiMsgs,
         contextWindow: requestProfile.contextWindow,
         ...(showThinking ? { think: true } : requestProfile.think === false ? { think: false } : {})
-      }, (d) => setStreamText((s) => (s || '') + d), cancelStreamRef, (d) => {
+      }, (d) => { if (run === generation.current) setStreamText((s) => (s || '') + d) }, cancelStreamRef, (d) => {
+        if (run !== generation.current) return
         fullThinking += d
         setThinkingText(fullThinking)
       })
-      setMsgs((m) => [...m, { role: 'assistant', content: full, ...(fullThinking ? { thinking: fullThinking } : {}) }])
+      if (run === generation.current) {
+        const checked = checkCoachAnswer(full, request)
+        setMsgs((m) => [...m, { role: 'assistant', ...checked, evidence: request.evidence, ...(!checked.evidenceFallback && fullThinking ? { thinking: fullThinking } : {}) }])
+      }
     } catch (e) {
-      setMsgs((m) => [...m, { role: 'assistant', content: `⚠︎ ${e?.message || 'Could not reach the model. Check Settings.'}` }])
-    } finally { setStreamText(null); setThinkingText(null); setBusy(false) }
+      if (run === generation.current) setRequestError(e?.message || 'Could not reach the model. Check Settings.')
+    } finally { if (run === generation.current) { setStreamText(null); setThinkingText(null); setStreamEvidence(null); setBusy(false) } }
   }
 
   function clearChat() {
@@ -162,6 +169,12 @@ export function Coach({ trades, stats, settings, reviews = {}, playbook = [], da
             <span className="text-xs" style={{ color: T.faint }}>{modelLabel || 'No model selected'} · not financial advice</span>
           </div>
         </div>
+        <div className="th-coach-scope">
+          <label>Symbol<select disabled={busy} value={filters.symbol} onChange={(event) => setFilters({ ...filters, symbol: event.target.value })}><option value="">From question / all</option>{[...new Set(trades.map((trade) => trade.symbol).filter(Boolean))].sort().map((symbol) => <option key={symbol}>{symbol}</option>)}</select></label>
+          <label>Account<select disabled={busy} value={filters.account} onChange={(event) => setFilters({ ...filters, account: event.target.value })}><option value="auto">From question / all</option>{accountOptions.map((account) => <option key={account.id} value={account.id ? `id:${account.id}` : 'live'}>{account.label}</option>)}</select></label>
+          <label>From<input type="date" disabled={busy} value={filters.from} onChange={(event) => setFilters({ ...filters, from: event.target.value })} /></label>
+          <label>To<input type="date" disabled={busy} value={filters.to} onChange={(event) => setFilters({ ...filters, to: event.target.value })} /></label>
+        </div>
         {tinyModel && (
           <div className="px-4 py-2 text-xs" style={{ background: 'rgba(251,113,133,0.10)', borderBottom: `1px solid ${T.line}`, color: T.down }}>
             <strong>{modelLabel}</strong> may misread or invent trades because of its size. Choose a larger model such as <span style={mono}>llama3.2</span> 3B, <span style={mono}>qwen2.5:7b</span>, or <span style={mono}>llama3.1:8b</span> in Settings.
@@ -193,7 +206,8 @@ export function Coach({ trades, stats, settings, reviews = {}, playbook = [], da
                 {m.role === 'assistant' ? (
                   <>
                     <ThinkingTrace text={m.thinking} />
-                    <CompactMarkdown>{m.content}</CompactMarkdown>
+                    <CoachEvidenceAnswer message={m} trades={trades} onOpenTrade={onOpenTrade} />
+                    {m.evidence && <div className="th-coach-actions"><button type="button" disabled={busy || !onAddCommitment} onClick={() => setCreatingCommitment(m.content)}><Target size={14} /> Choose commitment</button><button type="button" onClick={onOpenPlaybook} disabled={!onOpenPlaybook}><GraduationCap size={14} /> Playbook practice</button></div>}
                   </>
                 ) : m.content}
               </div>
@@ -203,19 +217,19 @@ export function Coach({ trades, stats, settings, reviews = {}, playbook = [], da
             <div className="flex" style={{ justifyContent: 'flex-start' }}>
               <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm" style={{ background: T.accentSoft, color: T.dim, border: `1px solid ${T.line}` }}>
                 {thinkingText !== null && <ThinkingTrace text={thinkingText} live />}
-                {streamText
-                  ? <CompactMarkdown>{streamText}</CompactMarkdown>
-                  : thinkingText
-                    ? <span className="text-xs" style={{ color: T.faint }}>Writing response…</span>
-                    : `Reading your ${requestProfile.mode} journal…`}
+                {streamText ? <span className="text-xs" style={{ color: T.faint }}>Checking response references...</span>
+                  : thinkingText ? <span className="text-xs" style={{ color: T.faint }}>Writing response...</span>
+                    : `Reading ${streamEvidence?.included || 0} examples from ${streamEvidence?.matched || 0} matching trades...`}
+                {streamEvidence && <p className="text-xs mt-2">{streamEvidence.scopeLabel}</p>}
               </div>
             </div>
           )}
         </div>
         <div className="px-4 pt-2 pb-3" style={{ borderTop: `1px solid ${T.line}` }}>
+          {requestError && <p role="alert" className="text-sm mb-2">{requestError}</p>}
           <div className="flex gap-2">
             <input style={inputStyle} className="flex-1 rounded px-3 py-2 text-sm" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && input.trim()) ask(input.trim()) }} placeholder="Ask about your journal…" />
-            <button type="button" disabled={busy || !input.trim()} onClick={() => input.trim() && ask(input.trim())} className="rounded px-3 py-2" style={{ background: T.accent, color: '#1A1306' }}><Send size={16} /></button>
+            {busy ? <button type="button" title="Stop response" aria-label="Stop response" onClick={() => { generation.current += 1; cancelStreamRef.current?.(); setBusy(false); setStreamText(null); setThinkingText(null); setStreamEvidence(null) }}><Square size={16} /></button> : <button type="button" title="Ask coach" aria-label="Ask coach" disabled={!input.trim()} onClick={() => input.trim() && ask(input.trim())} className="rounded px-3 py-2" style={{ background: T.accent, color: '#1A1306' }}><Send size={16} /></button>}
           </div>
           {/* Prompts sit under the composer, so the input is the first thing reached
               whether or not the conversation has started. The roomier two-column form
@@ -225,6 +239,8 @@ export function Coach({ trades, stats, settings, reviews = {}, playbook = [], da
       </div>
 
       <div className="th-coach-sidebar space-y-4">
+        <CoachMemory memory={memory} onChange={setMemory} includeWritten={includeWritten} />
+        {commitments.find((item) => item.status === 'active') && <section className="th-coach-memory"><h3>Active commitment</h3><p>{commitments.find((item) => item.status === 'active').title}</p></section>}
         <Panel title="Live price">
           <div className="flex gap-2">
             <input style={inputStyle} className="flex-1 rounded px-2 py-1.5 text-sm" value={price.sym} onChange={(e) => setPrice((p) => ({ ...p, sym: e.target.value }))} onKeyDown={(e) => e.key === 'Enter' && checkPrice()} placeholder="BTC, EURUSD, AAPL" />
@@ -250,6 +266,7 @@ export function Coach({ trades, stats, settings, reviews = {}, playbook = [], da
           </p>
         </Panel>
       </div>
+      {creatingCommitment && <CommitmentModal source="coach-evidence" suggestion={creatingCommitment} onClose={() => setCreatingCommitment(false)} onSave={onAddCommitment} />}
     </div>
   )
 }

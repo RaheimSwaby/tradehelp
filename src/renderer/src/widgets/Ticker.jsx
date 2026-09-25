@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { ChevronDown, ChevronUp } from 'lucide-react'
 import {
   MARKET_PULSE_STORAGE_KEY,
   MARKET_PULSE_WATCHLIST_EVENT,
@@ -65,6 +66,14 @@ function tickerDocument(symbols) {
 
 export function Ticker({ settings, onOpenMarketPulse }) {
   const [watchlist, setWatchlist] = useState(loadWatchlist)
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return window.localStorage.getItem('tradehelp.tickerCollapsed') === 'true' } catch { return false }
+  })
+  function toggleCollapsed() {
+    const next = !collapsed
+    setCollapsed(next)
+    try { window.localStorage.setItem('tradehelp.tickerCollapsed', String(next)) } catch {}
+  }
   const enabled = (settings?.tickerEnabled ?? 'true') !== 'false'
 
   useEffect(() => {
@@ -86,31 +95,20 @@ export function Ticker({ settings, onOpenMarketPulse }) {
   if (!enabled || symbols.length === 0) return null
   const openMarketPulse = () => onOpenMarketPulse?.()
   return (
-    <section
-      className="th-global-market-ticker"
-      role="button"
-      tabIndex={0}
-      aria-label="Open Market Pulse"
-      title="Open the full Market Pulse view"
-      onClick={openMarketPulse}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault()
-          openMarketPulse()
-        }
-      }}
-    >
+    <section className={`th-global-market-ticker${collapsed ? ' th-ticker-collapsed' : ''}`}>
+      <button type="button" className="th-market-open" aria-label="Open Market Pulse" title="Open Market Pulse" onClick={openMarketPulse} />
       <div className="th-global-market-ticker-label" aria-hidden="true">
         <span className="th-global-market-ticker-dot" />
         Markets
       </div>
-      <iframe
+      {!collapsed && <iframe
         title="Persistent market ticker powered by TradingView"
         srcDoc={srcDoc}
         sandbox="allow-scripts allow-same-origin"
         referrerPolicy="strict-origin-when-cross-origin"
         tabIndex={-1}
-      />
+      />}
+      <button type="button" className="th-ticker-toggle" aria-expanded={!collapsed} aria-label={collapsed ? 'Expand market ticker' : 'Collapse market ticker'} title={collapsed ? 'Expand market ticker' : 'Collapse market ticker'} onClick={toggleCollapsed}>{collapsed ? <ChevronDown size={15} /> : <ChevronUp size={15} />}</button>
     </section>
   )
 }

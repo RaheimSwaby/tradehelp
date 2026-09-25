@@ -1,4 +1,5 @@
 import { periodKey } from './utils.js'
+import { normalizeReviewResponses } from './reviewFeedback.js'
 
 export const PERIOD_RETROSPECTIVE_VERSION = 1
 export const PERIOD_RETROSPECTIVE_TYPE = 'period-retrospective'
@@ -177,7 +178,8 @@ export function buildPeriodRetrospective({
   existing = null,
   processStatus = 'not-assessed',
   commitmentEvidence = null,
-  reflection = ''
+  reflection = '',
+  responses = existing?.responses || {}
 } = {}) {
   const performance = periodPerformance(trades, selectedPeriod, granularity)
   const hasSavedSnapshot = existing && Object.prototype.hasOwnProperty.call(existing, 'targetSnapshot')
@@ -199,7 +201,8 @@ export function buildPeriodRetrospective({
       tradeCount: performance.tradeCount
     }),
     process,
-    reflection: String(reflection ?? '')
+    reflection: String(reflection ?? ''),
+    responses: normalizeReviewResponses(responses)
   }
 }
 
@@ -219,7 +222,8 @@ function normalizedRetrospective(value) {
     tradeCount,
     goalOutcome: assessGoalOutcome({ target: targetSnapshot.amount, actualPnl, tradeCount }),
     process: normalizedProcess(value.process),
-    reflection: String(value.reflection ?? '')
+    reflection: String(value.reflection ?? ''),
+    responses: normalizeReviewResponses(value.responses)
   }
 }
 

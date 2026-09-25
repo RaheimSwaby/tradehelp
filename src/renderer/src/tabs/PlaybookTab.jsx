@@ -4,6 +4,8 @@ import { T, mono } from '../theme.js'
 import { fmt$, fmtN, downscale, fileToDataUrl } from '../utils.js'
 import { PlaybookShareModal } from '../components/PlaybookShareModal.jsx'
 import { parsePlaybookImport, MAX_SHARED_IMAGES } from '../playbookShare.js'
+import { PlaybookPractice } from '../components/PlaybookPractice.jsx'
+import { GraduationCap } from 'lucide-react'
 
 const BLANK = { name: '', description: '', criteria: '', invalidation: '', targets: '', notes: '', images: [] }
 
@@ -22,7 +24,8 @@ function wrColor(wr) {
   return T.down
 }
 
-export function PlaybookTab({ entries, trades, onAdd, onUpdate, onDelete, onPlan }) {
+export function PlaybookTab({ entries, trades, plans = [], onAdd, onUpdate, onDelete, onPlan }) {
+  const [practicing, setPracticing] = useState(null)
   const [editing, setEditing] = useState(null)
   const [expanded, setExpanded] = useState(null)
   // Example charts live on disk. They are cached by image id, which never changes for
@@ -131,6 +134,8 @@ export function PlaybookTab({ entries, trades, onAdd, onUpdate, onDelete, onPlan
   const isExpanded = (id) => expanded === id
   const toggle = (id) => setExpanded((p) => (p === id ? null : id))
 
+  if (practicing) return <PlaybookPractice key={practicing.id} entry={practicing} trades={trades} plans={plans} onClose={() => setPracticing(null)} />
+
   return (
     <div className="th-page th-page-playbook space-y-4">
       {/* Header */}
@@ -218,6 +223,7 @@ export function PlaybookTab({ entries, trades, onAdd, onUpdate, onDelete, onPlan
                   </div>
                 )}
                 <div className="flex items-center gap-2 shrink-0 ml-1">
+                  <button type="button" title="Practice this setup" aria-label={`Practice ${e.name}`} onClick={(event) => { event.stopPropagation(); setPracticing(e) }}><GraduationCap size={17} /></button>
                   <button
                     onClick={(ev) => { ev.stopPropagation(); onPlan?.(e) }}
                     className="p-1 rounded" style={{ color: T.accentText }}

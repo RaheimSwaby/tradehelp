@@ -17,7 +17,19 @@ export function normalizeCoachChatHistory(input) {
     const content = typeof message?.content === 'string' ? message.content.slice(0, MAX_CONTENT_CHARS) : ''
     if (!role || !content.trim()) return []
     const thinking = typeof message?.thinking === 'string' ? message.thinking.slice(0, MAX_THINKING_CHARS) : ''
-    return [{ role, content, ...(thinking ? { thinking } : {}) }]
+    const contextKey = typeof message.contextKey === 'string' ? message.contextKey.slice(0, 2000) : ''
+    const raw = message.evidence
+    const evidence = raw && typeof raw === 'object' ? {
+      scopeLabel: String(raw.scopeLabel || '').slice(0, 500),
+      matched: Math.max(0, Number(raw.matched) || 0), included: Math.max(0, Number(raw.included) || 0),
+      memoryUsed: Math.max(0, Number(raw.memoryUsed) || 0), memoryTotal: Math.max(0, Number(raw.memoryTotal) || 0),
+      sources: (Array.isArray(raw.sources) ? raw.sources : []).slice(0, 100).filter((source) => source && /^[TSCR]\d+$/.test(source.key)).map((source) => ({
+        key: source.key, kind: ['trade', 'summary', 'review', 'commitment'].includes(source.kind) ? source.kind : 'summary',
+        ...(source.tradeId != null ? { tradeId: String(source.tradeId).slice(0, 100) } : {}),
+        label: String(source.label || '').slice(0, 500), detail: String(source.detail || '').slice(0, 2500),
+      })),
+    } : null
+    return [{ role, content, ...(thinking ? { thinking } : {}), ...(contextKey ? { contextKey } : {}), ...(evidence ? { evidence } : {}), ...(message.evidenceFallback === true ? { evidenceFallback: true } : {}) }]
   })
 }
 

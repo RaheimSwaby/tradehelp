@@ -2,7 +2,7 @@ import React from 'react'
 import { T, mono } from '../theme.js'
 
 const BLOCK_START = /^(?:#{1,6}\s+|[-+*]\s+|\d+[.)]\s+|>\s+)/
-const INLINE_MARKUP = /(`[^`\n]+`|\*\*[^*\n]+\*\*|__[^_\n]+__|\*[^*\n]+\*)/g
+const INLINE_MARKUP = /(`[^`\n]+`|\*\*[^*\n]+\*\*|__[^_\n]+__|\*[^*\n]+\*|\[[A-Z]{1,5}\d+\])/g
 
 function hideUnmatchedStrongMarker(value, marker) {
   const text = String(value || '')
@@ -12,10 +12,11 @@ function hideUnmatchedStrongMarker(value, marker) {
   return `${text.slice(0, last)}${text.slice(last + marker.length)}`
 }
 
-function renderInline(value, keyPrefix) {
+function renderInline(value, keyPrefix, renderReference) {
   const safeValue = hideUnmatchedStrongMarker(hideUnmatchedStrongMarker(value, '**'), '__')
   return safeValue.split(INLINE_MARKUP).filter(Boolean).map((part, index) => {
     const key = `${keyPrefix}-${index}`
+    if (renderReference && /^\[[A-Z]{1,5}\d+\]$/.test(part)) return <React.Fragment key={key}>{renderReference(part)}</React.Fragment>
     if (part.startsWith('`') && part.endsWith('`')) {
       return <code key={key} className="rounded px-1 py-0.5 text-[0.92em]" style={{ ...mono, color: T.accentText, background: T.surface2 }}>{part.slice(1, -1)}</code>
     }
@@ -97,7 +98,7 @@ export function parseCompactMarkdown(value) {
   return blocks
 }
 
-export function CompactMarkdown({ children, className = '' }) {
+export function CompactMarkdown({ children, className = '', renderReference }) {
   const blocks = parseCompactMarkdown(children)
 
   return (
@@ -105,20 +106,20 @@ export function CompactMarkdown({ children, className = '' }) {
       {blocks.map((block, index) => {
         const key = `${block.type}-${index}`
         if (block.type === 'heading') {
-          return <div key={key} className="th-markdown-heading text-sm font-semibold pt-1" style={{ color: T.text }}>{renderInline(block.text, key)}</div>
+          return <div key={key} className="th-markdown-heading text-sm font-semibold pt-1" style={{ color: T.text }}>{renderInline(block.text, key, renderReference)}</div>
         }
         if (block.type === 'unordered-list' || block.type === 'ordered-list') {
           const Tag = block.type === 'ordered-list' ? 'ol' : 'ul'
           return (
             <Tag key={key} className={`${block.type === 'ordered-list' ? 'list-decimal' : 'list-disc'} pl-5 space-y-1`}>
-              {block.items.map((item, itemIndex) => <li key={`${key}-${itemIndex}`}>{renderInline(item, `${key}-${itemIndex}`)}</li>)}
+              {block.items.map((item, itemIndex) => <li key={`${key}-${itemIndex}`}>{renderInline(item, `${key}-${itemIndex}`, renderReference)}</li>)}
             </Tag>
           )
         }
         if (block.type === 'quote') {
-          return <blockquote key={key} className="pl-3 py-0.5" style={{ borderLeft: `2px solid ${T.accent}`, color: T.text }}>{renderInline(block.text, key)}</blockquote>
+          return <blockquote key={key} className="pl-3 py-0.5" style={{ borderLeft: `2px solid ${T.accent}`, color: T.text }}>{renderInline(block.text, key, renderReference)}</blockquote>
         }
-        return <p key={key}>{renderInline(block.text, key)}</p>
+        return <p key={key}>{renderInline(block.text, key, renderReference)}</p>
       })}
     </div>
   )

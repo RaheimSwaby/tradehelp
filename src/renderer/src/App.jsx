@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react'
 import {
-  Settings as SettingsIcon, Gauge, Play,
+  Settings as SettingsIcon, Gauge, Play, MoreHorizontal,
   CalendarClock, AlertTriangle, X, Clock3, TrendingUp, HelpCircle,
   Waypoints, Wallet, Armchair, Flag, Megaphone, History, Shapes, LineChart, GraduationCap, PenLine, RefreshCw
 } from 'lucide-react'
@@ -209,7 +209,7 @@ export default function App() {
   const [updateAvail, setUpdateAvail] = useState(null)
   const [onboard, setOnboard] = useState(false)
   const [dailyReport, setDailyReport] = useState(null)
-  const drRef = useRef(false)
+  const [headerStatsExpanded, setHeaderStatsExpanded] = useState(false)
   const [feedbackPrompt, setFeedbackPrompt] = useState(false)
   const fbRef = useRef(false)
   const [nudge, setNudge] = useState(null)
@@ -353,12 +353,6 @@ export default function App() {
   useEffect(() => {
     if (ready && hasApi && settings && trades.length === 0 && settings.onboarded !== 'true') setOnboard(true)
   }, [ready]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Daily report: once per app launch, surface a review of the last trading day.
-  useEffect(() => {
-    if (drRef.current || !ready || !hasApi || !settings || settings.dailyReportEnabled === 'false') return
-    if (reportDay) { drRef.current = true; setDailyReport(reportDay) }
-  }, [ready, hasApi, settings, reportDay])
 
   function closeDailyReport() {
     setDailyReport(null)
@@ -965,7 +959,7 @@ export default function App() {
     update: Boolean(updateReady),
     dailyReview: Boolean(dailyReport),
     weeklyReview: Boolean(weeklyWrap),
-    briefing: Boolean(privateBriefingOpen && tab !== 'news'),
+    briefing: Boolean(privateBriefingOpen && tab !== 'news' && tab !== 'reviews'),
     timing: Boolean(sessionCue && personalClockAlerts),
     achievement: Boolean(toast),
     nudge: Boolean(nudge),
@@ -1030,17 +1024,17 @@ export default function App() {
   // Arrows move along the tablist and switch immediately (automatic activation), which
   // is the behaviour people expect from a desktop app's tab strip.
   function moveTab(index) {
-    const next = (index + TABS.length) % TABS.length
-    setTab(TABS[next][0])
-    tabRefs.current[next]?.focus()
+    const next = (index + visibleTabs.length) % visibleTabs.length
+    setTab(visibleTabs[next][0])
+    tabRefs.current[TABS.findIndex(([id]) => id === visibleTabs[next][0])]?.focus()
   }
   function onTabListKeyDown(event) {
-    const current = TABS.findIndex(([id]) => id === tab)
+    const current = visibleTabs.findIndex(([id]) => id === tab)
     if (current < 0) return
     const moves = {
       ArrowRight: current + 1, ArrowDown: current + 1,
       ArrowLeft: current - 1, ArrowUp: current - 1,
-      Home: 0, End: TABS.length - 1
+      Home: 0, End: visibleTabs.length - 1
     }
     if (!(event.key in moves)) return
     event.preventDefault()
@@ -1063,6 +1057,16 @@ export default function App() {
     ['news', 'News', Megaphone],
     ['settings', 'Settings', SettingsIcon]
   ]
+  const navigationGroups = [
+    ['Today', ['trade', 'chart', 'news'], DeskTrader],
+    ['Journal', ['journal'], QuillPen],
+    ['Review', ['reviews', 'dashboard', 'patterns', 'psych', 'goals', 'rating'], History],
+    ['Playbook', ['playbook'], Waypoints],
+    ['Coach', ['coach'], GraduationCap],
+    ['Manage', ['propfirm', 'settings'], SettingsIcon],
+  ]
+  const activeGroup = navigationGroups.find(([, ids]) => ids.includes(tab)) || navigationGroups[1]
+  const visibleTabs = activeGroup[1].map((id) => TABS.find(([key]) => key === id))
 
   // Desktop-app tab shortcuts: Ctrl/Cmd+1-9 jumps to a tab, Ctrl/Cmd+Tab cycles.
   // Deliberately no plain-letter bindings — they would fire while typing a trade note.
@@ -1118,12 +1122,15 @@ export default function App() {
             <span className="th-header-readout-group flex items-center gap-4" style={mono}>
               <Readout label="NET" value={fmt$(demoPnlTotal ?? stats.totalPnl)} tone={(demoPnlTotal ?? stats.totalPnl) >= 0 ? 'up' : 'down'} feedback={pnlFeedback} />
               <Readout label="WIN" value={`${fmtN(stats.winRate, 1)}%`} />
+              <button type="button" aria-label={headerStatsExpanded ? 'Hide additional statistics' : 'Show additional statistics'} title={headerStatsExpanded ? 'Hide additional statistics' : 'Show additional statistics'} aria-expanded={headerStatsExpanded} onClick={() => setHeaderStatsExpanded((value) => !value)} className="p-1 rounded" style={{ color: T.dim }}><MoreHorizontal size={17} /></button>
+              {headerStatsExpanded && <span className="flex flex-wrap items-center gap-3">
               {/* WIN now excludes scratches, so the count of them sits beside it:
                   without this the two numbers look like they disagree. */}
               {stats.breakEvenCount > 0 && <Readout label="BE" value={String(stats.breakEvenCount)} />}
               <Readout label="PF" value={stats.profitFactor === Infinity ? '∞' : fmtN(stats.profitFactor, 2)} />
               <Readout label="STREAK" value={String(stats.currentStreak)} tone={String(stats.currentStreak).endsWith('W') ? 'up' : String(stats.currentStreak).endsWith('L') ? 'down' : 'none'} />
               {stats.n > 0 && <Readout label="CALM" value={String(stats.nonTiltStreak)} tone="up" />}
+              </span>}
             </span>
             <PersonalClockReadout clock={sessionClock} schedule={personalSchedule} enabled={personalClockEnabled} />
             {!tradeMode && (
@@ -1133,7 +1140,7 @@ export default function App() {
             )}
             {reportDay && !dailyReport && !tradeMode && (settings?.dailyReportEnabled ?? 'true') !== 'false' && (
               <button type="button" onClick={openDailyReport} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm" style={{ background: T.surface2, color: T.dim, border: `1px solid ${T.line}` }}>
-                <CalendarClock size={14} /> Review
+                <CalendarClock size={14} /> Review ready
               </button>
             )}
             {/* Available in Trade Mode too, unlike the rest of these: writing a note
@@ -1164,8 +1171,12 @@ export default function App() {
         {/* A tablist is one stop in the tab order, not thirteen: Tab reaches the nav,
             arrows move along it, Tab again drops into the page. Screen readers also
             announce position ("tab 3 of 13") instead of a run of unrelated buttons. */}
-        <nav role="tablist" aria-label="Primary" className="th-primary-tabs flex" style={{ borderColor: T.line }} onKeyDown={onTabListKeyDown}>
-          {TABS.map(([id, label, Icon], index) => {
+        <nav aria-label="Workflows" className="th-workflow-nav">
+          {navigationGroups.map(([label, ids, Icon]) => <button key={label} type="button" aria-current={activeGroup[0] === label ? 'page' : undefined} onClick={() => setTab(ids[0])}><Icon size={16} />{label}</button>)}
+        </nav>
+        <nav role="tablist" aria-label={`${activeGroup[0]} pages`} className="th-primary-tabs th-workflow-pages flex" style={{ borderColor: T.line, display: visibleTabs.length === 1 ? 'none' : undefined }} onKeyDown={onTabListKeyDown}>
+          {visibleTabs.map(([id, label, Icon]) => {
+            const index = TABS.findIndex(([key]) => key === id)
             const active = tab === id
             return (
               <button key={id} type="button" role="tab" id={`th-tab-${id}`}
@@ -1224,12 +1235,12 @@ export default function App() {
             {tab === 'psych' && <Psychology stats={stats} />}
             {tab === 'rating' && <Rating trades={trades} stats={stats} achievements={achievements} unlockedAt={unlockedAt} settings={settings} onSave={saveSettings} payouts={payouts} />}
             {tab === 'goals' && <Goals goals={goals} onSave={saveGoals} trades={trades} now={now} commitments={commitments} onAddCommitment={addCommitment} onUpdateCommitment={updateCommitment} onDeleteCommitment={deleteCommitment} onOpenCoach={() => setTab('coach')} />}
-            {tab === 'reviews' && <Reviews trades={trades} ruleBreaks={ruleBreaks} reviews={reviews} goals={goals} settings={settings} onSave={saveReview} onDelete={removeReview} onOpenWeeklyWrap={showWeeklyWrap} now={now} />}
+            {tab === 'reviews' && <Reviews trades={trades} plans={tradePlans} ruleBreaks={ruleBreaks} reviews={reviews} goals={goals} settings={settings} onSave={saveReview} onDelete={removeReview} onOpenWeeklyWrap={showWeeklyWrap} now={now} commitments={commitments} onAddCommitment={addCommitment} onOpenTrade={setNotesView} />}
             <div aria-hidden={tab !== 'coach'} style={{ display: tab === 'coach' ? 'contents' : 'none' }}>
-              <Coach trades={trades} stats={stats} settings={settings} reviews={reviews} playbook={playbook} dayLogs={dayLogs} goals={goals} payouts={payouts} commitments={commitments} events={events} now={now} />
+              <Coach trades={trades} stats={stats} settings={settings} reviews={reviews} playbook={playbook} dayLogs={dayLogs} goals={goals} payouts={payouts} commitments={commitments} plans={tradePlans} events={events} now={now} onOpenTrade={setNotesView} onAddCommitment={addCommitment} onOpenPlaybook={() => setTab('playbook')} />
             </div>
             {tab === 'patterns' && <Patterns trades={trades} onOpenTrade={setNotesView} />}
-            {tab === 'playbook' && <PlaybookTab entries={playbook} trades={trades} onAdd={addPlaybookEntry} onUpdate={updatePlaybookEntry} onDelete={deletePlaybookEntry} onPlan={planFromPlaybook} />}
+            {tab === 'playbook' && <PlaybookTab entries={playbook} trades={trades} plans={tradePlans} onAdd={addPlaybookEntry} onUpdate={updatePlaybookEntry} onDelete={deletePlaybookEntry} onPlan={planFromPlaybook} />}
             {tab === 'news' && <NewsTab trades={trades} stats={stats} settings={settings} events={events} commitments={commitments} ruleBreaks={ruleBreaks} todayNet={todayNet} todayCount={todayTrades.length} live={tradeMode} now={now} briefQuotes={briefQuotes} briefUpdatedAt={briefUpdatedAt} onRefreshBriefing={refreshPrivateBriefingQuotes} onOpenMarketDataSettings={() => { setSettingsFocus('Market data connections'); setTab('settings') }} />}
             {tab === 'settings' && <SettingsTab settings={settings} onSave={saveSettings} license={license} onLicenseChange={refreshLicense} onReload={reloadAll} accounts={propFirmAccounts} profiles={instrumentProfiles} onAddProfile={addInstrumentProfile} onUpdateProfile={updateInstrumentProfile} onDeleteProfile={deleteInstrumentProfile} initialSection={settingsFocus} />}
           </div>
@@ -1239,7 +1250,7 @@ export default function App() {
 
       {notesView && <NotesModal trade={notesView} onClose={() => setNotesView(null)} onUpdate={updateTrade} onAttachmentsChange={refreshWorkflow} />}
       {preflight && (
-        <Preflight rules={rules} checks={checks} setChecks={setChecks}
+        <Preflight rules={rules} checks={checks} setChecks={setChecks} commitment={commitments.find((item) => item.status === 'active')}
           snapshot={{ todayNet, todayCount: todayTrades.length, weekNet }}
           goal={dailyGoal} maxLoss={maxLoss} imminent={imminentEvent} now={now}
           launching={goTransition === 'launching'} recordingEnabled={recordingEnabled} setRecordingEnabled={setRecordingEnabled}

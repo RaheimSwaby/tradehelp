@@ -25,7 +25,7 @@ export function coachVoiceInstruction(value) {
 }
 
 export function shouldIncludeWrittenJournal(settings = {}) {
-  return !isCloudProvider(settings?.provider) || (settings?.cloudJournalAccess ?? 'true') !== 'false'
+  return !isCloudProvider(settings?.provider) || ![false, 'false'].includes(settings?.cloudJournalAccess)
 }
 
 export function coachSnapshotKey(trades, context = '') {

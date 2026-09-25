@@ -316,7 +316,7 @@ export function RuleBreakPanel({ ruleBreaks = [], rules = [], onDelete }) {
   )
 }
 
-export function Preflight({ rules, checks, setChecks, snapshot, goal, maxLoss, imminent, now, launching = false, recordingEnabled, setRecordingEnabled, captureSources = [], selectedSource, setSelectedSource, captureLoading, captureError, onRefreshSources, onCancel, onGoLive }) {
+export function Preflight({ rules, checks, setChecks, snapshot, goal, maxLoss, imminent, now, launching = false, recordingEnabled, setRecordingEnabled, captureSources = [], selectedSource, setSelectedSource, captureLoading, captureError, onRefreshSources, onCancel, onGoLive, commitment }) {
   const toggle = (i) => setChecks((c) => ({ ...c, [i]: !c[i] }))
   const unchecked = rules.reduce((n, _, i) => n + (checks[i] ? 0 : 1), 0)
   const dateLabel = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })
@@ -337,6 +337,7 @@ export function Preflight({ rules, checks, setChecks, snapshot, goal, maxLoss, i
               <span>High-impact news — {imminent.country} {imminent.title} in {untilLabel(imminent.ts, now)}. Consider waiting for the print.</span>
             </div>
           )}
+          {commitment && <section className="py-3" style={{ borderBottom: `1px solid ${T.line}` }}><div className="text-xs mb-1" style={{ color: T.accentText }}>Your commitment for this session</div><h3 className="text-sm font-semibold">{commitment.title}</h3><p className="text-xs mt-1" style={{ color: T.dim }}>{commitment.evaluatedCount}/{commitment.targetCount} trades checked. Follow-through is reviewed separately from P&amp;L.</p></section>}
           <div className="grid grid-cols-3 gap-3">
             <Stat label="Today" value={fmt$(snapshot.todayNet)} tone={snapshot.todayNet >= 0 ? 'up' : 'down'} sub={`${snapshot.todayCount} trades`} />
             <Stat label="This week" value={fmt$(snapshot.weekNet)} tone={snapshot.weekNet >= 0 ? 'up' : 'down'} />

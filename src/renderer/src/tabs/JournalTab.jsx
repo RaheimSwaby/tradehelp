@@ -58,6 +58,10 @@ export function Journal({ trades, commitments = [], onAdd, onUpdate, onRemove, o
   const [pendingImport, setPendingImport] = useState(null)
   const [importInboxCount, setImportInboxCount] = useState(0)
   const [editing, setEditing] = useState(null)
+  const [editorOpen, setEditorOpen] = useState(false)
+  const [editorWidth, setEditorWidth] = useState(560)
+  const editorRef = useRef(null)
+  const editorButtonRef = useRef(null)
   const [query, setQuery] = useState('')
   const [timingDrilldown, setTimingDrilldown] = useState(null)
   const consumedDrilldownRef = useRef(null)
@@ -278,7 +282,10 @@ export function Journal({ trades, commitments = [], onAdd, onUpdate, onRemove, o
   useEffect(() => { setPage(0) }, [query, outcome, accountFilter, quarterFilter, pageSize, dismissedSearchFilters])
 
   function startEdit(t) {
+    if (editing?.id === t.id) { setEditorOpen(true); return }
+    if ((f.symbol || images.length || videos.length) && !window.confirm('Replace the current editor draft with this trade?')) return
     discardPendingVideos()
+    setEditorOpen(true)
     setEditing(t)
     setImages([])
     const existingFills = Array.isArray(t.fills) ? t.fills.map((fill, index) => ({ ...fill, filledAt: String(fill.filledAt || '').replace(' ', 'T'), sequence: index })) : []
@@ -299,7 +306,7 @@ export function Journal({ trades, commitments = [], onAdd, onUpdate, onRemove, o
       entryTime: t.entryTime ? t.entryTime.replace(' ', 'T') : '', exitTime: t.exitTime ? t.exitTime.replace(' ', 'T') : '',
       reason: t.reason || '', account: t.account || '', selfSetup: t.selfSetup || '', selfExec: t.selfExec || ''
     })
-    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
+    requestAnimationFrame(() => { if (editorRef.current) editorRef.current.scrollTop = 0 })
   }
   function cancelEdit() { discardPendingVideos(); setEditing(null); setF(blank); setImages([]); setFillsEnabled(false); setFills([]); setFillProfileId(''); setRiskProfileId('') }
   const set = (k) => (e) => setF((p) => ({ ...p, [k]: e.target.value }))
@@ -425,7 +432,7 @@ export function Journal({ trades, commitments = [], onAdd, onUpdate, onRemove, o
   useEffect(() => {
     const onPaste = (e) => {
       const imgs = [...(e.clipboardData?.items || [])].filter((it) => it.type.startsWith('image/')).map((it) => it.getAsFile()).filter(Boolean)
-      if (imgs.length) { e.preventDefault(); addImageFiles(imgs) }
+      if (imgs.length) { e.preventDefault(); setEditorOpen(true); addImageFiles(imgs) }
     }
     document.addEventListener('paste', onPaste)
     return () => document.removeEventListener('paste', onPaste)
@@ -513,6 +520,7 @@ export function Journal({ trades, commitments = [], onAdd, onUpdate, onRemove, o
         setF(blank); setImages([]); setVideos([]); setFillsEnabled(false); setFills([]); setFillProfileId(''); setRiskProfileId('')
       }
       if (result?.videoErrors?.length) setSubmitError(`${savedLabel}, but some recordings were not attached. ${result.videoErrors.join(' ')}`)
+      else if (!compact) { setEditorOpen(false); editorButtonRef.current?.focus() }
     } catch (error) {
       setSubmitError(error?.message || 'Trade could not be saved. Please try again.')
     } finally {
@@ -522,10 +530,13 @@ export function Journal({ trades, commitments = [], onAdd, onUpdate, onRemove, o
   }
 
   const inp = 'w-full rounded px-2 py-1.5 text-sm'
+  useEffect(() => {
+    if (editorOpen) editorRef.current?.querySelector('input')?.focus({ preventScroll: true })
+  }, [editorOpen])
   return (
-    <div className="th-page th-page-journal th-journal-workspace grid grid-cols-1 gap-4">
-      <div className="th-journal-entry-panel rounded-xl" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
+    <div className={`th-page th-page-journal th-journal-workspace th-journal-history-first grid grid-cols-1 gap-4${editorOpen ? ' th-editor-open' : ''}`} style={{ '--journal-editor-width': `${editorWidth}px` }}>
         <div className="th-journal-actions flex flex-wrap items-center gap-2">
+          <button ref={editorButtonRef} type="button" onClick={() => setEditorOpen(true)} aria-expanded={editorOpen} aria-controls="journal-trade-editor" className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md" style={{ background: T.accent, color: '#1A1306' }}><Plus size={14} />{editing ? `Edit ${editing.symbol}` : f.symbol || images.length ? 'Resume draft' : 'New trade'}</button>
           <button type="button" onClick={toggleSimple} title="Simple journal hides advanced price and risk fields"
             className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md"
             style={{ background: simple ? T.accentSoft : 'transparent', color: simple ? T.accentText : T.dim, border: `1px solid ${simple ? T.accent : T.line}` }}>
@@ -537,6 +548,8 @@ export function Journal({ trades, commitments = [], onAdd, onUpdate, onRemove, o
           <button type="button" onClick={() => setImportCenterOpen(true)} className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md" style={{ color: importInboxCount ? T.accentText : T.dim, border: `1px solid ${T.line}` }}><Inbox size={13} /> Inbox{importInboxCount ? ` ${importInboxCount}` : ''}</button>
           <button type="button" onClick={() => { setPendingImport(null); setImportOpen(true) }} className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md" style={{ color: T.dim, border: `1px solid ${T.line}` }}><Upload size={13} /> Import CSV</button>
         </div>
+      <aside id="journal-trade-editor" ref={editorRef} aria-label="Trade editor" hidden={!editorOpen} className="th-journal-entry-panel rounded-xl" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
+        <div className="th-editor-heading"><strong>{editing ? `Edit ${editing.symbol}` : 'New trade'}</strong><span className="text-xs" style={{ color: T.faint }}>{compact ? 'Quick entry' : 'Full entry'}</span><button type="button" title="Close editor (keep draft)" aria-label="Close editor and keep draft" onClick={() => { setEditorOpen(false); editorButtonRef.current?.focus() }}><X size={16} /></button></div>
         {editing && <div className="th-editing-trade flex items-center gap-2"><Pencil size={14} style={{ color: T.accentText }} /><strong>Edit {editing.symbol}</strong><button type="button" onClick={cancelEdit} className="ml-auto text-xs" style={{ color: T.dim }}>Cancel</button></div>}
         <section className="th-form-section">
           <div className="th-section-label">1. Basics</div>
@@ -897,8 +910,13 @@ export function Journal({ trades, commitments = [], onAdd, onUpdate, onRemove, o
             )}
           </>
         )}
-      </div>
+      </aside>
 
+      {editorOpen && <div className="th-editor-resize" role="separator" aria-label="Resize trade editor" aria-orientation="vertical" tabIndex={0} aria-valuemin={420} aria-valuemax={760} aria-valuenow={editorWidth}
+        onKeyDown={(event) => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); setEditorWidth((width) => Math.max(420, Math.min(760, width + (event.key === 'ArrowLeft' ? 20 : -20)))) } }}
+        onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); event.currentTarget.dataset.startX = event.clientX; event.currentTarget.dataset.startWidth = editorWidth }}
+        onPointerMove={(event) => { if (event.currentTarget.hasPointerCapture(event.pointerId)) setEditorWidth(Math.max(420, Math.min(760, Number(event.currentTarget.dataset.startWidth) + Number(event.currentTarget.dataset.startX) - event.clientX))) }}
+        onPointerUp={(event) => { if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId) }} />}
       <div className="th-journal-history rounded-xl overflow-hidden" style={{ background: T.surface, border: `1px solid ${T.line}` }}>
         <div className="th-history-toolbar px-4 py-3" style={{ borderBottom: `1px solid ${T.line}` }}>
           <div className="flex flex-wrap items-center justify-between gap-2">

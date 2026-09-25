@@ -43,13 +43,14 @@ export const COMMITMENT_RULE_META = {
   }
 }
 
-function CommitmentModal({ onClose, onSave }) {
+export function CommitmentModal({ onClose, onSave, source = 'coach', suggestion = '' }) {
   const [ruleType, setRuleType] = useState('max_trades_day')
   const [ruleValue, setRuleValue] = useState(COMMITMENT_RULE_META.max_trades_day.defaultValue)
   const [title, setTitle] = useState(COMMITMENT_RULE_META.max_trades_day.describe(COMMITMENT_RULE_META.max_trades_day.defaultValue))
   const [customTitle, setCustomTitle] = useState(false)
   const [targetCount, setTargetCount] = useState('10')
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
   const meta = COMMITMENT_RULE_META[ruleType]
 
   function chooseRule(nextType) {
@@ -63,9 +64,13 @@ function CommitmentModal({ onClose, onSave }) {
   async function save() {
     if (!title.trim() || !ruleValue.trim() || busy) return
     setBusy(true)
+    setError('')
     try {
-      await onSave({ title: title.trim(), ruleType, ruleValue: ruleValue.trim(), targetCount: parseInt(targetCount, 10) || 10, source: 'coach' })
+      const result = await onSave({ title: title.trim(), ruleType, ruleValue: ruleValue.trim(), targetCount: parseInt(targetCount, 10) || 10, source })
+      if (result === false) { setError('Commitment could not be started. Check the rule and try again.'); return }
       onClose()
+    } catch (error) {
+      setError(String(error?.message || 'Commitment could not be started.'))
     } finally {
       setBusy(false)
     }
@@ -83,6 +88,7 @@ function CommitmentModal({ onClose, onSave }) {
           <button type="button" onClick={onClose} className="ml-auto" style={{ color: T.faint }}><X size={18} /></button>
         </div>
 
+        {suggestion && <details className="mt-3 text-xs"><summary>Coach response to consider</summary><p className="whitespace-pre-wrap max-h-32 overflow-auto mt-2">{suggestion}</p></details>}
         <div className="grid grid-cols-2 gap-2 mt-4">
           {Object.entries(COMMITMENT_RULE_META).map(([key, rule]) => (
             <button key={key} type="button" onClick={() => chooseRule(key)} className="rounded-lg p-3 text-left text-xs"
@@ -111,6 +117,7 @@ function CommitmentModal({ onClose, onSave }) {
         <div className="rounded-lg p-3 mt-4 text-xs" style={{ background: T.surface2, border: `1px solid ${T.line}`, color: T.dim }}>
           TradeHelp evaluates this from your recorded trades and always shows why a trade passed or missed. The focus measures process, not whether a trade won.
         </div>
+        {error && <p role="alert" className="text-xs mt-3" style={{ color: T.down }}>{error}</p>}
         <div className="flex gap-2 mt-4">
           <button type="button" onClick={onClose} className="flex-1 rounded-lg py-2 text-sm" style={{ border: `1px solid ${T.line}`, color: T.dim }}>Cancel</button>
           <button type="button" onClick={save} disabled={!title.trim() || !ruleValue.trim() || busy} className="flex-1 rounded-lg py-2 text-sm font-semibold" style={{ background: T.accent, color: '#1A1306', opacity: title.trim() && ruleValue.trim() && !busy ? 1 : 0.5 }}>{busy ? 'Starting…' : 'Start commitment'}</button>
