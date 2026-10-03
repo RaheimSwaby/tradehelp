@@ -71,7 +71,6 @@ describe('AI caller payload propagation', () => {
     expect(proactiveTough.system).toContain('Delivery style (tough-love)')
     expect(proactiveSupportive.system).toMatch(/Do not give market predictions, buy\/sell advice, or promise profits/)
     expect(proactiveTough.system).toMatch(/Do not give market predictions, buy\/sell advice, or promise profits/)
-
     const dailySupportive = buildDailyReportAiPayload(report, { coachVoice: 'supportive' })
     const dailyTough = buildDailyReportAiPayload(report, { coachVoice: 'tough-love' })
     expect(dailySupportive.messages).toEqual(dailyTough.messages)
@@ -79,6 +78,19 @@ describe('AI caller payload propagation', () => {
     expect(dailyTough.system).toContain('Delivery style (tough-love)')
     expect(dailySupportive.system).toMatch(/No market predictions or buy\/sell advice/)
     expect(dailyTough.system).toMatch(/No market predictions or buy\/sell advice/)
+  })
+
+  it('keeps proactive coach model errors visible and preserves successful summaries', async () => {
+    const { coachBriefResult } = await import('../components/CoachBriefCard.jsx')
+    expect(coachBriefResult({ ok: false, error: 'The selected model has been retired.' })).toEqual({
+      text: '',
+      error: 'The selected model has been retired.'
+    })
+    expect(coachBriefResult({ ok: true, text: 'Keep respecting your stop.' })).toEqual({
+      text: 'Keep respecting your stop.',
+      error: ''
+    })
+    expect(coachBriefResult(null).error).toMatch(/AI summary unavailable/)
   })
 
   it('applies review voice and cloud written-journal privacy while preserving factual context', async () => {

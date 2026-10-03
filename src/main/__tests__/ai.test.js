@@ -68,6 +68,71 @@ describe('AI request limits', () => {
   })
 })
 
+describe('Ollama model failures', () => {
+  const settings = {
+    provider: 'ollama',
+    ollamaUrl: 'http://localhost:11434',
+    ollamaModel: 'deepseek-v4-flash:cloud'
+  }
+  const payload = { system: 'coach', messages: [], contextWindow: 4096, think: false }
+  const retired = () => new Response(JSON.stringify({
+    error: 'deepseek-v4-flash:0731 was retired at 2026-09-25 00:00:00 -0700 PDT'
+  }), { status: 410, headers: { 'Content-Type': 'application/json' } })
+
+  it('directs regular and streaming requests with a retired model back to Settings', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => retired()))
+    await expect(chat(settings, payload)).rejects.toThrow(/deepseek-v4-flash:cloud.*Settings.*Model provider/i)
+
+    vi.stubGlobal('fetch', vi.fn(async () => retired()))
+    await expect(chatStream(settings, payload, () => {})).rejects.toThrow(/deepseek-v4-flash:cloud.*Settings.*Model provider/i)
+  })
+
+  it('guides missing-model recovery without hiding unrelated Ollama errors', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      error: 'model deepseek-v4-flash:cloud not found'
+    }), { status: 404, headers: { 'Content-Type': 'application/json' } })))
+    await expect(chat(settings, payload)).rejects.toThrow(/cannot find.*deepseek-v4-flash:cloud.*Settings.*Model provider/i)
+
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('backend unavailable', { status: 503 })))
+    await expect(chatStream(settings, payload, () => {})).rejects.toThrow('Ollama 503: backend unavailable')
+  })
+
+  it('recognizes provider retirement wording and alternate missing-model wording', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      error: 'This model was retired by the provider.'
+    }), { status: 400, headers: { 'Content-Type': 'application/json' } })))
+    await expect(chat(settings, payload)).rejects.toThrow(/has been retired.*Settings.*Model provider/i)
+
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      error: 'model deepseek-v4-flash:cloud does not exist'
+    }), { status: 404, headers: { 'Content-Type': 'application/json' } })))
+    await expect(chat(settings, payload)).rejects.toThrow(/cannot find.*deepseek-v4-flash:cloud/i)
+  })
+
+  it('handles unreadable and unstructured provider errors without masking their status', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: false,
+      status: 500,
+      text: async () => { throw new Error('body read failed') }
+    })))
+    await expect(chat(settings, payload)).rejects.toThrow('Ollama 500')
+
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ message: 'gateway failure' }), {
+      status: 502,
+      headers: { 'Content-Type': 'application/json' }
+    })))
+    await expect(chat(settings, payload)).rejects.toThrow(/Ollama 502.*gateway failure/)
+  })
+
+  it('names the selected vision model when an image request hits retirement', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => retired()))
+    await expect(chat({ ...settings, ollamaVisionModel: 'vision-retired:cloud' }, {
+      ...payload,
+      messages: [{ role: 'user', content: 'Review this chart', images: ['data:image/png;base64,AAAA'] }]
+    })).rejects.toThrow(/vision-retired:cloud.*Settings.*Model provider/i)
+  })
+})
+
 describe('Claude (Anthropic) provider', () => {
   const settings = { provider: 'anthropic', anthropicKey: 'sk-ant-test', anthropicModel: 'claude-opus-5' }
 

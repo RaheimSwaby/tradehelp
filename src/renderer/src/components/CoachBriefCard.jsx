@@ -18,6 +18,11 @@ export function buildCoachBriefAiPayload(context, brief, settings = {}) {
   return proactiveCoachPayload(context, brief, settings.coachVoice)
 }
 
+export function coachBriefResult(response) {
+  if (response?.ok && response.text) return { text: response.text, error: '' }
+  return { text: '', error: response?.error || 'AI summary unavailable. Try again or open AI Coach for details.' }
+}
+
 export function CoachBriefCard({ trades, stats, settings, journalData = {}, onSaveSettings, onOpenCoach }) {
   const brief = useMemo(() => buildCoachBrief(trades, stats), [trades, stats])
   const includeWritten = shouldIncludeWrittenJournal(settings)
@@ -25,22 +30,28 @@ export function CoachBriefCard({ trades, stats, settings, journalData = {}, onSa
   const snapshot = useMemo(() => coachSnapshotKey(trades, context), [trades, context])
   const cached = settings?.coachBriefSnapshot === snapshot ? settings?.coachBriefText : ''
   const [aiText, setAiText] = useState(cached || '')
+  const [aiError, setAiError] = useState('')
   const [loading, setLoading] = useState(false)
   const mounted = useRef(true)
 
   useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
-  useEffect(() => { setAiText(cached || '') }, [cached, snapshot])
+  useEffect(() => { setAiText(cached || ''); setAiError('') }, [cached, snapshot])
 
   async function enhance(manual = false) {
     if (!stats.n || loading || !window.api?.aiChat || !aiConfigured(settings)) return
     setLoading(true)
+    setAiError('')
     if (!manual) await onSaveSettings?.({ coachBriefAttempt: snapshot })
     try {
-      const res = await window.api.aiChat(buildCoachBriefAiPayload(context, brief, settings))
-      if (res?.ok && res.text) {
-        if (mounted.current) setAiText(res.text)
-        await onSaveSettings?.({ coachBriefSnapshot: snapshot, coachBriefText: res.text, coachBriefAttempt: snapshot })
+      const result = coachBriefResult(await window.api.aiChat(buildCoachBriefAiPayload(context, brief, settings)))
+      if (result.text) {
+        if (mounted.current) setAiText(result.text)
+        await onSaveSettings?.({ coachBriefSnapshot: snapshot, coachBriefText: result.text, coachBriefAttempt: snapshot })
+      } else if (mounted.current) {
+        setAiError(result.error)
       }
+    } catch (error) {
+      if (mounted.current) setAiError(String(error?.message || error || 'AI summary unavailable.'))
     } finally {
       if (mounted.current) setLoading(false)
     }
@@ -64,6 +75,7 @@ export function CoachBriefCard({ trades, stats, settings, journalData = {}, onSa
           {aiText
             ? <CompactMarkdown className="mt-2">{aiText}</CompactMarkdown>
             : <p className="text-sm mt-1 leading-relaxed" style={{ color: T.dim }}>{brief.summary}</p>}
+          {aiError && <p role="alert" className="text-sm mt-2 leading-relaxed" style={{ color: T.down }}>{aiError}</p>}
           <div className="flex flex-wrap gap-2 mt-3">
             {aiConfigured(settings) && (
               <button type="button" onClick={() => enhance(true)} disabled={loading} className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md" style={{ background: T.surface2, color: T.text, border: `1px solid ${T.line}` }}>

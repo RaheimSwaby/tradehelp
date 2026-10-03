@@ -53,6 +53,21 @@ function ollamaMessages(system, messages) {
 }
 const ollamaModelFor = (s, messages) => (hasImgs(messages) ? (s.ollamaVisionModel || s.ollamaModel) : s.ollamaModel)
 
+// Ollama Cloud can keep a retired model in /api/tags even after inference starts
+// returning 410. Turn that provider detail into a recovery step the trader can use.
+async function ollamaFailure(res, model) {
+  const raw = await res.text().catch(() => '')
+  let detail = raw
+  try { detail = JSON.parse(raw)?.error || raw } catch {}
+  if (res.status === 410 || /\bretired\b/i.test(detail)) {
+    return `The Ollama model "${model}" has been retired. Open Settings, Model provider, choose another model, then press Test model.`
+  }
+  if (res.status === 404 && /model.*(?:not found|does not exist)/i.test(detail)) {
+    return `Ollama cannot find "${model}". Open Settings, Model provider, choose an installed model, then press Test model.`
+  }
+  return `Ollama ${res.status}${detail ? ': ' + detail : ''}`.slice(0, 200)
+}
+
 const anthropicModelFor = (s) => s.anthropicModel || ANTHROPIC_DEFAULT_MODEL
 
 // Claude takes base64 image bytes and their media type as separate fields, so the
@@ -156,11 +171,12 @@ export async function chat(settings, { system, messages, contextWindow: requeste
     const d = await res.json()
     return d.choices?.[0]?.message?.content ?? '(no response)'
   }
+  const model = ollamaModelFor(settings, messages)
   const res = await fetch(`${trim(settings.ollamaUrl)}/api/chat`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: ollamaModelFor(settings, messages), stream: false, messages: ollamaMessages(system, messages), options: ollamaOptions({ contextWindow: requestedContextWindow }), ...ollamaThinking(think) })
+    body: JSON.stringify({ model, stream: false, messages: ollamaMessages(system, messages), options: ollamaOptions({ contextWindow: requestedContextWindow }), ...ollamaThinking(think) })
   }).catch(() => { throw new Error('Cannot reach Ollama. Is it running? Try: ollama serve') })
-  if (!res.ok) throw new Error(`Ollama ${res.status}: ${await res.text().catch(() => '')}`.slice(0, 200))
+  if (!res.ok) throw new Error(await ollamaFailure(res, model))
   const d = await res.json()
   return d.message?.content ?? '(no response)'
 }
@@ -199,11 +215,12 @@ export async function chatStream(settings, { system, messages, contextWindow: re
       try { return JSON.parse(data).choices?.[0]?.delta?.content || '' } catch { return '' }
     })
   }
+  const model = ollamaModelFor(settings, messages)
   const res = await fetch(`${trim(settings.ollamaUrl)}/api/chat`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: ollamaModelFor(settings, messages), stream: true, messages: ollamaMessages(system, messages), options: ollamaOptions({ contextWindow: requestedContextWindow }), ...ollamaThinking(think) })
+    body: JSON.stringify({ model, stream: true, messages: ollamaMessages(system, messages), options: ollamaOptions({ contextWindow: requestedContextWindow }), ...ollamaThinking(think) })
   }).catch(() => { throw new Error('Cannot reach Ollama. Is it running? Try: ollama serve') })
-  if (!res.ok) throw new Error(`Ollama ${res.status}: ${await res.text().catch(() => '')}`.slice(0, 200))
+  if (!res.ok) throw new Error(await ollamaFailure(res, model))
   return readStream(res, onChunk, false, (line) => {
     try {
       const message = JSON.parse(line).message || {}
