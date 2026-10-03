@@ -44,6 +44,14 @@ const V050_NOTES = `- Market Pulse: account-free TradingView ticker, live charts
 - Help and FAQ now explain the new market data, session tracking, review, and coaching features`
 
 export const RELEASE_NOTES = {
+  '0.51.2': `AI Coach tells you how to recover when Ollama retires or removes the selected model.
+
+- TradeHelp names the retired or missing model and points you to Settings, Model provider
+- You choose and test the replacement; TradeHelp does not change your model or provider without permission
+- Coach Brief shows the same model error instead of dropping it
+- TradeHelp shows the status and details for other Ollama failures
+
+TradeHelp 0.51.2 supports Windows, macOS (Intel and Apple Silicon), and Linux.`,
   '0.51.1': `Squashed a couple bugs!
 
 - Reviews now connect recorded reasons, pre-entry plans, and commitment results, with supporting trades and previous-period comparisons
