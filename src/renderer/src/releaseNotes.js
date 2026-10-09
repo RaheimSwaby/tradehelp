@@ -44,6 +44,15 @@ const V050_NOTES = `- Market Pulse: account-free TradingView ticker, live charts
 - Help and FAQ now explain the new market data, session tracking, review, and coaching features`
 
 export const RELEASE_NOTES = {
+  '0.51.3': `Review your latest trading day and view trade screenshots in AI Coach.
+
+- Ask to review your latest session to select the most recent logged trading day within your filters
+- View screenshots attached to trades cited in a reply, browse multiple images, and click to enlarge
+- Screenshot previews stay on your device; the coach does not receive or analyse the images
+- The coach receives tag counts from all matching trades, even when it can only read a sample
+- Coach text and citation links use consistent typography
+
+Available for Windows, macOS (Intel and Apple Silicon), and Linux.`,
   '0.51.2': `AI Coach tells you how to recover when Ollama retires or removes the selected model.
 
 - TradeHelp names the retired or missing model and points you to Settings, Model provider
