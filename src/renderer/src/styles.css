@@ -837,6 +837,35 @@ button:focus-visible, a:focus-visible, [role="button"]:focus-visible, summary:fo
   height: calc(100vh - 190px);
   min-height: 420px;
 }
+.th-coach-transcript {
+  font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.th-coach-transcript .th-compact-markdown { font: inherit; }
+.th-coach-transcript .th-compact-markdown strong { font-weight: 600 !important; }
+.th-coach-transcript .th-coach-citation {
+  display: inline;
+  font: inherit;
+  padding: 0;
+  vertical-align: baseline;
+  text-underline-offset: 3px;
+}
+.th-coach-photos { margin-top: 16px; max-width: 640px; }
+.th-coach-photo-disclaimer, .th-coach-photo-caption { color: var(--th-dim); font-size: 12px; line-height: 1.5; }
+.th-coach-photo { margin: 12px 0 0; padding-top: 12px; border-top: 1px solid var(--th-line); }
+.th-coach-photo figcaption, .th-coach-photo-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.th-coach-photo figcaption strong { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 12px; }
+.th-coach-photos button { font: inherit; color: var(--th-accent-text); }
+.th-coach-photo-preview { display: block; width: 100%; padding: 0; cursor: zoom-in; background: #080a0d; }
+.th-coach-photo-preview img { display: block; width: 100%; max-height: 280px; object-fit: contain; }
+.th-coach-photo-controls { margin-top: 8px; font-size: 12px; }
+.th-coach-photo-controls span { margin-right: auto; }
+.th-coach-photo-caption { overflow-wrap: anywhere; white-space: pre-wrap; }
+.th-coach-photo-dialog { margin: auto; width: min(1200px, 94vw); max-height: 94vh; overflow: auto; padding: 16px; border: 1px solid var(--th-line); background: var(--th-surface); color: var(--th-text); }
+.th-coach-photo-dialog::backdrop { background: rgba(0, 0, 0, .8); }
+.th-coach-photo-dialog > button { display: block; margin: 0 0 12px auto; }
+.th-coach-photo-dialog img { display: block; width: 100%; max-height: 76vh; object-fit: contain; }
 .th-page .th-panel > .flex:first-child {
   min-height: 24px;
   margin-bottom: 10px;

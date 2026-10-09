@@ -1,6 +1,7 @@
 import React from 'react'
 import { coachCitations } from '../coachEvidence.js'
 import { CompactMarkdown } from './CompactMarkdown.jsx'
+import { CoachTradePhotos } from './CoachTradePhotos.jsx'
 
 export function CoachEvidenceAnswer({ message, trades, onOpenTrade }) {
   const sources = message.evidence?.sources || []
@@ -16,6 +17,7 @@ export function CoachEvidenceAnswer({ message, trades, onOpenTrade }) {
   return <>
     {message.evidenceFallback && <p className="text-xs mb-2" role="status">The model response did not pass evidence checks. Showing recorded facts instead.</p>}
     <CompactMarkdown renderReference={message.evidence ? renderReference : undefined}>{message.content}</CompactMarkdown>
+    <CoachTradePhotos message={message} trades={trades} onOpenTrade={onOpenTrade} />
     {message.evidence && <details className="th-coach-evidence"><summary>Evidence / {message.evidence.included} examples of {message.evidence.matched} matching trades</summary>
       <p>{message.evidence.scopeLabel}</p>
       {message.evidence.memoryTotal > 0 && <p>{message.evidence.memoryUsed} of {message.evidence.memoryTotal} approved memories included.</p>}

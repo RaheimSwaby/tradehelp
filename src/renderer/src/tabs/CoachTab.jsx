@@ -180,7 +180,7 @@ export function Coach({ trades, stats, settings, reviews = {}, playbook = [], da
             <strong>{modelLabel}</strong> may misread or invent trades because of its size. Choose a larger model such as <span style={mono}>llama3.2</span> 3B, <span style={mono}>qwen2.5:7b</span>, or <span style={mono}>llama3.1:8b</span> in Settings.
           </div>
         )}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+        <div ref={scrollRef} className="th-coach-transcript flex-1 overflow-y-auto px-4 py-3 space-y-3">
           {msgs.length === 0 && (
             <div className="th-coach-empty-state max-w-3xl py-2">
               <div className="flex items-start gap-2">
