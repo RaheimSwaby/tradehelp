@@ -46,6 +46,56 @@ describe('coach evidence evaluation fixtures', () => {
     expect(resolveCoachScope('last month', trades, settings, {}, new Date(2026, 0, 15))).toMatchObject({ from: '2025-12-01', to: '2025-12-31' })
     expect(build({ question: 'last week' }).scope).toMatchObject({ from: '2026-09-07', to: '2026-09-13' })
   })
+  it.each(['review my latest session', 'review my last session', 'review my most recent session', 'review my recent session', 'review my latest trading day'])('resolves "%s" before sampling, despite older keyword matches', (question) => {
+    const request = build({ question, trades: [
+      { ...trades[0], timestamp: '2026-08-17 09:50', notes: 'review my latest session', pnl: -193 },
+      { ...trades[0], id: 'newest', timestamp: '2026-08-20 11:31', pnl: -217 },
+      { ...trades[0], id: 'same-day', timestamp: '2026-08-20 10:00', pnl: 20 },
+    ] })
+    expect(request.scope).toMatchObject({ from: '2026-08-20', to: '2026-08-20' })
+    expect(request.packet.summary).toMatchObject({ count: 2, netPnl: -197 })
+    expect(request.packet.session).toMatchObject({ date: '2026-08-20', basis: 'Most recent logged trading day within the selected scope' })
+    expect(request.packet.trades.map((row) => row.pnl)).toEqual([-217, 20])
+    expect(request.evidence.scopeLabel).toContain('Latest session: 2026-08-20')
+  })
+  it('finds the latest day inside the symbol, account and date filters', () => {
+    expect(build({ question: 'Review my latest MES Live session' }).scope).toMatchObject({ from: '2026-09-07', to: '2026-09-07' })
+    expect(build({ question: 'Review my latest session', filters: { from: '2026-09-01', to: '2026-09-08', account: 'id:funded' } }).packet.summary.count).toBe(1)
+    expect(build({ question: 'Review my latest session on 2026-09-07' }).scope).toMatchObject({ from: '2026-09-07', to: '2026-09-07' })
+    expect(build({ question: 'Review my latest TSLA session' }).packet.coverage.matched).toBe(0)
+  })
+  it('uses valid local trading dates, includes today, and excludes undated and future rows from latest sessions', () => {
+    const request = build({ question: 'Review my latest session', trades: [
+      { id: 'invalid', symbol: 'MES', entryTime: 'bad date', timestamp: '2026-09-16 10:00', pnl: -10 },
+      { id: 'today', symbol: 'MES', entryTime: 'bad date', timestamp: '2026-09-17 10:00', pnl: 10 },
+      { id: 'future', symbol: 'MES', timestamp: '2026-10-01 10:00', pnl: 900 },
+      { id: 'undated', symbol: 'MES', pnl: 900 },
+    ] })
+    expect(request.packet.coverage.matched).toBe(1)
+    expect(request.packet.trades[0].date).toBe('2026-09-17 10:00')
+    expect(request.packet.summary.netPnl).toBe(10)
+    const empty = build({ question: 'Review my latest session', trades: [{ id: 'bad', pnl: 900 }] })
+    expect(empty.packet.coverage.matched).toBe(0)
+    expect(empty.packet.session.date).toBeNull()
+    expect(empty.packet.followUp).toContain('valid trading date')
+  })
+  it('keeps session totals and scope intact when a busy day exceeds the evidence budget', () => {
+    const request = build({ question: 'Review my latest session', maxChars: 10000, trades: Array.from({ length: 100 }, (_, i) => ({
+      ...trades[0], id: String(i), timestamp: '2026-09-09 10:00', pnl: -10, notes: 'x'.repeat(1000),
+    })) })
+    expect(request.packet.summary).toMatchObject({ count: 100, netPnl: -1000 })
+    expect(request.packet.session.date).toBe('2026-09-09')
+    expect(request.packet.coverage.included).toBeLessThan(100)
+    expect(JSON.stringify(request.packet).length).toBeLessThanOrEqual(10000)
+  })
+  it('supplies exact self-tagged pattern counts across the whole scope, deduplicating reason and emotion', () => {
+    const request = build({ question: 'How do I fix revenge trades?', maxChars: 10000, trades: Array.from({ length: 100 }, (_, i) => ({
+      ...trades[0], id: String(i), pnl: -10, reason: i < 5 ? 'Revenge trade' : '', emotion: i < 5 ? 'Revenge' : '', notes: 'x'.repeat(1000),
+    })) })
+    expect(request.packet.summary.selfReportedPatterns.find((item) => item.id === 'revenge')).toMatchObject({ count: 5, netPnl: -50 })
+    expect(request.evidence.sources.find((source) => source.key === 'S1').detail).toContain('Revenge trades: 5')
+    expect(request.packet.coverage.included).toBeLessThan(100)
+  })
   it('never infers plan adherence from profit', () => {
     const request = build()
     const loss = request.packet.trades.find((row) => row.pnl === -40)

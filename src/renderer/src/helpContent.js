@@ -285,7 +285,11 @@ export const HELP_SECTIONS = [
       },
       {
         q: 'What can the coach see?',
-        a: 'Your full journal: trades with notes, reasons and self-grades, saved reviews, playbook, goals, rules and no-trade days. It coaches process and psychology — it does not predict prices or give trade signals.'
+        a: 'The coach receives totals for your selected scope and a limited set of matching trade examples, plus permitted written context such as notes, reviews, playbook and approved memory. Ask to review your latest session to select your most recent logged trading day within the current filters. The coach does not predict prices or give trade signals.'
+      },
+      {
+        q: 'Can the coach show my trade screenshots?',
+        a: 'Yes. Attach screenshots to a trade in the Journal, then ask the coach about that trade or ask to see screenshots from a session. When the reply cites a trade with attachments, you can view them below the reply. Use Previous and Next to browse, click an image to enlarge it, or choose Open trade. These previews stay on your device and do not send images to the AI. The coach knows how many screenshots are attached but cannot interpret their contents in this conversation. Missing or deleted files show an unavailable message.'
       },
       {
         q: 'Are my coach conversations saved?',
