@@ -44,6 +44,14 @@ const V050_NOTES = `- Market Pulse: account-free TradingView ticker, live charts
 - Help and FAQ now explain the new market data, session tracking, review, and coaching features`
 
 export const RELEASE_NOTES = {
+  '0.51.4': `Continue your AI Coach review without repeating which session you mean.
+
+- Follow-up answers keep the current session, including answers that mention its symbol or account
+- The coach receives recent conversation context, including its previous question
+- New review requests and changes to filters, models or privacy settings start a separate context
+- If a reply cannot be validated, the retry message keeps the known session date
+
+Start a new session review after updating. Existing saved replies keep their original text.`,
   '0.51.3': `Review your latest trading day and view trade screenshots in AI Coach.
 
 - Ask to review your latest session to select the most recent logged trading day within your filters
