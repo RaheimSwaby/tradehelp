@@ -20,6 +20,7 @@ export function CoachEvidenceAnswer({ message, trades, onOpenTrade }) {
     <CoachTradePhotos message={message} trades={trades} onOpenTrade={onOpenTrade} />
     {message.evidence && <details className="th-coach-evidence"><summary>Evidence / {message.evidence.included} examples of {message.evidence.matched} matching trades</summary>
       <p>{message.evidence.scopeLabel}</p>
+      {message.evidence.retrieval && <p>Local written-record search: {message.evidence.retrieval.status}. {message.evidence.retrieval.searched} records searched, {message.evidence.retrieval.matched} matched, {message.evidence.retrieval.included} excerpts supplied. This does not include images or recordings.</p>}
       {message.evidence.memoryTotal > 0 && <p>{message.evidence.memoryUsed} of {message.evidence.memoryTotal} approved memories included.</p>}
       <p>References link to supplied records, not proof of the coach's interpretation.</p>
       {!citations.valid.length && <p>No supplied sources were cited. Treat this answer as unverified.</p>}

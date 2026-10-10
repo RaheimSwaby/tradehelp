@@ -44,6 +44,15 @@ const V050_NOTES = `- Market Pulse: account-free TradingView ticker, live charts
 - Help and FAQ now explain the new market data, session tracking, review, and coaching features`
 
 export const RELEASE_NOTES = {
+  '0.51.5': `Search more of your written journal in AI Coach.
+
+- Search trade notes, saved reviews, daily notes and playbook text locally before sending excerpts to your selected model
+- Whole-journal reviews use monthly totals and examples from across the selected date range
+- See search coverage and cited excerpts in the evidence panel
+- Distinguish no matching text from excluded access or a failed search
+- Reject direct trade-date citations that conflict with the cited record
+
+Access remains read-only and respects written-record privacy settings. Search uses the records loaded in the app. The coach still cannot analyse screenshots or request additional records on its own.`,
   '0.51.4': `Continue your AI Coach review without repeating which session you mean.
 
 - Follow-up answers keep the current session, including answers that mention its symbol or account

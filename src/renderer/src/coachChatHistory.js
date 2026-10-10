@@ -23,7 +23,8 @@ export function normalizeCoachChatHistory(input) {
       scopeLabel: String(raw.scopeLabel || '').slice(0, 500),
       matched: Math.max(0, Number(raw.matched) || 0), included: Math.max(0, Number(raw.included) || 0),
       memoryUsed: Math.max(0, Number(raw.memoryUsed) || 0), memoryTotal: Math.max(0, Number(raw.memoryTotal) || 0),
-      sources: (Array.isArray(raw.sources) ? raw.sources : []).slice(0, 100).filter((source) => source && /^[TSCR]\d+$/.test(source.key)).map((source) => ({
+      ...(raw.retrieval && ['ok', 'empty', 'no_matches', 'disabled', 'error'].includes(raw.retrieval.status) ? { retrieval: { status: raw.retrieval.status, ...Object.fromEntries(['searched', 'matched', 'included'].map((key) => [key, Math.max(0, Number(raw.retrieval[key]) || 0)])) } } : {}),
+      sources: (Array.isArray(raw.sources) ? raw.sources : []).slice(0, 100).filter((source) => source && /^[TSCRN]\d+$/.test(source.key)).map((source) => ({
         key: source.key, kind: ['trade', 'summary', 'review', 'commitment'].includes(source.kind) ? source.kind : 'summary',
         ...(source.tradeId != null ? { tradeId: String(source.tradeId).slice(0, 100) } : {}),
         label: String(source.label || '').slice(0, 500), detail: String(source.detail || '').slice(0, 2500),
