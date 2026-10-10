@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildCoachEvidence, coachMessages, coachCitations, resolveCoachScope, checkCoachAnswer } from '../coachEvidence.js'
+import { buildCoachEvidence, coachMessages, coachCitations, coachPriorScope, resolveCoachScope, checkCoachAnswer } from '../coachEvidence.js'
 import { buildPeriodRetrospective, serializePeriodRetrospective } from '../periodRetrospective.js'
 
 const trades = [
@@ -33,6 +33,86 @@ describe('coach evidence evaluation fixtures', () => {
     const priorScope = build({ question: 'MES Live last week' }).scope
     expect(build({ question: 'Why?', priorScope }).packet.coverage.matched).toBe(1)
     expect(build({ question: 'Review MNQ', priorScope }).packet.trades[0].symbol).toBe('MNQ')
+  })
+  it('keeps a natural answer to the coach in the latest session across multiple turns', () => {
+    const first = build({ question: 'review my latest session' })
+    const second = build({ question: 'i had this trade planned for about 2-3 days and still got stomped', priorScope: first.scope })
+    expect(second.scope).toEqual(first.scope)
+    expect(second.packet.coverage.matched).toBe(1)
+    expect(build({ question: 'my stop was 95 and risk was 40', priorScope: second.scope }).scope).toEqual(first.scope)
+    const history = [
+      { role: 'user', content: 'review my latest session', contextKey: first.contextKey },
+      { role: 'assistant', content: 'What was your pre-planned stop and risk? [T1]', evidence: first.evidence },
+    ]
+    const messages = coachMessages(second, 'i had this trade planned for about 2-3 days and still got stomped', history)
+    expect(messages[0].content).toContain('pre-planned stop and risk')
+    expect(messages[0].content).not.toContain('[T1]')
+  })
+  it('allows a new whole-journal question to leave the active session', () => {
+    const priorScope = build({ question: 'review my latest session' }).scope
+    for (const question of ['Review all my trades', 'How do I fix revenge trades?', 'When do I trade best?', 'Review my whole journal']) {
+      expect(build({ question, priorScope }).packet.coverage.matched).toBe(3)
+    }
+    expect(build({ question: 'Review MES', priorScope }).packet.coverage.matched).toBe(2)
+  })
+  it('keeps contextual symbol and account mentions in the active session', () => {
+    const first = build({ question: 'review my latest MES Live session' })
+    for (const question of ['my MES stop was 95 and risk was 40', 'it was on Live', 'the MES trade was planned']) {
+      const next = build({ question, priorScope: first.scope })
+      expect(next.scope).toEqual(first.scope)
+      expect(next.packet.coverage.matched).toBe(1)
+      const messages = coachMessages(next, question, [
+        { role: 'user', content: 'review my latest MES Live session', contextKey: first.contextKey },
+        { role: 'assistant', content: 'What was your stop? [T1]' },
+      ])
+      expect(messages[0].content).toContain('What was your stop?')
+      expect(messages[0].content).not.toContain('[T1]')
+      expect(JSON.stringify(messages)).not.toContain('previously discussed trade:')
+    }
+    expect(build({ question: 'Review MES', priorScope: first.scope }).packet.coverage.matched).toBe(2)
+    expect(build({ question: 'Review MNQ', priorScope: first.scope }).packet.trades[0].symbol).toBe('MNQ')
+  })
+  it('keeps the known session visible even when an answer fails validation', () => {
+    const request = build({ question: 'review my latest session' })
+    const answer = checkCoachAnswer('Uncited response', request)
+    expect(answer.evidenceFallback).toBe(true)
+    expect(answer.content).toContain('still reviewing 2026-09-09')
+    expect(answer.content).not.toContain('Which specific trade')
+  })
+  it('restores scope only within the same privacy, provider and UI filters', () => {
+    const first = build({ question: 'review my latest session' })
+    const history = [{ role: 'user', content: 'review my latest session', contextKey: first.contextKey }]
+    expect(coachPriorScope(history, settings)).toEqual(first.scope)
+    expect(coachPriorScope(history, settings, { account: 'live' })).toBeNull()
+    expect(coachPriorScope(history, { ...settings, ollamaModel: 'changed' })).toBeNull()
+    expect(coachPriorScope(history, { provider: 'cloud', cloudJournalAccess: false })).toBeNull()
+    expect(coachPriorScope([{ role: 'user', contextKey: 'broken' }], settings)).toBeNull()
+    const privateRequest = build({ question: 'i had this trade planned', priorScope: first.scope, settings: { provider: 'cloud', cloudJournalAccess: false } })
+    expect(privateRequest.packet.coverage.matched).toBe(3)
+  })
+  it('continues latest-session reviews inside unchanged UI filters', () => {
+    const filters = { symbol: 'MES', account: 'live' }
+    const first = build({ question: 'review my latest session', filters })
+    const history = [{ role: 'user', content: 'review my latest session', contextKey: first.contextKey }]
+    const priorScope = coachPriorScope(history, settings, filters)
+    expect(build({ question: '40 dollars', filters, priorScope }).scope).toEqual(first.scope)
+  })
+  it('bounds both sides of chat, drops older context after a switch, and removes stale citations', () => {
+    const request = build()
+    const history = [
+      { role: 'user', content: 'OLD_SAME_SCOPE', contextKey: request.contextKey },
+      { role: 'assistant', content: 'OLD_ANSWER' },
+      { role: 'user', content: 'OTHER_SCOPE', contextKey: 'other' },
+      { role: 'assistant', content: 'OTHER_ANSWER' },
+      { role: 'user', content: 'current discussion', contextKey: request.contextKey },
+      { role: 'assistant', content: 'What was your risk? [T99] [S1]' },
+    ]
+    const payload = JSON.stringify(coachMessages(request, '40', history))
+    expect(payload).toContain('What was your risk?')
+    expect(payload).not.toMatch(/OLD_SAME_SCOPE|OLD_ANSWER|OTHER_SCOPE|OTHER_ANSWER|\[T99\]/)
+    expect(coachMessages(request, '40', history, 0)).toHaveLength(2)
+    expect(coachMessages(request, '40', history, 2)).toHaveLength(3)
+    expect(request.system).toContain('Missing plan records do not mean no planning happened')
   })
   it('treats boolean false as a privacy restriction', () => {
     expect(build({ settings: { provider: 'cloud', cloudJournalAccess: false } }).includeWritten).toBe(false)

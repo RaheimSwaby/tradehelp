@@ -8,7 +8,7 @@ import { coachRequestProfile } from '../coachRequest.js'
 import { Panel } from '../components/Shared.jsx'
 import { EventsPanel } from '../widgets/EventBanner.jsx'
 import { clearCoachChatHistory, loadCoachChatHistory, saveCoachChatHistory } from '../coachChatHistory.js'
-import { buildCoachEvidence, coachAccounts, coachMessages, checkCoachAnswer } from '../coachEvidence.js'
+import { buildCoachEvidence, coachAccounts, coachMessages, coachPriorScope, checkCoachAnswer } from '../coachEvidence.js'
 import { loadCoachMemory } from '../coachMemory.js'
 import { CoachMemory } from '../components/CoachMemory.jsx'
 import { CoachEvidenceAnswer } from '../components/CoachEvidence.jsx'
@@ -72,8 +72,7 @@ export function Coach({ trades, stats, settings, reviews = {}, playbook = [], da
   const requestProfile = useMemo(() => coachRequestProfile(settings), [settings?.coachContextMode])
   const accountOptions = useMemo(() => coachAccounts(settings, trades), [settings, trades])
   const prepareRequest = (question) => {
-    let priorScope = null
-    try { priorScope = JSON.parse([...msgs].reverse().find((message) => message.role === 'user' && message.contextKey)?.contextKey || '[]')[0] || null } catch { /* Legacy messages have no scope. */ }
+    const priorScope = coachPriorScope(msgs, settings, filters)
     return buildCoachEvidence({ question, trades, plans, commitments, reviews, playbook, dayLogs, goals, settings, memory, filters, priorScope, now: now ? new Date(now) : new Date(), maxChars: requestProfile.maxChars })
   }
   // Sub-2B models can't reliably read structured journal data and tend to fabricate trades.
