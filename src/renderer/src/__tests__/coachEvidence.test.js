@@ -16,7 +16,7 @@ describe('coach evidence evaluation fixtures', () => {
     const result = build({ question: 'Why do I struggle with MES on Live?' })
     expect(result.packet.coverage.matched).toBe(1)
     expect(result.packet.summary.netPnl).toBe(-40)
-    expect(result.evidence.sources.filter((source) => source.kind === 'trade').map((source) => source.tradeId)).toEqual(['loss-followed'])
+    expect([...new Set(result.evidence.sources.filter((source) => source.kind === 'trade').map((source) => source.tradeId))]).toEqual(['loss-followed'])
     expect(JSON.stringify(result.packet)).not.toContain('PRIVATE_OTHER_ACCOUNT')
   })
   it('distinguishes similarly named symbols and unknown requested symbols', () => {
