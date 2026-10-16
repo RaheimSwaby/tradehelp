@@ -31,6 +31,15 @@ export async function initializeDatabase(db: SQLiteDatabase) {
       screenshot_uri TEXT,
       rule_checks TEXT NOT NULL DEFAULT '[]',
       rule_summary TEXT NOT NULL DEFAULT '',
+      emotion TEXT NOT NULL DEFAULT '',
+      self_setup TEXT NOT NULL DEFAULT '',
+      self_exec TEXT NOT NULL DEFAULT '',
+      entry_price REAL,
+      exit_price REAL,
+      stop REAL,
+      target REAL,
+      size REAL,
+      risk_amount REAL,
       origin TEXT NOT NULL DEFAULT 'mobile',
       desktop_id TEXT,
       sync_state TEXT NOT NULL DEFAULT 'pending'
@@ -73,6 +82,15 @@ export async function initializeDatabase(db: SQLiteDatabase) {
   await ensureColumn(db, 'mobile_trades', 'rule_checks', "TEXT NOT NULL DEFAULT '[]'")
   await ensureColumn(db, 'mobile_trades', 'rule_summary', "TEXT NOT NULL DEFAULT ''")
   await ensureColumn(db, 'mobile_trades', 'reasons', "TEXT NOT NULL DEFAULT '[]'")
+  await ensureColumn(db, 'mobile_trades', 'emotion', "TEXT NOT NULL DEFAULT ''")
+  await ensureColumn(db, 'mobile_trades', 'self_setup', "TEXT NOT NULL DEFAULT ''")
+  await ensureColumn(db, 'mobile_trades', 'self_exec', "TEXT NOT NULL DEFAULT ''")
+  await ensureColumn(db, 'mobile_trades', 'entry_price', 'REAL')
+  await ensureColumn(db, 'mobile_trades', 'exit_price', 'REAL')
+  await ensureColumn(db, 'mobile_trades', 'stop', 'REAL')
+  await ensureColumn(db, 'mobile_trades', 'target', 'REAL')
+  await ensureColumn(db, 'mobile_trades', 'size', 'REAL')
+  await ensureColumn(db, 'mobile_trades', 'risk_amount', 'REAL')
   await ensureColumn(db, 'mobile_trades', 'origin', "TEXT NOT NULL DEFAULT 'mobile'")
   await ensureColumn(db, 'mobile_trades', 'desktop_id', 'TEXT')
   // Sample rows are flagged with their own column rather than by overloading

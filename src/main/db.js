@@ -854,7 +854,8 @@ export function applyMobileTradeChanges(deviceId, changes = []) {
   const touchReceipt = db.prepare(`UPDATE mobile_sync_receipts SET syncedAt = ?
     WHERE deviceId = ? AND mobileTradeId = ?`)
   const updateFromMobile = db.prepare(`UPDATE trades SET
-    symbol=?,direction=?,pnl=?,fees=?,setup=?,notes=?,timestamp=?,entryTime=?,exitTime=?,reason=?,entryTimeframe=?,account=?
+    symbol=?,direction=?,pnl=?,fees=?,setup=?,notes=?,timestamp=?,entryTime=?,exitTime=?,reason=?,entryTimeframe=?,account=?,
+    entry=?,exit=?,stop=?,target=?,size=?,riskAmount=?,emotion=?,selfSetup=?,selfExec=?
     WHERE id=?`)
   let changed = false
 
@@ -878,8 +879,13 @@ export function applyMobileTradeChanges(deviceId, changes = []) {
 
     if (operation === 'update') {
       if (!linkedDesktopId) continue
-      const current = db.prepare('SELECT timestamp,entryTime,exitTime,account FROM trades WHERE id = ?').get(linkedDesktopId)
+      const current = db.prepare(`SELECT timestamp,entryTime,exitTime,account,
+        entry,exit,stop,target,size,riskAmount,emotion,selfSetup,selfExec
+        FROM trades WHERE id = ?`).get(linkedDesktopId)
       if (!current) continue
+      // Fields an older mobile build doesn't send arrive as undefined; keep the
+      // desktop value in that case instead of blanking it.
+      const keep = (incoming, fallback) => incoming === undefined ? fallback : incoming
       updateFromMobile.run(
         String(trade.symbol || '').trim().toUpperCase().slice(0, 30),
         trade.direction === 'Short' ? 'Short' : 'Long',
@@ -893,6 +899,15 @@ export function applyMobileTradeChanges(deviceId, changes = []) {
         String(trade.ruleSummary || '').slice(0, 240),
         String(trade.timeframe || '').slice(0, 40),
         trade.account === undefined ? String(current.account || '') : String(trade.account || '').slice(0, 120),
+        num(keep(trade.entryPrice, current.entry)),
+        num(keep(trade.exitPrice, current.exit)),
+        num(keep(trade.stop, current.stop)),
+        num(keep(trade.target, current.target)),
+        num(keep(trade.size, current.size)),
+        num(keep(trade.riskAmount, current.riskAmount)),
+        String(keep(trade.emotion, current.emotion) || '').slice(0, 60),
+        String(keep(trade.selfSetup, current.selfSetup) || '').slice(0, 8),
+        String(keep(trade.selfExec, current.selfExec) || '').slice(0, 8),
         linkedDesktopId
       )
       touchReceipt.run(new Date().toISOString(), device, mobileTradeId)
@@ -914,6 +929,12 @@ export function applyMobileTradeChanges(deviceId, changes = []) {
         id: desktopId,
         symbol: String(trade.symbol || '').trim().toUpperCase().slice(0, 30),
         direction: trade.direction === 'Short' ? 'Short' : 'Long',
+        entry: trade.entryPrice,
+        exit: trade.exitPrice,
+        stop: trade.stop,
+        target: trade.target,
+        size: trade.size,
+        riskAmount: trade.riskAmount,
         pnl: trade.pnl,
         fees: trade.fees,
         setup: String(trade.setup || '').slice(0, 120),
@@ -923,6 +944,9 @@ export function applyMobileTradeChanges(deviceId, changes = []) {
         exitTime: String(trade.exitTime || ''),
         reason: String(trade.ruleSummary || '').slice(0, 240),
         source: 'mobile',
+        emotion: String(trade.emotion || '').slice(0, 60),
+        selfSetup: String(trade.selfSetup || '').slice(0, 8),
+        selfExec: String(trade.selfExec || '').slice(0, 8),
         entryTimeframe: String(trade.timeframe || '').slice(0, 40),
         account: String(trade.account || '').slice(0, 120)
       })
@@ -950,7 +974,8 @@ export function importMobileTrades(deviceId, trades = []) {
 
 export function mobileTradeSnapshot(limit = 100) {
   const count = Math.max(1, Math.min(250, Math.trunc(Number(limit) || 100)))
-  return db.prepare(`SELECT id,symbol,direction,pnl,fees,setup,notes,timestamp,entryTime,exitTime,reason,source,entryTimeframe,account
+  return db.prepare(`SELECT id,symbol,direction,pnl,fees,setup,notes,timestamp,entryTime,exitTime,reason,source,entryTimeframe,account,
+      entry,exit,stop,target,size,riskAmount,emotion,selfSetup,selfExec
     FROM trades ORDER BY timestamp DESC, rowid DESC LIMIT ?`).all(count).map((trade) => ({
     id: String(trade.id),
     symbol: String(trade.symbol || ''),
@@ -965,6 +990,15 @@ export function mobileTradeSnapshot(limit = 100) {
     ruleSummary: String(trade.reason || ''),
     timeframe: String(trade.entryTimeframe || ''),
     account: String(trade.account || ''),
+    emotion: String(trade.emotion || ''),
+    selfSetup: String(trade.selfSetup || ''),
+    selfExec: String(trade.selfExec || ''),
+    entry: num(trade.entry),
+    exit: num(trade.exit),
+    stop: num(trade.stop),
+    target: num(trade.target),
+    size: num(trade.size),
+    riskAmount: num(trade.riskAmount),
     source: String(trade.source || 'manual')
   }))
 }

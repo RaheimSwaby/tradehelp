@@ -23,6 +23,17 @@ export type MobileTrade = {
   ruleChecks: RuleCheck[]
   ruleSummary: string
   reasons?: string[]
+  // Journal enrichment fields, mirroring the desktop trades table. Kept
+  // optional so trades synced from older builds (and demo rows) still typecheck.
+  emotion?: string
+  selfSetup?: string
+  selfExec?: string
+  entryPrice?: number | null
+  exitPrice?: number | null
+  stop?: number | null
+  target?: number | null
+  size?: number | null
+  riskAmount?: number | null
   origin: 'mobile' | 'desktop'
   desktopId: string
   syncState: 'pending' | 'synced'
@@ -55,6 +66,15 @@ type TradeRow = {
   rule_checks: string
   rule_summary: string
   reasons?: string
+  emotion?: string
+  self_setup?: string
+  self_exec?: string
+  entry_price?: number | null
+  exit_price?: number | null
+  stop?: number | null
+  target?: number | null
+  size?: number | null
+  risk_amount?: number | null
   origin: string
   desktop_id: string | null
   sync_state: string
@@ -175,6 +195,18 @@ function parseReasons(value?: string): string[] {
   }
 }
 
+function nullableNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null
+  const number = Number(value)
+  return Number.isFinite(number) ? number : null
+}
+
+// Desktop stores an unset numeric as 0 (see buildRow in src/main/db.js), so a
+// synced 0 would otherwise render on the phone as a real "Entry 0" price.
+function desktopNumber(value: unknown): number | null {
+  return nullableNumber(value) || null
+}
+
 function publicTrade(row: TradeRow): MobileTrade {
   return {
     id: row.id,
@@ -195,6 +227,15 @@ function publicTrade(row: TradeRow): MobileTrade {
     ruleChecks: parseChecks(row.rule_checks),
     ruleSummary: row.rule_summary || '',
     reasons: parseReasons(row.reasons),
+    emotion: row.emotion || '',
+    selfSetup: row.self_setup || '',
+    selfExec: row.self_exec || '',
+    entryPrice: nullableNumber(row.entry_price),
+    exitPrice: nullableNumber(row.exit_price),
+    stop: nullableNumber(row.stop),
+    target: nullableNumber(row.target),
+    size: nullableNumber(row.size),
+    riskAmount: nullableNumber(row.risk_amount),
     origin: row.origin === 'desktop' ? 'desktop' : 'mobile',
     desktopId: row.desktop_id || '',
     syncState: row.sync_state === 'synced' ? 'synced' : 'pending'
@@ -233,11 +274,16 @@ export async function saveTrade(db: SQLiteDatabase, trade: MobileTrade) {
   await db.withTransactionAsync(async () => {
     await db.runAsync(`INSERT INTO mobile_trades
       (id,created_at,updated_at,trade_date,symbol,direction,pnl,fees,timeframe,entry_time,exit_time,setup,notes,
-       account,screenshot_uri,rule_checks,rule_summary,reasons,origin,desktop_id,sync_state)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       account,screenshot_uri,rule_checks,rule_summary,reasons,emotion,self_setup,self_exec,
+       entry_price,exit_price,stop,target,size,risk_amount,origin,desktop_id,sync_state)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       trade.id, trade.createdAt, trade.updatedAt, trade.tradeDate, trade.symbol, trade.direction,
       trade.pnl, trade.fees, trade.timeframe, trade.entryTime, trade.exitTime, trade.setup, trade.notes, trade.account || '', trade.screenshotUri || null,
-      JSON.stringify(trade.ruleChecks), trade.ruleSummary, JSON.stringify(trade.reasons || []), trade.origin, trade.desktopId || null, trade.syncState)
+      JSON.stringify(trade.ruleChecks), trade.ruleSummary, JSON.stringify(trade.reasons || []),
+      trade.emotion || '', trade.selfSetup || '', trade.selfExec || '',
+      nullableNumber(trade.entryPrice), nullableNumber(trade.exitPrice), nullableNumber(trade.stop),
+      nullableNumber(trade.target), nullableNumber(trade.size), nullableNumber(trade.riskAmount),
+      trade.origin, trade.desktopId || null, trade.syncState)
     await db.runAsync(`INSERT OR REPLACE INTO sync_outbox
       (id,entity_type,entity_id,operation,payload,created_at,attempts)
       VALUES (?,?,?,?,?,?,0)`,
@@ -252,10 +298,14 @@ export async function updateLocalTrade(db: SQLiteDatabase, trade: MobileTrade) {
   await db.withTransactionAsync(async () => {
     await db.runAsync(`UPDATE mobile_trades SET
       updated_at=?,trade_date=?,symbol=?,direction=?,pnl=?,fees=?,timeframe=?,entry_time=?,exit_time=?,setup=?,notes=?,
-      account=?,screenshot_uri=?,rule_checks=?,rule_summary=?,reasons=?,sync_state='pending' WHERE id=?`,
+      account=?,screenshot_uri=?,rule_checks=?,rule_summary=?,reasons=?,emotion=?,self_setup=?,self_exec=?,
+      entry_price=?,exit_price=?,stop=?,target=?,size=?,risk_amount=?,sync_state='pending' WHERE id=?`,
       next.updatedAt, next.tradeDate, next.symbol, next.direction, next.pnl, next.fees,
       next.timeframe, next.entryTime, next.exitTime, next.setup, next.notes, next.account || '', next.screenshotUri || null,
-      JSON.stringify(next.ruleChecks), next.ruleSummary, JSON.stringify(next.reasons || []), next.id)
+      JSON.stringify(next.ruleChecks), next.ruleSummary, JSON.stringify(next.reasons || []),
+      next.emotion || '', next.selfSetup || '', next.selfExec || '',
+      nullableNumber(next.entryPrice), nullableNumber(next.exitPrice), nullableNumber(next.stop),
+      nullableNumber(next.target), nullableNumber(next.size), nullableNumber(next.riskAmount), next.id)
     await db.runAsync(`INSERT OR REPLACE INTO sync_outbox
       (id,entity_type,entity_id,operation,payload,created_at,attempts)
       VALUES (?,?,?,?,?,?,0)`,
@@ -336,12 +386,16 @@ export async function applySyncResult(
       if (linked) {
         if (linked.origin === 'desktop') {
           await db.runAsync(`UPDATE mobile_trades SET updated_at=?,trade_date=?,symbol=?,direction=?,
-            pnl=?,fees=?,timeframe=?,entry_time=?,exit_time=?,setup=?,notes=?,account=?,rule_summary=? WHERE id=?`,
+            pnl=?,fees=?,timeframe=?,entry_time=?,exit_time=?,setup=?,notes=?,account=?,rule_summary=?,
+            emotion=?,self_setup=?,self_exec=?,entry_price=?,exit_price=?,stop=?,target=?,size=?,risk_amount=? WHERE id=?`,
             new Date().toISOString(), normalizeTradeDate(item.tradeDate), String(item.symbol || ''),
             item.direction === 'Short' ? 'Short' : 'Long', Number(item.pnl) || 0, Number(item.fees) || 0,
             String(item.timeframe || ''), String(item.entryTime || ''), String(item.exitTime || ''),
             String(item.setup || ''), String(item.notes || ''), String(item.account || ''),
-            String(item.ruleSummary || ''), linked.id)
+            String(item.ruleSummary || ''), String(item.emotion || ''),
+            String(item.selfSetup || ''), String(item.selfExec || ''),
+            desktopNumber(item.entry), desktopNumber(item.exit), desktopNumber(item.stop),
+            desktopNumber(item.target), desktopNumber(item.size), desktopNumber(item.riskAmount), linked.id)
         }
         continue
       }
@@ -349,15 +403,20 @@ export async function applySyncResult(
       const now = new Date().toISOString()
       await db.runAsync(`INSERT OR REPLACE INTO mobile_trades
         (id,created_at,updated_at,trade_date,symbol,direction,pnl,fees,timeframe,entry_time,exit_time,setup,notes,
-         account,screenshot_uri,rule_checks,rule_summary,origin,desktop_id,sync_state)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         account,screenshot_uri,rule_checks,rule_summary,emotion,self_setup,self_exec,
+         entry_price,exit_price,stop,target,size,risk_amount,origin,desktop_id,sync_state)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         // The fallback was `now` as a UTC ISO string, which put a trade with a
         // missing timestamp on the wrong day for anyone behind UTC.
         id, now, now, normalizeTradeDate(item.tradeDate), String(item.symbol || ''),
         item.direction === 'Short' ? 'Short' : 'Long', Number(item.pnl) || 0, Number(item.fees) || 0,
         String(item.timeframe || ''), String(item.entryTime || ''), String(item.exitTime || ''),
         String(item.setup || ''), String(item.notes || ''), String(item.account || ''),
-        null, '[]', String(item.ruleSummary || ''), 'desktop', desktopId, 'synced')
+        null, '[]', String(item.ruleSummary || ''), String(item.emotion || ''),
+        String(item.selfSetup || ''), String(item.selfExec || ''),
+        desktopNumber(item.entry), desktopNumber(item.exit), desktopNumber(item.stop),
+        desktopNumber(item.target), desktopNumber(item.size), desktopNumber(item.riskAmount),
+        'desktop', desktopId, 'synced')
     }
   })
 }

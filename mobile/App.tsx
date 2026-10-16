@@ -154,6 +154,15 @@ type Form = {
   setup: string
   notes: string
   screenshotUri: string
+  emotion: string
+  selfSetup: string
+  selfExec: string
+  entryPrice: string
+  exitPrice: string
+  stop: string
+  target: string
+  size: string
+  riskAmount: string
 }
 
 type DailyReview = {
@@ -218,8 +227,47 @@ const blankForm = (): Form => {
     account: '',
     setup: '',
     notes: '',
-    screenshotUri: ''
+    screenshotUri: '',
+    emotion: '',
+    selfSetup: '',
+    selfExec: '',
+    entryPrice: '',
+    exitPrice: '',
+    stop: '',
+    target: '',
+    size: '',
+    riskAmount: ''
   }
+}
+
+// Mirror src/renderer/src/utils.js on desktop so trades tagged on the phone
+// land in the same emotion/grade vocabulary the desktop journal reports on.
+const EMOTIONS = ['Disciplined', 'Confident', 'Neutral', 'Hesitant', 'Anxious', 'FOMO', 'Greedy', 'Revenge', 'Bored']
+const SELF_GRADES = ['A+', 'A', 'B', 'C', 'D', 'F']
+
+function parseOptionalNumber(value: string): number | null {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  const number = Number(trimmed)
+  return Number.isFinite(number) ? number : null
+}
+
+// Labels for the optional numeric fields, used to name the bad field in errors.
+const NUMERIC_FIELD_LABELS: Array<[keyof Form, string]> = [
+  ['entryPrice', 'Entry price'],
+  ['exitPrice', 'Exit price'],
+  ['stop', 'Stop'],
+  ['target', 'Target'],
+  ['size', 'Size'],
+  ['riskAmount', 'Risk amount']
+]
+
+function invalidNumericField(form: Form): string {
+  for (const [key, label] of NUMERIC_FIELD_LABELS) {
+    const value = form[key]
+    if (typeof value === 'string' && value.trim() && parseOptionalNumber(value) === null) return label
+  }
+  return ''
 }
 
 // Single definition lives in src/storage/dates — two implementations of "what
@@ -2045,6 +2093,8 @@ function QuickLog({
     const pnl = Number(form.pnl)
     if (!form.symbol.trim()) return setError('Enter a symbol.')
     if (form.pnl.trim() === '' || !Number.isFinite(pnl)) return setError('Enter a valid P&L.')
+    const badField = invalidNumericField(form)
+    if (badField) return setError(`${badField} must be a number.`)
     setChecks(rules.map(() => null))
     setStep('checklist')
   }
@@ -2082,6 +2132,15 @@ function QuickLog({
         ruleChecks,
         ruleSummary: `${followed}/${rules.length} post-trade rules followed`,
         reasons: selectedReasons,
+        emotion: form.emotion,
+        selfSetup: form.selfSetup,
+        selfExec: form.selfExec,
+        entryPrice: parseOptionalNumber(form.entryPrice),
+        exitPrice: parseOptionalNumber(form.exitPrice),
+        stop: parseOptionalNumber(form.stop),
+        target: parseOptionalNumber(form.target),
+        size: parseOptionalNumber(form.size),
+        riskAmount: parseOptionalNumber(form.riskAmount),
         origin: 'mobile',
         desktopId: '',
         syncState: 'pending'
@@ -2137,6 +2196,29 @@ function QuickLog({
           <Text style={styles.panelTitle}>{followed}/{rules.length} followed</Text>
           <Text style={styles.muted}>A losing trade can still show strong execution.</Text>
         </View>
+
+        {([['Setup grade', 'selfSetup'], ['Execution grade', 'selfExec']] as const).map(([label, key]) => (
+          <View key={key}>
+            <Text style={styles.label}>{label} <Text style={styles.muted}>(optional)</Text></Text>
+            <View style={styles.reasonWrap}>
+              {SELF_GRADES.map((grade) => {
+                const active = form[key] === grade
+                return (
+                  <Pressable
+                    key={grade}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: active }}
+                    accessibilityLabel={`${label} ${grade}`}
+                    onPress={() => { triggerHaptic('light'); update(key, active ? '' : grade) }}
+                    style={[styles.presetPill, active ? { backgroundColor: colors.accentSoft, borderColor: colors.accent } : null]}
+                  >
+                    <Text style={[styles.presetText, active ? { color: colors.accent } : null]}>{grade}</Text>
+                  </Pressable>
+                )
+              })}
+            </View>
+          </View>
+        ))}
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <View style={styles.actionRow}>
           <Pressable accessibilityRole="button" style={[styles.secondaryButton, styles.flexOne]} onPress={() => { setStep('details'); setError('') }}>
@@ -2269,7 +2351,7 @@ function QuickLog({
       >
         <View style={styles.flexOne}>
           <Text style={styles.detailsToggleTitle}>{detailsExpanded ? 'Hide optional details' : 'Add optional details'}</Text>
-          <Text style={styles.muted}>Fees, times, reasons, notes, and chart</Text>
+          <Text style={styles.muted}>Fees, prices, risk, times, emotions, reasons, notes, and chart</Text>
         </View>
         {detailsExpanded
           ? <ChevronUp color={colors.accent} size={18} strokeWidth={2.2} />
@@ -2289,6 +2371,63 @@ function QuickLog({
               <TextInput accessibilityLabel="Entry chart timeframe" placeholder="1m, 5m, 15m" placeholderTextColor={colors.dim} style={styles.input}
                 value={form.timeframe} onChangeText={(value) => update('timeframe', value)} />
             </View>
+          </View>
+
+          <View style={styles.fieldRow}>
+            <View style={styles.field}>
+              <Text style={styles.label}>Entry price</Text>
+              <TextInput accessibilityLabel="Entry price" keyboardType="decimal-pad" placeholder="20,450.00" placeholderTextColor={colors.dim} style={styles.input}
+                value={form.entryPrice} onChangeText={(value) => update('entryPrice', value)} />
+            </View>
+            <View style={styles.field}>
+              <Text style={styles.label}>Exit price</Text>
+              <TextInput accessibilityLabel="Exit price" keyboardType="decimal-pad" placeholder="20,512.00" placeholderTextColor={colors.dim} style={styles.input}
+                value={form.exitPrice} onChangeText={(value) => update('exitPrice', value)} />
+            </View>
+          </View>
+
+          <View style={styles.fieldRow}>
+            <View style={styles.field}>
+              <Text style={styles.label}>Stop</Text>
+              <TextInput accessibilityLabel="Stop price" keyboardType="decimal-pad" placeholder="20,420.00" placeholderTextColor={colors.dim} style={styles.input}
+                value={form.stop} onChangeText={(value) => update('stop', value)} />
+            </View>
+            <View style={styles.field}>
+              <Text style={styles.label}>Target</Text>
+              <TextInput accessibilityLabel="Target price" keyboardType="decimal-pad" placeholder="20,540.00" placeholderTextColor={colors.dim} style={styles.input}
+                value={form.target} onChangeText={(value) => update('target', value)} />
+            </View>
+          </View>
+
+          <View style={styles.fieldRow}>
+            <View style={styles.field}>
+              <Text style={styles.label}>Size</Text>
+              <TextInput accessibilityLabel="Position size" keyboardType="decimal-pad" placeholder="2" placeholderTextColor={colors.dim} style={styles.input}
+                value={form.size} onChangeText={(value) => update('size', value)} />
+            </View>
+            <View style={styles.field}>
+              <Text style={styles.label}>Risk $</Text>
+              <TextInput accessibilityLabel="Risk amount in dollars" keyboardType="decimal-pad" placeholder="250" placeholderTextColor={colors.dim} style={styles.input}
+                value={form.riskAmount} onChangeText={(value) => update('riskAmount', value)} />
+            </View>
+          </View>
+
+          <Text style={styles.label}>How did you feel?</Text>
+          <View style={styles.reasonWrap}>
+            {EMOTIONS.map((emotion) => {
+              const active = form.emotion === emotion
+              return (
+                <Pressable
+                  key={emotion}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: active }}
+                  onPress={() => { triggerHaptic('light'); update('emotion', active ? '' : emotion) }}
+                  style={[styles.presetPill, active ? { backgroundColor: colors.accentSoft, borderColor: colors.accent } : null]}
+                >
+                  <Text style={[styles.presetText, active ? { color: colors.accent } : null]}>{emotion}</Text>
+                </Pressable>
+              )
+            })}
           </View>
 
           <View style={styles.fieldRow}>
@@ -2440,7 +2579,16 @@ function TradeEditor({
     account: trade.account,
     setup: trade.setup,
     notes: trade.notes,
-    screenshotUri: trade.screenshotUri
+    screenshotUri: trade.screenshotUri,
+    emotion: trade.emotion || '',
+    selfSetup: trade.selfSetup || '',
+    selfExec: trade.selfExec || '',
+    entryPrice: trade.entryPrice == null ? '' : String(trade.entryPrice),
+    exitPrice: trade.exitPrice == null ? '' : String(trade.exitPrice),
+    stop: trade.stop == null ? '' : String(trade.stop),
+    target: trade.target == null ? '' : String(trade.target),
+    size: trade.size == null ? '' : String(trade.size),
+    riskAmount: trade.riskAmount == null ? '' : String(trade.riskAmount)
   }))
   const [tradeDate, setTradeDate] = useState(trade.tradeDate)
   const [saving, setSaving] = useState(false)
@@ -2468,6 +2616,8 @@ function TradeEditor({
     if (!form.symbol.trim()) return setError('Enter a symbol.')
     if (!Number.isFinite(pnl)) return setError('Enter a valid P&L.')
     if (!Number.isFinite(fees)) return setError('Enter valid fees.')
+    const badField = invalidNumericField(form)
+    if (badField) return setError(`${badField} must be a number.`)
     if (!tradeDate.trim() || Number.isNaN(new Date(tradeDate.replace(' ', 'T')).getTime())) {
       return setError('Use a valid trade date and time.')
     }
@@ -2488,6 +2638,15 @@ function TradeEditor({
         setup: form.setup.trim(),
         notes: form.notes.trim(),
         screenshotUri: form.screenshotUri,
+        emotion: form.emotion,
+        selfSetup: form.selfSetup,
+        selfExec: form.selfExec,
+        entryPrice: parseOptionalNumber(form.entryPrice),
+        exitPrice: parseOptionalNumber(form.exitPrice),
+        stop: parseOptionalNumber(form.stop),
+        target: parseOptionalNumber(form.target),
+        size: parseOptionalNumber(form.size),
+        riskAmount: parseOptionalNumber(form.riskAmount),
         syncState: 'pending'
       })
       onClose()
@@ -2572,6 +2731,92 @@ function TradeEditor({
               placeholderTextColor={colors.dim}
               onChangeText={(value) => update('timeframe', value)}
             />
+
+            <View style={styles.fieldRow}>
+              <View style={styles.field}>
+                <Text style={styles.label}>Entry price</Text>
+                <TextInput keyboardType="decimal-pad" style={styles.input} value={form.entryPrice}
+                  placeholder="Optional" placeholderTextColor={colors.dim}
+                  onChangeText={(value) => update('entryPrice', value)} />
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.label}>Exit price</Text>
+                <TextInput keyboardType="decimal-pad" style={styles.input} value={form.exitPrice}
+                  placeholder="Optional" placeholderTextColor={colors.dim}
+                  onChangeText={(value) => update('exitPrice', value)} />
+              </View>
+            </View>
+
+            <View style={styles.fieldRow}>
+              <View style={styles.field}>
+                <Text style={styles.label}>Stop</Text>
+                <TextInput keyboardType="decimal-pad" style={styles.input} value={form.stop}
+                  placeholder="Optional" placeholderTextColor={colors.dim}
+                  onChangeText={(value) => update('stop', value)} />
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.label}>Target</Text>
+                <TextInput keyboardType="decimal-pad" style={styles.input} value={form.target}
+                  placeholder="Optional" placeholderTextColor={colors.dim}
+                  onChangeText={(value) => update('target', value)} />
+              </View>
+            </View>
+
+            <View style={styles.fieldRow}>
+              <View style={styles.field}>
+                <Text style={styles.label}>Size</Text>
+                <TextInput keyboardType="decimal-pad" style={styles.input} value={form.size}
+                  placeholder="Optional" placeholderTextColor={colors.dim}
+                  onChangeText={(value) => update('size', value)} />
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.label}>Risk $</Text>
+                <TextInput keyboardType="decimal-pad" style={styles.input} value={form.riskAmount}
+                  placeholder="Optional" placeholderTextColor={colors.dim}
+                  onChangeText={(value) => update('riskAmount', value)} />
+              </View>
+            </View>
+
+            <Text style={styles.label}>Emotion</Text>
+            <View style={styles.reasonWrap}>
+              {EMOTIONS.map((emotion) => {
+                const active = form.emotion === emotion
+                return (
+                  <Pressable
+                    key={emotion}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: active }}
+                    onPress={() => { triggerHaptic('light'); update('emotion', active ? '' : emotion) }}
+                    style={[styles.presetPill, active ? { backgroundColor: colors.accentSoft, borderColor: colors.accent } : null]}
+                  >
+                    <Text style={[styles.presetText, active ? { color: colors.accent } : null]}>{emotion}</Text>
+                  </Pressable>
+                )
+              })}
+            </View>
+
+            {([['Setup grade', 'selfSetup'], ['Execution grade', 'selfExec']] as const).map(([label, key]) => (
+              <View key={key}>
+                <Text style={styles.label}>{label}</Text>
+                <View style={styles.reasonWrap}>
+                  {SELF_GRADES.map((grade) => {
+                    const active = form[key] === grade
+                    return (
+                      <Pressable
+                        key={grade}
+                        accessibilityRole="radio"
+                        accessibilityState={{ checked: active }}
+                        accessibilityLabel={`${label} ${grade}`}
+                        onPress={() => { triggerHaptic('light'); update(key, active ? '' : grade) }}
+                        style={[styles.presetPill, active ? { backgroundColor: colors.accentSoft, borderColor: colors.accent } : null]}
+                      >
+                        <Text style={[styles.presetText, active ? { color: colors.accent } : null]}>{grade}</Text>
+                      </Pressable>
+                    )
+                  })}
+                </View>
+              </View>
+            ))}
 
             <View style={styles.fieldRow}>
               <View style={styles.field}>
@@ -2695,6 +2940,7 @@ function History({
         trade.direction,
         trade.tradeDate,
         shortDate(trade.tradeDate),
+        trade.emotion || '',
         ...(trade.reasons || [])
       ].some((value) => String(value || '').toLowerCase().includes(needle))
     })
@@ -2834,6 +3080,21 @@ function History({
         const gradeInfo = computeTradeGrade(trade)
         const heldMinutes = tradeHoldMinutes(trade)
         const heldLabel = heldMinutes === null ? '' : `Held ${formatHoldDuration(heldMinutes)}`
+        const rMultiple = trade.riskAmount && trade.riskAmount > 0 ? trade.pnl / trade.riskAmount : null
+        const priceDetails = [
+          trade.entryPrice != null ? `Entry ${trade.entryPrice}` : '',
+          trade.exitPrice != null ? `Exit ${trade.exitPrice}` : '',
+          trade.stop != null ? `Stop ${trade.stop}` : '',
+          trade.target != null ? `Target ${trade.target}` : '',
+          trade.size != null ? `Size ${trade.size}` : '',
+          trade.riskAmount != null ? `Risk ${money(trade.riskAmount)}` : '',
+          rMultiple !== null ? `${rMultiple >= 0 ? '+' : ''}${rMultiple.toFixed(2)}R` : ''
+        ].filter(Boolean).join(' · ')
+        const journalDetails = [
+          trade.emotion || '',
+          trade.selfSetup ? `Setup ${trade.selfSetup}` : '',
+          trade.selfExec ? `Exec ${trade.selfExec}` : ''
+        ].filter(Boolean).join(' · ')
         const expanded = expandedId === trade.id
         const monthKey = trade.tradeDate.slice(0, 7)
         const previousMonthKey = index > 0 ? visibleTrades[index - 1]?.tradeDate.slice(0, 7) : ''
@@ -2890,6 +3151,10 @@ function History({
                     </Text>
                   </View>
                 ) : null}
+                {journalDetails ? (
+                  <Text style={[styles.muted, { color: colors.accent }]}>{journalDetails}</Text>
+                ) : null}
+                {priceDetails ? <Text style={styles.muted}>{priceDetails}</Text> : null}
                 {trade.notes ? <Text style={styles.muted}>{trade.notes}</Text> : null}
                 <View style={styles.historyActions}>
                   <Pressable

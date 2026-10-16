@@ -587,6 +587,76 @@ describe('mobile sync - import and dedupe', () => {
   })
 })
 
+describe('mobile sync - journal enrichment fields', () => {
+  it('carries emotion, grades, and price fields from mobile to desktop and back', () => {
+    const deviceId = `ios-fields-${Date.now()}`
+    const mobileId = 'mobile-fields-1'
+    const created = applyMobileTradeChanges(deviceId, [{
+      entityId: mobileId,
+      operation: 'create',
+      payload: {
+        id: mobileId,
+        symbol: 'NQ',
+        direction: 'Long',
+        pnl: 450,
+        fees: 4.5,
+        tradeDate: '2026-10-14T09:45:00',
+        emotion: 'Confident',
+        selfSetup: 'A',
+        selfExec: 'B',
+        entryPrice: 20450,
+        exitPrice: 20512,
+        stop: 20420,
+        target: 20540,
+        size: 2,
+        riskAmount: 250
+      }
+    }])
+    const desktopId = created.accepted[0].desktopId
+    expect(listTrades().find((trade) => trade.id === desktopId)).toMatchObject({
+      emotion: 'Confident',
+      selfSetup: 'A',
+      selfExec: 'B',
+      entry: 20450,
+      exit: 20512,
+      stop: 20420,
+      target: 20540,
+      size: 2,
+      riskAmount: 250
+    })
+    expect(mobileTradeSnapshot().find((trade) => trade.id === desktopId)).toMatchObject({
+      emotion: 'Confident',
+      selfSetup: 'A',
+      selfExec: 'B',
+      entry: 20450,
+      riskAmount: 250
+    })
+
+    // An older mobile build that doesn't know the new fields sends them as
+    // undefined — the update must not blank what desktop already has.
+    const updated = applyMobileTradeChanges(deviceId, [{
+      entityId: mobileId,
+      operation: 'update',
+      payload: {
+        id: mobileId,
+        desktopId,
+        symbol: 'NQ',
+        direction: 'Long',
+        pnl: 500,
+        fees: 4.5,
+        tradeDate: '2026-10-14T09:45:00'
+      }
+    }])
+    expect(updated).toMatchObject({ updatedCount: 1 })
+    expect(listTrades().find((trade) => trade.id === desktopId)).toMatchObject({
+      pnl: 500,
+      emotion: 'Confident',
+      entry: 20450,
+      riskAmount: 250
+    })
+  })
+})
+
 describe('getAllData — export', () => {
   it('strips all secret API keys', () => {
     setSettings({ cloudKey: 'sk-secret', finnhubKey: 'fh-key', fmpKey: 'fmp-key' })
