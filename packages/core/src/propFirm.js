@@ -1,3 +1,4 @@
+import { localDateKey, tradeDateKey } from './tradeDate.js'
 import { tradeOutcome } from './workflow.js'
 
 /* ───────── prop firm challenge tracker ───────── */
@@ -24,7 +25,7 @@ export function computePropFirm(trades, cfg) {
     const floor = floorAt(peak)
     if (maxDD > 0 && bal <= floor) floorBreached = true
     curve.push({ i: curve.length, balance: bal, floor })
-    const d = (t.entryTime || t.timestamp || '').slice(0, 10)
+    const d = tradeDateKey(t)
     if (d) dayPnl[d] = (dayPnl[d] || 0) + pnl
   }
   let dailyBreached = false
@@ -33,7 +34,7 @@ export function computePropFirm(trades, cfg) {
   const netProfit = bal - start
   const curFloor = floorAt(peak)
   const ddBuffer = bal - curFloor
-  const todayPnl = dayPnl[new Date().toISOString().slice(0, 10)] || 0
+  const todayPnl = dayPnl[localDateKey(new Date())] || 0
   const dailyRemaining = Math.max(0, maxDaily - Math.max(0, -todayPnl))
   const daysTraded = Object.keys(dayPnl).length
   const targetHit = target > 0 && netProfit >= target
