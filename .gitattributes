@@ -1,0 +1,10 @@
+# Store text with LF line endings and check it out as LF on every OS. Without
+# this, Windows editors save CRLF and every file they touch shows as modified.
+* text=auto eol=lf
+
+# Binary assets: never convert or diff as text.
+*.png binary
+*.jpg binary
+*.ico binary
+*.icns binary
+*.mp4 binary
