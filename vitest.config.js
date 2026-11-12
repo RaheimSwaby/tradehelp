@@ -1,6 +1,10 @@
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
+  // The prop-firm parity test imports mobile TypeScript. mobile/tsconfig.json extends
+  // Expo's base config, which isn't installed at the repo root, so hand esbuild a
+  // literal tsconfig instead of letting it resolve that file.
+  esbuild: { tsconfigRaw: '{}' },
   test: {
     // Run in Node — db.js uses better-sqlite3 (native) and the 'electron' mock
     environment: 'node',
