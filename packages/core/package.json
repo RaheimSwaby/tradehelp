@@ -8,6 +8,7 @@
     "./workflow": "./src/workflow.js",
     "./grading": "./src/grading.js",
     "./propFirm": "./src/propFirm.js",
-    "./directionalBias": "./src/directionalBias.js"
+    "./directionalBias": "./src/directionalBias.js",
+    "./tradeDate": "./src/tradeDate.js"
   }
 }
