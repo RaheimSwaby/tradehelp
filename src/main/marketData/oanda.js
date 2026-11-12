@@ -1,4 +1,4 @@
-import { FOREX_BIAS_INSTRUMENTS } from '../../renderer/src/directionalBias.js'
+import { FOREX_BIAS_INSTRUMENTS } from '../../../packages/core/src/directionalBias.js'
 
 export const OANDA_PRACTICE_ID = 'oanda-practice'
 export const OANDA_PRACTICE_DATASET = 'OANDA v20 Practice'

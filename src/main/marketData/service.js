@@ -1,4 +1,4 @@
-import { computeDirectionalBias } from '../../renderer/src/directionalBias.js'
+import { computeDirectionalBias } from '../../../packages/core/src/directionalBias.js'
 import { createDatabentoProvider, DATABENTO_ID } from './databento.js'
 import { createOandaPracticeProvider } from './oanda.js'
 

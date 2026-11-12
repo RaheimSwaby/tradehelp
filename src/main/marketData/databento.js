@@ -1,4 +1,4 @@
-import { CME_BIAS_INSTRUMENTS } from '../../renderer/src/directionalBias.js'
+import { CME_BIAS_INSTRUMENTS } from '../../../packages/core/src/directionalBias.js'
 
 export const DATABENTO_ID = 'databento'
 export const DATABENTO_DATASET = 'GLBX.MDP3'

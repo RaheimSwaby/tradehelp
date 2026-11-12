@@ -7,6 +7,7 @@
   "exports": {
     "./workflow": "./src/workflow.js",
     "./grading": "./src/grading.js",
-    "./propFirm": "./src/propFirm.js"
+    "./propFirm": "./src/propFirm.js",
+    "./directionalBias": "./src/directionalBias.js"
   }
 }
