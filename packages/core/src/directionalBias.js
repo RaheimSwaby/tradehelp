@@ -147,9 +147,9 @@ function confirmedSwings(bars, radius = 2) {
   const highs = []
   const lows = []
   for (let index = radius; index < bars.length - radius; index += 1) {
-    const window = bars.slice(index - radius, index + radius + 1)
-    if (window.every((bar, item) => item === radius || bars[index].high > bar.high)) highs.push(bars[index])
-    if (window.every((bar, item) => item === radius || bars[index].low < bar.low)) lows.push(bars[index])
+    const neighbors = bars.slice(index - radius, index + radius + 1)
+    if (neighbors.every((bar, item) => item === radius || bars[index].high > bar.high)) highs.push(bars[index])
+    if (neighbors.every((bar, item) => item === radius || bars[index].low < bar.low)) lows.push(bars[index])
   }
   return { highs, lows }
 }
