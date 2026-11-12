@@ -5,6 +5,8 @@
   "description": "Pure TradeHelp trading math shared by the desktop app, the mobile app, and other TradeHelp tools.",
   "type": "module",
   "exports": {
-    "./workflow": "./src/workflow.js"
+    "./workflow": "./src/workflow.js",
+    "./grading": "./src/grading.js",
+    "./propFirm": "./src/propFirm.js"
   }
 }

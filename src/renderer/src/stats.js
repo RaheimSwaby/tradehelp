@@ -3,6 +3,10 @@ import { TILT, REASONS, clamp, fmtN, holdMs, periodKey, pad2 } from './utils.js'
 import { TRADING_WINDOW_HISTORY_LIMITS } from './sessionClock.js'
 import { parsePeriodRetrospective } from './periodRetrospective.js'
 import { achievedR, plannedRR, tradeOutcome } from './workflow.js'
+import { executionGrade } from '../../../packages/core/src/grading.js'
+
+export { executionGrade, letterFor } from '../../../packages/core/src/grading.js'
+export { computePropFirm } from '../../../packages/core/src/propFirm.js'
 
 const PERIOD_RETROSPECTIVE_MARKER = '<!-- tradehelp-period-retrospective:'
 
@@ -353,14 +357,6 @@ export function computeLeaks(trades = []) {
 }
 
 /* ───────── rating: grade the process, not the outcome ───────── */
-export function letterFor(score) {
-  if (score >= 95) return { letter: 'A+', tone: 'up' }
-  if (score >= 85) return { letter: 'A', tone: 'up' }
-  if (score >= 70) return { letter: 'B', tone: 'up' }
-  if (score >= 55) return { letter: 'C', tone: 'accent' }
-  if (score >= 40) return { letter: 'D', tone: 'down' }
-  return { letter: 'F', tone: 'down' }
-}
 
 // ── self-graded GPA: the trader's own Setup + Execution letter grades (A+→F).
 // Separate from the app's algorithmic grade — it's self-reported, not verified.
@@ -379,46 +375,6 @@ export function computeSelfGrade(trades) {
   const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null)
   const setupGpa = avg(setupPts), execGpa = avg(execPts), gpa = avg([...setupPts, ...execPts])
   return { count, gpa, setupGpa, execGpa, letter: gpaToLetter(gpa), setupLetter: gpaToLetter(setupGpa), execLetter: gpaToLetter(execGpa) }
-}
-
-// Per-trade execution grade — deliberately blind to whether the trade won or lost.
-//
-// This used to hand every imported trade a flat A for a win and C for a loss, which
-// made the grade a restatement of P&L and meant an imported journal only ever showed
-// two letters. It also scored missing data generously (no R:R counted 14 of 25, no
-// emotion 12), so a trade we knew nothing about still earned a D rather than saying
-// so.
-//
-// Now each signal is scored only when present, and the total is normalised across
-// the signals that exist. A trade with two signals is graded honestly on those two.
-// Below two, there is nothing to judge and it returns ungraded rather than inventing
-// a letter. Callers must handle score === null.
-export function executionGrade(t) {
-  const entry = Number(t.entry) || 0, stop = Number(t.stop) || 0
-  const pnl = Number(t.pnl) || 0, risk = Number(t.riskAmount) || 0, rr = plannedRR(t)
-
-  const parts = []
-
-  if (stop > 0 && entry > 0) {
-    parts.push((t.direction === 'Long' ? stop < entry : stop > entry) ? 25 : 10)
-  }
-  if (rr > 0) {
-    parts.push(rr >= 2 ? 25 : rr >= 1.5 ? 20 : rr >= 1 ? 15 : 8)
-  }
-  if (t.emotion) {
-    parts.push(['Disciplined', 'Confident', 'Neutral'].includes(t.emotion) ? 25
-      : ['FOMO', 'Greedy', 'Revenge'].includes(t.emotion) ? 0 : 12)
-  }
-  // Only meaningful on a loss with a planned risk: did the stop actually hold?
-  if (pnl < 0 && risk > 0) {
-    const mult = Math.abs(pnl) / risk
-    parts.push(mult <= 1.1 ? 25 : mult <= 1.5 ? 12 : 0)
-  }
-
-  if (parts.length < 2) return { score: null, letter: '—', tone: 'none', ungraded: true }
-
-  const score = Math.round((parts.reduce((a, b) => a + b, 0) / (parts.length * 25)) * 100)
-  return { score, signals: parts.length, ...letterFor(score) }
 }
 
 export function computeRating(trades, stats) {
@@ -564,56 +520,6 @@ export function computeAchievements(trades, stats, payouts = [], dayLogs = [], c
     progress: clamp((d.current || 0) / d.goal, 0, 1),
     unlocked: (d.current || 0) >= d.goal && (d.gate === undefined || d.gate)
   }))
-}
-
-/* ───────── prop firm challenge tracker ───────── */
-// Tracks closed-trade (end-of-day style) balance vs. a prop firm's challenge rules.
-export function computePropFirm(trades, cfg) {
-  const start = Number(cfg.accountSize) || 0
-  const target = Number(cfg.target) || 0
-  const maxDaily = Number(cfg.maxDailyLoss) || 0
-  const maxDD = Number(cfg.maxDrawdown) || 0
-  const minDays = Number(cfg.minDays) || 0
-  const trailing = cfg.ddType !== 'static'
-  const scale = Number(cfg.sizeScale) || 1
-  const rel = cfg.scope === 'own' ? trades.filter((t) => t.account === cfg.id) : trades
-  const sorted = [...rel].sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''))
-  const floorAt = (peak) => (trailing ? Math.min(peak - maxDD, start) : start - maxDD)
-
-  let bal = start, peak = start, floorBreached = false
-  const curve = [{ i: 0, balance: start, floor: floorAt(start) }]
-  const dayPnl = {}
-  for (const t of sorted) {
-    const pnl = (Number(t.pnl) || 0) * scale
-    bal += pnl
-    peak = Math.max(peak, bal)
-    const floor = floorAt(peak)
-    if (maxDD > 0 && bal <= floor) floorBreached = true
-    curve.push({ i: curve.length, balance: bal, floor })
-    const d = (t.entryTime || t.timestamp || '').slice(0, 10)
-    if (d) dayPnl[d] = (dayPnl[d] || 0) + pnl
-  }
-  let dailyBreached = false
-  for (const v of Object.values(dayPnl)) if (maxDaily > 0 && v <= -maxDaily) dailyBreached = true
-
-  const netProfit = bal - start
-  const curFloor = floorAt(peak)
-  const ddBuffer = bal - curFloor
-  const todayPnl = dayPnl[new Date().toISOString().slice(0, 10)] || 0
-  const dailyRemaining = Math.max(0, maxDaily - Math.max(0, -todayPnl))
-  const daysTraded = Object.keys(dayPnl).length
-  const targetHit = target > 0 && netProfit >= target
-  const daysHit = daysTraded >= minDays
-  const breached = floorBreached || dailyBreached
-  const status = breached ? 'failed' : (targetHit && daysHit ? 'passed' : 'active')
-  // Trading performance over the same trades the evaluation is scored on. The size
-  // scale is positive, so it never changes whether a trade counts as a win.
-  const n = sorted.length
-  const propOutcomes = sorted.map((t) => tradeOutcome(t))
-  const wins = propOutcomes.filter((o) => o === 'win').length
-  const decidedProp = wins + propOutcomes.filter((o) => o === 'loss').length
-  const winRate = decidedProp ? (wins / decidedProp) * 100 : 0
-  return { start, bal, netProfit, peak, curFloor, ddBuffer, maxDD, target, maxDaily, todayPnl, dailyRemaining, daysTraded, minDays, targetHit, daysHit, breached, floorBreached, dailyBreached, status, curve, n, wins, winRate }
 }
 
 const promptText = (value, max = 1200) => String(value || '').replace(/\s+/g, ' ').trim().slice(0, max)
